@@ -1,0 +1,15 @@
+appname               = xerp
+version               = 1.0.0
+display_name          = x.erp
+desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
+platform              = all
+source                = thirdparty
+maintainer            = x.erp
+distributor           = x.erp
+install_dep_apps      = nodejs_v22
+service_port          = 8686
+checkport             = true
+ctl_stop              = true
+desktop_uidir         = ui
+desktop_applaunchname = xerp.Application
+changelog             = 首个版本发布。

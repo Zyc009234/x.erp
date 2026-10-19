@@ -1,0 +1,1314 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>x.erp</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%236366f1'/%3E%3Cstop offset='1' stop-color='%2306b6d4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Ctext x='32' y='45' font-size='38' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'%3EE%3C/text%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6fb;--panel:#fff;--panel2:#f9fafb;--text:#1f2937;--muted:#6b7280;--border:#e8ebf2;
+  --primary:#4f46e5;--primary-2:#6366f1;--primary-soft:#eef2ff;
+  --green:#10b981;--green-soft:#ecfdf5;--orange:#f59e0b;--orange-soft:#fffbeb;
+  --red:#ef4444;--red-soft:#fef2f2;--blue:#0ea5e9;--blue-soft:#f0f9ff;--purple:#8b5cf6;--purple-soft:#f5f3ff;
+  --gray-soft:#f3f4f6;--sidebar:#0f172a;--sidebar-2:#1e293b;--sidebar-text:#94a3b8;
+  --radius:14px;--shadow:0 1px 2px rgba(16,24,40,.04),0 4px 16px rgba(16,24,40,.05);
+}
+[data-theme=dark]{
+  --bg:#0b1020;--panel:#121a2f;--panel2:#0f1628;--text:#e5e7eb;--muted:#94a3b8;--border:#1f2a44;
+  --primary-soft:#1e1b4b;--green-soft:#06281f;--orange-soft:#2d2006;--red-soft:#2d0f12;--blue-soft:#082235;
+  --purple-soft:#221a3d;--gray-soft:#1b2438;--sidebar:#070b17;--sidebar-2:#121a2f;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font:inherit;color:var(--text)}
+a.link{color:var(--primary);cursor:pointer;font-weight:500;text-decoration:none}
+a.link:hover{text-decoration:underline}
+
+/* layout */
+.app{display:flex;min-height:100vh}
+.sidebar{width:236px;background:var(--sidebar);color:var(--sidebar-text);display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0;z-index:40;transition:width .2s,transform .2s}
+.brand{display:flex;align-items:center;gap:10px;padding:20px 20px 18px;color:#fff;font-weight:700;font-size:17px;white-space:nowrap;overflow:hidden}
+.logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#06b6d4);display:grid;place-items:center;font-weight:800;flex-shrink:0;box-shadow:0 4px 14px rgba(99,102,241,.45)}
+nav{flex:1;overflow-y:auto;padding:4px 12px}
+.nav-group{font-size:11px;letter-spacing:.08em;padding:16px 10px 6px;color:#64748b;white-space:nowrap}
+.nav-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;margin:2px 0;cursor:pointer;white-space:nowrap;transition:.15s;position:relative}
+.nav-item:hover{background:var(--sidebar-2);color:#e2e8f0}
+.nav-item.on{background:linear-gradient(90deg,rgba(99,102,241,.25),rgba(99,102,241,.08));color:#fff}
+.nav-item.on::before{content:"";position:absolute;left:-12px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:#818cf8}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:11px;border-radius:10px;padding:0 7px;line-height:18px}
+.side-foot{padding:14px 20px;font-size:12px;color:#475569;white-space:nowrap;overflow:hidden}
+.main{flex:1;margin-left:236px;min-width:0;transition:margin .2s}
+.app.collapsed .sidebar{width:72px}
+.app.collapsed .main{margin-left:72px}
+.app.collapsed .nav-label,.app.collapsed .nav-group,.app.collapsed .brand-name,.app.collapsed .side-foot,.app.collapsed .nav-badge{display:none}
+.app.collapsed .nav-item{justify-content:center}
+
+.topbar{height:64px;display:flex;align-items:center;gap:14px;padding:0 24px;background:var(--panel);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:30}
+.crumb{font-weight:600;font-size:16px;white-space:nowrap}
+.crumb small{color:var(--muted);font-weight:400;font-size:13px;margin-left:8px}
+.top-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+.icon-btn{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--muted);position:relative;transition:.15s}
+.icon-btn:hover{background:var(--gray-soft);color:var(--text)}
+.icon-btn.sm{width:30px;height:30px}
+.dot{position:absolute;top:7px;right:7px;min-width:16px;height:16px;border-radius:8px;background:var(--red);color:#fff;font-size:10px;line-height:16px;padding:0 4px;display:none}
+.gsearch{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:0 12px;height:38px;width:280px;color:var(--muted)}
+.gsearch input{border:none;outline:none;background:none;flex:1;min-width:0}
+.user{display:flex;align-items:center;gap:10px;padding-left:10px;margin-left:4px;border-left:1px solid var(--border)}
+.avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f472b6,#8b5cf6);color:#fff;display:grid;place-items:center;font-weight:600}
+.user b{display:block;font-size:13px}.user small{color:var(--muted);font-size:12px}
+.bell-wrap{position:relative}
+.dropdown{position:absolute;right:0;top:46px;width:320px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.15);display:none;overflow:hidden}
+.dropdown.show{display:block}
+.dd-head{padding:12px 16px;font-weight:600;border-bottom:1px solid var(--border)}
+.dd-item{padding:10px 16px;display:flex;gap:10px;align-items:flex-start;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px}
+.dd-item:hover{background:var(--panel2)}
+.dd-item small{color:var(--muted);display:block}
+.content{padding:24px;max-width:1600px;margin:0 auto}
+
+/* components */
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.page-head h1{font-size:22px;font-weight:700}
+.page-head p{color:var(--muted);margin-top:2px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 0}
+.card-head h3{font-size:15px;font-weight:600}
+.card-head .more{color:var(--muted);font-size:13px;cursor:pointer}
+.card-head .more:hover{color:var(--primary)}
+.card-body{padding:16px 20px 20px}
+.grid{display:grid;gap:16px}
+.grid>*{min-width:0}
+.g4{grid-template-columns:repeat(4,1fr)}.g5{grid-template-columns:repeat(5,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:1fr 1fr}
+.g-2-1{grid-template-columns:2fr 1fr}
+.mb{margin-bottom:16px}
+.kpi{padding:18px 20px;display:flex;gap:14px;align-items:flex-start}
+.kpi-ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;flex-shrink:0}
+.kpi-ic svg.i{width:22px;height:22px}
+.kpi label{color:var(--muted);font-size:13px}
+.kpi .v{font-size:22px;font-weight:700;margin:2px 0;letter-spacing:-.01em;white-space:nowrap}
+.trend{font-size:12px;font-weight:500}
+.trend.up{color:var(--green)}.trend.down{color:var(--red)}.trend span{color:var(--muted);font-weight:400}
+.c-primary{background:var(--primary-soft);color:var(--primary)}.c-green{background:var(--green-soft);color:var(--green)}
+.c-orange{background:var(--orange-soft);color:var(--orange)}.c-red{background:var(--red-soft);color:var(--red)}
+.c-blue{background:var(--blue-soft);color:var(--blue)}.c-purple{background:var(--purple-soft);color:var(--purple)}
+
+.btn{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:9px;border:1px solid var(--border);background:var(--panel);font-weight:500;transition:.15s;white-space:nowrap}
+.btn:hover{border-color:var(--primary);color:var(--primary)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(79,70,229,.3)}
+.btn.primary:hover{background:var(--primary-2);color:#fff}
+.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+.btn.sm{height:30px;padding:0 10px;font-size:13px}
+.btn svg.i{width:16px;height:16px}
+.tbtn{padding:3px 8px;border-radius:6px;color:var(--primary);font-size:13px;font-weight:500}
+.tbtn:hover{background:var(--primary-soft)}
+.tbtn.primary{background:var(--primary-soft)}
+.tbtn.danger-text{color:var(--red)}.tbtn.danger-text:hover{background:var(--red-soft)}
+.ops{display:flex;gap:2px;flex-wrap:wrap}
+
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 20px;flex-wrap:wrap}
+.tb-left,.tb-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.search{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:9px;padding:0 12px;height:36px;width:240px;background:var(--panel);color:var(--muted)}
+.search input{border:none;outline:none;background:none;flex:1;min-width:0}
+.search:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.select{height:36px;border:1px solid var(--border);border-radius:9px;padding:0 10px;background:var(--panel);outline:none}
+
+.table-wrap{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;white-space:nowrap}
+.tbl th{text-align:left;font-weight:500;color:var(--muted);font-size:12.5px;background:var(--panel2);padding:11px 16px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.tbl th.sortable{cursor:pointer;user-select:none}.tbl th.sortable:hover{color:var(--primary)}
+.tbl td{padding:12px 16px;border-bottom:1px solid var(--border)}
+.tbl tbody tr{transition:background .1s}
+.tbl tbody tr:hover{background:var(--panel2)}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+.tbl.compact td{padding:10px 16px}
+.tbl.items td{padding:8px 10px}.tbl.items th{padding:9px 10px}
+.tbl.items input,.tbl.items select{width:100%;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:var(--panel);outline:none}
+.tbl.items input:focus,.tbl.items select:focus{border-color:var(--primary)}
+.sub-t{color:var(--muted);font-size:12px}
+.pager{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;color:var(--muted);font-size:13px}
+.pager>div{display:flex;gap:4px}
+.pg{min-width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--panel)}
+.pg.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.pg:disabled{opacity:.4;cursor:not-allowed}
+.empty{text-align:center;padding:36px 0;color:var(--muted)}
+.empty svg{width:64px;height:64px;opacity:.5;margin-bottom:6px}
+
+.badge{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:500}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.badge.plain::before{display:none}
+.badge.green{background:var(--green-soft);color:var(--green)}.badge.orange{background:var(--orange-soft);color:var(--orange)}
+.badge.red{background:var(--red-soft);color:var(--red)}.badge.blue{background:var(--blue-soft);color:var(--blue)}
+.badge.gray{background:var(--gray-soft);color:var(--muted)}.badge.purple{background:var(--purple-soft);color:var(--purple)}
+.badge.primary{background:var(--primary-soft);color:var(--primary)}
+.prog{display:flex;align-items:center;gap:8px;min-width:130px}
+.prog .bar{flex:1;height:6px;background:var(--gray-soft);border-radius:4px;overflow:hidden}
+.prog .bar i{display:block;height:100%;background:var(--green);border-radius:4px}
+.prog small{color:var(--muted);font-size:12px;width:36px;text-align:right}
+.pos{color:var(--green);font-weight:600}.neg{color:var(--red);font-weight:600}
+
+.tabs{display:flex;gap:4px;padding:6px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;width:fit-content;margin-bottom:16px}
+.tab{padding:7px 16px;border-radius:8px;color:var(--muted);font-weight:500}
+.tab.on{background:var(--panel);color:var(--primary);box-shadow:var(--shadow)}
+
+.todo{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;cursor:pointer;transition:.15s;border:1px solid var(--border)}
+.todo:hover{border-color:var(--primary);transform:translateY(-1px)}
+.todo b{font-size:20px;display:block;line-height:1.2}
+.todo small{color:var(--muted)}
+.quick{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 6px;border-radius:12px;cursor:pointer;transition:.15s;font-size:13px}
+.quick:hover{background:var(--panel2)}
+.quick .kpi-ic{width:42px;height:42px}
+.rank{display:flex;align-items:center;gap:12px;padding:8px 0}
+.rank .no{width:22px;height:22px;border-radius:6px;background:var(--gray-soft);display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--muted)}
+.rank:nth-child(-n+3) .no{background:var(--primary);color:#fff}
+.rank .nm{flex:1;min-width:0}
+.rank .nm div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rank .bar{height:5px;background:var(--gray-soft);border-radius:3px;margin-top:4px}
+.rank .bar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#6366f1,#06b6d4)}
+.chart-box{position:relative;height:280px}
+.welcome{background:linear-gradient(120deg,#4f46e5,#7c3aed 55%,#06b6d4);color:#fff;border:none;padding:24px 28px;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;overflow:hidden;position:relative}
+.welcome h2{font-size:21px}.welcome p{opacity:.85;margin-top:4px}
+.welcome::after{content:"";position:absolute;right:-60px;top:-80px;width:260px;height:260px;border-radius:50%;background:rgba(255,255,255,.08)}
+.welcome .btn{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);color:#fff;position:relative;z-index:1}
+.welcome .btn:hover{background:rgba(255,255,255,.25)}
+
+/* modal */
+.modal-mask{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(3px);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:6vh 16px;overflow-y:auto}
+.modal-mask.show{display:flex}
+.modal{background:var(--panel);border-radius:16px;width:560px;max-width:100%;box-shadow:0 24px 60px rgba(0,0,0,.25);animation:pop .18s ease-out}
+.modal.lg{width:860px}.modal.sm{width:420px}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+.m-head{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid var(--border)}
+.m-head h3{font-size:16px}
+.m-body{padding:20px 22px;max-height:68vh;overflow-y:auto}
+.m-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid var(--border)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field span{font-size:13px;color:var(--muted);font-weight:500}
+.field i{color:var(--red);font-style:normal}
+.field input,.field select,.field textarea{border:1px solid var(--border);border-radius:9px;padding:8px 12px;background:var(--panel);outline:none;transition:.15s}
+.field input,.field select{height:38px}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.field input:disabled{background:var(--panel2);color:var(--muted)}
+.field .err{border-color:var(--red)}
+.span2{grid-column:span 2}
+.line-head{display:flex;justify-content:space-between;align-items:center;margin:20px 0 10px}
+.o-total{text-align:right;margin-top:14px;color:var(--muted)}
+.o-total b{font-size:22px;color:var(--primary);margin-left:8px}
+.doc h2{text-align:center;font-size:20px;margin-bottom:4px}
+.doc .doc-sub{text-align:center;color:var(--muted);margin-bottom:18px}
+.doc-info{display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;margin-bottom:16px;font-size:13px}
+.doc-info span{color:var(--muted)}
+.doc-sum{display:flex;justify-content:flex-end;gap:28px;margin-top:14px;font-size:13px}
+.doc-sum b{font-size:16px}
+.confirm-ic{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;margin-bottom:12px}
+
+.toasts{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{background:var(--panel);border:1px solid var(--border);box-shadow:0 10px 30px rgba(0,0,0,.15);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:8px;animation:pop .2s;font-weight:500}
+.toast.success svg{color:var(--green)}.toast.error svg{color:var(--red)}.toast.info svg{color:var(--blue)}
+.setting-row{display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-bottom:1px solid var(--border);gap:16px}
+.setting-row:last-child{border-bottom:none}
+.setting-row small{color:var(--muted);display:block}
+.sr-group{display:flex;flex-direction:column;gap:6px}
+.backdrop{display:none}
+.login{position:fixed;inset:0;z-index:150;display:none;align-items:center;justify-content:center;padding:16px;overflow:auto;background:radial-gradient(circle at 15% 20%,rgba(99,102,241,.55) 0,transparent 45%),radial-gradient(circle at 85% 85%,rgba(6,182,212,.45) 0,transparent 45%),#0f172a}
+.login.show{display:flex}
+.login-card{width:410px;max-width:100%;background:var(--panel);border-radius:20px;padding:34px 32px;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+.login-card .logo{width:50px;height:50px;font-size:22px;color:#fff;margin-bottom:14px}
+.login-card h2{font-size:22px}.login-card>p{color:var(--muted);margin:4px 0 22px}
+.login-card .field{margin-bottom:14px}
+.login-card .btn.primary{width:100%;justify-content:center;height:42px;margin-top:6px;font-size:15px}
+.srv-state{font-size:12px;display:flex;align-items:center;gap:6px;color:var(--muted);margin:-6px 0 14px}
+.srv-state i{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.srv-state.ok i{background:var(--green)}.srv-state.bad i{background:var(--red)}.srv-state.bad{color:var(--red)}
+.conn{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:0 8px;white-space:nowrap}
+.conn i{width:8px;height:8px;border-radius:50%;background:var(--green)}
+.conn.bad{color:var(--red)}.conn.bad i{background:var(--red)}
+.user{cursor:pointer}
+.loading-bar{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,#6366f1,#06b6d4);z-index:300;width:0;opacity:0;transition:width .4s,opacity .3s}
+.loading-bar.on{width:75%;opacity:1}
+
+@media (max-width:1280px){.g5{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:1024px){.g-2-1,.g3{grid-template-columns:1fr}.gsearch{display:none}}
+@media (max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .app.open .sidebar{transform:none}
+  .app.open .backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:35}
+  .main,.app.collapsed .main{margin-left:0}
+  .app.collapsed .sidebar{width:236px}
+  .content{padding:16px}.topbar{padding:0 16px}
+  .g2,.g4,.g5{grid-template-columns:1fr}
+  .user div:last-child,.crumb small{display:none}
+  .form-grid,.doc-info{grid-template-columns:1fr}.span2{grid-column:auto}
+  .search{width:100%}.tb-left{width:100%}
+}
+@media print{
+  body *{visibility:hidden}
+  .print-area,.print-area *{visibility:visible}
+  .print-area{position:absolute;left:0;top:0;width:100%;padding:20px}
+  .modal-mask{background:none;backdrop-filter:none}
+}
+</style>
+</head>
+<body>
+<div class="loading-bar" id="lbar"></div>
+<div class="login" id="login">
+  <form class="login-card" onsubmit="return false">
+    <div class="logo">E</div>
+    <h2>x.erp</h2><p>企业资源计划管理系统</p>
+    <div id="srvBox">
+      <label class="field"><span>服务器地址</span><input id="lServer" placeholder="例如 http://192.168.1.10:8686"></label>
+      <div class="srv-state" id="srvState"><i></i><span>未检测</span><a class="link" id="srvTest" style="margin-left:auto;white-space:nowrap">测试连接</a></div>
+    </div>
+    <label class="field"><span>用户名</span><input id="lUser" autocomplete="username"></label>
+    <label class="field"><span>密码</span><input id="lPass" type="password" autocomplete="current-password"></label>
+    <button class="btn primary" id="lBtn">登 录</button>
+    <p style="color:var(--muted);font-size:12px;text-align:center;margin-top:16px">首次使用默认账号 admin / admin123，登录后请及时修改密码</p>
+  </form>
+</div>
+<div class="app" id="app">
+  <aside class="sidebar">
+    <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
+    <nav id="nav"></nav>
+    <div class="side-foot">v1.0 · 数据保存在本地浏览器</div>
+  </aside>
+  <div class="backdrop" data-act="toggleSide"></div>
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn" data-act="toggleSide" title="折叠菜单"><svg class="i" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <div class="crumb" id="crumb"></div>
+      <div class="top-actions">
+        <div class="gsearch"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="gsearch" placeholder="搜索单号 / 商品 / 客户，回车"></div>
+        <div class="conn" id="conn" title="服务器连接状态"><i></i><span>已连接</span></div>
+        <button class="icon-btn" data-act="toggleTheme" id="themeBtn" title="切换主题"></button>
+        <div class="bell-wrap">
+          <button class="icon-btn" data-act="toggleBell" title="消息提醒"><svg class="i" viewBox="0 0 24 24"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg><span class="dot" id="bellDot"></span></button>
+          <div class="dropdown" id="bellDrop"></div>
+        </div>
+        <div class="user" data-act="go" data-id="settings" title="账户设置"><div class="avatar" id="avatar">管</div><div><b id="userName">管理员</b><small id="userRole">系统管理员</small></div></div>
+      </div>
+    </header>
+    <main class="content" id="view"></main>
+  </div>
+</div>
+<div class="modal-mask" id="mask"><div class="modal" id="modal"></div></div>
+<div class="toasts" id="toasts"></div>
+<input type="file" id="importFile" accept=".json" hidden>
+
+<script>
+/* ================= 基础工具 ================= */
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = n => '¥' + (+n || 0).toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const moneyK = n => Math.abs(n) >= 10000 ? '¥' + (n / 10000).toFixed(2) + '万' : money(n);
+const num = n => (+n || 0).toLocaleString('zh-CN');
+const pad = n => String(n).padStart(2, '0');
+const fmtDate = d => { d = new Date(d); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+const today = () => fmtDate(new Date());
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const byId = (arr, id) => arr.find(x => x.id === id);
+const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
+const orderTotal = o => sum(o.items, i => i.qty * i.price);
+const orderCost = o => sum(o.items, i => i.qty * (i.cost || 0));
+const monthKey = d => String(d).slice(0, 7);
+const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
+function lastMonths(n) {
+  const r = [], d = new Date();
+  for (let i = n - 1; i >= 0; i--) { const x = new Date(d.getFullYear(), d.getMonth() - i, 1); r.push(x.getFullYear() + '-' + pad(x.getMonth() + 1)); }
+  return r;
+}
+const mLabel = mk => +mk.slice(5) + '月';
+
+const ICONS = {
+  dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  box:'<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+  warehouse:'<path d="M3 21V8l9-5 9 5v13"/><path d="M7 21v-8h10v8"/><path d="M7 17h10"/>',
+  cart:'<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.5 12h11L21 7H6"/>',
+  sales:'<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+  users:'<circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-7 7-7s7 3 7 7"/><path d="M16 4a4 4 0 010 8"/><path d="M22 21c0-3-2-5.5-4.5-6.5"/>',
+  truck:'<path d="M1 4h14v12H1z"/><path d="M15 9h4l4 4v3h-8"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/>',
+  id:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.5"/><path d="M5.5 17c.5-2 2-3 3.5-3s3 1 3.5 3"/><path d="M15 10h4M15 14h3"/>',
+  wallet:'<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 3h12"/><circle cx="17" cy="15" r="1.2"/>',
+  chart:'<path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  download:'<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+  upload:'<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>',
+  x:'<path d="M18 6L6 18M6 6l12 12"/>',
+  moon:'<path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  check:'<path d="M20 6L9 17l-5-5"/>',
+  alert:'<path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  printer:'<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  coin:'<circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .9-3 2s1 1.7 3 2 3 .9 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2"/>',
+  trash:'<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
+  refresh:'<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15"/>'
+};
+const ic = n => `<svg class="i" viewBox="0 0 24 24">${ICONS[n] || ''}</svg>`;
+const emptySvg = '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="10" y="18" width="44" height="34" rx="4"/><path d="M10 28h44M24 18l4-8h8l4 8"/><path d="M26 40h12"/></svg>';
+
+/* ================= 常量 ================= */
+const CATS = ['电子产品', '办公用品', '家居用品', '食品饮料'];
+const UNITS = ['个', '台', '箱', '盒', '把', '张', '袋', '瓶', '件', '套'];
+const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
+const DEPTS = ['销售部', '采购部', '仓储部', '财务部', '行政部', '技术部'];
+const METHODS = ['银行转账', '现金', '支付宝', '微信', '承兑汇票'];
+const FIN_CATS = {income: ['销售收款', '其他收入', '投资收益', '退款'], expense: ['采购付款', '工资', '房租', '水电', '办公费', '差旅', '营销推广', '其他支出']};
+const STATUS_COLOR = {'待发货':'orange','已发货':'blue','已完成':'green','已作废':'gray','待审核':'orange','已审核':'blue','已入库':'green','在职':'green','试用期':'blue','离职':'gray'};
+const ORD = {
+  sales:    {db:'sales', title:'销售订单', doc:'销售单', prefix:'SO', party:'customers', partyKey:'customerId', partyLabel:'客户', priceKey:'price', paidKey:'received', payWord:'收款', statuses:['待发货','已发货','已完成','已作废']},
+  purchase: {db:'purchases', title:'采购订单', doc:'采购单', prefix:'PO', party:'suppliers', partyKey:'supplierId', partyLabel:'供应商', priceKey:'cost', paidKey:'paid', payWord:'付款', statuses:['待审核','已审核','已入库','已作废']}
+};
+
+/* ================= 服务端通信 ================= */
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem('erp_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('erp_' + k, JSON.stringify(v)); } catch (e) {} }
+};
+const prefs = Object.assign({theme:'light', pageSize:10}, LS.get('prefs', {}));
+let db = {settings:{theme:prefs.theme, pageSize:prefs.pageSize}, products:[], customers:[], suppliers:[], employees:[], sales:[], purchases:[], stockLogs:[], finance:[]};
+let ME = null, CLIENT_MODE = false, SERVER_ADDR = '', pending = 0, dataSig = '';
+const isAdmin = () => !!ME && ME.role === 'admin';
+function savePrefs() { prefs.theme = db.settings.theme; prefs.pageSize = db.settings.pageSize; LS.set('prefs', prefs); }
+function busy(on) { pending += on ? 1 : -1; $('#lbar').classList.toggle('on', pending > 0); }
+function setConn(ok) { const c = $('#conn'); c.classList.toggle('bad', !ok); c.querySelector('span').textContent = ok ? '已连接' : '连接中断'; }
+async function api(method, path, body) {
+  busy(true);
+  try {
+    let res;
+    const headers = {'Content-Type':'application/json'}, token = LS.get('token');
+    if (token) headers.Authorization = 'Bearer ' + token;
+    try { res = await fetch(path, {method, headers, body:body === undefined ? undefined : JSON.stringify(body)}); }
+    catch (e) { setConn(false); throw new Error('无法连接到服务器，请检查网络'); }
+    let data = {};
+    try { data = await res.json(); } catch (e) {}
+    setConn(res.status !== 502);
+    if (res.status === 401 && !path.endsWith('/login') && ME) { LS.set('token', null); ME = null; showLogin('登录已过期，请重新登录'); }
+    if (!res.ok) throw new Error(data.error || '请求失败（' + res.status + '）');
+    return data;
+  } finally { busy(false); }
+}
+async function reload() {
+  const d = await api('GET', '/api/data');
+  ME = d.user;
+  const sig = JSON.stringify(d.data) + JSON.stringify(d.settings);
+  const changed = sig !== dataSig; dataSig = sig;
+  db = {...d.data, settings:{...d.settings, version:d.version, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
+  return changed;
+}
+// 发起写操作 → 成功后重新拉取数据并刷新界面；失败则提示错误并保持弹窗
+async function mutate(method, path, body, msg) {
+  try {
+    const r = await api(method, path, body);
+    await reload(); closeModal();
+    if (msg) toast(typeof msg === 'function' ? msg(r) : msg);
+    render();
+    return r || true;
+  } catch (e) { toast(e.message, 'error'); return null; }
+}
+
+/* ---------- 登录 ---------- */
+function showLogin(msg) {
+  $('#login').classList.add('show');
+  $('#lPass').value = '';
+  if (msg) toast(msg, 'error');
+  setTimeout(() => (CLIENT_MODE && !$('#lServer').value ? $('#lServer') : $('#lPass')).focus(), 50);
+}
+async function testServer() {
+  const st = $('#srvState'), label = st.querySelector('span');
+  st.className = 'srv-state'; label.textContent = '正在连接…';
+  try {
+    if (CLIENT_MODE) {
+      const s = $('#lServer').value.trim();
+      if (!s) throw new Error('请填写服务器地址');
+      const r = await fetch('/local/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({server:s})});
+      const c = await r.json();
+      if (!r.ok) throw new Error(c.error || '地址格式不正确');
+      $('#lServer').value = SERVER_ADDR = c.server;
+    }
+    const r = await fetch('/api/ping'), d = await r.json().catch(() => ({}));
+    if (!r.ok || d.app !== 'XERP') throw new Error(d.error || '该地址不是 x.erp 服务端');
+    st.className = 'srv-state ok'; label.textContent = `连接成功 · ${d.company || ''} · v${d.version}`;
+    return true;
+  } catch (e) { st.className = 'srv-state bad'; label.textContent = e.message; return false; }
+}
+async function doLogin() {
+  const btn = $('#lBtn'), user = $('#lUser').value.trim();
+  if (!user || !$('#lPass').value) return toast('请输入用户名和密码', 'error');
+  btn.disabled = true; btn.textContent = '登录中…';
+  try {
+    if (CLIENT_MODE && !(await testServer())) throw new Error('无法连接服务器，请检查服务器地址');
+    const r = await api('POST', '/api/login', {username:user, password:$('#lPass').value});
+    LS.set('token', r.token); LS.set('lastUser', user);
+    await enterApp();
+    toast('欢迎回来，' + ME.name);
+  } catch (e) { toast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '登 录'; }
+}
+async function enterApp() {
+  await reload();
+  $('#login').classList.remove('show');
+  applyTheme(); render();
+}
+async function boot() {
+  applyTheme();
+  try { const r = await fetch('/local/config'); if (r.ok) { CLIENT_MODE = true; SERVER_ADDR = (await r.json()).server || ''; } } catch (e) {}
+  if (CLIENT_MODE) {
+    $('#lServer').value = SERVER_ADDR;
+    const beat = () => fetch('/local/heartbeat', {method:'POST'}).catch(() => {});
+    beat(); setInterval(beat, 20000);
+  } else { $('#srvBox').style.display = 'none'; SERVER_ADDR = location.origin; }
+  $('#lUser').value = LS.get('lastUser', 'admin');
+  if (LS.get('token')) { try { await enterApp(); return; } catch (e) { LS.set('token', null); } }
+  showLogin();
+}
+// 每 30 秒同步一次其他用户的修改（编辑中不打扰）
+setInterval(async () => {
+  if (!ME || document.hidden || $('#mask').classList.contains('show') || $('#login').classList.contains('show')) return;
+  const a = document.activeElement;
+  if (a && /INPUT|SELECT|TEXTAREA/.test(a.tagName)) return;
+  try { if (await reload()) { const y = scrollY; render(); scrollTo(0, y); } } catch (e) {}
+}, 30000);
+const stockStatus = p => p.stock <= 0 ? ['缺货', 'red'] : p.stock < p.safety ? ['预警', 'orange'] : ['正常', 'green'];
+const lowStock = () => db.products.filter(p => p.stock < p.safety);
+const partyName = (kind, o) => { const C = ORD[kind]; return (byId(db[C.party], o[C.partyKey]) || {}).name || '-'; };
+const unpaidOf = (kind, o) => +(orderTotal(o) - (o[ORD[kind].paidKey] || 0)).toFixed(2);
+const badge = (t, c) => `<span class="badge ${c || STATUS_COLOR[t] || 'gray'}">${esc(t)}</span>`;
+
+/* ================= UI 基础 ================= */
+let charts = [];
+const ui = {}, lists = {};
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.innerHTML = ic(type === 'success' ? 'check' : type === 'error' ? 'alert' : 'info') + esc(msg);
+  $('#toasts').appendChild(el);
+  setTimeout(() => { el.style.transition = '.3s'; el.style.opacity = 0; setTimeout(() => el.remove(), 300); }, 2400);
+}
+function openModal(html, size = '') { const m = $('#modal'); m.className = 'modal ' + size; m.innerHTML = html; $('#mask').classList.add('show'); }
+function closeModal() { $('#mask').classList.remove('show'); $('#modal').innerHTML = ''; }
+function modalHead(title) { return `<div class="m-head"><h3>${title}</h3><button class="icon-btn sm" data-act="closeModal">${ic('x')}</button></div>`; }
+function confirmBox(msg, onOk, {title = '确认操作', danger = true, okText = '确定'} = {}) {
+  openModal(`<div class="m-body" style="padding-top:26px"><div class="confirm-ic ${danger ? 'c-red' : 'c-primary'}">${ic(danger ? 'alert' : 'info')}</div><h3 style="margin-bottom:6px">${title}</h3><p style="color:var(--muted)">${msg}</p></div>
+  <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn ${danger ? 'danger' : 'primary'}" id="cOk">${okText}</button></div>`, 'sm');
+  $('#cOk').onclick = () => { closeModal(); onOk(); };
+}
+function fieldHtml(f, d) {
+  const v = d[f.n] ?? f.def ?? '', dis = f.disabled ? 'disabled' : '';
+  let input;
+  if (f.type === 'select') {
+    const opts = typeof f.opts === 'function' ? f.opts() : f.opts;
+    input = `<select name="${f.n}" ${dis}>${opts.map(o => { const [a, b] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(a)}" ${String(a) === String(v) ? 'selected' : ''}>${esc(b)}</option>`; }).join('')}</select>`;
+  } else if (f.type === 'textarea') input = `<textarea name="${f.n}" rows="3" ${dis}>${esc(v)}</textarea>`;
+  else input = `<input name="${f.n}" type="${f.type || 'text'}" value="${esc(v)}" ${f.type === 'number' ? 'step="any"' : ''} placeholder="${esc(f.ph || '')}" ${dis}>`;
+  return `<label class="field ${f.span ? 'span2' : ''}"><span>${f.l}${f.req ? ' <i>*</i>' : ''}</span>${input}</label>`;
+}
+function readForm(fields) {
+  const out = {};
+  for (const f of fields) {
+    if (f.disabled) continue;
+    const el = document.querySelector(`#mform [name="${f.n}"]`);
+    const v = el.value.trim();
+    if (f.req && v === '') { el.classList.add('err'); el.focus(); toast('请填写' + f.l.replace(/（.*/, ''), 'error'); return null; }
+    out[f.n] = f.type === 'number' ? (+v || 0) : v;
+  }
+  return out;
+}
+function formModal({title, fields, data = {}, onSubmit, okText = '保存'}) {
+  openModal(`${modalHead(title)}<form id="mform" class="m-body form-grid" onsubmit="return false">${fields.map(f => fieldHtml(f, data)).join('')}</form>
+  <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="mOk">${okText}</button></div>`);
+  $('#mOk').onclick = async () => {
+    const v = readForm(fields); if (!v) return;
+    const b = $('#mOk'); b.disabled = true;
+    try { await onSubmit(v); } finally { b.disabled = false; }
+  };
+  const first = $('#mform input:not([disabled]),#mform select'); if (first) first.focus();
+}
+function exportCSV(name, headers, rows) {
+  const csv = '﻿' + [headers, ...rows].map(r => r.map(c => '"' + String(c ?? '').replace(/"/g, '""') + '"').join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+  a.download = name + '_' + today() + '.csv'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('已导出 ' + rows.length + ' 条记录');
+}
+
+/* ---------- 通用列表 ---------- */
+function getState(key) { return ui[key] || (ui[key] = {q:'', page:1, f:{}, sort:null}); }
+function toolbar(key, {placeholder = '搜索...', filters = [], buttons = ''} = {}) {
+  const st = getState(key);
+  return `<div class="toolbar"><div class="tb-left"><div class="search">${ic('search')}<input data-search="${key}" value="${esc(st.q)}" placeholder="${placeholder}"></div>
+  ${filters.map(f => `<select class="select" data-filter="${key}|${f.key}"><option value="">${f.label}</option>${f.options.map(o => { const [v, l] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}" ${st.f[f.key] === v ? 'selected' : ''}>${esc(l)}</option>`; }).join('')}</select>`).join('')}
+  </div><div class="tb-right">${buttons}</div></div>`;
+}
+function mountList(key, cfg) { lists[key] = cfg; getState(key); renderList(key); }
+function renderList(key) {
+  const cfg = lists[key], el = document.getElementById('list-' + key);
+  if (!cfg || !el) return;
+  const st = getState(key), ps = +db.settings.pageSize || 10;
+  let data = cfg.rows();
+  if (st.q) { const q = st.q.trim().toLowerCase(); data = data.filter(r => cfg.search(r).toLowerCase().includes(q)); }
+  (cfg.filters || []).forEach(f => { const v = st.f[f.key]; if (v) data = data.filter(r => f.test(r, v)); });
+  if (st.sort) { const col = cfg.columns[st.sort.i]; if (col && col.s) data = [...data].sort((a, b) => { const x = col.s(a), y = col.s(b); return (x > y ? 1 : x < y ? -1 : 0) * st.sort.dir; }); }
+  cfg.last = data;
+  const total = data.length, pages = Math.max(1, Math.ceil(total / ps));
+  if (st.page > pages) st.page = pages;
+  const rows = data.slice((st.page - 1) * ps, st.page * ps);
+  const head = cfg.columns.map((c, i) => `<th class="${c.cls || ''} ${c.s ? 'sortable' : ''}" ${c.s ? `data-act="sort" data-id="${key}|${i}"` : ''}>${c.t}${st.sort && st.sort.i === i ? (st.sort.dir > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('');
+  const body = rows.length ? rows.map(r => `<tr>${cfg.columns.map(c => `<td class="${c.cls || ''}">${c.r(r)}</td>`).join('')}</tr>`).join('')
+    : `<tr><td colspan="${cfg.columns.length}"><div class="empty">${emptySvg}<p>${cfg.empty || '暂无数据'}</p></div></td></tr>`;
+  let btns = ''; const s0 = Math.max(1, Math.min(st.page - 2, pages - 4)), e0 = Math.min(pages, s0 + 4);
+  for (let i = s0; i <= e0; i++) btns += `<button class="pg ${i === st.page ? 'on' : ''}" data-act="page" data-id="${key}|${i}">${i}</button>`;
+  el.innerHTML = `<div class="table-wrap"><table class="tbl ${cfg.compact ? 'compact' : ''}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
+  ${cfg.noPager ? '' : `<div class="pager"><span>共 ${total} 条</span><div><button class="pg" data-act="page" data-id="${key}|${st.page - 1}" ${st.page <= 1 ? 'disabled' : ''}>‹</button>${btns}<button class="pg" data-act="page" data-id="${key}|${st.page + 1}" ${st.page >= pages ? 'disabled' : ''}>›</button></div></div>`}`;
+}
+function exportList(key) {
+  const cfg = lists[key]; if (!cfg || !cfg.exp) return;
+  exportCSV(cfg.exp.name, cfg.exp.cols.map(c => c[0]), (cfg.last || cfg.rows()).map(r => cfg.exp.cols.map(c => c[1](r))));
+}
+const tbtn = (label, act, id, cls = '') => `<button class="tbtn ${cls}" data-act="${act}" data-id="${esc(id)}">${label}</button>`;
+const kpi = (label, value, icon, color, extra = '') => `<div class="card kpi"><div class="kpi-ic c-${color}">${ic(icon)}</div><div style="min-width:0"><label>${label}</label><div class="v">${value}</div>${extra}</div></div>`;
+function trendHtml(cur, prev) {
+  if (!prev) return '<div class="trend"><span>上月无数据</span></div>';
+  const p = (cur - prev) / Math.abs(prev) * 100;
+  return `<div class="trend ${p >= 0 ? 'up' : 'down'}">${p >= 0 ? '↑' : '↓'} ${Math.abs(p).toFixed(1)}% <span>较上月</span></div>`;
+}
+const pageHead = (title, desc, right = '') => `<div class="page-head"><div><h1>${title}</h1><p>${desc}</p></div><div class="tb-right">${right}</div></div>`;
+const tabs = (key, items) => `<div class="tabs">${items.map(([v, l]) => `<button class="tab ${ui[key] === v ? 'on' : ''}" data-act="tab" data-id="${key}|${v}">${l}</button>`).join('')}</div>`;
+
+/* ---------- 图表 ---------- */
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const PALETTE = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#84cc16', '#64748b'];
+function chart(id, cfg) {
+  const el = document.getElementById(id); if (!el) return;
+  if (!window.Chart) { el.parentElement.innerHTML = '<div class="empty">图表库加载失败（需联网）</div>'; return; }
+  Chart.defaults.color = cssVar('--muted');
+  Chart.defaults.borderColor = cssVar('--border');
+  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+  cfg.options = Object.assign({responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{usePointStyle:true, boxWidth:8, padding:16}}}}, cfg.options || {});
+  charts.push(new Chart(el, cfg));
+}
+const yMoney = {ticks:{callback:v => v >= 10000 ? v / 10000 + '万' : v}, grid:{drawBorder:false}};
+
+/* ================= 页面：工作台 ================= */
+function validSales() { return db.sales.filter(o => o.status !== '已作废'); }
+function pageDashboard() {
+  const [prev, cur] = lastMonths(2), S = validSales();
+  const sm = mk => S.filter(o => monthKey(o.date) === mk);
+  const curS = sum(sm(cur), orderTotal), prevS = sum(sm(prev), orderTotal);
+  const curP = sum(sm(cur), o => orderTotal(o) - orderCost(o)), prevP = sum(sm(prev), o => orderTotal(o) - orderCost(o));
+  const recv = sum(S, o => unpaidOf('sales', o));
+  const stockVal = sum(db.products, p => p.stock * p.cost);
+  const toShip = db.sales.filter(o => o.status === '待发货').length;
+  const toApprove = db.purchases.filter(o => o.status === '待审核').length;
+  const toIn = db.purchases.filter(o => o.status === '已审核').length;
+  const low = lowStock();
+  const h = new Date().getHours(), greet = h < 12 ? '早上好' : h < 18 ? '下午好' : '晚上好';
+  const pAmt = {};
+  S.filter(o => daysBetween(o.date, today()) <= 30).forEach(o => o.items.forEach(i => { pAmt[i.productId] = (pAmt[i.productId] || 0) + i.qty * i.price; }));
+  const top = Object.entries(pAmt).sort((a, b) => b[1] - a[1]).slice(0, 6), topMax = top[0] ? top[0][1] : 1;
+
+  $('#view').innerHTML = `
+  <div class="card welcome mb"><div><h2>${greet}，${esc(db.settings.user)} 👋</h2><p>今天是 ${new Date().toLocaleDateString('zh-CN', {year:'numeric', month:'long', day:'numeric', weekday:'long'})}，您有 ${toShip + toApprove + toIn} 项待处理事务。</p></div>
+    <div class="tb-right"><button class="btn" data-act="orderNew" data-id="sales">${ic('plus')}新建销售单</button><button class="btn" data-act="orderNew" data-id="purchase">${ic('plus')}新建采购单</button></div></div>
+  <div class="grid g4 mb">
+    ${kpi('本月销售额', moneyK(curS), 'sales', 'primary', trendHtml(curS, prevS))}
+    ${kpi('本月毛利', moneyK(curP), 'coin', 'green', trendHtml(curP, prevP))}
+    ${kpi('应收账款', moneyK(recv), 'wallet', 'orange', `<div class="trend"><span>${S.filter(o => unpaidOf('sales', o) > 0).length} 笔未结清</span></div>`)}
+    ${kpi('库存总值', moneyK(stockVal), 'warehouse', 'blue', `<div class="trend"><span>${db.products.length} 个 SKU · ${num(sum(db.products, p => p.stock))} 件</span></div>`)}
+  </div>
+  <div class="grid g-2-1 mb">
+    <div class="card"><div class="card-head"><h3>经营趋势（近 6 个月）</h3><span class="more" data-act="go" data-id="reports">查看报表 ›</span></div><div class="card-body"><div class="chart-box"><canvas id="c1"></canvas></div></div></div>
+    <div class="card"><div class="card-head"><h3>待办事项</h3></div><div class="card-body grid g2" style="gap:12px">
+      <div class="todo" data-act="goFilter" data-id="sales|status|待发货"><div class="kpi-ic c-orange">${ic('truck')}</div><div><b>${toShip}</b><small>待发货订单</small></div></div>
+      <div class="todo" data-act="goFilter" data-id="purchase|status|待审核"><div class="kpi-ic c-purple">${ic('check')}</div><div><b>${toApprove}</b><small>待审核采购</small></div></div>
+      <div class="todo" data-act="goFilter" data-id="purchase|status|已审核"><div class="kpi-ic c-blue">${ic('box')}</div><div><b>${toIn}</b><small>待入库采购</small></div></div>
+      <div class="todo" data-act="goFilter" data-id="products|stock|预警"><div class="kpi-ic c-red">${ic('alert')}</div><div><b>${low.length}</b><small>库存预警</small></div></div>
+    </div>
+    <div class="card-head" style="padding-top:0"><h3>快捷入口</h3></div>
+    <div class="card-body grid" style="grid-template-columns:repeat(4,1fr);gap:4px;padding-top:8px">
+      <div class="quick" data-act="add" data-id="products"><div class="kpi-ic c-primary">${ic('box')}</div>新增商品</div>
+      <div class="quick" data-act="add" data-id="customers"><div class="kpi-ic c-green">${ic('users')}</div>新增客户</div>
+      <div class="quick" data-act="finAdd"><div class="kpi-ic c-orange">${ic('wallet')}</div>记一笔</div>
+      <div class="quick" data-act="go" data-id="inventory"><div class="kpi-ic c-blue">${ic('warehouse')}</div>库存盘点</div>
+    </div></div>
+  </div>
+  <div class="grid g3 mb">
+    <div class="card"><div class="card-head"><h3>品类销售占比</h3></div><div class="card-body"><div class="chart-box" style="height:240px"><canvas id="c2"></canvas></div></div></div>
+    <div class="card"><div class="card-head"><h3>近 30 天热销商品</h3><span class="more" data-act="go" data-id="reports">更多 ›</span></div><div class="card-body">
+      ${top.length ? top.map(([pid, v]) => { const p = byId(db.products, pid) || {name:'已删除商品'}; return `<div class="rank"><span class="no"></span><div class="nm"><div>${esc(p.name)}</div><div class="bar"><i style="width:${v / topMax * 100}%"></i></div></div><b>${moneyK(v)}</b></div>`; }).join('') : `<div class="empty">${emptySvg}<p>暂无销售</p></div>`}
+    </div></div>
+    <div class="card"><div class="card-head"><h3>库存预警</h3><span class="more" data-act="go" data-id="inventory">去处理 ›</span></div><div class="card-body" style="padding:12px 0 0">
+      <table class="tbl compact"><thead><tr><th>商品</th><th class="num">库存</th><th class="num">安全</th><th>状态</th></tr></thead><tbody>
+      ${low.slice(0, 6).map(p => { const [t, c] = stockStatus(p); return `<tr><td>${esc(p.name)}</td><td class="num">${p.stock}</td><td class="num">${p.safety}</td><td>${badge(t, c)}</td></tr>`; }).join('') || `<tr><td colspan="4"><div class="empty">库存充足 ✨</div></td></tr>`}
+      </tbody></table></div></div>
+  </div>
+  <div class="card"><div class="card-head"><h3>最近销售订单</h3><span class="more" data-act="go" data-id="sales">全部订单 ›</span></div><div class="card-body" style="padding:12px 0 0">
+    <div class="table-wrap"><table class="tbl"><thead><tr><th>订单号</th><th>客户</th><th>日期</th><th class="num">金额</th><th>状态</th></tr></thead><tbody>
+    ${db.sales.slice(0, 6).map(o => `<tr><td><a class="link" data-act="orderView" data-id="sales|${o.id}">${o.no}</a></td><td>${esc(partyName('sales', o))}</td><td>${o.date}</td><td class="num">${money(orderTotal(o))}</td><td>${badge(o.status)}</td></tr>`).join('')}
+    </tbody></table></div></div></div>`;
+
+  const months = lastMonths(6);
+  chart('c1', {data:{labels:months.map(mLabel), datasets:[
+    {type:'bar', label:'销售额', data:months.map(m => sum(sm(m), orderTotal)), backgroundColor:'#6366f1', borderRadius:6, maxBarThickness:28},
+    {type:'bar', label:'采购额', data:months.map(m => sum(db.purchases.filter(o => o.status !== '已作废' && monthKey(o.date) === m), orderTotal)), backgroundColor:'#06b6d4', borderRadius:6, maxBarThickness:28},
+    {type:'line', label:'毛利', data:months.map(m => sum(sm(m), o => orderTotal(o) - orderCost(o))), borderColor:'#10b981', backgroundColor:'#10b981', tension:.35, pointRadius:4}
+  ]}, options:{scales:{y:yMoney, x:{grid:{display:false}}}}});
+  const cat = catStats(S);
+  chart('c2', {type:'doughnut', data:{labels:Object.keys(cat), datasets:[{data:Object.values(cat), backgroundColor:PALETTE, borderWidth:0}]}, options:{cutout:'68%'}});
+}
+function catStats(orders) {
+  const r = {};
+  orders.forEach(o => o.items.forEach(i => { const p = byId(db.products, i.productId); const c = p ? p.category : '其他'; r[c] = (r[c] || 0) + i.qty * i.price; }));
+  return r;
+}
+
+/* ================= 页面：商品 ================= */
+const ENT = {
+  products: {title:'商品', fields:[
+    {n:'sku', l:'商品编码', req:1}, {n:'name', l:'商品名称', req:1},
+    {n:'category', l:'商品分类', type:'select', opts:() => CATS}, {n:'unit', l:'计量单位', type:'select', opts:() => UNITS},
+    {n:'cost', l:'成本价（元）', type:'number', req:1}, {n:'price', l:'销售价（元）', type:'number', req:1},
+    {n:'stock', l:'期初库存', type:'number', def:0, lockOnEdit:1}, {n:'safety', l:'安全库存', type:'number', def:10},
+    {n:'remark', l:'备注', type:'textarea', span:1}]},
+  customers: {title:'客户', fields:[
+    {n:'name', l:'客户名称', req:1, span:1}, {n:'contact', l:'联系人', req:1}, {n:'phone', l:'联系电话', req:1}, {n:'email', l:'邮箱'},
+    {n:'level', l:'客户等级', type:'select', opts:() => LEVELS}, {n:'address', l:'地址', span:1}, {n:'remark', l:'备注', type:'textarea', span:1}]},
+  suppliers: {title:'供应商', fields:[
+    {n:'name', l:'供应商名称', req:1, span:1}, {n:'contact', l:'联系人', req:1}, {n:'phone', l:'联系电话', req:1}, {n:'email', l:'邮箱'},
+    {n:'category', l:'主营类目', type:'select', opts:() => [...CATS, '综合']}, {n:'address', l:'地址', span:1}, {n:'remark', l:'备注', type:'textarea', span:1}]},
+  employees: {title:'员工', fields:[
+    {n:'no', l:'工号', ph:'留空自动生成'}, {n:'name', l:'姓名', req:1}, {n:'gender', l:'性别', type:'select', opts:['男', '女']},
+    {n:'dept', l:'部门', type:'select', opts:() => DEPTS}, {n:'position', l:'职位', req:1}, {n:'phone', l:'手机号'},
+    {n:'salary', l:'月薪（元）', type:'number'}, {n:'joinDate', l:'入职日期', type:'date', def:today()},
+    {n:'status', l:'状态', type:'select', opts:['在职', '试用期', '离职']}]}
+};
+function editEntity(type, id) {
+  const cfg = ENT[type], rec = id ? byId(db[type], id) : null;
+  const fields = cfg.fields.map(f => ({...f, disabled:rec && f.lockOnEdit}));
+  formModal({title:(rec ? '编辑' : '新增') + cfg.title, fields, data:rec || {}, onSubmit:v =>
+    mutate(rec ? 'PUT' : 'POST', '/api/' + type + (rec ? '/' + rec.id : ''), v, (rec ? '已更新' : '已新增') + cfg.title)});
+}
+function delEntity(type, id) {
+  const rec = byId(db[type], id), cfg = ENT[type];
+  confirmBox(`确定删除${cfg.title}「${esc(rec.name)}」吗？此操作不可撤销。`, () => mutate('DELETE', `/api/${type}/${id}`, undefined, '已删除'));
+}
+function pageProducts() {
+  const filters = [
+    {key:'cat', label:'全部分类', options:CATS, test:(p, v) => p.category === v},
+    {key:'stock', label:'库存状态', options:['正常', '预警', '缺货'], test:(p, v) => v === '预警' ? p.stock < p.safety : stockStatus(p)[0] === v}
+  ];
+  $('#view').innerHTML = pageHead('商品管理', '维护商品档案、价格与安全库存') + `
+  <div class="grid g4 mb">
+    ${kpi('商品总数', db.products.length, 'box', 'primary')}
+    ${kpi('商品分类', new Set(db.products.map(p => p.category)).size, 'dashboard', 'purple')}
+    ${kpi('平均毛利率', (sum(db.products, p => p.price ? (p.price - p.cost) / p.price : 0) / (db.products.length || 1) * 100).toFixed(1) + '%', 'coin', 'green')}
+    ${kpi('库存预警', lowStock().length, 'alert', 'red')}
+  </div>
+  <div class="card">${toolbar('products', {placeholder:'搜索编码 / 名称', filters, buttons:`<button class="btn" data-act="export" data-id="products">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="products">${ic('plus')}新增商品</button>`})}<div id="list-products"></div></div>`;
+  mountList('products', {rows:() => db.products, search:p => p.sku + p.name + p.category, filters, columns:[
+    {t:'商品编码', r:p => `<span class="sub-t">${esc(p.sku)}</span>`, s:p => p.sku},
+    {t:'商品名称', r:p => `<b>${esc(p.name)}</b>`, s:p => p.name},
+    {t:'分类', r:p => badge(p.category, 'primary plain')},
+    {t:'单位', r:p => esc(p.unit)},
+    {t:'成本价', cls:'num', r:p => money(p.cost), s:p => p.cost},
+    {t:'销售价', cls:'num', r:p => money(p.price), s:p => p.price},
+    {t:'毛利率', cls:'num', r:p => p.price ? ((p.price - p.cost) / p.price * 100).toFixed(1) + '%' : '-', s:p => p.price ? (p.price - p.cost) / p.price : 0},
+    {t:'库存', cls:'num', r:p => `<b>${num(p.stock)}</b>`, s:p => p.stock},
+    {t:'状态', r:p => badge(...stockStatus(p))},
+    {t:'操作', r:p => `<div class="ops">${tbtn('编辑', 'edit', 'products|' + p.id)}${tbtn('入库', 'stock', 'in|' + p.id)}${tbtn('删除', 'del', 'products|' + p.id, 'danger-text')}</div>`}
+  ], exp:{name:'商品列表', cols:[['商品编码', p => p.sku], ['商品名称', p => p.name], ['分类', p => p.category], ['单位', p => p.unit], ['成本价', p => p.cost], ['销售价', p => p.price], ['库存', p => p.stock], ['安全库存', p => p.safety]]}});
+}
+
+/* ================= 页面：库存 ================= */
+function pageInventory() {
+  if (!ui.invTab) ui.invTab = 'stock';
+  const totalQty = sum(db.products, p => p.stock), val = sum(db.products, p => p.stock * p.cost);
+  const m = monthKey(today()), ml = db.stockLogs.filter(l => monthKey(l.date) === m);
+  $('#view').innerHTML = pageHead('库存管理', '实时库存、出入库记录与盘点') + `
+  <div class="grid g4 mb">
+    ${kpi('库存总量', num(totalQty), 'box', 'primary', `<div class="trend"><span>${db.products.length} 个 SKU</span></div>`)}
+    ${kpi('库存总值（成本）', moneyK(val), 'coin', 'green')}
+    ${kpi('本月入库', num(sum(ml.filter(l => l.qty > 0), l => l.qty)), 'download', 'blue')}
+    ${kpi('本月出库', num(-sum(ml.filter(l => l.qty < 0), l => l.qty)), 'upload', 'orange')}
+  </div>
+  ${tabs('invTab', [['stock', '库存总览'], ['logs', '出入库记录']])}
+  <div class="card" id="invCard"></div>`;
+  if (ui.invTab === 'stock') {
+    const filters = [{key:'cat', label:'全部分类', options:CATS, test:(p, v) => p.category === v}, {key:'st', label:'库存状态', options:['正常', '预警', '缺货'], test:(p, v) => stockStatus(p)[0] === v}];
+    $('#invCard').innerHTML = toolbar('inv', {placeholder:'搜索商品', filters, buttons:`<button class="btn" data-act="export" data-id="inv">${ic('download')}导出库存</button>`}) + '<div id="list-inv"></div>';
+    mountList('inv', {rows:() => db.products, search:p => p.sku + p.name, filters, columns:[
+      {t:'商品', r:p => `<b>${esc(p.name)}</b><div class="sub-t">${esc(p.sku)} · ${esc(p.category)}</div>`, s:p => p.name},
+      {t:'当前库存', cls:'num', r:p => `<b>${num(p.stock)}</b> ${esc(p.unit)}`, s:p => p.stock},
+      {t:'安全库存', cls:'num', r:p => num(p.safety)},
+      {t:'库存水位', r:p => { const pct = Math.min(100, p.stock / (p.safety * 3) * 100); const c = stockStatus(p)[1]; return `<div class="prog"><div class="bar"><i style="width:${pct}%;background:var(--${c})"></i></div></div>`; }},
+      {t:'成本单价', cls:'num', r:p => money(p.cost)},
+      {t:'库存金额', cls:'num', r:p => money(p.stock * p.cost), s:p => p.stock * p.cost},
+      {t:'状态', r:p => badge(...stockStatus(p))},
+      {t:'操作', r:p => `<div class="ops">${tbtn('入库', 'stock', 'in|' + p.id)}${tbtn('出库', 'stock', 'out|' + p.id)}${tbtn('盘点', 'stock', 'check|' + p.id)}${tbtn('流水', 'prodLogs', p.id)}</div>`}
+    ], exp:{name:'库存清单', cols:[['编码', p => p.sku], ['商品', p => p.name], ['分类', p => p.category], ['库存', p => p.stock], ['安全库存', p => p.safety], ['成本', p => p.cost], ['库存金额', p => (p.stock * p.cost).toFixed(2)], ['状态', p => stockStatus(p)[0]]]}});
+  } else {
+    const kinds = ['期初库存', '采购入库', '销售出库', '手工入库', '手工出库', '盘点调整'];
+    const filters = [{key:'kind', label:'全部类型', options:kinds, test:(l, v) => l.kind === v}, {key:'dir', label:'方向', options:[['in', '入库'], ['out', '出库']], test:(l, v) => v === 'in' ? l.qty > 0 : l.qty < 0}];
+    $('#invCard').innerHTML = toolbar('logs', {placeholder:'搜索商品 / 单号', filters, buttons:`<button class="btn" data-act="export" data-id="logs">${ic('download')}导出</button>`}) + '<div id="list-logs"></div>';
+    const pn = l => (byId(db.products, l.productId) || {}).name || '已删除商品';
+    mountList('logs', {rows:() => db.stockLogs, search:l => pn(l) + l.ref + l.note, filters, columns:[
+      {t:'时间', r:l => `${l.date} <span class="sub-t">${l.time || ''}</span>`, s:l => l.date + l.time},
+      {t:'商品', r:l => esc(pn(l))},
+      {t:'类型', r:l => badge(l.kind, l.qty > 0 ? 'green' : 'orange')},
+      {t:'数量', cls:'num', r:l => `<span class="${l.qty > 0 ? 'pos' : 'neg'}">${l.qty > 0 ? '+' : ''}${l.qty}</span>`, s:l => l.qty},
+      {t:'关联单据', r:l => l.ref ? `<span class="sub-t">${esc(l.ref)}</span>` : '-'},
+      {t:'备注', r:l => esc(l.note) || '-'},
+      {t:'操作人', r:l => esc(l.operator || '-')}
+    ], exp:{name:'出入库记录', cols:[['日期', l => l.date], ['时间', l => l.time], ['商品', pn], ['类型', l => l.kind], ['数量', l => l.qty], ['单据', l => l.ref], ['备注', l => l.note], ['操作人', l => l.operator]]}});
+  }
+}
+function stockModal(mode, id) {
+  const p = byId(db.products, id), T = {in:'手工入库', out:'手工出库', check:'库存盘点'}[mode];
+  formModal({title:T + ' · ' + esc(p.name), fields:[
+    {n:'qty', l:mode === 'check' ? `实盘数量（账面 ${p.stock}）` : `数量（当前库存 ${p.stock}）`, type:'number', req:1},
+    {n:'note', l:'备注', type:'textarea', span:1}],
+    data:{qty:mode === 'check' ? p.stock : ''}, onSubmit:v => {
+      if (!Number.isInteger(v.qty)) return toast('数量必须为整数', 'error');
+      if (mode !== 'check' && v.qty <= 0) return toast('数量必须大于 0', 'error');
+      return mutate('POST', '/api/stock/' + p.id, {mode, qty:v.qty, note:v.note}, r => r.delta === 0 ? '库存无变化' : T + '成功：' + (r.delta > 0 ? '+' : '') + r.delta);
+    }});
+}
+function prodLogs(id) {
+  const p = byId(db.products, id), logs = db.stockLogs.filter(l => l.productId === id).slice(0, 50);
+  openModal(`${modalHead('库存流水 · ' + esc(p.name))}<div class="m-body" style="padding:0"><table class="tbl compact"><thead><tr><th>时间</th><th>类型</th><th class="num">数量</th><th>单据</th></tr></thead><tbody>
+  ${logs.map(l => `<tr><td>${l.date} ${l.time || ''}</td><td>${badge(l.kind, l.qty > 0 ? 'green' : 'orange')}</td><td class="num ${l.qty > 0 ? 'pos' : 'neg'}">${l.qty > 0 ? '+' : ''}${l.qty}</td><td class="sub-t">${esc(l.ref) || '-'}</td></tr>`).join('') || '<tr><td colspan="4"><div class="empty">暂无流水</div></td></tr>'}
+  </tbody></table></div>`, 'lg');
+}
+
+/* ================= 页面：销售 / 采购 ================= */
+function pageOrders(kind) {
+  const C = ORD[kind], list = db[C.db], m = monthKey(today());
+  const valid = list.filter(o => o.status !== '已作废'), monthO = valid.filter(o => monthKey(o.date) === m);
+  const unpaid = sum(valid, o => unpaidOf(kind, o));
+  const filters = [
+    {key:'status', label:'全部状态', options:C.statuses, test:(o, v) => o.status === v},
+    {key:'party', label:'全部' + C.partyLabel, options:db[C.party].map(p => [p.id, p.name]), test:(o, v) => o[C.partyKey] === v},
+    {key:'pay', label:C.payWord + '状态', options:['未结清', '已结清'], test:(o, v) => (unpaidOf(kind, o) > 0.001) === (v === '未结清')}
+  ];
+  $('#view').innerHTML = pageHead(kind === 'sales' ? '销售管理' : '采购管理', kind === 'sales' ? '销售订单、发货与收款全流程' : '采购订单、审核、入库与付款全流程') + `
+  <div class="grid g4 mb">
+    ${kpi('本月订单数', monthO.length, 'cart', 'primary')}
+    ${kpi('本月' + (kind === 'sales' ? '销售' : '采购') + '额', moneyK(sum(monthO, orderTotal)), 'sales', 'green')}
+    ${kpi(C.statuses[0], list.filter(o => o.status === C.statuses[0]).length, 'clock', 'orange')}
+    ${kpi(kind === 'sales' ? '待收款' : '待付款', moneyK(unpaid), 'wallet', 'red')}
+  </div>
+  <div class="card">${toolbar(kind, {placeholder:'搜索单号 / ' + C.partyLabel, filters, buttons:`<button class="btn" data-act="export" data-id="${kind}">${ic('download')}导出</button><button class="btn primary" data-act="orderNew" data-id="${kind}">${ic('plus')}新建${C.title}</button>`})}<div id="list-${kind}"></div></div>`;
+  mountList(kind, {rows:() => db[C.db], search:o => o.no + partyName(kind, o) + o.remark, filters, columns:[
+    {t:'单号', r:o => `<a class="link" data-act="orderView" data-id="${kind}|${o.id}">${o.no}</a>`, s:o => o.no},
+    {t:C.partyLabel, r:o => esc(partyName(kind, o))},
+    {t:'日期', r:o => o.date, s:o => o.date},
+    {t:'商品', r:o => { const p = byId(db.products, o.items[0]?.productId); return esc(p ? p.name : '-') + (o.items.length > 1 ? `<span class="sub-t"> 等${o.items.length}项</span>` : ''); }},
+    {t:'金额', cls:'num', r:o => `<b>${money(orderTotal(o))}</b>`, s:orderTotal},
+    {t:C.payWord + '进度', r:o => { const t = orderTotal(o), pct = t ? (o[C.paidKey] || 0) / t * 100 : 0; return o.status === '已作废' ? '-' : `<div class="prog"><div class="bar"><i style="width:${pct}%"></i></div><small>${pct.toFixed(0)}%</small></div>`; }},
+    {t:'状态', r:o => badge(o.status)},
+    {t:'操作', r:o => `<div class="ops">${orderOps(kind, o)}</div>`}
+  ], exp:{name:C.title, cols:[['单号', o => o.no], [C.partyLabel, o => partyName(kind, o)], ['日期', o => o.date], ['金额', o => orderTotal(o).toFixed(2)], ['已' + C.payWord, o => o[C.paidKey] || 0], ['状态', o => o.status], ['备注', o => o.remark]]}});
+}
+function orderOps(kind, o) {
+  const C = ORD[kind], id = kind + '|' + o.id, b = [tbtn('查看', 'orderView', id)];
+  if (kind === 'sales') {
+    if (o.status === '待发货') b.push(tbtn('发货', 'ship', id, 'primary'), tbtn('编辑', 'orderEdit', id));
+    if (o.status === '已发货') b.push(tbtn('完成', 'complete', id, 'primary'));
+  } else {
+    if (o.status === '待审核') b.push(tbtn('审核', 'approve', id, 'primary'), tbtn('编辑', 'orderEdit', id));
+    if (o.status === '已审核') b.push(tbtn('入库', 'inbound', id, 'primary'));
+  }
+  if (o.status !== '已作废' && unpaidOf(kind, o) > 0.001) b.push(tbtn(C.payWord, 'pay', id));
+  const cancellable = kind === 'sales' ? o.status === '待发货' : ['待审核', '已审核'].includes(o.status);
+  if (cancellable && !(o[C.paidKey] > 0)) b.push(tbtn('作废', 'cancel', id, 'danger-text'));
+  if (o.status === '已作废') b.push(tbtn('删除', 'orderDel', id, 'danger-text'));
+  return b.join('');
+}
+function orderModal(kind, id) {
+  const C = ORD[kind], o = id ? byId(db[C.db], id) : null;
+  const draft = {items:o ? o.items.map(i => ({...i})) : [{productId:'', qty:1, price:0}]};
+  openModal(`${modalHead((o ? '编辑' : '新建') + C.title + (o ? ' · ' + o.no : ''))}
+  <div class="m-body"><div class="form-grid">
+    <label class="field"><span>${C.partyLabel} <i>*</i></span><select id="oParty"><option value="">请选择${C.partyLabel}</option>${db[C.party].map(p => `<option value="${p.id}" ${o && p.id === o[C.partyKey] ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+    <label class="field"><span>单据日期 <i>*</i></span><input type="date" id="oDate" value="${o ? o.date : today()}"></label>
+  </div>
+  <div class="line-head"><b>商品明细</b><button class="btn sm" id="oAdd">${ic('plus')}添加商品</button></div>
+  <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:240px">商品</th><th style="width:110px">数量</th><th style="width:130px">单价</th><th class="num" style="width:130px">小计</th><th style="width:44px"></th></tr></thead><tbody id="oItems"></tbody></table></div>
+  <label class="field" style="margin-top:16px"><span>备注</span><textarea id="oRemark" rows="2">${esc(o ? o.remark : '')}</textarea></label>
+  <div class="o-total">合计金额<b id="oTotal">¥0.00</b></div></div>
+  <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="oSave">保存订单</button></div>`, 'lg');
+  const tb = $('#oItems');
+  const updTotal = () => { $('#oTotal').textContent = money(sum(draft.items, i => i.qty * i.price)); };
+  const renderItems = () => {
+    tb.innerHTML = draft.items.map((it, i) => `<tr>
+      <td><select data-i="${i}" data-k="productId"><option value="">选择商品</option>${db.products.map(p => `<option value="${p.id}" ${p.id === it.productId ? 'selected' : ''}>${esc(p.name)}（库存 ${p.stock}${esc(p.unit)}）</option>`).join('')}</select></td>
+      <td><input type="number" min="1" data-i="${i}" data-k="qty" value="${it.qty}"></td>
+      <td><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"></td>
+      <td class="num sub">${money(it.qty * it.price)}</td>
+      <td><button class="icon-btn sm" data-del="${i}" title="删除">${ic('trash')}</button></td></tr>`).join('');
+    updTotal();
+  };
+  tb.addEventListener('change', e => {
+    const t = e.target, i = +t.dataset.i;
+    if (t.dataset.k === 'productId') { const p = byId(db.products, t.value); draft.items[i].productId = t.value; if (p) { draft.items[i].price = p[C.priceKey]; draft.items[i].cost = p.cost; } renderItems(); }
+  });
+  tb.addEventListener('input', e => {
+    const t = e.target, i = +t.dataset.i, k = t.dataset.k;
+    if (k === 'qty' || k === 'price') { draft.items[i][k] = +t.value || 0; t.closest('tr').querySelector('.sub').textContent = money(draft.items[i].qty * draft.items[i].price); updTotal(); }
+  });
+  tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { draft.items.splice(+b.dataset.del, 1); if (!draft.items.length) draft.items.push({productId:'', qty:1, price:0}); renderItems(); } });
+  $('#oAdd').onclick = () => { draft.items.push({productId:'', qty:1, price:0}); renderItems(); };
+  $('#oSave').onclick = () => {
+    const party = $('#oParty').value, date = $('#oDate').value, remark = $('#oRemark').value.trim();
+    const items = draft.items.filter(i => i.productId);
+    if (!party) return toast('请选择' + C.partyLabel, 'error');
+    if (!date) return toast('请选择日期', 'error');
+    if (!items.length) return toast('请至少添加一个商品', 'error');
+    if (items.some(i => i.qty <= 0 || !Number.isInteger(i.qty))) return toast('数量必须为正整数', 'error');
+    if (items.some(i => i.price < 0)) return toast('单价不能为负', 'error');
+    const body = {partyId:party, date, remark, items:items.map(i => ({productId:i.productId, qty:i.qty, price:i.price}))};
+    const b = $('#oSave'); b.disabled = true;
+    mutate(o ? 'PUT' : 'POST', '/api/orders/' + kind + (o ? '/' + o.id : ''), body, r => o ? '订单已更新' : '订单已创建：' + r.no)
+      .finally(() => { b.disabled = false; });
+  };
+  renderItems();
+}
+function orderView(kind, id) {
+  const C = ORD[kind], o = byId(db[C.db], id), party = byId(db[C.party], o[C.partyKey]) || {};
+  const total = orderTotal(o), paid = o[C.paidKey] || 0;
+  const pays = db.finance.filter(f => f.ref === o.no);
+  openModal(`${modalHead(C.title + '详情')}
+  <div class="m-body"><div class="print-area doc">
+    <h2>${esc(db.settings.company)}</h2><div class="doc-sub">${C.doc} · ${o.no} &nbsp; ${badge(o.status)}</div>
+    <div class="doc-info">
+      <div><span>${C.partyLabel}：</span>${esc(party.name || '-')}</div><div><span>单据日期：</span>${o.date}</div>
+      <div><span>联系人：</span>${esc(party.contact || '-')} ${esc(party.phone || '')}</div><div><span>制单人：</span>${esc(db.settings.user)}</div>
+      <div style="grid-column:1/-1"><span>地址：</span>${esc(party.address || '-')}</div>
+    </div>
+    <table class="tbl compact"><thead><tr><th>#</th><th>商品</th><th>单位</th><th class="num">数量</th><th class="num">单价</th><th class="num">金额</th></tr></thead><tbody>
+    ${o.items.map((i, n) => { const p = byId(db.products, i.productId) || {name:'已删除商品', unit:''}; return `<tr><td>${n + 1}</td><td>${esc(p.name)}</td><td>${esc(p.unit)}</td><td class="num">${i.qty}</td><td class="num">${money(i.price)}</td><td class="num">${money(i.qty * i.price)}</td></tr>`; }).join('')}
+    </tbody></table>
+    <div class="doc-sum"><div>合计：<b>${money(total)}</b></div><div>已${C.payWord}：<b class="pos">${money(paid)}</b></div><div>未${C.payWord}：<b class="neg">${money(total - paid)}</b></div></div>
+    ${o.remark ? `<p style="margin-top:12px;color:var(--muted)">备注：${esc(o.remark)}</p>` : ''}
+    ${pays.length ? `<h4 style="margin:18px 0 8px">${C.payWord}记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(f.method || '')}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td></tr>`).join('')}</tbody></table>` : ''}
+  </div></div>
+  <div class="m-foot"><div class="ops" style="margin-right:auto">${orderOps(kind, o).replace(tbtn('查看', 'orderView', kind + '|' + o.id), '')}</div><button class="btn" data-act="print">${ic('printer')}打印</button><button class="btn primary" data-act="closeModal">关闭</button></div>`, 'lg');
+}
+function orderAct(action, kind, id) {
+  const C = ORD[kind], o = byId(db[C.db], id), url = `/api/orders/${kind}/${id}`;
+  const run = (act, msg, body) => mutate(act === 'delete' ? 'DELETE' : 'POST', act === 'delete' ? url : url + '/' + act, body || {}, msg);
+  if (action === 'ship') {
+    const lack = o.items.map(i => ({i, p:byId(db.products, i.productId)})).filter(x => !x.p || x.p.stock < x.i.qty);
+    if (lack.length) return toast('库存不足：' + lack.map(x => (x.p ? x.p.name + '（缺 ' + (x.i.qty - x.p.stock) + '）' : '商品已删除')).join('、'), 'error');
+    confirmBox(`确认发货 ${o.no}？将扣减对应商品库存。`, () => run('ship', '已发货，库存已扣减'), {danger:false, okText:'确认发货'});
+  } else if (action === 'complete') run('complete', '订单已完成');
+  else if (action === 'approve') confirmBox(`审核通过采购单 ${o.no}？`, () => run('approve', '审核通过'), {danger:false, okText:'审核通过'});
+  else if (action === 'inbound') confirmBox(`确认采购单 ${o.no} 全部到货入库？`, () => run('inbound', '已入库，库存已增加'), {danger:false, okText:'确认入库'});
+  else if (action === 'cancel') confirmBox(`确定作废单据 ${o.no} 吗？`, () => run('cancel', '已作废'));
+  else if (action === 'orderDel') confirmBox(`确定删除单据 ${o.no} 吗？此操作不可撤销。`, () => run('delete', '已删除'));
+  else if (action === 'pay') {
+    const unpaid = unpaidOf(kind, o);
+    formModal({title:'登记' + C.payWord + ' · ' + o.no, okText:'确认' + C.payWord, fields:[
+      {n:'amount', l:`${C.payWord}金额（未结 ${money(unpaid)}）`, type:'number', req:1}, {n:'date', l:'日期', type:'date', req:1},
+      {n:'method', l:'方式', type:'select', opts:METHODS}, {n:'note', l:'备注'}],
+      data:{amount:unpaid, date:today(), method:'银行转账'}, onSubmit:v => {
+        if (v.amount <= 0 || v.amount > unpaid + 0.001) return toast('金额需在 0 ~ ' + money(unpaid) + ' 之间', 'error');
+        return run('pay', C.payWord + '已登记：' + money(v.amount), v);
+      }});
+  }
+}
+
+/* ================= 页面：客户 / 供应商 ================= */
+function pageParty(type) {
+  const isC = type === 'customers', kind = isC ? 'sales' : 'purchase', C = ORD[kind];
+  const orders = pid => db[C.db].filter(o => o[C.partyKey] === pid && o.status !== '已作废');
+  const filters = isC ? [{key:'lv', label:'全部等级', options:LEVELS, test:(r, v) => r.level === v}] : [{key:'cat', label:'全部类目', options:[...CATS, '综合'], test:(r, v) => r.category === v}];
+  const active = db[type].filter(p => orders(p.id).some(o => daysBetween(o.date, today()) <= 90)).length;
+  $('#view').innerHTML = pageHead(isC ? '客户管理' : '供应商管理', isC ? '客户档案、交易统计与应收情况' : '供应商档案、采购统计与应付情况') + `
+  <div class="grid g4 mb">
+    ${kpi(isC ? '客户总数' : '供应商总数', db[type].length, isC ? 'users' : 'truck', 'primary')}
+    ${kpi('近 90 天活跃', active, 'sales', 'green')}
+    ${kpi(isC ? '累计销售额' : '累计采购额', moneyK(sum(db[C.db].filter(o => o.status !== '已作废'), orderTotal)), 'coin', 'blue')}
+    ${kpi(isC ? '应收合计' : '应付合计', moneyK(sum(db[C.db].filter(o => o.status !== '已作废'), o => unpaidOf(kind, o))), 'wallet', 'orange')}
+  </div>
+  <div class="card">${toolbar(type, {placeholder:'搜索名称 / 联系人 / 电话', filters, buttons:`<button class="btn" data-act="export" data-id="${type}">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="${type}">${ic('plus')}新增${ENT[type].title}</button>`})}<div id="list-${type}"></div></div>`;
+  mountList(type, {rows:() => db[type], search:r => r.name + r.contact + r.phone, filters, columns:[
+    {t:'名称', r:r => `<b>${esc(r.name)}</b><div class="sub-t">${esc(r.address || '')}</div>`, s:r => r.name},
+    {t:'联系人', r:r => `${esc(r.contact)}<div class="sub-t">${esc(r.phone)}</div>`},
+    isC ? {t:'等级', r:r => badge(r.level, r.level === 'VIP' ? 'purple plain' : 'primary plain'), s:r => LEVELS.indexOf(r.level)} : {t:'主营类目', r:r => badge(r.category || '-', 'primary plain')},
+    {t:'订单数', cls:'num', r:r => orders(r.id).length, s:r => orders(r.id).length},
+    {t:isC ? '累计消费' : '累计采购', cls:'num', r:r => money(sum(orders(r.id), orderTotal)), s:r => sum(orders(r.id), orderTotal)},
+    {t:isC ? '应收' : '应付', cls:'num', r:r => { const u = sum(orders(r.id), o => unpaidOf(kind, o)); return u > 0 ? `<span class="neg">${money(u)}</span>` : money(0); }, s:r => sum(orders(r.id), o => unpaidOf(kind, o))},
+    {t:'最近交易', r:r => orders(r.id)[0]?.date || '-'},
+    {t:'操作', r:r => `<div class="ops">${tbtn('订单', 'partyOrders', type + '|' + r.id)}${tbtn('编辑', 'edit', type + '|' + r.id)}${tbtn('删除', 'del', type + '|' + r.id, 'danger-text')}</div>`}
+  ], exp:{name:ENT[type].title + '列表', cols:[['名称', r => r.name], ['联系人', r => r.contact], ['电话', r => r.phone], ['邮箱', r => r.email], [isC ? '等级' : '类目', r => isC ? r.level : r.category], ['地址', r => r.address], ['订单数', r => orders(r.id).length], ['累计金额', r => sum(orders(r.id), orderTotal).toFixed(2)]]}});
+}
+
+/* ================= 页面：财务 ================= */
+function pageFinance() {
+  if (!ui.finTab) ui.finTab = 'flow';
+  const m = monthKey(today()), mf = db.finance.filter(f => monthKey(f.date) === m);
+  const inc = sum(mf.filter(f => f.type === 'income'), f => f.amount), exp = sum(mf.filter(f => f.type === 'expense'), f => f.amount);
+  const recv = sum(validSales(), o => unpaidOf('sales', o)), pay = sum(db.purchases.filter(o => o.status !== '已作废'), o => unpaidOf('purchase', o));
+  $('#view').innerHTML = pageHead('财务管理', '收支流水、应收应付与资金概览', `<button class="btn primary" data-act="finAdd">${ic('plus')}记一笔</button>`) + `
+  <div class="grid g5 mb">
+    ${kpi('本月收入', moneyK(inc), 'download', 'green')}
+    ${kpi('本月支出', moneyK(exp), 'upload', 'red')}
+    ${kpi('本月净现金流', `<span class="${inc - exp >= 0 ? 'pos' : 'neg'}">${moneyK(inc - exp)}</span>`, 'coin', 'primary')}
+    ${kpi('应收账款', moneyK(recv), 'wallet', 'orange')}
+    ${kpi('应付账款', moneyK(pay), 'wallet', 'purple')}
+  </div>
+  ${tabs('finTab', [['flow', '收支流水'], ['recv', '应收账款'], ['pay', '应付账款'], ['chart', '收支分析']])}
+  <div class="card" id="finCard"></div>`;
+  const card = $('#finCard');
+  if (ui.finTab === 'flow') {
+    const filters = [{key:'type', label:'收支类型', options:[['income', '收入'], ['expense', '支出']], test:(f, v) => f.type === v},
+      {key:'cat', label:'全部科目', options:[...FIN_CATS.income, ...FIN_CATS.expense], test:(f, v) => f.category === v},
+      {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(f, v) => monthKey(f.date) === v}];
+    card.innerHTML = toolbar('fin', {placeholder:'搜索单号 / 备注', filters, buttons:`<button class="btn" data-act="export" data-id="fin">${ic('download')}导出</button>`}) + '<div id="list-fin"></div>';
+    mountList('fin', {rows:() => db.finance, search:f => f.ref + f.note + f.category, filters, columns:[
+      {t:'日期', r:f => f.date, s:f => f.date},
+      {t:'类型', r:f => badge(f.type === 'income' ? '收入' : '支出', f.type === 'income' ? 'green' : 'red')},
+      {t:'科目', r:f => esc(f.category)},
+      {t:'金额', cls:'num', r:f => `<span class="${f.type === 'income' ? 'pos' : 'neg'}">${f.type === 'income' ? '+' : '-'}${money(f.amount)}</span>`, s:f => f.amount},
+      {t:'方式', r:f => esc(f.method || '-')},
+      {t:'关联单据', r:f => f.ref ? `<span class="sub-t">${esc(f.ref)}</span>` : '-'},
+      {t:'备注', r:f => esc(f.note || '-')},
+      {t:'操作', r:f => f.ref ? '<span class="sub-t">单据生成</span>' : `<div class="ops">${tbtn('删除', 'finDel', f.id, 'danger-text')}</div>`}
+    ], exp:{name:'收支流水', cols:[['日期', f => f.date], ['类型', f => f.type === 'income' ? '收入' : '支出'], ['科目', f => f.category], ['金额', f => f.amount], ['方式', f => f.method], ['单据', f => f.ref], ['备注', f => f.note]]}});
+  } else if (ui.finTab === 'recv' || ui.finTab === 'pay') {
+    const kind = ui.finTab === 'recv' ? 'sales' : 'purchase', C = ORD[kind], key = 'fin_' + kind;
+    card.innerHTML = toolbar(key, {placeholder:'搜索单号 / ' + C.partyLabel}) + `<div id="list-${key}"></div>`;
+    mountList(key, {rows:() => db[C.db].filter(o => o.status !== '已作废' && unpaidOf(kind, o) > 0.001), search:o => o.no + partyName(kind, o), empty:'全部结清 🎉', columns:[
+      {t:'单号', r:o => `<a class="link" data-act="orderView" data-id="${kind}|${o.id}">${o.no}</a>`},
+      {t:C.partyLabel, r:o => esc(partyName(kind, o))},
+      {t:'单据日期', r:o => o.date, s:o => o.date},
+      {t:'订单金额', cls:'num', r:o => money(orderTotal(o))},
+      {t:'已' + C.payWord, cls:'num', r:o => money(o[C.paidKey] || 0)},
+      {t:'未' + C.payWord, cls:'num', r:o => `<b class="neg">${money(unpaidOf(kind, o))}</b>`, s:o => unpaidOf(kind, o)},
+      {t:'账龄', r:o => { const d = daysBetween(o.date, today()); return badge(d + ' 天', d > 60 ? 'red' : d > 30 ? 'orange' : 'green'); }, s:o => o.date},
+      {t:'操作', r:o => tbtn(C.payWord, 'pay', kind + '|' + o.id, 'primary')}
+    ]});
+  } else {
+    card.innerHTML = `<div class="card-body grid g2"><div><h3 style="margin-bottom:12px">月度收支（近 6 个月）</h3><div class="chart-box"><canvas id="f1"></canvas></div></div><div><h3 style="margin-bottom:12px">支出结构（近 6 个月）</h3><div class="chart-box"><canvas id="f2"></canvas></div></div></div>`;
+    const ms = lastMonths(6), fm = (mk, t) => sum(db.finance.filter(f => f.type === t && monthKey(f.date) === mk), f => f.amount);
+    chart('f1', {type:'bar', data:{labels:ms.map(mLabel), datasets:[{label:'收入', data:ms.map(m => fm(m, 'income')), backgroundColor:'#10b981', borderRadius:6, maxBarThickness:26}, {label:'支出', data:ms.map(m => fm(m, 'expense')), backgroundColor:'#f43f5e', borderRadius:6, maxBarThickness:26}]}, options:{scales:{y:yMoney, x:{grid:{display:false}}}}});
+    const ec = {}; db.finance.filter(f => f.type === 'expense' && ms.includes(monthKey(f.date))).forEach(f => { ec[f.category] = (ec[f.category] || 0) + f.amount; });
+    chart('f2', {type:'doughnut', data:{labels:Object.keys(ec), datasets:[{data:Object.values(ec), backgroundColor:PALETTE, borderWidth:0}]}, options:{cutout:'62%', plugins:{legend:{position:'right'}}}});
+  }
+}
+function finAdd() {
+  formModal({title:'记一笔', fields:[
+    {n:'type', l:'收支类型', type:'select', opts:[['expense', '支出'], ['income', '收入']]},
+    {n:'category', l:'科目', type:'select', opts:FIN_CATS.expense.filter(c => c !== '采购付款')},
+    {n:'amount', l:'金额（元）', type:'number', req:1}, {n:'date', l:'日期', type:'date', req:1},
+    {n:'method', l:'方式', type:'select', opts:METHODS}, {n:'note', l:'备注'}],
+    data:{date:today(), method:'银行转账'}, onSubmit:v => {
+      if (v.amount <= 0) return toast('金额必须大于 0', 'error');
+      return mutate('POST', '/api/finance', v, '已记账');
+    }});
+  const typeSel = $('#mform [name=type]'), catSel = $('#mform [name=category]');
+  typeSel.onchange = () => { catSel.innerHTML = FIN_CATS[typeSel.value].filter(c => c !== '采购付款' && c !== '销售收款').map(c => `<option>${c}</option>`).join(''); };
+}
+
+/* ================= 页面：人事 ================= */
+function pageEmployees() {
+  const on = db.employees.filter(e => e.status !== '离职');
+  const filters = [{key:'dept', label:'全部部门', options:DEPTS, test:(e, v) => e.dept === v}, {key:'st', label:'全部状态', options:['在职', '试用期', '离职'], test:(e, v) => e.status === v}];
+  $('#view').innerHTML = pageHead('人事管理', '员工档案、部门与薪资') + `
+  <div class="grid g4 mb">
+    ${kpi('在职人数', on.length, 'users', 'primary')}
+    ${kpi('部门数', new Set(on.map(e => e.dept)).size, 'dashboard', 'purple')}
+    ${kpi('月薪资总额', moneyK(sum(on, e => e.salary)), 'coin', 'green')}
+    ${kpi('平均月薪', money(on.length ? sum(on, e => e.salary) / on.length : 0), 'chart', 'blue')}
+  </div>
+  <div class="grid g-2-1">
+    <div class="card">${toolbar('employees', {placeholder:'搜索姓名 / 工号 / 职位', filters, buttons:`<button class="btn" data-act="export" data-id="employees">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="employees">${ic('plus')}新增员工</button>`})}<div id="list-employees"></div></div>
+    <div class="card"><div class="card-head"><h3>部门人数分布</h3></div><div class="card-body"><div class="chart-box"><canvas id="e1"></canvas></div></div></div>
+  </div>`;
+  mountList('employees', {rows:() => db.employees, search:e => e.no + e.name + e.position + e.phone, filters, columns:[
+    {t:'员工', r:e => `<div style="display:flex;gap:10px;align-items:center"><div class="avatar" style="width:32px;height:32px;font-size:13px;background:${e.gender === '女' ? 'linear-gradient(135deg,#f472b6,#fb7185)' : 'linear-gradient(135deg,#60a5fa,#6366f1)'}">${esc(e.name.slice(-1))}</div><div><b>${esc(e.name)}</b><div class="sub-t">${esc(e.no)}</div></div></div>`, s:e => e.no},
+    {t:'部门', r:e => esc(e.dept), s:e => e.dept},
+    {t:'职位', r:e => esc(e.position)},
+    {t:'手机', r:e => esc(e.phone || '-')},
+    {t:'月薪', cls:'num', r:e => money(e.salary), s:e => e.salary},
+    {t:'入职日期', r:e => esc(e.joinDate), s:e => e.joinDate},
+    {t:'状态', r:e => badge(e.status)},
+    {t:'操作', r:e => `<div class="ops">${tbtn('编辑', 'edit', 'employees|' + e.id)}${tbtn('删除', 'del', 'employees|' + e.id, 'danger-text')}</div>`}
+  ], exp:{name:'员工名单', cols:[['工号', e => e.no], ['姓名', e => e.name], ['性别', e => e.gender], ['部门', e => e.dept], ['职位', e => e.position], ['手机', e => e.phone], ['月薪', e => e.salary], ['入职日期', e => e.joinDate], ['状态', e => e.status]]}});
+  const dc = DEPTS.map(d => on.filter(e => e.dept === d).length);
+  chart('e1', {type:'doughnut', data:{labels:DEPTS, datasets:[{data:dc, backgroundColor:PALETTE, borderWidth:0}]}, options:{cutout:'62%'}});
+}
+
+/* ================= 页面：报表 ================= */
+function pageReports() {
+  if (!ui.rptN) ui.rptN = 6;
+  const months = lastMonths(ui.rptN), S = validSales();
+  const stats = months.map(mk => {
+    const so = S.filter(o => monthKey(o.date) === mk), po = db.purchases.filter(o => o.status !== '已作废' && monthKey(o.date) === mk);
+    const sales = sum(so, orderTotal), cost = sum(so, orderCost), gp = sales - cost;
+    const exp = sum(db.finance.filter(f => f.type === 'expense' && f.category !== '采购付款' && monthKey(f.date) === mk), f => f.amount);
+    return {mk, count:so.length, sales, cost, gp, rate:sales ? gp / sales * 100 : 0, purchase:sum(po, orderTotal), exp, net:gp - exp};
+  });
+  const inRange = S.filter(o => months.includes(monthKey(o.date)));
+  const pAmt = {}, cAmt = {};
+  inRange.forEach(o => { cAmt[o.customerId] = (cAmt[o.customerId] || 0) + orderTotal(o); o.items.forEach(i => { pAmt[i.productId] = pAmt[i.productId] || {amt:0, qty:0, gp:0}; pAmt[i.productId].amt += i.qty * i.price; pAmt[i.productId].qty += i.qty; pAmt[i.productId].gp += i.qty * (i.price - (i.cost || 0)); }); });
+  const topP = Object.entries(pAmt).sort((a, b) => b[1].amt - a[1].amt).slice(0, 10);
+  const topC = Object.entries(cAmt).sort((a, b) => b[1] - a[1]).slice(0, 8), cMax = topC[0] ? topC[0][1] : 1;
+  const T = {sales:sum(stats, s => s.sales), gp:sum(stats, s => s.gp), exp:sum(stats, s => s.exp), net:sum(stats, s => s.net)};
+  ui.rptStats = stats;
+  $('#view').innerHTML = pageHead('统计报表', '经营数据多维度分析', `<select class="select" id="rptN"><option value="3" ${ui.rptN == 3 ? 'selected' : ''}>近 3 个月</option><option value="6" ${ui.rptN == 6 ? 'selected' : ''}>近 6 个月</option><option value="12" ${ui.rptN == 12 ? 'selected' : ''}>近 12 个月</option></select><button class="btn" data-act="rptExport">${ic('download')}导出报表</button>`) + `
+  <div class="grid g4 mb">
+    ${kpi('销售总额', moneyK(T.sales), 'sales', 'primary', `<div class="trend"><span>${inRange.length} 笔订单</span></div>`)}
+    ${kpi('毛利总额', moneyK(T.gp), 'coin', 'green', `<div class="trend"><span>毛利率 ${T.sales ? (T.gp / T.sales * 100).toFixed(1) : 0}%</span></div>`)}
+    ${kpi('运营费用', moneyK(T.exp), 'wallet', 'orange')}
+    ${kpi('净利润', `<span class="${T.net >= 0 ? 'pos' : 'neg'}">${moneyK(T.net)}</span>`, 'chart', 'purple')}
+  </div>
+  <div class="grid g-2-1 mb">
+    <div class="card"><div class="card-head"><h3>销售与利润趋势</h3></div><div class="card-body"><div class="chart-box"><canvas id="r1"></canvas></div></div></div>
+    <div class="card"><div class="card-head"><h3>客户销售排行</h3></div><div class="card-body">
+      ${topC.map(([cid, v]) => `<div class="rank"><span class="no"></span><div class="nm"><div>${esc((byId(db.customers, cid) || {}).name || '已删除')}</div><div class="bar"><i style="width:${v / cMax * 100}%"></i></div></div><b>${moneyK(v)}</b></div>`).join('') || '<div class="empty">暂无数据</div>'}
+    </div></div>
+  </div>
+  <div class="grid g2 mb">
+    <div class="card"><div class="card-head"><h3>商品销售 TOP 10</h3></div><div class="card-body"><div class="chart-box" style="height:320px"><canvas id="r2"></canvas></div></div></div>
+    <div class="card"><div class="card-head"><h3>品类销售对比</h3></div><div class="card-body"><div class="chart-box" style="height:320px"><canvas id="r3"></canvas></div></div></div>
+  </div>
+  <div class="card"><div class="card-head"><h3>月度经营明细</h3></div><div class="card-body" style="padding:12px 0 0"><div class="table-wrap"><table class="tbl">
+    <thead><tr><th>月份</th><th class="num">订单数</th><th class="num">销售额</th><th class="num">销售成本</th><th class="num">毛利</th><th class="num">毛利率</th><th class="num">采购额</th><th class="num">运营费用</th><th class="num">净利润</th></tr></thead>
+    <tbody>${stats.map(s => `<tr><td>${s.mk}</td><td class="num">${s.count}</td><td class="num">${money(s.sales)}</td><td class="num">${money(s.cost)}</td><td class="num">${money(s.gp)}</td><td class="num">${s.rate.toFixed(1)}%</td><td class="num">${money(s.purchase)}</td><td class="num">${money(s.exp)}</td><td class="num ${s.net >= 0 ? 'pos' : 'neg'}">${money(s.net)}</td></tr>`).join('')}
+    <tr style="font-weight:700;background:var(--panel2)"><td>合计</td><td class="num">${sum(stats, s => s.count)}</td><td class="num">${money(T.sales)}</td><td class="num">${money(sum(stats, s => s.cost))}</td><td class="num">${money(T.gp)}</td><td class="num">${T.sales ? (T.gp / T.sales * 100).toFixed(1) : 0}%</td><td class="num">${money(sum(stats, s => s.purchase))}</td><td class="num">${money(T.exp)}</td><td class="num ${T.net >= 0 ? 'pos' : 'neg'}">${money(T.net)}</td></tr></tbody>
+  </table></div></div></div>`;
+  $('#rptN').onchange = e => { ui.rptN = +e.target.value; render(); };
+  chart('r1', {data:{labels:months.map(mLabel), datasets:[
+    {type:'bar', label:'销售额', data:stats.map(s => s.sales), backgroundColor:'#6366f1', borderRadius:6, maxBarThickness:30},
+    {type:'line', label:'毛利', data:stats.map(s => s.gp), borderColor:'#10b981', backgroundColor:'#10b981', tension:.35},
+    {type:'line', label:'净利润', data:stats.map(s => s.net), borderColor:'#f59e0b', backgroundColor:'#f59e0b', tension:.35, borderDash:[5, 4]}
+  ]}, options:{scales:{y:yMoney, x:{grid:{display:false}}}}});
+  chart('r2', {type:'bar', data:{labels:topP.map(([pid]) => (byId(db.products, pid) || {}).name || '已删除'), datasets:[{label:'销售额', data:topP.map(x => x[1].amt), backgroundColor:'#06b6d4', borderRadius:5}, {label:'毛利', data:topP.map(x => x[1].gp), backgroundColor:'#a5b4fc', borderRadius:5}]}, options:{indexAxis:'y', scales:{x:yMoney, y:{grid:{display:false}}}}});
+  const cat = catStats(inRange);
+  chart('r3', {type:'polarArea', data:{labels:Object.keys(cat), datasets:[{data:Object.values(cat), backgroundColor:PALETTE.map(c => c + 'cc'), borderWidth:0}]}, options:{scales:{r:{ticks:{display:false}}}}});
+}
+
+/* ================= 页面：设置 ================= */
+function pageSettings() {
+  const items = [['general', '常规设置']];
+  if (isAdmin()) items.push(['users', '用户管理'], ['data', '数据管理'], ['audit', '操作日志']);
+  if (!items.some(i => i[0] === ui.setTab)) ui.setTab = 'general';
+  const st = db.settings;
+  $('#view').innerHTML = pageHead('系统设置', '账户、偏好、用户权限与数据管理') + tabs('setTab', items) + '<div id="setBody"></div>';
+  const body = $('#setBody');
+  if (ui.setTab === 'general') {
+    body.innerHTML = `<div class="grid g2">
+    <div class="card"><div class="card-head"><h3>我的账户</h3></div><div class="card-body">
+      <div style="display:flex;gap:14px;align-items:center;margin-bottom:6px"><div class="avatar" style="width:52px;height:52px;font-size:20px">${esc(ME.name.slice(0, 1))}</div>
+        <div><b style="font-size:16px">${esc(ME.name)}</b><div class="sub-t">账号：${esc(ME.username)} · ${isAdmin() ? '系统管理员' : '业务员'}</div></div></div>
+      <div class="setting-row"><div class="sr-group"><b>登录密码</b><small>定期修改密码可提升账户安全</small></div><button class="btn" data-act="changePwd">修改密码</button></div>
+      <div class="setting-row"><div class="sr-group"><b>退出登录</b><small>${CLIENT_MODE ? '退出后可切换账号或服务器地址' : '退出当前账号'}</small></div><button class="btn" data-act="logout">退出登录</button></div>
+      <div class="setting-row"><div class="sr-group"><b>服务器</b><small>${esc(SERVER_ADDR)}</small></div><span class="badge green">服务端 v${esc(st.version || '-')}</span></div>
+    </div></div>
+    <div class="card"><div class="card-head"><h3>界面偏好（仅本机）</h3></div><div class="card-body">
+      <div class="form-grid">
+        <label class="field"><span>界面主题</span><select id="sTheme"><option value="light" ${st.theme === 'light' ? 'selected' : ''}>浅色</option><option value="dark" ${st.theme === 'dark' ? 'selected' : ''}>深色</option><option value="auto" ${st.theme === 'auto' ? 'selected' : ''}>跟随系统</option></select></label>
+        <label class="field"><span>每页显示条数</span><select id="sPs">${[10, 15, 20, 50].map(n => `<option ${+st.pageSize === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      </div>
+      <div style="margin-top:16px;text-align:right"><button class="btn" data-act="savePrefs">${ic('check')}保存偏好</button></div>
+      <div class="setting-row" style="margin-top:12px;border-top:1px solid var(--border)"><div class="sr-group" style="flex:1"><b>公司名称</b><small>显示在单据抬头，所有用户共享${isAdmin() ? '' : '（仅管理员可修改）'}</small>
+        <div style="display:flex;gap:8px;margin-top:6px"><input class="select" style="flex:1" id="sCompany" value="${esc(st.company)}" ${isAdmin() ? '' : 'disabled'}>${isAdmin() ? `<button class="btn primary" data-act="saveCompany">保存</button>` : ''}</div></div></div>
+    </div></div></div>`;
+  } else if (ui.setTab === 'users') {
+    body.innerHTML = `<div class="card"><div class="toolbar"><div class="tb-left"><span class="sub-t">管理员：全部功能；业务员：日常业务操作，不能管理用户与数据</span></div><div class="tb-right"><button class="btn primary" data-act="userEdit">${ic('plus')}新增用户</button></div></div><div id="userList"><div class="empty">加载中…</div></div></div>`;
+    api('GET', '/api/users').then(users => {
+      USERS = users;
+      $('#userList').innerHTML = `<div class="table-wrap"><table class="tbl"><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th>创建时间</th><th>最近登录</th><th>操作</th></tr></thead><tbody>
+      ${users.map(u => `<tr><td><b>${esc(u.username)}</b>${u.id === ME.id ? ' <span class="badge blue plain">当前</span>' : ''}</td><td>${esc(u.name)}</td><td>${badge(u.role === 'admin' ? '管理员' : '业务员', u.role === 'admin' ? 'purple' : 'blue')}</td><td>${fmtTime(u.createdAt)}</td><td>${fmtTime(u.lastLogin)}</td>
+        <td><div class="ops">${tbtn('编辑', 'userEdit', u.id)}${u.id === ME.id ? '' : tbtn('删除', 'userDel', u.id, 'danger-text')}</div></td></tr>`).join('')}</tbody></table></div>`;
+    }).catch(e => toast(e.message, 'error'));
+  } else if (ui.setTab === 'data') {
+    body.innerHTML = `<div class="card" style="max-width:820px"><div class="card-body">
+      <div class="setting-row"><div class="sr-group"><b>导出备份</b><small>将全部业务数据导出为 JSON 文件保存到本机</small></div><button class="btn" data-act="backup">${ic('download')}导出</button></div>
+      <div class="setting-row"><div class="sr-group"><b>导入备份</b><small>从 JSON 备份文件恢复（将覆盖服务器上的全部业务数据，兼容单机版备份）</small></div><button class="btn" data-act="restore">${ic('upload')}导入</button></div>
+      <div class="setting-row"><div class="sr-group"><b>自动备份</b><small>服务端每天自动备份数据库到数据目录下的 backups 文件夹，保留最近 30 天</small></div><span class="badge green">已启用</span></div>
+      <div class="setting-row"><div class="sr-group"><b>重置演示数据</b><small>用系统自带示例数据覆盖当前业务数据</small></div><button class="btn" data-act="reset">${ic('refresh')}重置</button></div>
+      <div class="setting-row"><div class="sr-group"><b style="color:var(--red)">清空业务数据</b><small>删除所有商品、单据、往来单位等，正式启用前使用（用户账号会保留）</small></div><button class="btn danger" data-act="clearAll">${ic('trash')}清空</button></div>
+      <div class="setting-row"><div class="sr-group"><b>数据概况</b><small>商品 ${db.products.length} · 客户 ${db.customers.length} · 供应商 ${db.suppliers.length} · 销售单 ${db.sales.length} · 采购单 ${db.purchases.length} · 流水 ${db.finance.length + db.stockLogs.length} 条</small></div></div>
+    </div></div>`;
+  } else {
+    body.innerHTML = `<div class="card"><div id="auditList"><div class="empty">加载中…</div></div></div>`;
+    api('GET', '/api/audit?limit=300').then(rows => {
+      $('#auditList').innerHTML = `<div class="table-wrap"><table class="tbl compact"><thead><tr><th>时间</th><th>用户</th><th>操作</th><th>内容</th><th>IP</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td>${fmtTime(r.time)}</td><td>${esc(r.username)}</td><td>${badge(r.action, 'primary plain')}</td><td>${esc(r.detail)}</td><td class="sub-t">${esc(r.ip)}</td></tr>`).join('') || '<tr><td colspan="5"><div class="empty">暂无日志</div></td></tr>'}</tbody></table></div>`;
+    }).catch(e => toast(e.message, 'error'));
+  }
+}
+let USERS = [];
+const fmtTime = t => t ? new Date(t).toLocaleString('zh-CN', {hour12:false}) : '-';
+function userEdit(id) {
+  const u = id ? USERS.find(x => x.id === id) : null;
+  formModal({title:u ? '编辑用户' : '新增用户', fields:[
+    {n:'username', l:'用户名（登录账号）', req:1, disabled:!!u}, {n:'name', l:'姓名', req:1},
+    {n:'role', l:'角色', type:'select', opts:[['user', '业务员'], ['admin', '管理员']]},
+    {n:'password', l:u ? '新密码（留空则不修改）' : '初始密码（至少 6 位）', type:'password', req:!u}],
+    data:u || {role:'user'}, onSubmit:v => {
+      if (v.password && v.password.length < 6) return toast('密码至少 6 位', 'error');
+      return mutate(u ? 'PUT' : 'POST', '/api/users' + (u ? '/' + u.id : ''), v, u ? '用户已更新' : '用户已创建');
+    }});
+}
+
+/* ================= 外壳：导航 / 主题 / 提醒 / 搜索 ================= */
+const NAV = [
+  {id:'dashboard', label:'工作台', icon:'dashboard', fn:pageDashboard},
+  {group:'业务管理'},
+  {id:'sales', label:'销售管理', icon:'sales', fn:() => pageOrders('sales'), badge:() => db.sales.filter(o => o.status === '待发货').length},
+  {id:'purchase', label:'采购管理', icon:'cart', fn:() => pageOrders('purchase'), badge:() => db.purchases.filter(o => o.status === '待审核').length},
+  {id:'inventory', label:'库存管理', icon:'warehouse', fn:pageInventory, badge:() => lowStock().length},
+  {id:'products', label:'商品管理', icon:'box', fn:pageProducts},
+  {group:'往来单位'},
+  {id:'customers', label:'客户管理', icon:'users', fn:() => pageParty('customers')},
+  {id:'suppliers', label:'供应商管理', icon:'truck', fn:() => pageParty('suppliers')},
+  {group:'运营管理'},
+  {id:'finance', label:'财务管理', icon:'wallet', fn:pageFinance},
+  {id:'employees', label:'人事管理', icon:'id', fn:pageEmployees},
+  {id:'reports', label:'统计报表', icon:'chart', fn:pageReports},
+  {id:'settings', label:'系统设置', icon:'settings', fn:pageSettings}
+];
+const PAGES = Object.fromEntries(NAV.filter(n => n.id).map(n => [n.id, n]));
+const current = () => { const p = location.hash.replace('#/', ''); return PAGES[p] ? p : 'dashboard'; };
+function go(p) { if (location.hash === '#/' + p) render(); else location.hash = '#/' + p; }
+function applyTheme() {
+  const t = db.settings.theme === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : db.settings.theme;
+  document.documentElement.dataset.theme = t;
+  $('#themeBtn').innerHTML = ic(t === 'dark' ? 'sun' : 'moon');
+}
+function render() {
+  if (!ME) return;
+  charts.forEach(c => c.destroy()); charts = [];
+  const p = current(), page = PAGES[p];
+  $('#nav').innerHTML = NAV.map(n => n.group ? `<div class="nav-group">${n.group}</div>`
+    : `<div class="nav-item ${n.id === p ? 'on' : ''}" data-act="go" data-id="${n.id}" title="${n.label}">${ic(n.icon)}<span class="nav-label">${n.label}</span>${n.badge && n.badge() ? `<span class="nav-badge">${n.badge()}</span>` : ''}</div>`).join('');
+  $('#crumb').innerHTML = `${page.label}<small>${esc(db.settings.company)}</small>`;
+  $('#userName').textContent = ME.name; $('#avatar').textContent = ME.name.slice(0, 1);
+  $('#userRole').textContent = isAdmin() ? '系统管理员' : '业务员';
+  page.fn();
+  updateBell();
+  $('#app').classList.remove('open');
+}
+function updateBell() {
+  const low = lowStock(), ship = db.sales.filter(o => o.status === '待发货'), appr = db.purchases.filter(o => o.status === '待审核');
+  const n = low.length + (ship.length ? 1 : 0) + (appr.length ? 1 : 0);
+  const dot = $('#bellDot'); dot.style.display = n ? 'block' : 'none'; dot.textContent = n;
+  $('#bellDrop').innerHTML = `<div class="dd-head">消息提醒（${n}）</div>
+    ${ship.length ? `<div class="dd-item" data-act="goFilter" data-id="sales|status|待发货"><span class="badge orange plain">订单</span><div>${ship.length} 个销售订单待发货<small>请尽快安排出库</small></div></div>` : ''}
+    ${appr.length ? `<div class="dd-item" data-act="goFilter" data-id="purchase|status|待审核"><span class="badge purple plain">审核</span><div>${appr.length} 个采购订单待审核<small>点击前往处理</small></div></div>` : ''}
+    ${low.slice(0, 6).map(p => `<div class="dd-item" data-act="stock" data-id="in|${p.id}"><span class="badge red plain">库存</span><div>${esc(p.name)} 库存不足<small>当前 ${p.stock}，安全库存 ${p.safety}，点击补货入库</small></div></div>`).join('')}
+    ${n ? '' : '<div class="empty">暂无新消息</div>'}`;
+}
+function globalSearch(q) {
+  q = q.trim().toLowerCase(); if (!q) return;
+  const hit = s => String(s).toLowerCase().includes(q);
+  const so = db.sales.filter(o => hit(o.no) || hit(partyName('sales', o))).slice(0, 6);
+  const po = db.purchases.filter(o => hit(o.no) || hit(partyName('purchase', o))).slice(0, 6);
+  const pr = db.products.filter(p => hit(p.name) || hit(p.sku)).slice(0, 6);
+  const cu = db.customers.filter(c => hit(c.name) || hit(c.contact) || hit(c.phone)).slice(0, 6);
+  const sec = (title, arr, f) => arr.length ? `<h4 style="margin:14px 0 6px;color:var(--muted);font-size:12px">${title}</h4>${arr.map(f).join('')}` : '';
+  const row = (act, id, main, sub) => `<div class="dd-item" style="border-radius:8px;border:none" data-act="${act}" data-id="${id}"><div>${main}<small>${sub}</small></div></div>`;
+  const html = sec('销售订单', so, o => row('orderView', 'sales|' + o.id, o.no, partyName('sales', o) + ' · ' + money(orderTotal(o)) + ' · ' + o.status))
+    + sec('采购订单', po, o => row('orderView', 'purchase|' + o.id, o.no, partyName('purchase', o) + ' · ' + money(orderTotal(o)) + ' · ' + o.status))
+    + sec('商品', pr, p => row('edit', 'products|' + p.id, esc(p.name), p.sku + ' · 库存 ' + p.stock))
+    + sec('客户', cu, c => row('edit', 'customers|' + c.id, esc(c.name), esc(c.contact) + ' · ' + esc(c.phone)));
+  openModal(`${modalHead('搜索：' + esc(q))}<div class="m-body" style="padding-top:6px">${html || `<div class="empty">${emptySvg}<p>未找到相关结果</p></div>`}</div>`);
+}
+
+/* ================= 事件分发 ================= */
+const split = v => String(v).split('|');
+const A = {
+  closeModal, go,
+  toggleSide: () => { const app = $('#app'); if (innerWidth <= 768) app.classList.toggle('open'); else app.classList.toggle('collapsed'); },
+  toggleTheme: () => { db.settings.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; savePrefs(); applyTheme(); render(); },
+  toggleBell: () => $('#bellDrop').classList.toggle('show'),
+  goFilter: v => { const [page, f, val] = split(v); const st = getState(page); st.f = {[f]:val}; st.q = ''; st.page = 1; $('#bellDrop').classList.remove('show'); closeModal(); go(page); },
+  page: v => { const [k, n] = split(v); getState(k).page = +n; renderList(k); },
+  sort: v => { const [k, i] = split(v), st = getState(k); st.sort = st.sort && st.sort.i === +i ? {i:+i, dir:-st.sort.dir} : {i:+i, dir:1}; renderList(k); },
+  tab: v => { const [k, t] = split(v); ui[k] = t; render(); },
+  export: exportList,
+  add: t => editEntity(t),
+  edit: v => { const [t, id] = split(v); closeModal(); editEntity(t, id); },
+  del: v => delEntity(...split(v)),
+  stock: v => { const [m, id] = split(v); $('#bellDrop').classList.remove('show'); stockModal(m, id); },
+  prodLogs,
+  partyOrders: v => { const [t, id] = split(v); const page = t === 'customers' ? 'sales' : 'purchase'; const st = getState(page); st.f = {party:id}; st.q = ''; st.page = 1; go(page); },
+  orderNew: k => orderModal(k),
+  orderEdit: v => { const [k, id] = split(v); closeModal(); orderModal(k, id); },
+  orderView: v => orderView(...split(v)),
+  print: () => window.print(),
+  finAdd,
+  finDel: id => confirmBox('确定删除这条收支记录吗？', () => mutate('DELETE', '/api/finance/' + id, undefined, '已删除')),
+  rptExport: () => exportCSV('月度经营报表', ['月份', '订单数', '销售额', '销售成本', '毛利', '毛利率%', '采购额', '运营费用', '净利润'], ui.rptStats.map(s => [s.mk, s.count, s.sales.toFixed(2), s.cost.toFixed(2), s.gp.toFixed(2), s.rate.toFixed(1), s.purchase.toFixed(2), s.exp.toFixed(2), s.net.toFixed(2)])),
+  savePrefs: () => { db.settings.theme = $('#sTheme').value; db.settings.pageSize = +$('#sPs').value; savePrefs(); applyTheme(); toast('偏好已保存'); render(); },
+  saveCompany: () => mutate('PUT', '/api/settings', {company:$('#sCompany').value.trim()}, '公司名称已保存'),
+  changePwd: () => formModal({title:'修改密码', okText:'确认修改', fields:[
+    {n:'old', l:'当前密码', type:'password', req:1}, {n:'pwd', l:'新密码（至少 6 位）', type:'password', req:1}, {n:'pwd2', l:'确认新密码', type:'password', req:1}],
+    onSubmit:async v => {
+      if (v.pwd.length < 6) return toast('新密码至少 6 位', 'error');
+      if (v.pwd !== v.pwd2) return toast('两次输入的新密码不一致', 'error');
+      try { await api('POST', '/api/password', {oldPassword:v.old, newPassword:v.pwd}); closeModal(); toast('密码已修改'); } catch (e) { toast(e.message, 'error'); }
+    }}),
+  logout: () => confirmBox('确定退出登录吗？', async () => {
+    try { await api('POST', '/api/logout', {}); } catch (e) {}
+    LS.set('token', null); ME = null; showLogin();
+  }, {danger:false, okText:'退出'}),
+  userEdit: id => userEdit(id),
+  userDel: id => { const u = USERS.find(x => x.id === id); confirmBox(`确定删除用户「${esc(u.name)}（${esc(u.username)}）」吗？`, () => mutate('DELETE', '/api/users/' + id, undefined, '用户已删除')); },
+  backup: async () => {
+    try {
+      const d = await api('GET', '/api/backup');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(d, null, 2)], {type:'application/json'}));
+      a.download = 'erp_backup_' + today() + '.json'; a.click(); toast('备份已导出');
+    } catch (e) { toast(e.message, 'error'); }
+  },
+  restore: () => $('#importFile').click(),
+  reset: () => confirmBox('将用演示数据覆盖服务器上的全部业务数据，所有用户都会受影响，确定继续？', () => mutate('POST', '/api/reset-demo', {}, '已重置为演示数据')),
+  clearAll: () => confirmBox('将删除服务器上的所有业务数据（保留用户账号和系统设置），此操作不可撤销！', () => mutate('POST', '/api/clear', {}, '数据已清空'), {title:'危险操作', okText:'确认清空'})
+};
+['ship', 'complete', 'approve', 'inbound', 'cancel', 'orderDel', 'pay'].forEach(a => { A[a] = v => { const [k, id] = split(v); orderAct(a, k, id); }; });
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!e.target.closest('.bell-wrap')) $('#bellDrop').classList.remove('show');
+  if (!el || el.disabled) return;
+  const fn = A[el.dataset.act];
+  if (fn) { e.preventDefault(); fn(el.dataset.id, el); }
+});
+document.addEventListener('input', e => { const k = e.target.dataset.search; if (k) { const st = getState(k); st.q = e.target.value; st.page = 1; renderList(k); } });
+document.addEventListener('change', e => { const f = e.target.dataset.filter; if (f) { const [k, fk] = split(f); getState(k).f[fk] = e.target.value; getState(k).page = 1; renderList(k); } });
+$('#mask').addEventListener('mousedown', e => { if (e.target.id === 'mask') closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+$('#gsearch').addEventListener('keydown', e => { if (e.key === 'Enter') globalSearch(e.target.value); });
+$('#importFile').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    e.target.value = '';
+    let d;
+    try { d = JSON.parse(r.result); } catch (err) { return toast('导入失败：文件不是有效的 JSON', 'error'); }
+    confirmBox('导入将覆盖服务器上的全部业务数据，确定继续？', () => mutate('POST', '/api/restore', d, '导入成功'));
+  };
+  r.readAsText(file);
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (db.settings.theme === 'auto') { applyTheme(); render(); } });
+window.addEventListener('hashchange', render);
+
+$('#lBtn').onclick = doLogin;
+$('#srvTest').onclick = testServer;
+boot();
+</script>
+</body>
+</html>

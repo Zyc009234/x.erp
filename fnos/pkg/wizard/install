@@ -1,0 +1,20 @@
+[
+    {
+        "stepTitle": "管理员账号",
+        "items": [
+            {
+                "type": "tips",
+                "helpText": "x.erp 将创建管理员账号 admin。请设置管理员登录密码（至少 6 位），安装后在浏览器访问 http://NAS地址:8686 登录。"
+            },
+            {
+                "type": "password",
+                "field": "wizard_admin_password",
+                "label": "管理员密码",
+                "rules": [
+                    { "required": true, "message": "请输入管理员密码" },
+                    { "min": 6, "message": "密码至少 6 位" }
+                ]
+            }
+        ]
+    }
+]

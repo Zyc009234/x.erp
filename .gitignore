@@ -1,0 +1,8 @@
+dist/
+fnos/build/
+fnos/tools/
+node_modules/
+*.fpk
+*.db
+*.db-shm
+*.db-wal

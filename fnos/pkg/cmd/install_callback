@@ -1,0 +1,9 @@
+#!/bin/bash
+### 安装完成后：把安装向导填写的管理员密码交给服务端，首次启动时读取并删除
+
+mkdir -p "${TRIM_PKGVAR}"
+if [ -n "${wizard_admin_password}" ]; then
+    umask 077
+    printf '%s' "${wizard_admin_password}" > "${TRIM_PKGVAR}/admin-password"
+fi
+exit 0
