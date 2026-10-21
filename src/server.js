@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -84,6 +84,7 @@ function tx(fn) {
 const uid = () => Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
 const sum = (a, f) => a.reduce((s, x) => s + (f(x) || 0), 0);
 const round2 = n => Math.round(n * 100) / 100;
+const round4 = n => Math.round(n * 1e4) / 1e4;
 const orderTotal = o => round2(sum(o.items, i => i.qty * i.price));
 const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
 const str = (v, max = 200) => String(v ?? '').trim().slice(0, max);
@@ -92,8 +93,8 @@ const fail = (msg, status) => { throw new HttpError(msg, status); };
 function audit(ctx, action, detail = '') { S.audit.run(new Date().toISOString(), ctx.user ? ctx.user.name : '-', action, String(detail).slice(0, 300), ctx.ip || ''); }
 
 /* ================= 业务常量 ================= */
-const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'stockLogs', 'stockDocs', 'finance'];
-const DATED = ['sales', 'purchases', 'stockLogs', 'stockDocs', 'finance'];
+const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance'];
+const DATED = ['sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance'];
 const CATS = ['电子产品', '办公用品', '家居用品', '食品饮料'];
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
 const METHODS = ['银行转账', '现金', '支付宝', '微信', '承兑汇票'];
@@ -121,7 +122,7 @@ const DEFAULT_MODULES = ['inventory', 'products'];
 // [权限键, 名称, 所属模块]
 const PERMS = [
   ['inv.view', '查看库存、出入库单与流水', 'inventory'], ['inv.in', '开入库单', 'inventory'], ['inv.out', '开出库单', 'inventory'],
-  ['inv.check', '库存盘点（直接调整账面数量）', 'inventory'], ['inv.void', '作废出入库单（冲回库存）', 'inventory'],
+  ['inv.check', '盘点录入（新建盘点单、录实盘数）', 'inventory'], ['inv.checkpost', '盘点审核（确认盘盈盘亏、调整库存）', 'inventory'], ['inv.void', '作废出入库单（冲回库存）', 'inventory'],
   ['inv.print', '打印单据 / 盘点表', 'inventory'], ['inv.export', '导出数据', 'inventory'],
   ['inv.cost', '查看价格与金额', 'inventory'], ['inv.backdate', '单据日期可选非当天（补录）', 'inventory'],
   ['inv.others', '查看 / 处理他人开的单据', 'inventory'],
@@ -137,11 +138,11 @@ const cleanPerms = a => [...new Set((Array.isArray(a) ? a : []).filter(k => PERM
 /* ---------- 角色 ---------- */
 // 预置角色：首次启动写入，之后可在「角色管理」里修改、删除，也可新增自定义角色
 const DEFAULT_ROLES = [
-  ['r_wh_mgr', '仓库主管', '库存全部操作，含作废、盘点、补录和查看金额', ['inv.view', 'inv.in', 'inv.out', 'inv.check', 'inv.void', 'inv.print', 'inv.export', 'inv.cost', 'inv.backdate', 'inv.others', 'prod.view', 'prod.edit']],
+  ['r_wh_mgr', '仓库主管', '库存全部操作，含作废、盘点审核、补录和查看金额', ['inv.view', 'inv.in', 'inv.out', 'inv.check', 'inv.checkpost', 'inv.void', 'inv.print', 'inv.export', 'inv.cost', 'inv.backdate', 'inv.others', 'prod.view', 'prod.edit']],
   ['r_wh', '仓管员', '日常收发货：开入库单、出库单并打印', ['inv.view', 'inv.in', 'inv.out', 'inv.print', 'prod.view']],
   ['r_in', '入库员', '只负责收货入库', ['inv.view', 'inv.in', 'inv.print', 'prod.view']],
   ['r_out', '出库员', '只负责发货 / 领料出库', ['inv.view', 'inv.out', 'inv.print', 'prod.view']],
-  ['r_check', '盘点员', '盘点调整库存，打印盘点表', ['inv.view', 'inv.check', 'inv.print', 'inv.others', 'prod.view']],
+  ['r_check', '盘点员', '新建盘点单、录入实盘数（审核由主管完成）', ['inv.view', 'inv.check', 'inv.print', 'inv.others', 'prod.view']],
   ['r_prod', '商品专员', '维护商品档案（编码、规格、安全库存）', ['inv.view', 'prod.view', 'prod.edit']],
   ['r_acct', '成本会计', '查看全部单据与金额，导出对账', ['inv.view', 'inv.cost', 'inv.export', 'inv.print', 'inv.others', 'prod.view', 'finance', 'reports']],
   ['r_read', '只读查询', '只能查看和打印，不能改动库存', ['inv.view', 'inv.print', 'inv.export', 'inv.others', 'prod.view']],
@@ -166,6 +167,15 @@ for (const u of db.prepare("SELECT * FROM users WHERE role <> 'admin' AND role_i
     else { rid = 'r' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'); db.prepare('INSERT INTO roles (id, name, descr, perms, sort, created_at) VALUES (?, ?, ?, ?, 99, ?)').run(rid, (u.name || u.username) + '的权限', '由旧账号权限迁移', JSON.stringify(own), new Date().toISOString()); }
   }
   db.prepare('UPDATE users SET role_id = ? WHERE id = ?').run(rid, u.id);
+}
+// v1.0.2：盘点拆分为「录入」和「审核」，原来能盘点的角色（预置盘点员除外）补上审核权限
+if (getMeta('permsVersion', 1) < 2) {
+  for (const r of db.prepare('SELECT * FROM roles').all()) {
+    const p = rolePerms(r);
+    if (p.includes('inv.check') && !p.includes('inv.checkpost') && r.id !== 'r_check') db.prepare('UPDATE roles SET perms = ? WHERE id = ?').run(JSON.stringify([...p, 'inv.checkpost']), r.id);
+  }
+  db.prepare("UPDATE roles SET descr = '新建盘点单、录入实盘数（审核由主管完成）' WHERE id = 'r_check'").run();
+  setMeta('permsVersion', 2);
 }
 const rawPerms = u => { if (u.role === 'admin') return PERM_KEYS; const r = u.role_id && roleById.get(u.role_id); return r ? rolePerms(r) : []; };
 function enabledModules() { const m = getMeta('settings', {}).modules; return Array.isArray(m) && m.length ? m : DEFAULT_MODULES; }
@@ -301,9 +311,31 @@ function login(ctx, body) {
 }
 
 /* ================= 业务逻辑 ================= */
-function addLog(ctx, productId, kind, qty, ref = '', note = '', date = '') {
+function addLog(ctx, productId, kind, qty, ref = '', note = '', date = '', extra = {}) {
   const d = new Date();
-  put('stockLogs', { id: uid(), date: date || today(), time: pad(d.getHours()) + ':' + pad(d.getMinutes()), productId, kind, qty, ref, note, operator: ctx.user.name });
+  put('stockLogs', { id: uid(), date: date || today(), time: pad(d.getHours()) + ':' + pad(d.getMinutes()), productId, kind, qty, ref, note, operator: ctx.user.name, ...extra });
+}
+/**
+ * 所有库存变动的唯一入口，按「移动加权平均」核算成本：
+ * - 入库带单价 price：新成本 = (原结存数量 × 原成本 + 入库数量 × 单价) / 新结存数量；原结存 ≤ 0 时直接取入库单价
+ * - 入库不带单价（盘盈等）与出库：按当前成本计价，单位成本不变
+ * - 冲回入库（作废入库单）传 reversePrice：按原入库单价把这部分价值减掉
+ * 流水上记录本次计价单价 cost 与变动后的单位成本 costAfter，收发存报表据此计算金额
+ */
+function moveStock(ctx, p, qty, kind, ref = '', note = '', { price, reversePrice, date } = {}) {
+  const before = p.stock || 0, cost0 = p.cost || 0, after = before + qty;
+  let unit = cost0;
+  if (qty > 0 && price != null && Number.isFinite(+price)) {
+    unit = +price;
+    p.cost = before <= 0 || after <= 0 ? round4(unit) : round4((before * cost0 + qty * unit) / after);
+  } else if (qty < 0 && reversePrice != null) {
+    unit = +reversePrice;
+    if (after > 0) p.cost = Math.max(0, round4((before * cost0 + qty * unit) / after));
+  }
+  p.stock = after;
+  put('products', p);
+  addLog(ctx, p.id, kind, qty, ref, note, date, { cost: round4(unit), costAfter: p.cost });
+  return unit;
 }
 function nextNo(C) {
   const k = C.prefix + today().replace(/-/g, ''), counters = getMeta('counters', {});
@@ -332,6 +364,7 @@ function saveEntity(ctx, col, id) {
       if (list('products').some(p => p.sku === r.sku && p.id !== id)) fail('商品编码已存在');
       r.stock = rec ? rec.stock : Math.round(r.stock || 0);
       r.safety = Math.round(r.safety || 0);
+      if (rec && rec.stock !== 0) r.cost = rec.cost;  // 有库存时成本由移动加权平均自动计算
     }
     if (col === 'employees' && !r.no) {
       const nos = new Set(list('employees').map(e => e.no));
@@ -339,8 +372,10 @@ function saveEntity(ctx, col, id) {
       r.no = 'E' + n;
     }
     if (!rec) { r.id = uid(); r.createdAt = today(); }
+    const init = !rec && col === 'products' ? r.stock : 0;
+    if (init) r.stock = 0;
     put(col, r);
-    if (!rec && col === 'products' && r.stock > 0) addLog(ctx, r.id, '期初库存', r.stock, '', '新建商品');
+    if (init > 0) moveStock(ctx, r, init, '期初库存', '', '新建商品', { price: r.cost || 0 });
     audit(ctx, (rec ? '修改' : '新增') + E.name, r.name);
     return r;
   });
@@ -349,7 +384,7 @@ function deleteEntity(ctx, col, id) {
   const E = ENTITY[col] || fail('接口不存在', 404);
   return tx(() => {
     const rec = get(col, id) || fail(E.name + '不存在', 404);
-    const used = col === 'products' ? [...list('sales'), ...list('purchases'), ...list('stockDocs')].some(o => o.items.some(i => i.productId === id))
+    const used = col === 'products' ? [...list('sales'), ...list('purchases'), ...list('stockDocs')].some(o => o.items.some(i => i.productId === id)) || list('checkDocs').some(o => o.lines.some(l => l.productId === id))
       : col === 'customers' ? list('sales').some(o => o.customerId === id)
       : col === 'suppliers' ? list('purchases').some(o => o.supplierId === id) : false;
     if (used) fail(`该${E.name}已被单据引用，无法删除`);
@@ -396,14 +431,13 @@ function orderAction(ctx, kind, id, action) {
       o.items.forEach(i => { qty[i.productId] = (qty[i.productId] || 0) + i.qty; });
       const lack = Object.entries(qty).map(([pid, q]) => ({ p: get('products', pid), q })).filter(x => !x.p || x.p.stock < x.q);
       if (lack.length) fail('库存不足：' + lack.map(x => x.p ? `${x.p.name}（需 ${x.q}，现有 ${x.p.stock}）` : '商品已删除').join('、'));
-      Object.entries(qty).forEach(([pid, q]) => { const p = get('products', pid); p.stock -= q; put('products', p); });
-      o.items.forEach(i => addLog(ctx, i.productId, '销售出库', -i.qty, o.no));
+      o.items.forEach(i => { i.cost = moveStock(ctx, get('products', i.productId), -i.qty, '销售出库', o.no); });
       o.status = '已发货'; o.shipDate = today();
     } else if (action === 'complete' && kind === 'sales') { need('已发货'); o.status = '已完成'; }
     else if (action === 'approve' && kind === 'purchase') { need('待审核'); o.status = '已审核'; o.approver = ctx.user.name; }
     else if (action === 'inbound' && kind === 'purchase') {
       need('已审核');
-      o.items.forEach(i => { const p = get('products', i.productId); if (p) { p.stock += i.qty; put('products', p); addLog(ctx, p.id, '采购入库', i.qty, o.no); } });
+      o.items.forEach(i => { const p = get('products', i.productId); if (p) moveStock(ctx, p, i.qty, '采购入库', o.no, '', { price: i.price }); });
       o.status = '已入库'; o.inDate = today();
     } else if (action === 'cancel') {
       const ok = kind === 'sales' ? ['待发货'] : ['待审核', '已审核'];
@@ -440,7 +474,7 @@ function adjustStock(ctx, id) {
     let d;
     if (mode === 'check') { if (qty < 0) fail('数量不能为负'); d = qty - p.stock; }
     else { if (qty <= 0) fail('数量必须大于 0'); d = mode === 'in' ? qty : -qty; if (p.stock + d < 0) fail('库存不足，当前仅 ' + p.stock); }
-    if (d !== 0) { p.stock += d; put('products', p); addLog(ctx, p.id, T, d, '', str(note)); audit(ctx, T, `${p.name} ${d > 0 ? '+' : ''}${d}`); }
+    if (d !== 0) { moveStock(ctx, p, d, T, '', str(note)); audit(ctx, T, `${p.name} ${d > 0 ? '+' : ''}${d}`); }
     return { delta: d, stock: p.stock };
   });
 }
@@ -460,9 +494,10 @@ function saveStockDoc(ctx) {
       const p = get('products', i.productId) || fail('商品不存在或已删除');
       const qty = Number(i.qty);
       if (!Number.isInteger(qty) || qty <= 0) fail(`「${p.name}」数量必须为正整数`);
-      const price = withPrice && i.price !== undefined && i.price !== '' ? Number(i.price) : (p.cost || 0);
+      // 出库一律按移动加权成本计价；入库可填单价（看不到金额的账号按当前成本）
+      const price = dir === 'in' && withPrice && i.price !== undefined && i.price !== '' ? Number(i.price) : (p.cost || 0);
       if (!Number.isFinite(price) || price < 0) fail(`「${p.name}」单价不正确`);
-      return { productId: p.id, qty, price: round2(price), note: str(i.note, 100) };
+      return { productId: p.id, qty, price: dir === 'in' ? round4(price) : 0, note: str(i.note, 100) };
     });
     if (!items.length) fail('请至少添加一个商品');
     const need = qtyByProduct(items);
@@ -470,11 +505,13 @@ function saveStockDoc(ctx) {
       const lack = Object.entries(need).map(([pid, q]) => ({ p: get('products', pid), q })).filter(x => x.p.stock < x.q);
       if (lack.length) fail('库存不足：' + lack.map(x => `${x.p.name}（需 ${x.q}，现有 ${x.p.stock}）`).join('、'));
     }
-    Object.entries(need).forEach(([pid, q]) => { const p = get('products', pid); p.stock += dir === 'in' ? q : -q; put('products', p); });
     const o = { id: uid(), no: nextNo(D), dir, type: b.type, date, time: hhmm(), party: str(b.party, 100), handler: str(b.handler, 32), remark: str(b.remark, 500),
       items, status: '正常', creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), printCount: 0 };
+    items.forEach(i => {
+      const unit = moveStock(ctx, get('products', i.productId), dir === 'in' ? i.qty : -i.qty, o.type, o.no, i.note || o.party, { price: dir === 'in' ? i.price : undefined, date });
+      if (dir === 'out') i.price = round4(unit);
+    });
     put('stockDocs', o);
-    items.forEach(i => addLog(ctx, i.productId, o.type, dir === 'in' ? i.qty : -i.qty, o.no, i.note || o.party, date));
     audit(ctx, '新建' + D.title, `${o.no} ${o.type} ${items.length} 项`);
     return o;
   });
@@ -489,9 +526,9 @@ function voidStockDoc(ctx, id) {
       const lack = Object.entries(need).map(([pid, q]) => ({ p: get('products', pid), q })).filter(x => x.p && x.p.stock < x.q);
       if (lack.length) fail('库存已被领用，无法作废：' + lack.map(x => `${x.p.name}（需扣回 ${x.q}，现有 ${x.p.stock}）`).join('、'));
     }
-    Object.entries(need).forEach(([pid, q]) => { const p = get('products', pid); if (p) { p.stock += o.dir === 'in' ? -q : q; put('products', p); } });
     const reason = str(ctx.body.reason, 200);
-    o.items.forEach(i => addLog(ctx, i.productId, '作废冲回', o.dir === 'in' ? -i.qty : i.qty, o.no, reason));
+    // 入库单作废：按原入库单价冲减；出库单作废：按原出库成本退回
+    o.items.forEach(i => { const p = get('products', i.productId); if (p) moveStock(ctx, p, o.dir === 'in' ? -i.qty : i.qty, '作废冲回', o.no, reason, o.dir === 'in' ? { reversePrice: i.price } : { price: i.price }); });
     Object.assign(o, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString(), voidReason: reason });
     put('stockDocs', o);
     audit(ctx, '作废' + DOC[o.dir].title, o.no + (reason ? ' ' + reason : ''));
@@ -507,12 +544,120 @@ function markPrinted(ctx, id) {
     return { printCount: o.printCount };
   });
 }
+/* ---------- 盘点单：新建（快照账面）→ 录入实盘 → 审核（按审核时的账面生成盘盈 / 盘亏） ---------- */
+const CHECK = { col: 'checkDocs', prefix: 'PD', title: '盘点单' };
+function applyCounts(o, lines) {
+  const byId = new Map(o.lines.map(l => [l.productId, l]));
+  for (const x of Array.isArray(lines) ? lines : []) {
+    const l = x && byId.get(x.productId); if (!l) continue;
+    if (x.counted === null || x.counted === '' || x.counted === undefined) { l.counted = null; continue; }
+    const n = Number(x.counted);
+    if (!Number.isInteger(n) || n < 0) fail('实盘数量必须是非负整数');
+    l.counted = n;
+  }
+}
+function createCheck(ctx) {
+  const b = ctx.body, cat = str(b.category, 50);
+  let ps = list('products');
+  if (cat) ps = ps.filter(p => p.category === cat);
+  if (Array.isArray(b.productIds) && b.productIds.length) { const s = new Set(b.productIds); ps = ps.filter(p => s.has(p.id)); }
+  if (!ps.length) fail('没有符合条件的商品');
+  ps.sort((x, y) => String(x.sku).localeCompare(String(y.sku)));
+  return tx(() => {
+    const o = { id: uid(), no: nextNo(CHECK), date: today(), time: hhmm(), scope: cat ? '分类：' + cat : b.productIds && b.productIds.length ? `指定 ${ps.length} 个商品` : '全部商品',
+      remark: str(b.remark, 500), lines: ps.map(p => ({ productId: p.id, book: p.stock, counted: null })), status: '盘点中',
+      creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString() };
+    put('checkDocs', o); audit(ctx, '新建盘点单', `${o.no} ${o.scope} ${o.lines.length} 项`);
+    return o;
+  });
+}
+function editCheck(ctx, id, fn) {
+  return tx(() => {
+    const o = get('checkDocs', id) || fail('盘点单不存在', 404);
+    ownDoc(ctx, o);
+    if (o.status !== '盘点中') fail(`盘点单已${o.status === '已完成' ? '审核' : '作废'}，不能再修改`);
+    return fn(o);
+  });
+}
+const saveCheck = (ctx, id) => editCheck(ctx, id, o => {
+  applyCounts(o, ctx.body.lines);
+  if ('remark' in ctx.body) o.remark = str(ctx.body.remark, 500);
+  put('checkDocs', o); audit(ctx, '保存盘点单', `${o.no} 已录 ${o.lines.filter(l => l.counted != null).length}/${o.lines.length}`);
+  return o;
+});
+const postCheck = (ctx, id) => editCheck(ctx, id, o => {
+  if (ctx.body.lines) applyCounts(o, ctx.body.lines);
+  const counted = o.lines.filter(l => l.counted != null);
+  if (!counted.length) fail('还没有录入任何实盘数量');
+  let gain = 0, loss = 0;
+  for (const l of counted) {
+    const p = get('products', l.productId); if (!p) continue;
+    l.bookAtPost = p.stock; l.diff = l.counted - p.stock; l.cost = p.cost || 0;
+    if (l.diff > 0) gain += l.diff; else loss -= l.diff;
+    if (l.diff) moveStock(ctx, p, l.diff, l.diff > 0 ? '盘盈' : '盘亏', o.no);
+  }
+  Object.assign(o, { status: '已完成', poster: ctx.user.name, postedAt: new Date().toISOString(), postDate: today() });
+  put('checkDocs', o);
+  audit(ctx, '审核盘点单', `${o.no} 盘盈 ${gain} 盘亏 ${loss}`);
+  return o;
+});
+const voidCheck = (ctx, id) => editCheck(ctx, id, o => {
+  Object.assign(o, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString() });
+  put('checkDocs', o); audit(ctx, '作废盘点单', o.no);
+  return o;
+});
+
+/* ---------- 导入商品与期初库存 ---------- */
+function importProducts(ctx) {
+  const rows = Array.isArray(ctx.body.rows) ? ctx.body.rows : fail('没有可导入的数据');
+  if (rows.length > 5000) fail('一次最多导入 5000 行');
+  const update = ctx.body.update !== false, money = seesPrice(ctx.perms);
+  return tx(() => {
+    const bySku = new Map(list('products').map(p => [p.sku, p])), seen = new Set(), errors = [];
+    let created = 0, updated = 0, skipped = 0;
+    rows.forEach((raw, i) => {
+      const line = Number.isInteger(raw._row) ? raw._row : i + 2, sku = str(raw.sku, 64), name = str(raw.name, 200);
+      const err = m => errors.push(`第 ${line} 行：${m}`);
+      if (!sku) return err('商品编码为空');
+      if (seen.has(sku)) return err(`商品编码 ${sku} 在表格中重复`);
+      seen.add(sku);
+      const num = (k, label, int) => {
+        if (raw[k] === undefined || raw[k] === null || raw[k] === '') return undefined;
+        const n = Number(raw[k]);
+        if (!Number.isFinite(n) || n < 0 || (int && !Number.isInteger(n))) { err(`${label}「${raw[k]}」不正确`); return null; }
+        return round4(n);
+      };
+      const cost = num('cost', '成本价'), price = num('price', '销售价'), stock = num('stock', '期初库存', true), safety = num('safety', '安全库存', true);
+      if ([cost, price, stock, safety].includes(null)) return;
+      const fields = {};
+      for (const k of ['name', 'spec', 'category', 'unit', 'remark']) if (raw[k] !== undefined && raw[k] !== null && String(raw[k]).trim() !== '') fields[k] = str(raw[k], k === 'remark' ? 500 : 200);
+      if (safety !== undefined) fields.safety = safety;
+      if (money && price !== undefined) fields.price = round2(price);
+      const p = bySku.get(sku);
+      if (p) {
+        if (!update) { skipped++; return; }
+        Object.assign(p, fields);
+        if (money && cost !== undefined && p.stock === 0) p.cost = cost;  // 有库存时成本由移动加权决定，不覆盖
+        put('products', p); updated++;
+        return;
+      }
+      if (!name) return err('新商品必须填写商品名称');
+      const np = { id: uid(), sku, name, spec: '', category: '', unit: '个', price: 0, safety: 0, remark: '', ...fields, cost: money && cost !== undefined ? cost : 0, stock: 0, createdAt: today() };
+      put('products', np); bySku.set(sku, np); created++;
+      if (stock > 0) moveStock(ctx, np, stock, '期初库存', '', 'Excel 导入', { price: np.cost });
+    });
+    if (errors.length) fail('导入失败，数据未做任何改动：\n' + errors.slice(0, 20).join('\n') + (errors.length > 20 ? `\n……共 ${errors.length} 处错误` : ''));
+    audit(ctx, '导入商品', `新增 ${created}，更新 ${updated}，跳过 ${skipped}`);
+    return { created, updated, skipped };
+  });
+}
+
 // 按权限裁剪下发给前端的数据
 function visibleData(ctx) {
   const P = ctx.perms, any = (...k) => k.some(x => P.has(x));
   const want = {
     products: any('inv.view', 'prod.view', 'sales', 'purchase', 'dashboard', 'reports'),
-    stockLogs: any('inv.view', 'dashboard'), stockDocs: P.has('inv.view'),
+    stockLogs: any('inv.view', 'dashboard'), stockDocs: P.has('inv.view'), checkDocs: P.has('inv.view'),
     sales: any('sales', 'dashboard', 'reports', 'parties'), purchases: any('purchase', 'dashboard', 'reports', 'parties'),
     customers: any('sales', 'parties', 'dashboard', 'reports'), suppliers: any('purchase', 'parties'),
     finance: any('finance', 'sales', 'purchase', 'reports'), employees: P.has('hr')
@@ -521,8 +666,12 @@ function visibleData(ctx) {
   const data = {};
   COLS.forEach(c => { data[c] = want[c] ? list(c) : []; if (DATED.includes(c)) data[c].sort(byDate); });
   if (!seesPrice(P)) data.products = data.products.map(({ cost, price, ...p }) => p);
-  if (!P.has('inv.others')) data.stockDocs = data.stockDocs.filter(o => o.creatorId === ctx.user.id);
-  if (!P.has('inv.cost')) data.stockDocs = data.stockDocs.map(o => ({ ...o, items: o.items.map(({ price, ...i }) => i) }));
+  if (!P.has('inv.others')) { data.stockDocs = data.stockDocs.filter(o => o.creatorId === ctx.user.id); data.checkDocs = data.checkDocs.filter(o => o.creatorId === ctx.user.id); }
+  if (!P.has('inv.cost')) {
+    data.stockDocs = data.stockDocs.map(o => ({ ...o, items: o.items.map(({ price, ...i }) => i) }));
+    data.stockLogs = data.stockLogs.map(({ cost, costAfter, ...l }) => l);
+    data.checkDocs = data.checkDocs.map(o => ({ ...o, lines: o.lines.map(({ cost, ...l }) => l) }));
+  }
   return data;
 }
 
@@ -621,7 +770,12 @@ route('POST', '/api/orders/:kind', ctx => saveOrder(ctx, ctx.params.kind, null),
 route('PUT', '/api/orders/:kind/:id', ctx => saveOrder(ctx, ctx.params.kind, ctx.params.id), orderPerm);
 route('DELETE', '/api/orders/:kind/:id', ctx => deleteOrder(ctx, ctx.params.kind, ctx.params.id), orderPerm);
 route('POST', '/api/orders/:kind/:id/:action', ctx => orderAction(ctx, ctx.params.kind, ctx.params.id, ctx.params.action), orderPerm);
-route('POST', '/api/stock/:id', ctx => adjustStock(ctx, ctx.params.id), { perm: ctx => ({ in: 'inv.in', out: 'inv.out' })[ctx.body.mode] || 'inv.check' });
+route('POST', '/api/stock/:id', ctx => adjustStock(ctx, ctx.params.id), { perm: ctx => ({ in: 'inv.in', out: 'inv.out' })[ctx.body.mode] || 'inv.checkpost' });
+route('POST', '/api/checkdocs', ctx => createCheck(ctx), { perm: 'inv.check' });
+route('PUT', '/api/checkdocs/:id', ctx => saveCheck(ctx, ctx.params.id), { perm: 'inv.check' });
+route('POST', '/api/checkdocs/:id/post', ctx => postCheck(ctx, ctx.params.id), { perm: 'inv.checkpost' });
+route('POST', '/api/checkdocs/:id/void', ctx => voidCheck(ctx, ctx.params.id), { perm: 'inv.check' });
+route('POST', '/api/products/import', ctx => importProducts(ctx), { perm: 'prod.edit' });
 route('POST', '/api/stockdocs', ctx => saveStockDoc(ctx), { perm: ctx => ctx.body.dir === 'out' ? 'inv.out' : 'inv.in' });
 route('POST', '/api/stockdocs/:id/void', ctx => voidStockDoc(ctx, ctx.params.id), { perm: 'inv.void' });
 route('POST', '/api/stockdocs/:id/print', ctx => markPrinted(ctx, ctx.params.id), { perm: 'inv.print' });

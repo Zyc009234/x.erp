@@ -290,7 +290,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v1.0.1 · 数据保存在服务器</div>
+    <div class="side-foot">v1.0.2 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -373,6 +373,8 @@ const emptySvg = '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" str
 /* ================= 常量 ================= */
 const CATS = ['电子产品', '办公用品', '家居用品', '食品饮料'];
 const UNITS = ['个', '台', '箱', '盒', '把', '张', '袋', '瓶', '件', '套'];
+const cats = () => [...new Set([...CATS, ...db.products.map(p => p.category).filter(Boolean)])];
+const units = () => [...new Set([...UNITS, ...db.products.map(p => p.unit).filter(Boolean)])];
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
 const DEPTS = ['销售部', '采购部', '仓储部', '财务部', '行政部', '技术部'];
 const METHODS = ['银行转账', '现金', '支付宝', '微信', '承兑汇票'];
@@ -389,7 +391,7 @@ const LS = {
   set(k, v) { try { localStorage.setItem('erp_' + k, JSON.stringify(v)); } catch (e) {} }
 };
 const prefs = Object.assign({theme:'light', pageSize:10}, LS.get('prefs', {}));
-let db = {settings:{theme:prefs.theme, pageSize:prefs.pageSize}, products:[], customers:[], suppliers:[], employees:[], sales:[], purchases:[], stockLogs:[], stockDocs:[], finance:[]};
+let db = {settings:{theme:prefs.theme, pageSize:prefs.pageSize}, products:[], customers:[], suppliers:[], employees:[], sales:[], purchases:[], stockLogs:[], stockDocs:[], checkDocs:[], finance:[]};
 let ME = null, META = {modules:{}, perms:[], templates:{}, docTypes:{in:[], out:[]}}, CLIENT_MODE = false, SERVER_ADDR = '', pending = 0, dataSig = '';
 const isAdmin = () => !!ME && ME.role === 'admin';
 const can = k => !!ME && (ME.perms || []).includes(k);
@@ -525,6 +527,9 @@ function fieldHtml(f, d) {
   if (f.type === 'select') {
     const opts = typeof f.opts === 'function' ? f.opts() : f.opts;
     input = `<select name="${f.n}" ${dis}>${opts.map(o => { const [a, b] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(a)}" ${String(a) === String(v) ? 'selected' : ''}>${esc(b)}</option>`; }).join('')}</select>`;
+  } else if (f.type === 'combo') {
+    const opts = typeof f.opts === 'function' ? f.opts() : f.opts;
+    input = `<input name="${f.n}" list="dl-${f.n}" value="${esc(v)}" placeholder="${esc(f.ph || '')}" ${dis}><datalist id="dl-${f.n}">${opts.map(o => `<option value="${esc(o)}">`).join('')}</datalist>`;
   } else if (f.type === 'textarea') input = `<textarea name="${f.n}" rows="3" ${dis}>${esc(v)}</textarea>`;
   else input = `<input name="${f.n}" type="${f.type || 'text'}" value="${esc(v)}" ${f.type === 'number' ? 'step="any"' : ''} placeholder="${esc(f.ph || '')}" ${dis}>`;
   return `<label class="field ${f.span ? 'span2' : ''}"><span>${f.l}${f.req ? ' <i>*</i>' : ''}</span>${input}</label>`;
@@ -577,6 +582,7 @@ function renderList(key) {
   (cfg.filters || []).forEach(f => { const v = st.f[f.key]; if (v) data = data.filter(r => f.test(r, v)); });
   if (st.sort) { const col = cfg.columns[st.sort.i]; if (col && col.s) data = [...data].sort((a, b) => { const x = col.s(a), y = col.s(b); return (x > y ? 1 : x < y ? -1 : 0) * st.sort.dir; }); }
   cfg.last = data;
+  if (cfg.after) setTimeout(() => cfg.after(data));
   const total = data.length, pages = Math.max(1, Math.ceil(total / ps));
   if (st.page > pages) st.page = pages;
   const rows = data.slice((st.page - 1) * ps, st.page * ps);
@@ -693,7 +699,7 @@ function catStats(orders) {
 const ENT = {
   products: {title:'商品', fields:[
     {n:'sku', l:'商品编码', req:1}, {n:'name', l:'商品名称', req:1}, {n:'spec', l:'规格型号', span:1},
-    {n:'category', l:'商品分类', type:'select', opts:() => CATS}, {n:'unit', l:'计量单位', type:'select', opts:() => UNITS},
+    {n:'category', l:'商品分类', type:'combo', opts:cats, ph:'可选择或直接输入'}, {n:'unit', l:'计量单位', type:'combo', opts:units, def:'个'},
     {n:'cost', l:'成本价（元）', type:'number', req:1, money:1}, {n:'price', l:'销售价（元）', type:'number', req:1, money:1},
     {n:'stock', l:'期初库存', type:'number', def:0, lockOnEdit:1}, {n:'safety', l:'安全库存', type:'number', def:10},
     {n:'remark', l:'备注', type:'textarea', span:1}]},
@@ -711,7 +717,9 @@ const ENT = {
 };
 function editEntity(type, id) {
   const cfg = ENT[type], rec = id ? byId(db[type], id) : null;
-  const fields = cfg.fields.filter(f => !f.money || seesPrice()).map(f => ({...f, disabled:rec && f.lockOnEdit}));
+  const costLocked = type === 'products' && rec && rec.stock !== 0;
+  const fields = cfg.fields.filter(f => !f.money || seesPrice()).map(f => ({...f, disabled:rec && f.lockOnEdit || f.n === 'cost' && costLocked,
+    l:f.n === 'cost' ? (rec ? '成本价（元，移动加权自动计算' + (costLocked ? '' : '，无库存时可改') + '）' : '期初成本价（元）') : f.l}));
   formModal({title:(rec ? '编辑' : '新增') + cfg.title, fields, data:rec || {}, onSubmit:v =>
     mutate(rec ? 'PUT' : 'POST', '/api/' + type + (rec ? '/' + rec.id : ''), v, (rec ? '已更新' : '已新增') + cfg.title)});
 }
@@ -721,12 +729,12 @@ function delEntity(type, id) {
 }
 function pageProducts() {
   const filters = [
-    {key:'cat', label:'全部分类', options:CATS, test:(p, v) => p.category === v},
+    {key:'cat', label:'全部分类', options:cats(), test:(p, v) => p.category === v},
     {key:'stock', label:'库存状态', options:['正常', '预警', '缺货'], test:(p, v) => v === '预警' ? p.stock < p.safety : stockStatus(p)[0] === v}
   ];
   const pr = seesPrice();
   const btns = (can('inv.export') || isAdmin() ? `<button class="btn" data-act="export" data-id="products">${ic('download')}导出</button>` : '')
-    + (can('prod.edit') ? `<button class="btn primary" data-act="add" data-id="products">${ic('plus')}新增商品</button>` : '');
+    + (can('prod.edit') ? `<button class="btn" data-act="importOpen">${ic('upload')}导入</button><button class="btn primary" data-act="add" data-id="products">${ic('plus')}新增商品</button>` : '');
   $('#view').innerHTML = pageHead('商品管理', '维护商品档案、规格与安全库存') + `
   <div class="grid g4 mb">
     ${kpi('商品总数', db.products.length, 'box', 'primary')}
@@ -770,11 +778,12 @@ function pageInventory() {
     ${kpi('本月入库', num(sum(ml.filter(l => l.qty > 0), l => l.qty)), 'download', 'blue')}
     ${kpi('本月出库', num(-sum(ml.filter(l => l.qty < 0), l => l.qty)), 'upload', 'orange')}
   </div>
-  ${tabs('invTab', [['stock', '库存总览'], ['docs', '出入库单'], ['logs', '出入库流水']])}
+  ${tabs('invTab', [['stock', '库存总览'], ['docs', '出入库单'], ['check', '盘点单'], ['summary', '收发存汇总'], ['logs', '出入库流水']])}
   <div class="card" id="invCard"></div>`;
   if (ui.invTab === 'stock') {
-    const filters = [{key:'cat', label:'全部分类', options:CATS, test:(p, v) => p.category === v}, {key:'st', label:'库存状态', options:['正常', '预警', '缺货'], test:(p, v) => stockStatus(p)[0] === v}];
-    const btns = (can('inv.print') ? `<button class="btn" data-act="printCheck">${ic('printer')}打印盘点表</button>` : '')
+    const filters = [{key:'cat', label:'全部分类', options:cats(), test:(p, v) => p.category === v}, {key:'st', label:'库存状态', options:['正常', '预警', '缺货'], test:(p, v) => stockStatus(p)[0] === v}];
+    const btns = (can('prod.edit') ? `<button class="btn" data-act="importOpen">${ic('upload')}导入商品 / 期初</button>` : '')
+      + (can('inv.print') ? `<button class="btn" data-act="printCheck">${ic('printer')}打印盘点表</button>` : '')
       + (can('inv.export') ? `<button class="btn" data-act="export" data-id="inv">${ic('download')}导出库存</button>` : '');
     $('#invCard').innerHTML = toolbar('inv', {placeholder:'搜索编码 / 商品 / 规格', filters, buttons:btns}) + '<div id="list-inv"></div>';
     mountList('inv', {rows:() => db.products, search:p => p.sku + p.name + (p.spec || ''), filters, columns:[
@@ -784,7 +793,7 @@ function pageInventory() {
       {t:'库存水位', r:p => { const pct = Math.min(100, p.stock / ((p.safety || 1) * 3) * 100); const c = stockStatus(p)[1]; return `<div class="prog"><div class="bar"><i style="width:${pct}%;background:var(--${c})"></i></div></div>`; }},
       ...(pr ? [{t:'成本单价', cls:'num', r:p => money(p.cost)}, {t:'库存金额', cls:'num', r:p => money(p.stock * p.cost), s:p => p.stock * p.cost}] : []),
       {t:'状态', r:p => badge(...stockStatus(p))},
-      {t:'操作', r:p => `<div class="ops">${can('inv.in') ? tbtn('入库', 'stock', 'in|' + p.id) : ''}${can('inv.out') ? tbtn('出库', 'stock', 'out|' + p.id) : ''}${can('inv.check') ? tbtn('盘点', 'stock', 'check|' + p.id) : ''}${tbtn('流水', 'prodLogs', p.id)}</div>`}
+      {t:'操作', r:p => `<div class="ops">${can('inv.in') ? tbtn('入库', 'stock', 'in|' + p.id) : ''}${can('inv.out') ? tbtn('出库', 'stock', 'out|' + p.id) : ''}${can('inv.checkpost') ? tbtn('调整', 'stock', 'check|' + p.id) : ''}${tbtn('流水', 'prodLogs', p.id)}</div>`}
     ], exp:{name:'库存清单', cols:[['编码', p => p.sku], ['商品', p => p.name], ['规格型号', p => p.spec], ['分类', p => p.category], ['单位', p => p.unit], ['库存', p => p.stock], ['安全库存', p => p.safety], ...(pr ? [['成本', p => p.cost], ['库存金额', p => (p.stock * p.cost).toFixed(2)]] : []), ['状态', p => stockStatus(p)[0]]]}});
   } else if (ui.invTab === 'docs') {
     const mo = canMoney();
@@ -806,8 +815,10 @@ function pageInventory() {
       {t:'状态', r:o => badge(o.status, o.status === '正常' ? 'blue' : 'gray')},
       {t:'操作', r:o => `<div class="ops">${tbtn('查看', 'docView', o.id)}${can('inv.print') ? tbtn('打印', 'docPrint', o.id) : ''}${can('inv.void') && o.status === '正常' ? tbtn('作废', 'docVoid', o.id, 'danger-text') : ''}</div>`}
     ], exp:{name:'出入库单', cols:[['单号', o => o.no], ['类型', o => o.type], ['日期', o => o.date], ['单位', o => o.party], ['经手人', o => o.handler], ['商品数', o => o.items.length], ['数量', docQty], ...(mo ? [['金额', o => docAmount(o).toFixed(2)]] : []), ['制单人', o => o.creator], ['状态', o => o.status], ['备注', o => o.remark]]}});
-  } else {
-    const kinds = ['期初库存', ...META.docTypes.in, ...META.docTypes.out, '作废冲回', '盘点调整', '手工入库', '手工出库'];
+  } else if (ui.invTab === 'check') pageCheckDocs();
+  else if (ui.invTab === 'summary') pageSummary();
+  else {
+    const kinds = ['期初库存', ...META.docTypes.in, ...META.docTypes.out, '作废冲回', '盘盈', '盘亏', '盘点调整', '手工入库', '手工出库'];
     const filters = [{key:'kind', label:'全部类型', options:kinds, test:(l, v) => l.kind === v}, {key:'dir', label:'方向', options:[['in', '入库'], ['out', '出库']], test:(l, v) => v === 'in' ? l.qty > 0 : l.qty < 0}];
     $('#invCard').innerHTML = toolbar('logs', {placeholder:'搜索商品 / 单号', filters, buttons:can('inv.export') ? `<button class="btn" data-act="export" data-id="logs">${ic('download')}导出</button>` : ''}) + '<div id="list-logs"></div>';
     const pn = l => prodOf(l.productId).name;
@@ -816,7 +827,7 @@ function pageInventory() {
       {t:'商品', r:l => esc(pn(l))},
       {t:'类型', r:l => badge(l.kind, l.qty > 0 ? 'green' : 'orange')},
       {t:'数量', cls:'num', r:l => `<span class="${l.qty > 0 ? 'pos' : 'neg'}">${l.qty > 0 ? '+' : ''}${l.qty}</span>`, s:l => l.qty},
-      {t:'关联单据', r:l => { const d = l.ref && docByNo(l.ref); return d ? `<a class="link" data-act="docView" data-id="${d.id}">${esc(l.ref)}</a>` : l.ref ? `<span class="sub-t">${esc(l.ref)}</span>` : '-'; }},
+      {t:'关联单据', r:l => { const d = l.ref && docByNo(l.ref), c = l.ref && db.checkDocs.find(x => x.no === l.ref); return d ? `<a class="link" data-act="docView" data-id="${d.id}">${esc(l.ref)}</a>` : c ? `<a class="link" data-act="checkOpen" data-id="${c.id}">${esc(l.ref)}</a>` : l.ref ? `<span class="sub-t">${esc(l.ref)}</span>` : '-'; }},
       {t:'备注', r:l => esc(l.note) || '-'},
       {t:'操作人', r:l => esc(l.operator || '-')}
     ], exp:{name:'出入库流水', cols:[['日期', l => l.date], ['时间', l => l.time], ['商品', pn], ['类型', l => l.kind], ['数量', l => l.qty], ['单据', l => l.ref], ['备注', l => l.note], ['操作人', l => l.operator]]}});
@@ -825,7 +836,7 @@ function pageInventory() {
 function stockModal(mode, id) {
   if (mode !== 'check') return docModal(mode, id);
   const p = byId(db.products, id);
-  formModal({title:'库存盘点 · ' + esc(p.name), fields:[
+  formModal({title:'库存调整 · ' + esc(p.name), fields:[
     {n:'qty', l:`实盘数量（账面 ${p.stock}）`, type:'number', req:1},
     {n:'note', l:'备注', type:'textarea', span:1}],
     data:{qty:p.stock}, onSubmit:v => {
@@ -862,7 +873,7 @@ function docModal(dir, productId) {
   </div>
   <div class="line-head"><b>商品明细</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 名称搜索，支持扫码枪录入编码后回车</span><button class="btn sm" id="dAdd">${ic('plus')}添加一行</button></div>
   <datalist id="dProdList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
-  <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:230px">商品</th><th style="width:60px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th>${mo ? '<th style="width:110px">单价</th><th class="num" style="width:110px">金额</th>' : ''}<th style="width:140px">备注</th><th style="width:44px"></th></tr></thead><tbody id="dItems"></tbody></table></div>
+  <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:230px">商品</th><th style="width:60px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th>${mo ? `<th style="width:110px">${dir === 'in' ? '单价' : '成本单价'}</th><th class="num" style="width:110px">金额</th>` : ''}<th style="width:140px">备注</th><th style="width:44px"></th></tr></thead><tbody id="dItems"></tbody></table></div>
   <label class="field" style="margin-top:16px"><span>单据备注</span><textarea id="dRemark" rows="2"></textarea></label>
   <div class="o-total">合计数量<b id="dQty">0</b>${mo ? `&nbsp;&nbsp;合计金额<b id="dAmt">¥0.00</b>` : ''}</div></div>
   <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn" id="dSave">保存</button>${can('inv.print') ? `<button class="btn primary" id="dSavePrint">${ic('printer')}保存并打印</button>` : ''}</div>`, 'lg');
@@ -877,7 +888,7 @@ function docModal(dir, productId) {
       <td>${p ? esc(p.unit) : ''}</td>
       <td class="num ${p && dir === 'out' && p.stock < it.qty ? 'neg' : ''}">${p ? p.stock : ''}</td>
       <td><input type="number" min="1" step="1" data-i="${i}" data-k="qty" value="${it.qty}"></td>
-      ${mo ? `<td><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"></td><td class="num sub">${money((+it.qty || 0) * (+it.price || 0))}</td>` : ''}
+      ${mo ? (dir === 'in' ? `<td><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"></td>` : `<td class="num sub-t" title="出库按移动加权成本计价">${p ? money(p.cost) : ''}</td>`) + `<td class="num sub">${money((+it.qty || 0) * (+it.price || 0))}</td>` : ''}
       <td><input data-i="${i}" data-k="note" value="${esc(it.note)}"></td>
       <td><button class="icon-btn sm" data-del="${i}" title="删除">${ic('trash')}</button></td></tr>`; }).join('');
     updTotal();
@@ -946,6 +957,7 @@ function rmbUpper(v) {
   return (v < 0 ? '负' : '') + out + s;
 }
 const PAPERS = {a4:['A4 纵向', 'A4 portrait', 12], half:['二等分 241×140（针式）', '241mm 140mm', 6], a5:['A5 横向', 'A5 landscape', 7]};
+const PRINT_ONLY = {a4l:['A4 横向', 'A4 landscape', 0]};
 function slipHtml(o, {showMoney, minRows = 0}) {
   const cols = showMoney ? 9 : 7, rows = o.items.map((i, n) => { const p = prodOf(i.productId); return `<tr><td class="c">${n + 1}</td><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.spec || '')}</td><td class="c">${esc(p.unit)}</td><td class="r">${i.qty}</td>${showMoney ? `<td class="r">${(+i.price || 0).toFixed(2)}</td><td class="r">${(i.qty * (+i.price || 0)).toFixed(2)}</td>` : ''}<td>${esc(i.note || '')}</td></tr>`; });
   for (let k = rows.length; k < minRows; k++) rows.push(`<tr>${'<td>&nbsp;</td>'.repeat(cols)}</tr>`);
@@ -963,7 +975,7 @@ function slipHtml(o, {showMoney, minRows = 0}) {
   ${o.status === '已作废' ? `<div class="s-meta" style="margin-top:6px"><span>作废：${esc(o.voidBy || '')} ${fmtTime(o.voidAt)} ${esc(o.voidReason || '')}</span></div>` : ''}</div>`;
 }
 function printFrame(title, body, paperKey) {
-  const paper = PAPERS[paperKey] || PAPERS.a4;
+  const paper = PAPERS[paperKey] || PRINT_ONLY[paperKey] || PAPERS.a4;
   const css = `@page{size:${paper[1]};margin:8mm 10mm}*{box-sizing:border-box;margin:0;padding:0}
   body{font-family:"SimSun","Songti SC","Microsoft YaHei",serif;color:#000;font-size:12px}
   table{border-collapse:collapse;width:100%;margin-top:4px}th,td{border:1px solid #000;padding:3px 5px;font-size:12px;line-height:1.35}th{font-weight:700;text-align:center}
@@ -1016,6 +1028,343 @@ function printCheck() {
   <tbody>${rows.map((p, n) => `<tr><td class="c">${n + 1}</td><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.spec || '')}</td><td class="c">${esc(p.unit)}</td><td class="r">${p.stock}</td><td></td><td></td><td></td></tr>`).join('')}</tbody></table>
   <div class="s-sign"><span>盘点人：</span><span>复核人：</span><span>仓库主管：</span></div><div class="foot">打印人：${esc(ME.name)} · ${fmtTime(new Date())}</div>`;
   printFrame('库存盘点表 ' + today(), body, 'a4');
+}
+
+/* ---------- 盘点单 ---------- */
+const CHECK_COLOR = {'盘点中':'orange', '已完成':'green', '已作废':'gray'};
+function checkStats(o) {
+  const r = {gq:0, lq:0, ga:0, la:0, counted:o.lines.filter(l => l.counted != null).length};
+  o.lines.forEach(l => { const c = l.cost || 0; if (l.diff > 0) { r.gq += l.diff; r.ga += l.diff * c; } else if (l.diff < 0) { r.lq -= l.diff; r.la -= l.diff * c; } });
+  return r;
+}
+function pageCheckDocs() {
+  const mo = canMoney();
+  const filters = [{key:'st', label:'全部状态', options:['盘点中', '已完成', '已作废'], test:(o, v) => o.status === v},
+    {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(o, v) => monthKey(o.date) === v}];
+  $('#invCard').innerHTML = toolbar('checks', {placeholder:'搜索单号 / 范围 / 备注', filters, buttons:can('inv.check') ? `<button class="btn primary" data-act="checkNew">${ic('plus')}新建盘点单</button>` : ''}) + '<div id="list-checks"></div>';
+  mountList('checks', {rows:() => db.checkDocs, search:o => o.no + o.scope + o.remark + o.creator, filters, empty:'暂无盘点单，点「新建盘点单」开始盘点', columns:[
+    {t:'单号', r:o => `<a class="link" data-act="checkOpen" data-id="${o.id}">${o.no}</a>`, s:o => o.no},
+    {t:'日期', r:o => `${o.date} <span class="sub-t">${o.time || ''}</span>`, s:o => o.date + o.time},
+    {t:'范围', r:o => esc(o.scope)},
+    {t:'已录入', cls:'num', r:o => `${checkStats(o).counted} / ${o.lines.length}`},
+    {t:'盘盈 / 盘亏', r:o => { if (o.status !== '已完成') return '-'; const s = checkStats(o); return `<span class="pos">+${s.gq}</span> / <span class="neg">-${s.lq}</span>` + (mo ? `<div class="sub-t">${money(s.ga - s.la)}</div>` : ''); }},
+    {t:'制单人', r:o => esc(o.creator)},
+    {t:'审核人', r:o => esc(o.poster || '-')},
+    {t:'状态', r:o => badge(o.status, CHECK_COLOR[o.status])},
+    {t:'操作', r:o => `<div class="ops">${o.status === '盘点中' && can('inv.check') ? tbtn('录入', 'checkOpen', o.id, 'primary') : tbtn('查看', 'checkOpen', o.id)}${can('inv.print') ? tbtn('打印', 'checkPrint', o.id) : ''}${o.status === '盘点中' && can('inv.check') ? tbtn('作废', 'checkVoid', o.id, 'danger-text') : ''}</div>`}
+  ]});
+}
+function checkNew() {
+  formModal({title:'新建盘点单', okText:'开始盘点', fields:[
+    {n:'category', l:'盘点范围', type:'select', opts:[['', `全部商品（${db.products.length} 个）`], ...cats().map(c => [c, `分类：${c}（${db.products.filter(p => p.category === c).length} 个）`])], span:1},
+    {n:'remark', l:'备注', ph:'例如：10 月月末盘点', span:1}],
+    onSubmit:async v => {
+      try {
+        const r = await api('POST', '/api/checkdocs', v);
+        await reload(); ui.invTab = 'check'; render(); toast('盘点单已创建：' + r.no + '，账面数量已快照');
+        checkOpen(r.id);
+      } catch (e) { toast(e.message, 'error'); }
+    }});
+  $('.m-body').insertAdjacentHTML('beforeend', '<p class="span2 sub-t">创建时会记录每个商品当前的账面数量。审核时按审核那一刻的账面数量计算盘盈盘亏，盘点期间照常收发货也不会算错。</p>');
+}
+function checkOpen(id) {
+  const o = byId(db.checkDocs, id); if (!o) return toast('盘点单不存在或无权查看', 'error');
+  const editable = o.status === '盘点中' && can('inv.check'), done = o.status === '已完成', mo = canMoney();
+  const counts = Object.fromEntries(o.lines.map(l => [l.productId, l.counted == null ? '' : l.counted]));
+  const curBook = l => done ? l.bookAtPost : (byId(db.products, l.productId) || {stock:l.book}).stock;
+  const diffOf = l => done ? l.diff : counts[l.productId] === '' ? null : +counts[l.productId] - curBook(l);
+  const costOf = l => done ? (l.cost || 0) : ((byId(db.products, l.productId) || {}).cost || 0);
+  openModal(`${modalHead(`盘点单 · ${o.no} ${badge(o.status, CHECK_COLOR[o.status])}`)}
+  <div class="m-body">
+    <div class="doc-info" style="margin-bottom:10px"><div><span>范围：</span>${esc(o.scope)}</div><div><span>创建：</span>${esc(o.creator)} ${o.date} ${o.time || ''}</div>
+      ${done ? `<div><span>审核：</span>${esc(o.poster)} ${fmtTime(o.postedAt)}</div>` : ''}${o.remark ? `<div><span>备注：</span>${esc(o.remark)}</div>` : ''}</div>
+    <div class="toolbar" style="padding:0 0 10px"><div class="tb-left"><div class="search">${ic('search')}<input id="ckQ" placeholder="编码 / 名称，扫码后回车定位"></div>
+      <select class="select" id="ckF"><option value="">全部商品</option><option value="todo">未录入</option><option value="diff">有差异</option></select></div>
+      <div class="tb-right">${editable ? `<button class="btn sm" id="ckFill" title="把还没录入的商品实盘数填成当前账面数">未录入的按账面填充</button>` : ''}</div></div>
+    <div class="table-wrap" style="max-height:52vh;overflow:auto"><table class="tbl items"><thead><tr><th>商品</th><th style="width:50px">单位</th><th class="num" style="width:80px">${done ? '审核时账面' : '账面'}</th><th style="width:110px">实盘数量</th><th class="num" style="width:80px">差异</th>${mo ? '<th class="num" style="width:110px">差异金额</th>' : ''}</tr></thead>
+    <tbody id="ckRows">${o.lines.map(l => { const p = prodOf(l.productId), changed = !done && curBook(l) !== l.book; return `<tr data-pid="${l.productId}" data-q="${esc((p.sku + ' ' + p.name + ' ' + (p.spec || '')).toLowerCase())}">
+      <td><b>${esc(p.name)}</b><div class="sub-t">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''}</div></td><td>${esc(p.unit)}</td>
+      <td class="num">${curBook(l)}${changed ? `<div class="sub-t" title="创建盘点单时的账面数">建单时 ${l.book}</div>` : ''}</td>
+      <td>${editable ? `<input type="number" min="0" step="1" data-pid="${l.productId}" value="${counts[l.productId]}">` : l.counted == null ? '<span class="sub-t">未盘</span>' : l.counted}</td>
+      <td class="num ck-d"></td>${mo ? '<td class="num ck-a"></td>' : ''}</tr>`; }).join('')}</tbody></table></div>
+    <div class="o-total" id="ckSum"></div></div>
+  <div class="m-foot">${can('inv.print') ? `<button class="btn" style="margin-right:auto" data-act="checkPrint" data-id="${o.id}">${ic('printer')}打印</button>` : '<span style="margin-right:auto"></span>'}
+    <button class="btn" data-act="closeModal">关闭</button>${editable ? '<button class="btn" id="ckSave">保存</button>' : ''}${o.status === '盘点中' && can('inv.checkpost') ? `<button class="btn primary" id="ckPost">${ic('check')}审核生效</button>` : ''}</div>`, 'lg');
+  const tb = $('#ckRows');
+  const paint = tr => {
+    const l = o.lines.find(x => x.productId === tr.dataset.pid), d = diffOf(l);
+    tr.querySelector('.ck-d').innerHTML = d == null ? '' : d === 0 ? '0' : `<span class="${d > 0 ? 'pos' : 'neg'}">${d > 0 ? '+' : ''}${d}</span>`;
+    if (mo) tr.querySelector('.ck-a').innerHTML = d ? `<span class="${d > 0 ? 'pos' : 'neg'}">${money(d * costOf(l))}</span>` : '';
+  };
+  const summary = () => {
+    let n = 0, gq = 0, lq = 0, amt = 0;
+    o.lines.forEach(l => { const d = diffOf(l); if (d == null) return; n++; if (d > 0) gq += d; else lq -= d; amt += d * costOf(l); });
+    $('#ckSum').innerHTML = `已录入 <b style="font-size:16px;color:var(--text)">${n} / ${o.lines.length}</b>&nbsp;&nbsp;盘盈 <b class="pos" style="font-size:16px">+${gq}</b>&nbsp;&nbsp;盘亏 <b class="neg" style="font-size:16px">-${lq}</b>${mo ? `&nbsp;&nbsp;差异金额 <b style="font-size:16px">${money(amt)}</b>` : ''}`;
+    return {n, gq, lq};
+  };
+  const filter = () => {
+    const q = $('#ckQ').value.trim().toLowerCase(), f = $('#ckF').value;
+    tb.querySelectorAll('tr').forEach(tr => {
+      const l = o.lines.find(x => x.productId === tr.dataset.pid), d = diffOf(l);
+      tr.style.display = (!q || tr.dataset.q.includes(q)) && (!f || (f === 'todo' ? d == null : d != null && d !== 0)) ? '' : 'none';
+    });
+  };
+  tb.querySelectorAll('tr').forEach(paint); summary();
+  $('#ckQ').addEventListener('input', filter); $('#ckF').addEventListener('change', filter);
+  $('#ckQ').addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const p = findProduct(e.target.value), inp = p && tb.querySelector(`input[data-pid="${p.id}"]`);
+    if (!p || !tb.querySelector(`tr[data-pid="${p.id}"]`)) return toast('本盘点单中没有该商品：' + e.target.value, 'error');
+    e.target.value = ''; filter();
+    const tr = tb.querySelector(`tr[data-pid="${p.id}"]`); tr.scrollIntoView({block:'center'});
+    if (inp) { inp.focus(); inp.select(); }
+  });
+  tb.addEventListener('input', e => { const pid = e.target.dataset.pid; if (!pid) return; counts[pid] = e.target.value === '' ? '' : e.target.value; paint(e.target.closest('tr')); summary(); });
+  // 在实盘数量框里回车跳到下一行
+  tb.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || !e.target.dataset.pid) return;
+    e.preventDefault();
+    const ins = [...tb.querySelectorAll('input')].filter(x => x.closest('tr').style.display !== 'none'), i = ins.indexOf(e.target);
+    if (ins[i + 1]) { ins[i + 1].focus(); ins[i + 1].select(); } else $('#ckQ').focus();
+  });
+  const lines = () => o.lines.map(l => ({productId:l.productId, counted:counts[l.productId] === '' ? null : +counts[l.productId]}));
+  const bad = () => lines().some(l => l.counted != null && (!Number.isInteger(l.counted) || l.counted < 0));
+  if ($('#ckFill')) $('#ckFill').onclick = () => {
+    let n = 0;
+    o.lines.forEach(l => { if (counts[l.productId] === '') { counts[l.productId] = curBook(l); n++; } });
+    tb.querySelectorAll('input').forEach(x => { x.value = counts[x.dataset.pid]; paint(x.closest('tr')); });
+    summary(); toast(`已按账面填充 ${n} 个商品`, 'info');
+  };
+  if ($('#ckSave')) $('#ckSave').onclick = async () => {
+    if (bad()) return toast('实盘数量必须是非负整数', 'error');
+    try { await api('PUT', '/api/checkdocs/' + o.id, {lines:lines()}); await reload(); render(); toast('已保存'); checkOpen(o.id); }
+    catch (e) { toast(e.message, 'error'); }
+  };
+  if ($('#ckPost')) $('#ckPost').onclick = () => {
+    if (bad()) return toast('实盘数量必须是非负整数', 'error');
+    const s = summary();
+    if (!s.n) return toast('还没有录入任何实盘数量', 'error');
+    const sent = editable ? lines() : undefined;
+    confirmBox(`将按 ${s.n} 个已录入商品调整库存：盘盈 <b class="pos">+${s.gq}</b>，盘亏 <b class="neg">-${s.lq}</b>。${o.lines.length - s.n ? `未录入的 ${o.lines.length - s.n} 个商品不做调整。` : ''}审核后不能修改。`, async () => {
+      try { await api('POST', `/api/checkdocs/${o.id}/post`, sent ? {lines:sent} : {}); await reload(); render(); toast('盘点单已审核，库存已调整'); checkOpen(o.id); }
+      catch (e) { toast(e.message, 'error'); }
+    }, {title:'审核盘点单', danger:false, okText:'确认审核'});
+  };
+}
+function checkPrint(id) {
+  const o = byId(db.checkDocs, id), done = o.status === '已完成', mo = canMoney() && done;
+  const rows = o.lines.map((l, n) => {
+    const p = prodOf(l.productId), book = done ? l.bookAtPost : (byId(db.products, l.productId) || {}).stock;
+    const d = done ? l.diff : l.counted == null ? null : l.counted - book;
+    return `<tr><td class="c">${n + 1}</td><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.spec || '')}</td><td class="c">${esc(p.unit)}</td><td class="r">${book ?? ''}</td><td class="r">${l.counted ?? ''}</td><td class="r">${d == null ? '' : d > 0 ? '+' + d : d}</td>${mo ? `<td class="r">${d ? (d * (l.cost || 0)).toFixed(2) : ''}</td>` : ''}<td></td></tr>`;
+  });
+  const s = checkStats(o);
+  const body = `<div class="slip-wrap">${o.status === '已作废' ? '<div class="slip-stamp">作废</div>' : ''}<div class="s-title"><h1>${esc(db.settings.company)}</h1><h2>${done ? '盘点盈亏表' : '盘点表'}</h2></div>
+  <div class="s-meta"><span>单号：<b>${o.no}</b></span><span>范围：${esc(o.scope)}</span><span>日期：${done ? o.postDate || o.date : o.date}</span></div>
+  <table><thead><tr><th style="width:34px">序号</th><th>商品编码</th><th>商品名称</th><th>规格型号</th><th style="width:42px">单位</th><th style="width:62px">账面数量</th><th style="width:62px">实盘数量</th><th style="width:52px">差异</th>${mo ? '<th style="width:76px">差异金额</th>' : ''}<th>备注</th></tr></thead>
+  <tbody>${rows.join('')}${done ? `<tr><td colspan="7" class="r"><b>合计 盘盈 +${s.gq} / 盘亏 -${s.lq}</b></td><td></td>${mo ? `<td class="r"><b>${(s.ga - s.la).toFixed(2)}</b></td>` : ''}<td></td></tr>` : ''}
+  ${o.remark ? `<tr><td colspan="${mo ? 10 : 9}">备注：${esc(o.remark)}</td></tr>` : ''}</tbody></table>
+  <div class="s-sign"><span>制单：${esc(o.creator)}</span><span>盘点人：</span><span>复核人：</span><span>审核：${esc(o.poster || '')}</span></div></div>
+  <div class="foot">打印人：${esc(ME.name)} · ${fmtTime(new Date())}</div>`;
+  printFrame(o.no, body, 'a4');
+}
+function checkVoid(id) {
+  const o = byId(db.checkDocs, id);
+  confirmBox(`确定作废盘点单 ${o.no} 吗？作废后不会调整任何库存。`, () => mutate('POST', `/api/checkdocs/${id}/void`, {}, '盘点单已作废'));
+}
+
+/* ---------- 收发存汇总 / 明细账 ---------- */
+const logAsc = (a, b) => (a.date + (a.time || '') + a.id).localeCompare(b.date + (b.time || '') + b.id);
+function logsByProduct() {
+  const g = {};
+  db.stockLogs.forEach(l => { (g[l.productId] = g[l.productId] || []).push(l); });
+  Object.values(g).forEach(a => a.sort(logAsc));
+  return g;
+}
+// 期末结存 = 当前库存 − 截止日之后的变动；期初 = 期末 − 期间净变动（不依赖历史流水是否完整）
+// 金额：入 / 出按流水上的计价单价；期初 / 期末按当时的移动加权单位成本
+function stockSummary(from, to) {
+  const g = logsByProduct();
+  return db.products.map(p => {
+    let after = 0, inQ = 0, outQ = 0, inA = 0, outA = 0, costBegin = null, costEnd = null;
+    for (const l of g[p.id] || []) {
+      if (l.date > to) { after += l.qty; continue; }
+      const c = l.cost ?? p.cost ?? 0;
+      if (l.date >= from) { if (l.qty > 0) { inQ += l.qty; inA += l.qty * c; } else { outQ -= l.qty; outA -= l.qty * c; } }
+      else if (l.costAfter != null) costBegin = l.costAfter;
+      if (l.costAfter != null) costEnd = l.costAfter;
+    }
+    const endQ = p.stock - after, beginQ = endQ - inQ + outQ;
+    return {p, beginQ, inQ, outQ, endQ, beginA:beginQ * (costBegin ?? costEnd ?? p.cost ?? 0), inA, outA, endA:endQ * (costEnd ?? p.cost ?? 0)};
+  });
+}
+function monthRange(offset) { const d = new Date(), a = new Date(d.getFullYear(), d.getMonth() + offset, 1), b = new Date(d.getFullYear(), d.getMonth() + offset + 1, 0); return [fmtDate(a), offset ? fmtDate(b) : today()]; }
+function pageSummary() {
+  if (!ui.ssFrom) [ui.ssFrom, ui.ssTo] = monthRange(0);
+  const mo = canMoney();
+  ui.ssRows = stockSummary(ui.ssFrom, ui.ssTo);
+  const filters = [{key:'cat', label:'全部分类', options:cats(), test:(r, v) => r.p.category === v},
+    {key:'act', label:'全部商品', options:[['1', '只看有收发的'], ['2', '只看有结存的']], test:(r, v) => v === '1' ? r.inQ || r.outQ : r.endQ !== 0}];
+  const btns = (can('inv.print') ? `<button class="btn" data-act="ssPrint">${ic('printer')}打印</button>` : '') + (can('inv.export') ? `<button class="btn" data-act="export" data-id="ss">${ic('download')}导出</button>` : '');
+  $('#invCard').innerHTML = `<div class="toolbar" style="padding-bottom:0"><div class="tb-left"><b>期间</b><input type="date" class="select" id="ssFrom" value="${ui.ssFrom}" max="${today()}"><span>至</span><input type="date" class="select" id="ssTo" value="${ui.ssTo}" max="${today()}">
+    <button class="btn sm" data-act="ssRange" data-id="0">本月</button><button class="btn sm" data-act="ssRange" data-id="-1">上月</button><button class="btn sm" data-act="ssRange" data-id="y">本年</button></div></div>`
+    + toolbar('ss', {placeholder:'搜索编码 / 商品 / 规格', filters, buttons:btns}) + '<div id="ssTotal" style="padding:0 20px 12px"></div><div id="list-ss"></div>';
+  const cell = (q, a) => `${num(q)}${mo ? `<div class="sub-t">${money(a)}</div>` : ''}`;
+  mountList('ss', {rows:() => ui.ssRows, search:r => r.p.sku + r.p.name + (r.p.spec || ''), filters, columns:[
+    {t:'商品', r:r => `<a class="link" data-act="ledger" data-id="${r.p.id}">${esc(r.p.name)}</a><div class="sub-t">${esc(r.p.sku)}${r.p.spec ? ' · ' + esc(r.p.spec) : ''}</div>`, s:r => r.p.sku},
+    {t:'单位', r:r => esc(r.p.unit)},
+    {t:'期初结存', cls:'num', r:r => cell(r.beginQ, r.beginA), s:r => r.beginQ},
+    {t:'本期入库', cls:'num', r:r => r.inQ ? `<span class="pos">${cell(r.inQ, r.inA)}</span>` : cell(0, 0), s:r => r.inQ},
+    {t:'本期出库', cls:'num', r:r => r.outQ ? `<span class="neg">${cell(r.outQ, r.outA)}</span>` : cell(0, 0), s:r => r.outQ},
+    {t:'期末结存', cls:'num', r:r => `<b>${cell(r.endQ, r.endA)}</b>`, s:r => r.endQ},
+    {t:'', r:r => tbtn('明细账', 'ledger', r.p.id)}
+  ], after:data => {
+    const T = k => sum(data, r => r[k]);
+    $('#ssTotal').innerHTML = `<div class="grid g4" style="gap:12px">${[['期初结存', 'beginQ', 'beginA'], ['本期入库', 'inQ', 'inA'], ['本期出库', 'outQ', 'outA'], ['期末结存', 'endQ', 'endA']].map(([l, q, a]) =>
+      `<div class="todo" style="cursor:default"><div><small>${l}（${data.length} 个商品）</small><b>${num(T(q))}</b>${mo ? `<small>${money(T(a))}</small>` : ''}</div></div>`).join('')}</div>`;
+  }, exp:{name:`收发存汇总_${ui.ssFrom}_${ui.ssTo}`, cols:[['商品编码', r => r.p.sku], ['商品名称', r => r.p.name], ['规格型号', r => r.p.spec], ['分类', r => r.p.category], ['单位', r => r.p.unit],
+    ['期初数量', r => r.beginQ], ...(mo ? [['期初金额', r => r.beginA.toFixed(2)]] : []), ['入库数量', r => r.inQ], ...(mo ? [['入库金额', r => r.inA.toFixed(2)]] : []),
+    ['出库数量', r => r.outQ], ...(mo ? [['出库金额', r => r.outA.toFixed(2)]] : []), ['期末数量', r => r.endQ], ...(mo ? [['期末金额', r => r.endA.toFixed(2)]] : [])]}});
+  const onDate = () => {
+    const f = $('#ssFrom').value, t = $('#ssTo').value;
+    if (!f || !t || f > t) return toast('起止日期不正确', 'error');
+    ui.ssFrom = f; ui.ssTo = t; ui.ssRows = stockSummary(f, t); renderList('ss');
+  };
+  $('#ssFrom').onchange = onDate; $('#ssTo').onchange = onDate;
+}
+function ssPrint() {
+  const rows = lists.ss.last || ui.ssRows, mo = canMoney(), T = k => sum(rows, r => r[k]);
+  const c = (q, a) => `<td class="r">${q}</td>${mo ? `<td class="r">${a.toFixed(2)}</td>` : ''}`;
+  const h = l => mo ? `<th colspan="2">${l}</th>` : `<th>${l}</th>`;
+  const body = `<div class="s-title"><h1>${esc(db.settings.company)}</h1><h2>收发存汇总表</h2></div>
+  <div class="s-meta"><span>期间：${ui.ssFrom} 至 ${ui.ssTo}</span><span>共 ${rows.length} 个商品</span></div>
+  <table><thead><tr><th rowspan="${mo ? 2 : 1}" style="width:34px">序号</th><th rowspan="${mo ? 2 : 1}">商品编码</th><th rowspan="${mo ? 2 : 1}">商品名称</th><th rowspan="${mo ? 2 : 1}">规格型号</th><th rowspan="${mo ? 2 : 1}" style="width:40px">单位</th>${h('期初结存')}${h('本期入库')}${h('本期出库')}${h('期末结存')}</tr>
+  ${mo ? `<tr>${'<th>数量</th><th>金额</th>'.repeat(4)}</tr>` : ''}</thead>
+  <tbody>${rows.map((r, n) => `<tr><td class="c">${n + 1}</td><td>${esc(r.p.sku)}</td><td>${esc(r.p.name)}</td><td>${esc(r.p.spec || '')}</td><td class="c">${esc(r.p.unit)}</td>${c(r.beginQ, r.beginA)}${c(r.inQ, r.inA)}${c(r.outQ, r.outA)}${c(r.endQ, r.endA)}</tr>`).join('')}
+  <tr><td colspan="5" class="r"><b>合计</b></td>${c(T('beginQ'), T('beginA'))}${c(T('inQ'), T('inA'))}${c(T('outQ'), T('outA'))}${c(T('endQ'), T('endA'))}</tr></tbody></table>
+  <div class="s-sign"><span>制表：${esc(ME.name)}</span><span>仓库主管：</span><span>财务：</span></div><div class="foot">打印时间：${fmtTime(new Date())}</div>`;
+  printFrame('收发存汇总表', body, 'a4l');
+}
+function ledger(pid) {
+  const p = byId(db.products, pid); if (!p) return;
+  const from = ui.ssFrom || monthRange(0)[0], to = ui.ssTo || today(), mo = canMoney();
+  const r = stockSummary(from, to).find(x => x.p.id === pid);
+  const logs = (logsByProduct()[pid] || []).filter(l => l.date >= from && l.date <= to);
+  let bal = r.beginQ;
+  const rows = logs.map(l => {
+    bal += l.qty; const d = l.ref && docByNo(l.ref), c = l.ref && db.checkDocs.find(x => x.no === l.ref);
+    const ref = d ? `<a class="link" data-act="docView" data-id="${d.id}">${esc(l.ref)}</a>` : c ? `<a class="link" data-act="checkOpen" data-id="${c.id}">${esc(l.ref)}</a>` : esc(l.ref || '');
+    return `<tr><td>${l.date} <span class="sub-t">${l.time || ''}</span></td><td>${badge(l.kind, l.qty > 0 ? 'green' : 'orange')}</td><td>${ref}</td>
+      <td class="num pos">${l.qty > 0 ? l.qty : ''}</td><td class="num neg">${l.qty < 0 ? -l.qty : ''}</td><td class="num"><b>${bal}</b></td>
+      ${mo ? `<td class="num">${l.cost != null ? money(l.cost) : '-'}</td><td class="num">${l.costAfter != null ? money(l.costAfter) : '-'}</td>` : ''}<td class="sub-t">${esc(l.note || '')} ${esc(l.operator || '')}</td></tr>`;
+  });
+  openModal(`${modalHead('库存明细账 · ' + esc(p.name))}<div class="m-body" style="padding-top:12px">
+    <p class="sub-t" style="margin-bottom:10px">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''} · 期间 ${from} 至 ${to}（在「收发存汇总」里修改期间）</p>
+    <div class="table-wrap"><table class="tbl compact"><thead><tr><th>日期</th><th>类型</th><th>单据</th><th class="num">入库</th><th class="num">出库</th><th class="num">结存</th>${mo ? '<th class="num">计价单价</th><th class="num">结存单位成本</th>' : ''}<th>摘要 / 操作人</th></tr></thead><tbody>
+    <tr style="background:var(--panel2)"><td colspan="5"><b>期初结存</b></td><td class="num"><b>${r.beginQ}</b></td>${mo ? `<td></td><td class="num">${money(r.beginQ ? r.beginA / r.beginQ : 0)}</td>` : ''}<td></td></tr>
+    ${rows.join('') || `<tr><td colspan="${mo ? 9 : 7}"><div class="empty">本期无收发</div></td></tr>`}
+    <tr style="background:var(--panel2)"><td colspan="3"><b>本期合计 / 期末结存</b></td><td class="num pos"><b>${r.inQ}</b></td><td class="num neg"><b>${r.outQ}</b></td><td class="num"><b>${r.endQ}</b></td>${mo ? `<td></td><td class="num">${money(r.endQ ? r.endA / r.endQ : p.cost)}</td>` : ''}<td></td></tr>
+    </tbody></table></div></div>`, 'lg');
+}
+
+/* ---------- Excel 导入商品与期初库存 ---------- */
+const IMPORT_COLS = [['sku', '商品编码', ['编码', 'sku', '货号', '商品编号', '物料编码']], ['name', '商品名称', ['名称', '品名', '物料名称']], ['spec', '规格型号', ['规格', '型号']],
+  ['category', '分类', ['商品分类', '类别']], ['unit', '单位', ['计量单位']], ['cost', '成本价', ['成本', '进价', '期初成本', '期初单价']], ['price', '销售价', ['售价', '零售价']],
+  ['stock', '期初库存', ['期初数量', '库存', '数量', '库存数量']], ['safety', '安全库存', ['最低库存', '库存下限']], ['remark', '备注', []]];
+function loadXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  return new Promise((ok, bad) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => ok(window.XLSX); s.onerror = () => { s.remove(); bad(new Error('Excel 组件加载失败（需要能访问外网），可以把表格另存为 CSV 再导入')); };
+    document.head.appendChild(s);
+  });
+}
+function parseCSV(t) {
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '"') { if (t[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true; else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; } else if (c !== '\r') cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+async function readSheet(file) {
+  if (/\.csv$/i.test(file.name)) {
+    const buf = await file.arrayBuffer();
+    let t = new TextDecoder('utf-8').decode(buf);
+    if (t.includes('�')) t = new TextDecoder('gbk').decode(buf);  // Excel 另存的 CSV 常是 GBK
+    return parseCSV(t.replace(/^﻿/, ''));
+  }
+  const X = await loadXLSX(), wb = X.read(await file.arrayBuffer());
+  return X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+}
+function sheetToRows(aoa) {
+  const norm = s => String(s ?? '').replace(/[\s*＊()（）]/g, '').toLowerCase();
+  const hi = aoa.findIndex(r => r.some(c => IMPORT_COLS[0][2].concat(IMPORT_COLS[0][1]).map(norm).includes(norm(c))));
+  if (hi < 0) throw new Error('没找到表头，第一行需要包含「商品编码」列，建议下载模板填写');
+  const map = {};
+  aoa[hi].forEach((h, i) => { const col = IMPORT_COLS.find(([, l, al]) => [l, ...al].map(norm).includes(norm(h))); if (col && !(col[0] in map)) map[col[0]] = i; });
+  // _row：在表格里的实际行号，报错时好定位
+  return aoa.slice(hi + 1).map((r, j) => { const o = {}; for (const [k, i] of Object.entries(map)) { const v = r[i]; o[k] = typeof v === 'string' ? v.trim() : v; } return [o, hi + 2 + j]; })
+    .filter(([o]) => Object.values(o).some(v => v !== '' && v != null)).map(([o, n]) => ({...o, _row:n}));
+}
+async function downloadTemplate() {
+  const head = IMPORT_COLS.map(c => c[1]), demo = [['A1001', '示例商品一', '500ml', '食品饮料', '瓶', 3.5, 6, 120, 20, ''], ['A1002', '示例商品二', 'M10×30', '五金配件', '个', 0.2, 0.5, 1000, 200, '']];
+  try {
+    const X = await loadXLSX(), ws = X.utils.aoa_to_sheet([head, ...demo]), wb = X.utils.book_new();
+    ws['!cols'] = head.map(() => ({wch:12}));
+    X.utils.book_append_sheet(wb, ws, '商品'); X.writeFile(wb, '商品导入模板.xlsx');
+  } catch (e) { exportCSV('商品导入模板', head, demo); toast('Excel 组件不可用，已下载 CSV 模板', 'info'); }
+}
+function importOpen() {
+  openModal(`${modalHead('导入商品 / 期初库存')}<div class="m-body">
+    <ol style="padding-left:18px;line-height:2">
+      <li>下载模板，按列填写（只有「商品编码」必填；新商品还要填「商品名称」）</li>
+      <li>编码不存在的行会<b>新建商品</b>，「期初库存」「成本价」作为期初结存入账</li>
+      <li>编码已存在的行会<b>更新档案</b>（名称、规格、分类、单位、售价、安全库存、备注），不改动库存数量</li>
+      <li>支持 .xlsx / .xls / .csv；任何一行出错都不会导入，先预览确认</li></ol>
+    <label class="chk" style="margin-top:8px"><input type="checkbox" id="imUpd" checked>编码已存在时更新商品档案（取消则跳过这些行）</label></div>
+    <div class="m-foot"><button class="btn" style="margin-right:auto" id="imTpl">${ic('download')}下载模板</button><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="imPick">${ic('upload')}选择文件</button></div>`);
+  $('#imTpl').onclick = downloadTemplate;
+  $('#imPick').onclick = () => {
+    const f = document.createElement('input'); f.type = 'file'; f.accept = '.xlsx,.xls,.csv';
+    const upd = $('#imUpd').checked;
+    f.onchange = async () => {
+      const file = f.files[0]; if (!file) return;
+      try { busy(true); importPreview(sheetToRows(await readSheet(file)), upd, file.name); }
+      catch (e) { toast('读取失败：' + e.message, 'error'); } finally { busy(false); }
+    };
+    f.click();
+  };
+}
+function importPreview(rows, update, fileName) {
+  if (!rows.length) return toast('表格里没有数据行', 'error');
+  const bySku = new Map(db.products.map(p => [p.sku, p])), seen = new Set(), pr = seesPrice();
+  const isNum = (v, int) => v === '' || v == null || (Number.isFinite(+v) && +v >= 0 && (!int || Number.isInteger(+v)));
+  const checked = rows.map(r => {
+    const sku = String(r.sku ?? '').trim(), ex = bySku.get(sku), msg = [];
+    if (!sku) msg.push('编码为空'); else if (seen.has(sku)) msg.push('编码重复'); seen.add(sku);
+    if (!ex && !String(r.name ?? '').trim()) msg.push('新商品缺少名称');
+    [['cost', '成本价'], ['price', '销售价']].forEach(([k, l]) => { if (!isNum(r[k])) msg.push(l + '不正确'); });
+    [['stock', '期初库存'], ['safety', '安全库存']].forEach(([k, l]) => { if (!isNum(r[k], true)) msg.push(l + '须为非负整数'); });
+    const st = msg.length ? '错误' : ex ? (update ? '更新' : '跳过') : '新增';
+    if (ex && !msg.length && r.stock !== '' && r.stock != null && +r.stock !== ex.stock) msg.push('已有商品不改库存（当前 ' + ex.stock + '）');
+    return {r, st, msg:msg.join('；')};
+  });
+  const cnt = k => checked.filter(x => x.st === k).length, errs = cnt('错误');
+  openModal(`${modalHead('导入预览 · ' + esc(fileName))}<div class="m-body" style="padding-top:12px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${badge('新增 ' + cnt('新增'), 'green')}${badge('更新 ' + cnt('更新'), 'blue')}${cnt('跳过') ? badge('跳过 ' + cnt('跳过'), 'gray') : ''}${errs ? badge('错误 ' + errs, 'red') : ''}
+      <span class="sub-t">共 ${rows.length} 行${rows.length > 300 ? '，下表只显示前 300 行' : ''}${!pr ? '；你没有查看价格的权限，价格列不会导入' : ''}</span></div>
+    <div class="table-wrap" style="max-height:52vh;overflow:auto"><table class="tbl compact"><thead><tr><th>行</th><th>结果</th><th>编码</th><th>名称</th><th>规格</th><th>分类</th><th>单位</th>${pr ? '<th class="num">成本价</th><th class="num">销售价</th>' : ''}<th class="num">期初库存</th><th class="num">安全库存</th><th>说明</th></tr></thead><tbody>
+    ${checked.slice(0, 300).map(x => `<tr><td class="sub-t">${x.r._row}</td><td>${badge(x.st, {新增:'green', 更新:'blue', 跳过:'gray', 错误:'red'}[x.st])}</td><td>${esc(x.r.sku)}</td><td>${esc(x.r.name)}</td><td>${esc(x.r.spec)}</td><td>${esc(x.r.category)}</td><td>${esc(x.r.unit)}</td>
+      ${pr ? `<td class="num">${esc(x.r.cost)}</td><td class="num">${esc(x.r.price)}</td>` : ''}<td class="num">${esc(x.r.stock)}</td><td class="num">${esc(x.r.safety)}</td><td class="${x.st === '错误' ? 'neg' : 'sub-t'}">${esc(x.msg)}</td></tr>`).join('')}
+    </tbody></table></div></div>
+    <div class="m-foot"><button class="btn" style="margin-right:auto" data-act="importOpen">重新选择</button><button class="btn" data-act="closeModal">取消</button>
+    <button class="btn primary" id="imGo" ${errs ? 'disabled title="请先修正表格中的错误"' : ''}>确认导入</button></div>`, 'lg');
+  $('#imGo').onclick = () => { $('#imGo').disabled = true; mutate('POST', '/api/products/import', {rows, update}, r => `导入完成：新增 ${r.created}，更新 ${r.updated}${r.skipped ? '，跳过 ' + r.skipped : ''}`).then(r => { if (!r) $('#imGo').disabled = false; }); };
 }
 
 /* ================= 页面：销售 / 采购 ================= */
@@ -1396,8 +1745,8 @@ function pageSettings() {
 let USERS = [];
 const fmtTime = t => t ? new Date(t).toLocaleString('zh-CN', {hour12:false}) : '-';
 let ROLES = [];
-const PERM_SHORT = {'inv.view':'查看', 'inv.in':'入库', 'inv.out':'出库', 'inv.check':'盘点', 'inv.void':'作废', 'inv.print':'打印', 'inv.export':'导出', 'inv.cost':'金额',
-  'inv.backdate':'补录', 'inv.others':'他人单据', 'prod.view':'商品查看', 'prod.edit':'商品编辑', 'prod.delete':'商品删除'};
+const PERM_SHORT = {'inv.view':'查看', 'inv.in':'入库', 'inv.out':'出库', 'inv.check':'盘点录入', 'inv.void':'作废', 'inv.print':'打印', 'inv.export':'导出', 'inv.cost':'金额',
+  'inv.backdate':'补录', 'inv.others':'他人单据', 'inv.checkpost':'盘点审核', 'prod.view':'商品查看', 'prod.edit':'商品编辑', 'prod.delete':'商品删除'};
 const permBrief = perms => perms.length ? perms.map(k => `<span class="badge primary plain" style="margin:1px">${esc(PERM_SHORT[k] || (META.perms.find(p => p[0] === k) || [k, k])[1])}</span>`).join('') : '<span class="sub-t">无权限</span>';
 function userEdit(id) {
   const u = id ? USERS.find(x => x.id === id) : null;
@@ -1538,6 +1887,10 @@ const A = {
   docPrint: id => docPrint(id),
   docVoid: id => { closeModal(); docVoid(id); },
   printCheck,
+  checkNew, checkOpen:id => { closeModal(); checkOpen(id); }, checkPrint, checkVoid,
+  importOpen:() => { closeModal(); importOpen(); },
+  ssPrint, ledger:id => { closeModal(); ledger(id); },
+  ssRange:v => { const d = new Date(); [ui.ssFrom, ui.ssTo] = v === 'y' ? [d.getFullYear() + '-01-01', today()] : monthRange(+v); render(); },
   saveModules: () => {
     const modules = [...document.querySelectorAll('input[name=mod]:checked')].map(x => x.value);
     if (!modules.length) return toast('至少启用一个模块', 'error');
