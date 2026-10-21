@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 1.0.0
+version               = 1.0.1
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 首个版本发布。
+changelog             = 库存：新增入库单 / 出库单（多行明细、扫码录入、作废冲回），支持 A4 / 二等分 / A5 打印与金额大写，可打印盘点表；商品增加规格型号。权限：新增角色管理，预置仓库主管、仓管员、入库员、出库员、盘点员、商品专员、成本会计、只读查询、业务员 9 个角色，可自定义角色并逐项配置权限；可按需启用功能模块。

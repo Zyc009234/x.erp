@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -54,6 +54,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, time TEXT, username TEXT, action TEXT, detail TEXT, ip TEXT);
 `);
+try { db.exec('ALTER TABLE users ADD COLUMN perms TEXT'); } catch (e) {}  // 细化权限（JSON 数组），NULL 表示旧账号：拥有全部业务权限
 const S = {
   list: db.prepare('SELECT data FROM docs WHERE col = ? ORDER BY rowid DESC'),
   get: db.prepare('SELECT data FROM docs WHERE col = ? AND id = ?'),
@@ -91,8 +92,8 @@ const fail = (msg, status) => { throw new HttpError(msg, status); };
 function audit(ctx, action, detail = '') { S.audit.run(new Date().toISOString(), ctx.user ? ctx.user.name : '-', action, String(detail).slice(0, 300), ctx.ip || ''); }
 
 /* ================= 业务常量 ================= */
-const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'stockLogs', 'finance'];
-const DATED = ['sales', 'purchases', 'stockLogs', 'finance'];
+const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'stockLogs', 'stockDocs', 'finance'];
+const DATED = ['sales', 'purchases', 'stockLogs', 'stockDocs', 'finance'];
 const CATS = ['电子产品', '办公用品', '家居用品', '食品饮料'];
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
 const METHODS = ['银行转账', '现金', '支付宝', '微信', '承兑汇票'];
@@ -103,7 +104,7 @@ const ORD = {
 };
 const ENTITY = {
   products: { name: '商品', required: { sku: '商品编码', name: '商品名称' },
-    fields: { sku: ['s', '商品编码'], name: ['s', '商品名称'], category: ['s'], unit: ['s'], cost: ['n', '成本价'], price: ['n', '销售价'], stock: ['n', '期初库存'], safety: ['n', '安全库存'], remark: ['s'] } },
+    fields: { sku: ['s', '商品编码'], name: ['s', '商品名称'], spec: ['s'], category: ['s'], unit: ['s'], cost: ['n', '成本价'], price: ['n', '销售价'], stock: ['n', '期初库存'], safety: ['n', '安全库存'], remark: ['s'] } },
   customers: { name: '客户', required: { name: '客户名称' },
     fields: { name: ['s'], contact: ['s'], phone: ['s'], email: ['s'], level: ['s'], address: ['s'], remark: ['s'] } },
   suppliers: { name: '供应商', required: { name: '供应商名称' },
@@ -111,6 +112,66 @@ const ENTITY = {
   employees: { name: '员工', required: { name: '姓名' },
     fields: { no: ['s'], name: ['s'], gender: ['s'], dept: ['s'], position: ['s'], phone: ['s'], salary: ['n', '月薪'], joinDate: ['s'], status: ['s'] } }
 };
+const DOC_TYPES = { in: ['采购入库', '生产入库', '退货入库', '其他入库'], out: ['领料出库', '销售出库', '报损出库', '其他出库'] };
+const DOC = { in: { col: 'stockDocs', prefix: 'RK', title: '入库单' }, out: { col: 'stockDocs', prefix: 'CK', title: '出库单' } };
+
+/* ================= 模块 / 权限 ================= */
+const MODULES = { inventory: '库存管理', products: '商品管理', dashboard: '工作台', sales: '销售管理', purchase: '采购管理', parties: '客户 / 供应商', finance: '财务管理', hr: '人事管理', reports: '统计报表' };
+const DEFAULT_MODULES = ['inventory', 'products'];
+// [权限键, 名称, 所属模块]
+const PERMS = [
+  ['inv.view', '查看库存、出入库单与流水', 'inventory'], ['inv.in', '开入库单', 'inventory'], ['inv.out', '开出库单', 'inventory'],
+  ['inv.check', '库存盘点（直接调整账面数量）', 'inventory'], ['inv.void', '作废出入库单（冲回库存）', 'inventory'],
+  ['inv.print', '打印单据 / 盘点表', 'inventory'], ['inv.export', '导出数据', 'inventory'],
+  ['inv.cost', '查看价格与金额', 'inventory'], ['inv.backdate', '单据日期可选非当天（补录）', 'inventory'],
+  ['inv.others', '查看 / 处理他人开的单据', 'inventory'],
+  ['prod.view', '查看商品档案', 'products'], ['prod.edit', '新增 / 编辑商品', 'products'], ['prod.delete', '删除商品', 'products'],
+  ['dashboard', '工作台', 'dashboard'], ['sales', '销售管理（全部操作）', 'sales'], ['purchase', '采购管理（全部操作）', 'purchase'],
+  ['parties', '客户 / 供应商管理', 'parties'], ['finance', '财务管理', 'finance'], ['hr', '人事管理', 'hr'], ['reports', '统计报表', 'reports']
+];
+const PERM_KEYS = PERMS.map(p => p[0]);
+const PERM_MOD = Object.fromEntries(PERMS.map(p => [p[0], p[2]]));
+const PERM_LABEL = Object.fromEntries(PERMS.map(p => [p[0], p[1]]));
+const cleanPerms = a => [...new Set((Array.isArray(a) ? a : []).filter(k => PERM_KEYS.includes(k)))];
+
+/* ---------- 角色 ---------- */
+// 预置角色：首次启动写入，之后可在「角色管理」里修改、删除，也可新增自定义角色
+const DEFAULT_ROLES = [
+  ['r_wh_mgr', '仓库主管', '库存全部操作，含作废、盘点、补录和查看金额', ['inv.view', 'inv.in', 'inv.out', 'inv.check', 'inv.void', 'inv.print', 'inv.export', 'inv.cost', 'inv.backdate', 'inv.others', 'prod.view', 'prod.edit']],
+  ['r_wh', '仓管员', '日常收发货：开入库单、出库单并打印', ['inv.view', 'inv.in', 'inv.out', 'inv.print', 'prod.view']],
+  ['r_in', '入库员', '只负责收货入库', ['inv.view', 'inv.in', 'inv.print', 'prod.view']],
+  ['r_out', '出库员', '只负责发货 / 领料出库', ['inv.view', 'inv.out', 'inv.print', 'prod.view']],
+  ['r_check', '盘点员', '盘点调整库存，打印盘点表', ['inv.view', 'inv.check', 'inv.print', 'inv.others', 'prod.view']],
+  ['r_prod', '商品专员', '维护商品档案（编码、规格、安全库存）', ['inv.view', 'prod.view', 'prod.edit']],
+  ['r_acct', '成本会计', '查看全部单据与金额，导出对账', ['inv.view', 'inv.cost', 'inv.export', 'inv.print', 'inv.others', 'prod.view', 'finance', 'reports']],
+  ['r_read', '只读查询', '只能查看和打印，不能改动库存', ['inv.view', 'inv.print', 'inv.export', 'inv.others', 'prod.view']],
+  ['r_staff', '业务员', '旧版「业务员」：全部业务功能（不含用户与数据管理）', PERM_KEYS]
+];
+db.exec('CREATE TABLE IF NOT EXISTS roles (id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, descr TEXT, perms TEXT NOT NULL, builtin INTEGER NOT NULL DEFAULT 0, sort INTEGER NOT NULL DEFAULT 0, created_at TEXT)');
+try { db.exec('ALTER TABLE users ADD COLUMN role_id TEXT'); } catch (e) {}
+if (!db.prepare('SELECT COUNT(*) AS n FROM roles').get().n) {
+  const ins = db.prepare('INSERT INTO roles (id, name, descr, perms, builtin, sort, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)');
+  DEFAULT_ROLES.forEach(([id, name, descr, perms], i) => ins.run(id, name, descr, JSON.stringify(perms), i, new Date().toISOString()));
+}
+const roleById = db.prepare('SELECT * FROM roles WHERE id = ?');
+const rolePerms = r => { try { return cleanPerms(JSON.parse(r.perms)); } catch (e) { return []; } };
+// 旧账号迁移到角色：没有逐项权限的 → 业务员；有逐项权限的 → 找权限完全一致的角色，找不到就为其新建一个
+for (const u of db.prepare("SELECT * FROM users WHERE role <> 'admin' AND role_id IS NULL").all()) {
+  let rid = 'r_staff';
+  if (u.perms != null) {
+    let own = []; try { own = cleanPerms(JSON.parse(u.perms)); } catch (e) {}
+    const key = [...own].sort().join();
+    const hit = db.prepare('SELECT * FROM roles').all().find(r => [...rolePerms(r)].sort().join() === key);
+    if (hit) rid = hit.id;
+    else { rid = 'r' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'); db.prepare('INSERT INTO roles (id, name, descr, perms, sort, created_at) VALUES (?, ?, ?, ?, 99, ?)').run(rid, (u.name || u.username) + '的权限', '由旧账号权限迁移', JSON.stringify(own), new Date().toISOString()); }
+  }
+  db.prepare('UPDATE users SET role_id = ? WHERE id = ?').run(rid, u.id);
+}
+const rawPerms = u => { if (u.role === 'admin') return PERM_KEYS; const r = u.role_id && roleById.get(u.role_id); return r ? rolePerms(r) : []; };
+function enabledModules() { const m = getMeta('settings', {}).modules; return Array.isArray(m) && m.length ? m : DEFAULT_MODULES; }
+// 实际生效的权限 = 账号权限 ∩ 已启用模块
+const seesPrice = P => ['inv.cost', 'sales', 'purchase', 'finance', 'reports', 'dashboard'].some(k => P.has(k));
+function effectivePerms(u) { const mods = new Set(enabledModules()); return new Set(rawPerms(u).filter(k => mods.has(PERM_MOD[k]))); }
 
 /* ================= 演示数据 ================= */
 function seed() {
@@ -197,15 +258,23 @@ function checkPwd(u, pwd) {
   const a = Buffer.from(hashPwd(pwd, u.salt).hash, 'hex'), b = Buffer.from(u.hash || '', 'hex');
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
-const publicUser = u => ({ id: u.id, username: u.username, name: u.name, role: u.role, createdAt: u.created_at, lastLogin: u.last_login });
-function createUser({ username, name, role, password }) {
+const roleName = u => u.role === 'admin' ? '管理员' : ((u.role_id && roleById.get(u.role_id)) || {}).name || '未分配角色';
+const publicUser = u => ({ id: u.id, username: u.username, name: u.name, role: u.role, roleId: u.role === 'admin' ? 'admin' : u.role_id, roleName: roleName(u), perms: rawPerms(u), createdAt: u.created_at, lastLogin: u.last_login });
+// roleId 为 'admin' 表示管理员，否则为角色 id
+function pickRole(roleId) {
+  if (roleId === 'admin') return { role: 'admin', roleId: null };
+  if (!roleId || !roleById.get(roleId)) fail('请选择有效的角色');
+  return { role: 'user', roleId };
+}
+function createUser({ username, name, roleId, password }) {
   username = str(username, 32);
   if (!/^[A-Za-z0-9_.-]{2,32}$/.test(username)) fail('用户名需为 2-32 位字母、数字或 _ . -');
   if (String(password || '').length < 6) fail('密码至少 6 位');
   if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(username)) fail('用户名已存在');
   const { salt, hash } = hashPwd(password), id = uid();
-  db.prepare('INSERT INTO users (id, username, name, role, salt, hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(id, username, str(name, 32) || username, role === 'admin' ? 'admin' : 'user', salt, hash, new Date().toISOString());
+  const r = pickRole(roleId);
+  db.prepare('INSERT INTO users (id, username, name, role, role_id, salt, hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(id, username, str(name, 32) || username, r.role, r.roleId, salt, hash, new Date().toISOString());
   return id;
 }
 function authUser(req) {
@@ -232,9 +301,9 @@ function login(ctx, body) {
 }
 
 /* ================= 业务逻辑 ================= */
-function addLog(ctx, productId, kind, qty, ref = '', note = '') {
+function addLog(ctx, productId, kind, qty, ref = '', note = '', date = '') {
   const d = new Date();
-  put('stockLogs', { id: uid(), date: today(), time: pad(d.getHours()) + ':' + pad(d.getMinutes()), productId, kind, qty, ref, note, operator: ctx.user.name });
+  put('stockLogs', { id: uid(), date: date || today(), time: pad(d.getHours()) + ':' + pad(d.getMinutes()), productId, kind, qty, ref, note, operator: ctx.user.name });
 }
 function nextNo(C) {
   const k = C.prefix + today().replace(/-/g, ''), counters = getMeta('counters', {});
@@ -254,6 +323,7 @@ function clean(col, body) {
 }
 function saveEntity(ctx, col, id) {
   const E = ENTITY[col] || fail('接口不存在', 404), v = clean(col, ctx.body);
+  if (col === 'products' && !seesPrice(ctx.perms)) { delete v.cost; delete v.price; }  // 看不到价格的账号不能改价格
   return tx(() => {
     const rec = id ? (get(col, id) || fail(E.name + '不存在', 404)) : null;
     const r = { ...(rec || {}), ...v };
@@ -279,7 +349,7 @@ function deleteEntity(ctx, col, id) {
   const E = ENTITY[col] || fail('接口不存在', 404);
   return tx(() => {
     const rec = get(col, id) || fail(E.name + '不存在', 404);
-    const used = col === 'products' ? [...list('sales'), ...list('purchases')].some(o => o.items.some(i => i.productId === id))
+    const used = col === 'products' ? [...list('sales'), ...list('purchases'), ...list('stockDocs')].some(o => o.items.some(i => i.productId === id))
       : col === 'customers' ? list('sales').some(o => o.customerId === id)
       : col === 'suppliers' ? list('purchases').some(o => o.supplierId === id) : false;
     if (used) fail(`该${E.name}已被单据引用，无法删除`);
@@ -374,6 +444,88 @@ function adjustStock(ctx, id) {
     return { delta: d, stock: p.stock };
   });
 }
+/* ---------- 出入库单 ---------- */
+const hhmm = () => { const d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+function ownDoc(ctx, o) { if (o.creatorId !== ctx.user.id && !ctx.perms.has('inv.others')) fail('只能处理自己开的单据', 403); }
+function qtyByProduct(items) { const q = {}; items.forEach(i => { q[i.productId] = (q[i.productId] || 0) + i.qty; }); return q; }
+function saveStockDoc(ctx) {
+  const b = ctx.body, dir = b.dir === 'out' ? 'out' : 'in', D = DOC[dir];
+  if (!DOC_TYPES[dir].includes(b.type)) fail('请选择' + D.title.slice(0, 2) + '类型');
+  const date = isDate(b.date) ? b.date : today();
+  if (date > today()) fail('单据日期不能晚于今天');
+  if (date !== today() && !ctx.perms.has('inv.backdate')) fail('没有补录权限，只能开当天的单据', 403);
+  const withPrice = ctx.perms.has('inv.cost');
+  return tx(() => {
+    const items = (Array.isArray(b.items) ? b.items : []).filter(i => i && i.productId).map(i => {
+      const p = get('products', i.productId) || fail('商品不存在或已删除');
+      const qty = Number(i.qty);
+      if (!Number.isInteger(qty) || qty <= 0) fail(`「${p.name}」数量必须为正整数`);
+      const price = withPrice && i.price !== undefined && i.price !== '' ? Number(i.price) : (p.cost || 0);
+      if (!Number.isFinite(price) || price < 0) fail(`「${p.name}」单价不正确`);
+      return { productId: p.id, qty, price: round2(price), note: str(i.note, 100) };
+    });
+    if (!items.length) fail('请至少添加一个商品');
+    const need = qtyByProduct(items);
+    if (dir === 'out') {
+      const lack = Object.entries(need).map(([pid, q]) => ({ p: get('products', pid), q })).filter(x => x.p.stock < x.q);
+      if (lack.length) fail('库存不足：' + lack.map(x => `${x.p.name}（需 ${x.q}，现有 ${x.p.stock}）`).join('、'));
+    }
+    Object.entries(need).forEach(([pid, q]) => { const p = get('products', pid); p.stock += dir === 'in' ? q : -q; put('products', p); });
+    const o = { id: uid(), no: nextNo(D), dir, type: b.type, date, time: hhmm(), party: str(b.party, 100), handler: str(b.handler, 32), remark: str(b.remark, 500),
+      items, status: '正常', creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), printCount: 0 };
+    put('stockDocs', o);
+    items.forEach(i => addLog(ctx, i.productId, o.type, dir === 'in' ? i.qty : -i.qty, o.no, i.note || o.party, date));
+    audit(ctx, '新建' + D.title, `${o.no} ${o.type} ${items.length} 项`);
+    return o;
+  });
+}
+function voidStockDoc(ctx, id) {
+  return tx(() => {
+    const o = get('stockDocs', id) || fail('单据不存在', 404);
+    ownDoc(ctx, o);
+    if (o.status === '已作废') fail('单据已作废');
+    const need = qtyByProduct(o.items);
+    if (o.dir === 'in') {  // 入库单作废要把货扣回来
+      const lack = Object.entries(need).map(([pid, q]) => ({ p: get('products', pid), q })).filter(x => x.p && x.p.stock < x.q);
+      if (lack.length) fail('库存已被领用，无法作废：' + lack.map(x => `${x.p.name}（需扣回 ${x.q}，现有 ${x.p.stock}）`).join('、'));
+    }
+    Object.entries(need).forEach(([pid, q]) => { const p = get('products', pid); if (p) { p.stock += o.dir === 'in' ? -q : q; put('products', p); } });
+    const reason = str(ctx.body.reason, 200);
+    o.items.forEach(i => addLog(ctx, i.productId, '作废冲回', o.dir === 'in' ? -i.qty : i.qty, o.no, reason));
+    Object.assign(o, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString(), voidReason: reason });
+    put('stockDocs', o);
+    audit(ctx, '作废' + DOC[o.dir].title, o.no + (reason ? ' ' + reason : ''));
+    return o;
+  });
+}
+function markPrinted(ctx, id) {
+  return tx(() => {
+    const o = get('stockDocs', id) || fail('单据不存在', 404);
+    ownDoc(ctx, o);
+    o.printCount = (o.printCount || 0) + 1; put('stockDocs', o);
+    audit(ctx, '打印' + DOC[o.dir].title, `${o.no} 第 ${o.printCount} 次`);
+    return { printCount: o.printCount };
+  });
+}
+// 按权限裁剪下发给前端的数据
+function visibleData(ctx) {
+  const P = ctx.perms, any = (...k) => k.some(x => P.has(x));
+  const want = {
+    products: any('inv.view', 'prod.view', 'sales', 'purchase', 'dashboard', 'reports'),
+    stockLogs: any('inv.view', 'dashboard'), stockDocs: P.has('inv.view'),
+    sales: any('sales', 'dashboard', 'reports', 'parties'), purchases: any('purchase', 'dashboard', 'reports', 'parties'),
+    customers: any('sales', 'parties', 'dashboard', 'reports'), suppliers: any('purchase', 'parties'),
+    finance: any('finance', 'sales', 'purchase', 'reports'), employees: P.has('hr')
+  };
+  const byDate = (a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || ''));
+  const data = {};
+  COLS.forEach(c => { data[c] = want[c] ? list(c) : []; if (DATED.includes(c)) data[c].sort(byDate); });
+  if (!seesPrice(P)) data.products = data.products.map(({ cost, price, ...p }) => p);
+  if (!P.has('inv.others')) data.stockDocs = data.stockDocs.filter(o => o.creatorId === ctx.user.id);
+  if (!P.has('inv.cost')) data.stockDocs = data.stockDocs.map(o => ({ ...o, items: o.items.map(({ price, ...i }) => i) }));
+  return data;
+}
+
 function addFinance(ctx) {
   const b = ctx.body, type = b.type === 'income' ? 'income' : b.type === 'expense' ? 'expense' : fail('收支类型不正确');
   if (!FIN_CATS[type].includes(b.category)) fail('科目不正确');
@@ -427,42 +579,54 @@ if (!db.prepare('SELECT COUNT(*) AS n FROM users').get().n) {
   let pwd = '';
   try { if (arg('admin-password-file')) pwd = fs.readFileSync(arg('admin-password-file'), 'utf8').trim(); } catch (e) {}
   if (pwd.length < 6) pwd = 'admin123';
-  createUser({ username: 'admin', name: '管理员', role: 'admin', password: pwd });
+  createUser({ username: 'admin', name: '管理员', roleId: 'admin', password: pwd });
   log(pwd === 'admin123' ? '已创建默认管理员账号 admin / admin123' : '已创建管理员账号 admin（密码为安装时设置的密码）');
 }
 try { if (arg('admin-password-file')) fs.unlinkSync(arg('admin-password-file')); } catch (e) {}
 
 /* ================= 路由 ================= */
 const routes = [];
+// opts.perm：所需权限键，或根据请求返回权限键的函数
 const route = (method, pattern, handler, opts = {}) =>
-  routes.push({ method, re: new RegExp('^' + pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)') + '$'), handler, auth: opts.auth !== false, admin: !!opts.admin });
+  routes.push({ method, re: new RegExp('^' + pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)') + '$'), handler, auth: opts.auth !== false, admin: !!opts.admin, perm: opts.perm });
 
 route('GET', '/api/ping', () => ({ ok: true, app: 'XERP', version: VERSION, company: getMeta('settings', {}).company || '' }), { auth: false });
 route('POST', '/api/login', ctx => login(ctx, ctx.body), { auth: false });
 route('POST', '/api/logout', ctx => { db.prepare('DELETE FROM sessions WHERE token = ?').run(ctx.user.token); });
-route('GET', '/api/data', ctx => {
-  const data = {};
-  const byDate = (a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || ''));
-  COLS.forEach(c => { data[c] = list(c); if (DATED.includes(c)) data[c].sort(byDate); });
-  return { version: VERSION, settings: getMeta('settings', {}), user: publicUser(ctx.user), data };
-});
+route('GET', '/api/data', ctx => ({
+  version: VERSION, settings: { ...getMeta('settings', {}), modules: enabledModules() },
+  user: { ...publicUser(ctx.user), perms: [...ctx.perms] }, data: visibleData(ctx),
+  meta: { modules: MODULES, perms: PERMS, docTypes: DOC_TYPES }
+}));
 route('PUT', '/api/settings', ctx => {
-  const company = str(ctx.body.company, 100) || fail('公司名称不能为空');
-  setMeta('settings', { ...getMeta('settings', {}), company }); audit(ctx, '修改设置', '公司名称：' + company);
+  const s = getMeta('settings', {}), b = ctx.body, changes = [];
+  if ('company' in b) { s.company = str(b.company, 100) || fail('公司名称不能为空'); changes.push('公司名称：' + s.company); }
+  if (Array.isArray(b.modules)) {
+    s.modules = b.modules.filter(m => m in MODULES);
+    if (!s.modules.length) fail('至少启用一个模块');
+    changes.push('启用模块：' + s.modules.map(m => MODULES[m]).join('、'));
+  }
+  setMeta('settings', s); audit(ctx, '修改设置', changes.join('；'));
 }, { admin: true });
 
+const ENTITY_PERM = { products: { POST: 'prod.edit', PUT: 'prod.edit', DELETE: 'prod.delete' }, customers: 'parties', suppliers: 'parties', employees: 'hr' };
 for (const col of Object.keys(ENTITY)) {
-  route('POST', `/api/${col}`, ctx => saveEntity(ctx, col, null));
-  route('PUT', `/api/${col}/:id`, ctx => saveEntity(ctx, col, ctx.params.id));
-  route('DELETE', `/api/${col}/:id`, ctx => deleteEntity(ctx, col, ctx.params.id));
+  const perm = ctx => typeof ENTITY_PERM[col] === 'string' ? ENTITY_PERM[col] : ENTITY_PERM[col][ctx.method];
+  route('POST', `/api/${col}`, ctx => saveEntity(ctx, col, null), { perm });
+  route('PUT', `/api/${col}/:id`, ctx => saveEntity(ctx, col, ctx.params.id), { perm });
+  route('DELETE', `/api/${col}/:id`, ctx => deleteEntity(ctx, col, ctx.params.id), { perm });
 }
-route('POST', '/api/orders/:kind', ctx => saveOrder(ctx, ctx.params.kind, null));
-route('PUT', '/api/orders/:kind/:id', ctx => saveOrder(ctx, ctx.params.kind, ctx.params.id));
-route('DELETE', '/api/orders/:kind/:id', ctx => deleteOrder(ctx, ctx.params.kind, ctx.params.id));
-route('POST', '/api/orders/:kind/:id/:action', ctx => orderAction(ctx, ctx.params.kind, ctx.params.id, ctx.params.action));
-route('POST', '/api/stock/:id', ctx => adjustStock(ctx, ctx.params.id));
-route('POST', '/api/finance', ctx => addFinance(ctx));
-route('DELETE', '/api/finance/:id', ctx => deleteFinance(ctx, ctx.params.id));
+const orderPerm = { perm: ctx => ctx.params.kind === 'sales' ? 'sales' : 'purchase' };
+route('POST', '/api/orders/:kind', ctx => saveOrder(ctx, ctx.params.kind, null), orderPerm);
+route('PUT', '/api/orders/:kind/:id', ctx => saveOrder(ctx, ctx.params.kind, ctx.params.id), orderPerm);
+route('DELETE', '/api/orders/:kind/:id', ctx => deleteOrder(ctx, ctx.params.kind, ctx.params.id), orderPerm);
+route('POST', '/api/orders/:kind/:id/:action', ctx => orderAction(ctx, ctx.params.kind, ctx.params.id, ctx.params.action), orderPerm);
+route('POST', '/api/stock/:id', ctx => adjustStock(ctx, ctx.params.id), { perm: ctx => ({ in: 'inv.in', out: 'inv.out' })[ctx.body.mode] || 'inv.check' });
+route('POST', '/api/stockdocs', ctx => saveStockDoc(ctx), { perm: ctx => ctx.body.dir === 'out' ? 'inv.out' : 'inv.in' });
+route('POST', '/api/stockdocs/:id/void', ctx => voidStockDoc(ctx, ctx.params.id), { perm: 'inv.void' });
+route('POST', '/api/stockdocs/:id/print', ctx => markPrinted(ctx, ctx.params.id), { perm: 'inv.print' });
+route('POST', '/api/finance', ctx => addFinance(ctx), { perm: 'finance' });
+route('DELETE', '/api/finance/:id', ctx => deleteFinance(ctx, ctx.params.id), { perm: 'finance' });
 
 route('POST', '/api/password', ctx => {
   const { oldPassword, newPassword } = ctx.body;
@@ -477,16 +641,48 @@ route('GET', '/api/users', () => db.prepare('SELECT * FROM users WHERE disabled 
 route('POST', '/api/users', ctx => { createUser(ctx.body); audit(ctx, '新增用户', ctx.body.username); }, { admin: true });
 route('PUT', '/api/users/:id', ctx => {
   const u = S.userById.get(ctx.params.id) || fail('用户不存在', 404), b = ctx.body;
-  const role = b.role === 'admin' ? 'admin' : 'user';
-  if (u.role === 'admin' && role !== 'admin' && S.adminCount.get().n <= 1) fail('系统至少需要保留一个管理员');
-  db.prepare('UPDATE users SET name = ?, role = ? WHERE id = ?').run(str(b.name, 32) || u.name, role, u.id);
+  const r = pickRole(b.roleId);
+  if (u.role === 'admin' && r.role !== 'admin' && S.adminCount.get().n <= 1) fail('系统至少需要保留一个管理员');
+  if (u.id === ctx.user.id && r.role !== 'admin') fail('不能取消自己的管理员身份');
+  db.prepare('UPDATE users SET name = ?, role = ?, role_id = ? WHERE id = ?').run(str(b.name, 32) || u.name, r.role, r.roleId, u.id);
   if (b.password) {
     if (String(b.password).length < 6) fail('密码至少 6 位');
     const { salt, hash } = hashPwd(b.password);
     db.prepare('UPDATE users SET salt = ?, hash = ? WHERE id = ?').run(salt, hash, u.id);
     if (u.id !== ctx.user.id) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(u.id);
   }
-  audit(ctx, '修改用户', u.username + (b.password ? '（重置密码）' : ''));
+  audit(ctx, '修改用户', `${u.username} → ${roleName({ role: r.role, role_id: r.roleId })}` + (b.password ? '（重置密码）' : ''));
+}, { admin: true });
+
+route('GET', '/api/roles', () => {
+  const count = Object.fromEntries(db.prepare("SELECT role_id, COUNT(*) AS n FROM users WHERE role <> 'admin' AND disabled = 0 GROUP BY role_id").all().map(x => [x.role_id, x.n]));
+  return db.prepare('SELECT * FROM roles ORDER BY sort, created_at').all()
+    .map(r => ({ id: r.id, name: r.name, descr: r.descr || '', perms: rolePerms(r), builtin: !!r.builtin, users: count[r.id] || 0 }));
+}, { admin: true });
+function saveRole(ctx, id) {
+  const b = ctx.body, name = str(b.name, 20) || fail('请填写角色名称');
+  if (name === '管理员') fail('「管理员」是系统保留名称');
+  const dup = db.prepare('SELECT id FROM roles WHERE name = ?').get(name);
+  if (dup && dup.id !== id) fail('角色名称已存在');
+  const perms = JSON.stringify(cleanPerms(b.perms)), descr = str(b.descr, 100);
+  if (id) {
+    roleById.get(id) || fail('角色不存在', 404);
+    db.prepare('UPDATE roles SET name = ?, descr = ?, perms = ? WHERE id = ?').run(name, descr, perms, id);
+  } else {
+    id = 'r' + uid();
+    db.prepare('INSERT INTO roles (id, name, descr, perms, sort, created_at) VALUES (?, ?, ?, ?, 50, ?)').run(id, name, descr, perms, new Date().toISOString());
+  }
+  audit(ctx, (ctx.params.id ? '修改' : '新增') + '角色', `${name}（${JSON.parse(perms).length} 项权限）`);
+  return { id };
+}
+route('POST', '/api/roles', ctx => saveRole(ctx, null), { admin: true });
+route('PUT', '/api/roles/:id', ctx => saveRole(ctx, ctx.params.id), { admin: true });
+route('DELETE', '/api/roles/:id', ctx => {
+  const r = roleById.get(ctx.params.id) || fail('角色不存在', 404);
+  const n = db.prepare('SELECT COUNT(*) AS n FROM users WHERE role_id = ? AND role <> \'admin\'').get(r.id).n;
+  if (n) fail(`还有 ${n} 个账号使用该角色，请先给他们换角色`);
+  db.prepare('DELETE FROM roles WHERE id = ?').run(r.id);
+  audit(ctx, '删除角色', r.name);
 }, { admin: true });
 route('DELETE', '/api/users/:id', ctx => {
   if (ctx.params.id === ctx.user.id) fail('不能删除当前登录的账号');
@@ -540,15 +736,18 @@ const server = http.createServer(async (req, res) => {
     }
     res.writeHead(404); return res.end();
   }
-  const ctx = { ip: String(req.socket.remoteAddress || '').replace(/^::ffff:/, ''), query: url.searchParams, body: {}, user: null, params: {} };
+  const ctx = { ip: String(req.socket.remoteAddress || '').replace(/^::ffff:/, ''), method: req.method, query: url.searchParams, body: {}, user: null, params: {}, perms: new Set() };
   try {
     const r = routes.find(x => x.method === req.method && x.re.test(url.pathname)) || fail('接口不存在', 404);
     ctx.params = Object.fromEntries(Object.entries(url.pathname.match(r.re).groups || {}).map(([k, v]) => [k, decodeURIComponent(v)]));
     if (r.auth) {
       ctx.user = authUser(req) || fail('登录已过期，请重新登录', 401);
       if (r.admin && ctx.user.role !== 'admin') fail('需要管理员权限', 403);
+      ctx.perms = effectivePerms(ctx.user);
     }
     if (req.method === 'POST' || req.method === 'PUT') ctx.body = await readBody(req);
+    const need = typeof r.perm === 'function' ? r.perm(ctx) : r.perm;
+    if (need && !ctx.perms.has(need)) fail(`没有权限：${PERM_LABEL[need] || need}${enabledModules().includes(PERM_MOD[need]) ? '' : '（该模块未启用）'}`, 403);
     const out = r.handler(ctx);
     send(res, 200, out === undefined ? { ok: true } : out);
   } catch (e) {
