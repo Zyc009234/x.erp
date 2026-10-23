@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '1.0.4';
+const VERSION = '1.0.5';
 const RELEASE_DATE = '2026-10-23';  // 本版本发布日期：授权码的免费升级截止日不早于它，专业版功能才可用
 // 专业版授权码校验公钥（对应私钥只在发码方本机，见 tools/license.js）
 const LICENSE_PUBKEY = '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAlhmiG/CK2MaT2qX7LaziMR2fGn4BfkaXbavU3UeJD3s=\n-----END PUBLIC KEY-----\n';

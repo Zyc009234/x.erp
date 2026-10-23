@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 1.0.4
+version               = 1.0.5
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 完全离线可用：图表组件和 Excel 导入组件随程序内置，不再需要访问外网；新增 Windows 安装版（后台服务、开机自启）。
+changelog             = 新增安卓客户端：手机连接局域网里的 x.erp，摄像头扫码录入（出入库、盘点、搜索），可保存导出文件、选择导入文件、调用手机打印；服务端地址可自动查找。全局搜索支持按条码查找商品。

@@ -43,6 +43,10 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:11px;border-radius:10px;padding:0 7px;line-height:18px}
 .side-foot{padding:14px 20px;font-size:12px;color:#475569;white-space:nowrap;overflow:hidden}
 .pro-tag{font-size:11px;margin-left:4px;vertical-align:1px}
+#scanFab{display:none}
+.native #scanFab{display:flex;position:fixed;right:18px;bottom:22px;z-index:9000;width:56px;height:56px;border-radius:50%;align-items:center;justify-content:center;background:var(--primary);color:#fff;box-shadow:0 6px 20px rgba(79,70,229,.45)}
+.native #scanFab svg.i{width:26px;height:26px}
+.native #scanFab:active{transform:scale(.94)}
 .main{flex:1;margin-left:236px;min-width:0;transition:margin .2s}
 .app.collapsed .sidebar{width:72px}
 .app.collapsed .main{margin-left:72px}
@@ -291,7 +295,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v1.0.4 · 数据保存在服务器</div>
+    <div class="side-foot">v1.0.5 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -398,6 +402,7 @@ const LS = {
   set(k, v) { try { localStorage.setItem('erp_' + k, JSON.stringify(v)); } catch (e) {} }
 };
 const prefs = Object.assign({theme:'light', pageSize:10}, LS.get('prefs', {}));
+const NATIVE = window.XerpApp || null;  // 在 x.erp 安卓客户端里运行时，由客户端注入（扫码、保存文件、打印、切换服务器）
 let db = {settings:{theme:prefs.theme, pageSize:prefs.pageSize}, products:[], customers:[], suppliers:[], employees:[], sales:[], purchases:[], stockLogs:[], stockDocs:[], checkDocs:[], finance:[], warehouses:[], transferDocs:[], batches:[]};
 let ME = null, META = {modules:{}, perms:[], templates:{}, docTypes:{in:[], out:[]}, defaultWh:'w1', trialDays:15}, LIC = {pro:false, mode:'none'}, CLIENT_MODE = false, SERVER_ADDR = '', pending = 0, dataSig = '';
 /* ---------- 专业版 / 仓库 / 批次 ---------- */
@@ -590,11 +595,8 @@ function formModal({title, fields, data = {}, onSubmit, okText = '保存'}) {
 }
 function exportCSV(name, headers, rows) {
   const csv = '﻿' + [headers, ...rows].map(r => r.map(c => '"' + String(c ?? '').replace(/"/g, '""') + '"').join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
-  a.download = name + '_' + today() + '.csv'; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  toast('已导出 ' + rows.length + ' 条记录');
+  saveFile(name + '_' + today() + '.csv', 'text/csv', csv);
+  if (!NATIVE) toast('已导出 ' + rows.length + ' 条记录');
 }
 
 /* ---------- 通用列表 ---------- */
@@ -1086,12 +1088,29 @@ function printFrame(title, body, paperKey) {
   .r{text-align:right}.c{text-align:center}.slip-wrap{position:relative}.page{page-break-after:always}.page:last-child{page-break-after:auto}
   .slip-stamp{position:absolute;right:30px;top:10px;border:3px solid #000;font-size:22px;font-weight:800;padding:2px 14px;transform:rotate(-12deg);letter-spacing:.3em}
   .foot{margin-top:6px;font-size:10px;color:#444;text-align:right}`;
+  printHtml(title, `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>${body}</body></html>`);
+}
+// 打印一份完整的 HTML：浏览器里用隐藏 iframe；安卓客户端里交给系统打印
+function printHtml(title, html) {
+  if (NATIVE) return NATIVE.print(title, html);
   const f = document.createElement('iframe');
   f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
   document.body.appendChild(f);
   const d = f.contentDocument;
-  d.open(); d.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>${body}</body></html>`); d.close();
-  setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 1500); }, 150);
+  d.open(); d.write(html); d.close();
+  setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 1500); }, 200);
+}
+// 保存文件：浏览器里直接下载；安卓客户端里让用户选保存位置
+function saveFile(name, mime, data) {
+  if (NATIVE) {
+    const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data);
+    let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return NATIVE.saveFile(name, mime, btoa(bin));
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], {type:mime}));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 async function docPrint(id) {
   const o = byId(db.stockDocs, id); if (!o) return;
@@ -1668,12 +1687,7 @@ function labelOpen() {
   prev();
 }
 function printLabels(body) {
-  const f = document.createElement('iframe');
-  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
-  document.body.appendChild(f);
-  const d = f.contentDocument;
-  d.open(); d.write(`<!doctype html><html><head><meta charset="utf-8"><title>条码标签</title></head><body>${body}</body></html>`); d.close();
-  setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 1500); }, 200);
+  printHtml('条码标签', `<!doctype html><html><head><meta charset="utf-8"><title>条码标签</title></head><body>${body}</body></html>`);
 }
 
 /* ---------- 专业版：激活 / 试用 ---------- */
@@ -1754,7 +1768,9 @@ async function downloadTemplate() {
   try {
     const X = await loadXLSX(), ws = X.utils.aoa_to_sheet([head, ...demo]), wb = X.utils.book_new();
     ws['!cols'] = head.map(() => ({wch:12}));
-    X.utils.book_append_sheet(wb, ws, '商品'); X.writeFile(wb, '商品导入模板.xlsx');
+    X.utils.book_append_sheet(wb, ws, '商品');
+    if (NATIVE) saveFile('商品导入模板.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', X.write(wb, {type:'array', bookType:'xlsx'}));
+    else X.writeFile(wb, '商品导入模板.xlsx');
   } catch (e) { exportCSV('商品导入模板', head, demo); toast('Excel 组件不可用，已下载 CSV 模板', 'info'); }
 }
 function importOpen() {
@@ -2160,7 +2176,7 @@ function pageSettings() {
         <div><b style="font-size:16px">${esc(ME.name)}</b><div class="sub-t">账号：${esc(ME.username)} · ${isAdmin() ? '系统管理员' : esc(ME.roleName || '操作员')}</div></div></div>
       <div class="setting-row"><div class="sr-group"><b>登录密码</b><small>定期修改密码可提升账户安全</small></div><button class="btn" data-act="changePwd">修改密码</button></div>
       <div class="setting-row"><div class="sr-group"><b>退出登录</b><small>${CLIENT_MODE ? '退出后可切换账号或服务器地址' : '退出当前账号'}</small></div><button class="btn" data-act="logout">退出登录</button></div>
-      <div class="setting-row"><div class="sr-group"><b>服务器</b><small>${esc(SERVER_ADDR)}</small></div><span class="badge green">服务端 v${esc(st.version || '-')}</span></div>
+      <div class="setting-row"><div class="sr-group"><b>服务器</b><small>${esc(SERVER_ADDR)}</small></div><span style="display:flex;gap:8px;align-items:center"><span class="badge green">服务端 v${esc(st.version || '-')}</span>${NATIVE ? `<button class="btn sm" data-act="nativeServer">切换服务器</button>` : ''}</span></div>
     </div></div>
     <div class="card"><div class="card-head"><h3>界面偏好（仅本机）</h3></div><div class="card-body">
       <div class="form-grid">
@@ -2322,7 +2338,7 @@ function globalSearch(q) {
   const hit = s => String(s).toLowerCase().includes(q);
   const so = can('sales') ? db.sales.filter(o => hit(o.no) || hit(partyName('sales', o))).slice(0, 6) : [];
   const po = can('purchase') ? db.purchases.filter(o => hit(o.no) || hit(partyName('purchase', o))).slice(0, 6) : [];
-  const pr = db.products.filter(p => hit(p.name) || hit(p.sku) || hit(p.spec || '')).slice(0, 6);
+  const pr = db.products.filter(p => hit(p.name) || hit(p.sku) || hit(p.barcode || '') || hit(p.spec || '')).slice(0, 6);
   const cu = can('parties') ? db.customers.filter(c => hit(c.name) || hit(c.contact) || hit(c.phone)).slice(0, 6) : [];
   const sd = db.stockDocs.filter(o => hit(o.no) || hit(o.party)).slice(0, 6);
   const sec = (title, arr, f) => arr.length ? `<h4 style="margin:14px 0 6px;color:var(--muted);font-size:12px">${title}</h4>${arr.map(f).join('')}` : '';
@@ -2361,6 +2377,7 @@ const A = {
   checkNew, checkOpen:id => { closeModal(); checkOpen(id); }, checkPrint, checkVoid,
   importOpen:() => { closeModal(); importOpen(); },
   ssPrint, ledger:id => { closeModal(); ledger(id); },
+  nativeServer: () => NATIVE && NATIVE.changeServer(),
   goPro: () => { closeModal(); ui.setTab = 'pro'; go('settings'); },
   goBatches: () => { $('#bellDrop').classList.remove('show'); ui.invTab = 'batch'; const st = getState('batches'); st.f = {}; go('inventory'); },
   licActivate: () => { const key = $('#licKey').value.replace(/\s+/g, ''); if (!key) return toast('请粘贴授权码', 'error'); mutate('POST', '/api/license', {key}, r => r.pro ? '专业版已激活，感谢支持！' : '授权码已保存：' + (r.note || '')); },
@@ -2384,7 +2401,8 @@ const A = {
   orderNew: k => orderModal(k),
   orderEdit: v => { const [k, id] = split(v); closeModal(); orderModal(k, id); },
   orderView: v => orderView(...split(v)),
-  print: () => window.print(),
+  // 订单详情打印整页（页面的 @media print 只留单据区域）；安卓客户端把当前页面去掉脚本后交给系统打印
+  print: () => NATIVE ? printHtml('单据', document.documentElement.outerHTML.replace(/<script[\s\S]*?<\/script>/gi, '')) : window.print(),
   finAdd,
   finDel: id => confirmBox('确定删除这条收支记录吗？', () => mutate('DELETE', '/api/finance/' + id, undefined, '已删除')),
   rptExport: () => exportCSV('月度经营报表', ['月份', '订单数', '销售额', '销售成本', '毛利', '毛利率%', '采购额', '运营费用', '净利润'], ui.rptStats.map(s => [s.mk, s.count, s.sales.toFixed(2), s.cost.toFixed(2), s.gp.toFixed(2), s.rate.toFixed(1), s.purchase.toFixed(2), s.exp.toFixed(2), s.net.toFixed(2)])),
@@ -2409,9 +2427,8 @@ const A = {
   backup: async () => {
     try {
       const d = await api('GET', '/api/backup');
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([JSON.stringify(d, null, 2)], {type:'application/json'}));
-      a.download = 'erp_backup_' + today() + '.json'; a.click(); toast('备份已导出');
+      saveFile('erp_backup_' + today() + '.json', 'application/json', JSON.stringify(d, null, 2));
+      if (!NATIVE) toast('备份已导出');
     } catch (e) { toast(e.message, 'error'); }
   },
   restore: () => $('#importFile').click(),
@@ -2445,6 +2462,49 @@ $('#importFile').addEventListener('change', e => {
 });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (db.settings.theme === 'auto') { applyTheme(); render(); } });
 window.addEventListener('hashchange', render);
+
+/* ================= 安卓客户端：扫码按钮 / 返回键 / 切换服务器 ================= */
+if (NATIVE) {
+  document.documentElement.classList.add('native');
+  // 记住最后一个获得焦点的输入框：扫码结果填进去并模拟扫码枪的回车
+  const SCAN_INPUT = 'input:not([type=checkbox]):not([type=radio]):not([type=date]):not([type=file]):not([type=password]),textarea';
+  let lastInput = null;
+  document.addEventListener('focusin', e => { if (e.target.matches(SCAN_INPUT)) lastInput = e.target; });
+  const fab = document.createElement('button');
+  fab.id = 'scanFab'; fab.type = 'button'; fab.title = '扫码'; fab.innerHTML = ic('barcode');
+  ['pointerdown', 'mousedown'].forEach(t => fab.addEventListener(t, e => e.preventDefault()));  // 不抢输入框的焦点
+  fab.addEventListener('click', () => {
+    if (!ME) return toast('请先登录', 'error');
+    const a = document.activeElement;
+    if (a && a.matches(SCAN_INPUT)) lastInput = a;
+    else if ($('#mask').classList.contains('show') && lastInput && !lastInput.closest('#modal')) lastInput = null;  // 弹窗开着时不往背后的页面里填
+    NATIVE.scan();
+  });
+  document.body.appendChild(fab);
+  window.__xerpScanResult = code => {
+    code = String(code || '').trim(); if (!code) return;
+    const el = lastInput && lastInput.isConnected && lastInput.offsetParent !== null ? lastInput : null;
+    if (el) {
+      el.focus(); el.value = code;
+      el.dispatchEvent(new Event('input', {bubbles:true}));
+      el.dispatchEvent(new Event('change', {bubbles:true}));
+      if (el.isConnected) el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true}));
+      return;
+    }
+    // 没有正在填的输入框：按条码 / 编码直接找商品
+    const p = findProduct(code);
+    if (p && can('inv.view')) { prodLogs(p.id); toast(p.name + ' · 当前库存 ' + p.stock, 'info'); }
+    else globalSearch(code);
+  };
+  // 返回键：先关弹窗、下拉、侧栏，处理了返回 true
+  window.__xerpBack = () => {
+    if ($('#mask').classList.contains('show')) { closeModal(); return true; }
+    if ($('#bellDrop').classList.contains('show')) { $('#bellDrop').classList.remove('show'); return true; }
+    if ($('#app').classList.contains('open')) { $('#app').classList.remove('open'); return true; }
+    return false;
+  };
+  $('#lBtn').insertAdjacentHTML('afterend', `<p style="text-align:center;margin-top:14px;font-size:13px"><span class="sub-t">服务器 ${esc(NATIVE.server().replace(/^https?:\/\//, ''))}</span> · <a class="link" data-act="nativeServer">切换</a></p>`);
+}
 
 $('#lBtn').onclick = doLogin;
 $('#srvTest').onclick = testServer;
