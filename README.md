@@ -58,6 +58,21 @@ node src/server.js --data ./data --port 8686
 
 浏览器打开 `http://127.0.0.1:8686`，默认账号 `admin` / `admin123`，首次登录后请立即修改。
 
+## Windows 安装版
+
+从 [Releases](https://github.com/Zyc009234/x.erp/releases) 下载 `xerp-<版本>-windows-x64-setup.exe`（Windows 10 / 11 64 位），双击安装：
+
+- 安装向导里设置端口（默认 8686）和管理员密码；自带 Node.js，不用另装任何东西
+- 以后台服务运行（任务计划程序「x.erp」，SYSTEM 身份开机自启，崩溃自动重启），不用登录 Windows
+- 自动在防火墙放行该端口，仅限同一局域网；局域网其他电脑访问 `http://本机IP:8686`
+- 数据在 `C:\ProgramData\XERP`；覆盖安装新版即可升级，升级和卸载都不删数据
+
+构建：`powershell -ExecutionPolicy Bypass -File windows\build-windows.ps1`（需要 x64 Node.js 22.13+ 和 Inno Setup 6：`winget install JRSoftware.InnoSetup`），产物为 `dist\xerp-<版本>-windows-x64-setup.exe`。
+
+## 离线使用
+
+完全离线可用：服务端只用 Node.js 内置模块和内置 SQLite，前端用到的图表（Chart.js）和 Excel 导入（SheetJS）组件放在 `src/vendor/` 随程序发布，授权码离线校验。
+
 ## 飞牛 fnOS 应用
 
 构建（Windows，需 Node.js；首次运行会自动下载官方 [fnpack](https://developer.fnnas.com/docs/cli/fnpack/)）：

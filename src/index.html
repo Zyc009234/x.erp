@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>x.erp</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%236366f1'/%3E%3Cstop offset='1' stop-color='%2306b6d4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Ctext x='32' y='45' font-size='38' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'%3EE%3C/text%3E%3C/svg%3E">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="vendor/chart.umd.min.js"></script>
 <style>
 :root{
   --bg:#f4f6fb;--panel:#fff;--panel2:#f9fafb;--text:#1f2937;--muted:#6b7280;--border:#e8ebf2;
@@ -291,7 +291,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v1.0.3 · 数据保存在服务器</div>
+    <div class="side-foot">v1.0.4 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -646,7 +646,7 @@ const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(
 const PALETTE = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#84cc16', '#64748b'];
 function chart(id, cfg) {
   const el = document.getElementById(id); if (!el) return;
-  if (!window.Chart) { el.parentElement.innerHTML = '<div class="empty">图表库加载失败（需联网）</div>'; return; }
+  if (!window.Chart) { el.parentElement.innerHTML = '<div class="empty">图表组件加载失败，请刷新页面重试</div>'; return; }
   Chart.defaults.color = cssVar('--muted');
   Chart.defaults.borderColor = cssVar('--border');
   Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
@@ -1713,8 +1713,8 @@ function loadXLSX() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
   return new Promise((ok, bad) => {
     const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    s.onload = () => ok(window.XLSX); s.onerror = () => { s.remove(); bad(new Error('Excel 组件加载失败（需要能访问外网），可以把表格另存为 CSV 再导入')); };
+    s.src = 'vendor/xlsx.full.min.js';
+    s.onload = () => ok(window.XLSX); s.onerror = () => { s.remove(); bad(new Error('Excel 组件加载失败，请刷新页面重试，或把表格另存为 CSV 再导入')); };
     document.head.appendChild(s);
   });
 }

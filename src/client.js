@@ -40,6 +40,15 @@ function indexHtml() {
   try { const sea = require('node:sea'); if (sea.isSea()) return (INDEX_HTML = sea.getAsset('index.html', 'utf8')); } catch (e) {}
   return (INDEX_HTML = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8'));
 }
+// 前端用到的第三方库随程序一起发布，不依赖外网
+const VENDOR = ['chart.umd.min.js', 'xlsx.full.min.js'], vendorCache = {};
+function vendorFile(p) {
+  const name = p.startsWith('/vendor/') && p.slice(8);
+  if (!VENDOR.includes(name)) return null;
+  if (vendorCache[name]) return vendorCache[name];
+  try { const sea = require('node:sea'); if (sea.isSea()) return (vendorCache[name] = Buffer.from(sea.getAsset('vendor/' + name))); } catch (e) {}
+  try { return (vendorCache[name] = fs.readFileSync(path.join(__dirname, 'vendor', name))); } catch (e) { return null; }
+}
 const json = (res, status, obj) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(obj)); };
 function readBody(req) {
   return new Promise(resolve => { const c = []; req.on('data', d => c.push(d)); req.on('end', () => { try { resolve(JSON.parse(Buffer.concat(c).toString('utf8') || '{}')); } catch (e) { resolve({}); } }); });
@@ -88,6 +97,8 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
     return res.end(indexHtml());
   }
+  const v = req.method === 'GET' && vendorFile(p);
+  if (v) { res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=604800' }); return res.end(v); }
   res.writeHead(404); res.end();
 });
 

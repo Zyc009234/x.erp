@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '1.0.3';
+const VERSION = '1.0.4';
 const RELEASE_DATE = '2026-10-23';  // 本版本发布日期：授权码的免费升级截止日不早于它，专业版功能才可用
 // 专业版授权码校验公钥（对应私钥只在发码方本机，见 tools/license.js）
 const LICENSE_PUBKEY = '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAlhmiG/CK2MaT2qX7LaziMR2fGn4BfkaXbavU3UeJD3s=\n-----END PUBLIC KEY-----\n';
@@ -1118,6 +1118,15 @@ function indexHtml() {
   try { return (INDEX_HTML = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8')); } catch (e) {}
   return '<h1>x.erp 服务端运行中</h1>';
 }
+// 前端用到的第三方库随程序一起发布（图表、Excel 导入），不依赖外网
+const VENDOR = ['chart.umd.min.js', 'xlsx.full.min.js'], vendorCache = {};
+function vendorFile(p) {
+  const name = p.startsWith('/vendor/') && p.slice(8);
+  if (!VENDOR.includes(name)) return null;
+  if (vendorCache[name]) return vendorCache[name];
+  try { const sea = require('node:sea'); if (sea.isSea()) return (vendorCache[name] = Buffer.from(sea.getAsset('vendor/' + name))); } catch (e) {}
+  try { return (vendorCache[name] = fs.readFileSync(path.join(__dirname, 'vendor', name))); } catch (e) { return null; }
+}
 function send(res, status, obj) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(obj));
@@ -1146,6 +1155,8 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
       return res.end(indexHtml());
     }
+    const v = req.method === 'GET' && vendorFile(url.pathname);
+    if (v) { res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=604800' }); return res.end(v); }
     res.writeHead(404); return res.end();
   }
   const ctx = { ip: String(req.socket.remoteAddress || '').replace(/^::ffff:/, ''), method: req.method, query: url.searchParams, body: {}, user: null, params: {}, perms: new Set() };
