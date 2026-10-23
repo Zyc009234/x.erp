@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '1.0.5';
+const VERSION = '1.0.6';
 const RELEASE_DATE = '2026-10-23';  // 本版本发布日期：授权码的免费升级截止日不早于它，专业版功能才可用
 // 专业版授权码校验公钥（对应私钥只在发码方本机，见 tools/license.js）
 const LICENSE_PUBKEY = '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAlhmiG/CK2MaT2qX7LaziMR2fGn4BfkaXbavU3UeJD3s=\n-----END PUBLIC KEY-----\n';
@@ -245,6 +245,8 @@ function seed() {
     ['每日坚果礼盒', '食品饮料', '盒', 56, 118], ['进口干红葡萄酒', '食品饮料', '瓶', 120, 268]
   ];
   const products = P.map((p, i) => ({ id: 'p' + (i + 1), sku: 'SKU' + (1001 + i), name: p[0], category: p[1], unit: p[2], cost: p[3], price: p[4], stock: ri(30, 280), safety: ri(20, 40), remark: '', createdAt: dayAgo(200) }));
+  // 演示多单位：鼠标、中性笔、葡萄酒可按箱进出
+  Object.assign(products[3], { units: [{ name: '箱', rate: 20 }] }); Object.assign(products[7], { units: [{ name: '箱', rate: 40 }] }); Object.assign(products[19], { units: [{ name: '箱', rate: 6 }] });
   products[2].stock = 8; products[9].stock = 12; products[14].stock = 0; products[19].stock = 15;
   const names = ['星辰科技有限公司', '蓝海贸易有限公司', '远航物流集团', '恒信商贸有限公司', '青松教育科技', '金桥实业有限公司', '云图数据服务', '和美家居连锁', '乐享餐饮管理', '启明管理咨询'];
   const people = ['张伟', '李娜', '王强', '刘洋', '陈静', '杨帆', '赵磊', '黄敏', '周杰', '吴芳', '徐鹏', '孙丽', '马超', '朱婷', '胡斌', '郭琳'];
@@ -488,7 +490,10 @@ function saveEntity(ctx, col, id) {
     if (col === 'products') {
       const others = list('products').filter(p => p.id !== id);
       if (others.some(p => p.sku === r.sku)) fail('商品编码已存在');
-      if (r.barcode && others.some(p => p.barcode === r.barcode || p.sku === r.barcode)) fail('条码已被其他商品使用');
+      r.units = cleanUnits('units' in ctx.body ? ctx.body.units : (rec && rec.units) || [], r.unit || '个');
+      const mine = [r.barcode, ...r.units.map(u => u.barcode)].filter(Boolean), used = new Set(others.flatMap(codesOf));
+      if (new Set(mine).size < mine.length) fail('条码重复：商品条码和各单位条码不能相同');
+      if (mine.some(c => used.has(c))) fail('条码已被其他商品使用');
       r.stock = rec ? rec.stock : Math.round(r.stock || 0);
       r.wh = rec ? rec.wh : undefined;
       r.safety = Math.round(r.safety || 0);
@@ -532,10 +537,9 @@ function saveOrder(ctx, kind, id) {
     if (!isDate(b.date)) fail('日期格式不正确');
     const items = (Array.isArray(b.items) ? b.items : []).filter(i => i && i.productId).map(i => {
       const p = get('products', i.productId) || fail('商品不存在或已删除');
-      const qty = Number(i.qty), price = Number(i.price);
-      if (!Number.isInteger(qty) || qty <= 0) fail('数量必须为正整数');
+      const l = unitQty(p, i), price = Number(i.price);
       if (!Number.isFinite(price) || price < 0) fail('单价不正确');
-      return { productId: p.id, qty, price: round2(price), cost: p.cost };
+      return { productId: p.id, ...l, price: basePrice(round2(price), l), ...(l.rate ? { uprice: round2(price) } : {}), cost: p.cost };
     });
     if (!items.length) fail('请至少添加一个商品');
     const data = { [C.partyKey]: party, date: b.date, remark: str(b.remark, 500), items };
@@ -543,6 +547,7 @@ function saveOrder(ctx, kind, id) {
       const o = get(C.col, id) || fail('单据不存在', 404);
       if (o.status !== C.statuses[0]) fail(`单据状态为「${o.status}」，不能编辑`);
       items.forEach(it => { const old = o.items.find(x => x.productId === it.productId); if (old && old.cost != null) it.cost = old.cost; });
+      if ((o[C.paidKey] || 0) > orderTotal({ items }) + 0.001) fail(`已${C.payWord} ${o[C.paidKey]} 元，修改后的合计不能少于这个数`);
       Object.assign(o, data);
       put(C.col, o); audit(ctx, '修改' + C.title, o.no);
       return o;
@@ -618,6 +623,31 @@ function adjustStock(ctx, id) {
 const hhmm = () => { const d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
 function ownDoc(ctx, o) { if (o.creatorId !== ctx.user.id && !ctx.perms.has('inv.others')) fail('只能处理自己开的单据', 403); }
 function qtyByProduct(items) { const q = {}; items.forEach(i => { q[i.productId] = (q[i.productId] || 0) + i.qty; }); return q; }
+/* ---------- 多单位：商品可设辅助单位（如 1 箱 = 12 个），开单可按辅助单位录入；库存、成本一律按基本单位核算 ---------- */
+function cleanUnits(raw, base) {
+  if (!Array.isArray(raw)) return [];
+  if (raw.length > 5) fail('辅助单位最多 5 个');
+  const seen = new Set([base]);
+  return raw.map(u => {
+    const name = str(u && u.name, 10), rate = Number(u && u.rate), barcode = str(u && u.barcode, 64);
+    if (!name) fail('辅助单位名称不能为空');
+    if (seen.has(name)) fail(`单位「${name}」重复（不能和基本单位相同）`);
+    if (!Number.isInteger(rate) || rate < 2 || rate > 100000) fail(`「1 ${name} = ? ${base}」的换算数需为 2 ~ 100000 的整数`);
+    seen.add(name);
+    return barcode ? { name, rate, barcode } : { name, rate };
+  });
+}
+const codesOf = p => [p.sku, p.barcode, ...(p.units || []).map(u => u.barcode)].filter(Boolean);
+// 明细数量按所选单位录入，换算成基本单位：返回 { qty: 基本单位数量, unit, rate, uqty: 录入数量 }
+function unitQty(p, i) {
+  const n = Number(i.qty), name = str(i.unit, 10);
+  if (!Number.isInteger(n) || n <= 0) fail(`「${p.name}」数量必须为正整数`);
+  if (!name || name === p.unit) return { qty: n };
+  const u = (p.units || []).find(x => x.name === name) || fail(`「${p.name}」没有单位「${name}」，请先在商品档案里设置`);
+  return { qty: n * u.rate, unit: u.name, rate: u.rate, uqty: n };
+}
+// 录入的是所选单位的单价，按基本单位保存且不取整，保证 数量 × 单价 等于录入金额
+const basePrice = (price, l) => (l.rate ? price / l.rate : price);
 function saveStockDoc(ctx) {
   const b = ctx.body, dir = b.dir === 'out' ? 'out' : 'in', D = DOC[dir];
   if (!DOC_TYPES[dir].includes(b.type)) fail('请选择' + D.title.slice(0, 2) + '类型');
@@ -629,12 +659,11 @@ function saveStockDoc(ctx) {
     const wh = pickWh(b.wh);
     const items = (Array.isArray(b.items) ? b.items : []).filter(i => i && i.productId).map(i => {
       const p = get('products', i.productId) || fail('商品不存在或已删除');
-      const qty = Number(i.qty);
-      if (!Number.isInteger(qty) || qty <= 0) fail(`「${p.name}」数量必须为正整数`);
-      // 出库一律按移动加权成本计价；入库可填单价（看不到金额的账号按当前成本）
-      const price = dir === 'in' && withPrice && i.price !== undefined && i.price !== '' ? Number(i.price) : (p.cost || 0);
+      const l = unitQty(p, i);
+      // 出库一律按移动加权成本计价；入库可填单价（所选单位的单价；看不到金额的账号按当前成本）
+      const price = dir === 'in' && withPrice && i.price !== undefined && i.price !== '' ? Number(i.price) : (p.cost || 0) * (l.rate || 1);
       if (!Number.isFinite(price) || price < 0) fail(`「${p.name}」单价不正确`);
-      const it = { productId: p.id, qty, price: dir === 'in' ? round4(price) : 0, note: str(i.note, 100) };
+      const it = { productId: p.id, ...l, price: dir === 'in' ? basePrice(round4(price), l) : 0, ...(dir === 'in' && l.rate ? { uprice: round4(price) } : {}), note: str(i.note, 100) };
       if (dir === 'in' && p.batch) {
         it.batch = { no: str(i.batchNo, 40), prodDate: isDate(i.prodDate) ? i.prodDate : '', expDate: isDate(i.expDate) ? i.expDate : '' };
         if (it.batch.expDate && it.batch.prodDate && it.batch.expDate < it.batch.prodDate) fail(`「${p.name}」有效期早于生产日期`);
@@ -651,7 +680,7 @@ function saveStockDoc(ctx) {
       items, status: '正常', creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), printCount: 0 };
     items.forEach(i => {
       const m = moveStock(ctx, get('products', i.productId), dir === 'in' ? i.qty : -i.qty, o.type, o.no, i.note || o.party, { price: dir === 'in' ? i.price : undefined, date, wh, batch: i.batch });
-      if (dir === 'out') i.price = round4(m.unit);
+      if (dir === 'out') { i.price = round4(m.unit); if (i.rate) i.uprice = round4(m.unit * i.rate); }
       delete i.batch;
       if (m.alloc) i.batches = m.alloc;
     });
@@ -793,9 +822,8 @@ function saveTransfer(ctx) {
   if (date !== today() && !ctx.perms.has('inv.backdate')) fail('没有补录权限，只能开当天的单据', 403);
   return tx(() => {
     const items = (Array.isArray(b.items) ? b.items : []).filter(i => i && i.productId).map(i => {
-      const p = get('products', i.productId) || fail('商品不存在或已删除'), qty = Number(i.qty);
-      if (!Number.isInteger(qty) || qty <= 0) fail(`「${p.name}」数量必须为正整数`);
-      return { productId: p.id, qty, note: str(i.note, 100) };
+      const p = get('products', i.productId) || fail('商品不存在或已删除');
+      return { productId: p.id, ...unitQty(p, i), note: str(i.note, 100) };
     });
     if (!items.length) fail('请至少添加一个商品');
     const lack = Object.entries(qtyByProduct(items)).map(([pid, q]) => ({ p: get('products', pid), q })).filter(x => whQty(x.p, from) < x.q);
@@ -895,7 +923,7 @@ function visibleData(ctx) {
   if (!seesPrice(P)) data.products = data.products.map(({ cost, price, ...p }) => p);
   if (!P.has('inv.others')) for (const c of ['stockDocs', 'checkDocs', 'transferDocs']) data[c] = data[c].filter(o => o.creatorId === ctx.user.id);
   if (!P.has('inv.cost')) {
-    data.stockDocs = data.stockDocs.map(o => ({ ...o, items: o.items.map(({ price, ...i }) => i) }));
+    data.stockDocs = data.stockDocs.map(o => ({ ...o, items: o.items.map(({ price, uprice, ...i }) => i) }));
     data.transferDocs = data.transferDocs.map(o => ({ ...o, items: o.items.map(({ cost, ...i }) => i) }));
     data.stockLogs = data.stockLogs.map(({ cost, costAfter, ...l }) => l);
     data.checkDocs = data.checkDocs.map(o => ({ ...o, lines: o.lines.map(({ cost, ...l }) => l) }));
@@ -1003,6 +1031,30 @@ route('PUT', '/api/settings', ctx => {
     changes.push('启用模块：' + s.modules.map(m => MODULES[m]).join('、'));
   }
   setMeta('settings', s); audit(ctx, '修改设置', changes.join('；'));
+}, { admin: true });
+
+// 打印模板：每种单据一份（标题、抬头、表头项目、明细列的显示 / 顺序 / 名称、签字栏、底部说明、字号），所有用户共用
+const PRINT_KINDS = { in: '入库单', out: '出库单', transfer: '调拨单', sales: '销售单', purchase: '采购单' };
+const PRINT_COLS = ['idx', 'sku', 'barcode', 'name', 'spec', 'unit', 'qty', 'price', 'amount', 'batch', 'note'];
+const PRINT_META = ['no', 'type', 'date', 'party', 'wh', 'handler', 'contact', 'address'];
+function cleanTpl(t) {
+  if (!t || typeof t !== 'object') return null;
+  const cols = (Array.isArray(t.cols) ? t.cols : []).filter((c, i, a) => c && PRINT_COLS.includes(c.k) && a.findIndex(x => x && x.k === c.k) === i)
+    .map(c => ({ k: c.k, label: str(c.label, 10), on: !!c.on }));
+  const meta = {};
+  for (const k of PRINT_META) if (t.meta && k in t.meta) meta[k] = !!t.meta[k];
+  const size = Math.round(Number(t.fontSize) || 12);
+  return { title: str(t.title, 20), header: str(t.header, 300), footer: str(t.footer, 300), signs: str(t.signs, 100),
+    fontSize: Math.min(16, Math.max(10, size)), upper: t.upper !== false, printer: t.printer !== false, cols, meta };
+}
+route('PUT', '/api/settings/print', ctx => {
+  const kind = ctx.body.kind;
+  if (!PRINT_KINDS[kind]) fail('单据类型不正确');
+  const s = getMeta('settings', {}), all = { ...(s.printTpl || {}) }, t = cleanTpl(ctx.body.tpl);
+  if (t) all[kind] = t; else delete all[kind];
+  s.printTpl = all; setMeta('settings', s);
+  audit(ctx, '修改打印模板', PRINT_KINDS[kind] + (t ? '' : ' 恢复默认'));
+  return all;
 }, { admin: true });
 
 const ENTITY_PERM = { products: { POST: 'prod.edit', PUT: 'prod.edit', DELETE: 'prod.delete' }, customers: 'parties', suppliers: 'parties', employees: 'hr' };

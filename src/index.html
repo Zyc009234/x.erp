@@ -245,10 +245,14 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .tpl-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:14px}
 .slip-preview{border:1px solid var(--border);border-radius:10px;padding:18px;background:#fff;color:#000;overflow-x:auto}
 .slip-preview table{border-collapse:collapse;width:100%}
-.slip-preview th,.slip-preview td{border:1px solid #333;padding:4px 6px;font-size:12.5px}
-.slip-preview .s-title{text-align:center}.slip-preview .s-title h1{font-size:18px}.slip-preview .s-title h2{font-size:15px;letter-spacing:.4em;margin:2px 0 8px}
-.slip-preview .s-meta{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;margin:3px 0;flex-wrap:wrap}
-.slip-preview .s-sign{display:flex;justify-content:space-between;margin-top:14px;font-size:12.5px}
+.slip-preview th,.slip-preview td{border:1px solid #333;padding:4px 6px;font-size:1em}
+.slip-preview .s-title{text-align:center}.slip-preview .s-title h1{font-size:1.42em}.slip-preview .s-title h2{font-size:1.25em;letter-spacing:.4em;margin:2px 0 8px}.slip-preview .s-head{font-size:.92em}
+.slip-preview .s-meta{display:flex;justify-content:space-between;gap:2px 16px;margin:3px 0;flex-wrap:wrap}
+.slip-preview .s-sign{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 16px;margin-top:14px}.slip-preview .s-foot{margin-top:8px;font-size:.92em}
+.slip-preview .slip-wrap{position:relative}.slip-preview .slip-stamp{position:absolute;right:30px;top:10px;border:3px solid #c00;color:#c00;font-size:22px;font-weight:800;padding:2px 14px;transform:rotate(-12deg);letter-spacing:.3em}
+.tp-col{display:flex;gap:6px;align-items:center;margin:3px 0}.tp-col input[data-l]{flex:1;min-width:0}
+.tp-grid{display:grid;grid-template-columns:minmax(300px,400px) minmax(0,1fr);gap:16px;align-items:start}.tp-form .field{margin-bottom:12px}.tp-grid .card-head h3{white-space:nowrap}
+@media(max-width:1180px){.tp-grid{grid-template-columns:1fr}}
 .slip-preview .r{text-align:right}.slip-preview .c{text-align:center}
 .slip-wrap{position:relative}
 .slip-stamp{position:absolute;right:30px;top:24px;border:3px solid #dc2626;color:#dc2626;font-size:22px;font-weight:800;padding:2px 14px;transform:rotate(-12deg);letter-spacing:.3em;opacity:.85}
@@ -295,7 +299,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v1.0.5 · 数据保存在服务器</div>
+    <div class="side-foot">v1.0.6 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -734,7 +738,8 @@ function catStats(orders) {
 const ENT = {
   products: {title:'商品', fields:[
     {n:'sku', l:'商品编码', req:1}, {n:'barcode', l:'条码', ph:'留空则用商品编码'}, {n:'name', l:'商品名称', req:1, span:1}, {n:'spec', l:'规格型号', span:1},
-    {n:'category', l:'商品分类', type:'combo', opts:cats, ph:'可选择或直接输入'}, {n:'unit', l:'计量单位', type:'combo', opts:units, def:'个'},
+    {n:'category', l:'商品分类', type:'combo', opts:cats, ph:'可选择或直接输入'}, {n:'unit', l:'基本单位（库存按它记）', type:'combo', opts:units, def:'个'},
+    {n:'unitsText', l:'辅助单位（选填）', ph:'例如 箱=12；盒=6，可按箱开单。箱有自己的条码写成 箱=12/6901234567890', span:1},
     {n:'cost', l:'成本价（元）', type:'number', req:1, money:1}, {n:'price', l:'销售价（元）', type:'number', req:1, money:1},
     {n:'stock', l:'期初库存', type:'number', def:0, lockOnEdit:1}, {n:'safety', l:'安全库存', type:'number', def:10},
     {n:'batch', l:'批次 / 保质期管理', type:'select', opts:[['', '不启用'], ['1', '启用（入库记批次，出库先到期先出）']], pro:1}, {n:'shelfDays', l:'保质期（天，选填）', type:'number', ph:'填了可按生产日期自动算有效期', pro:1},
@@ -759,8 +764,9 @@ function editEntity(type, id) {
   const fields = cfg.fields.filter(f => (!f.money || seesPrice()) && (!f.pro || showPro)).map(f => ({...f, disabled:rec && f.lockOnEdit || f.n === 'cost' && costLocked,
     l:f.n === 'cost' ? (rec ? '成本价（元，移动加权自动计算' + (costLocked ? '' : '，无库存时可改') + '）' : '期初成本价（元）') : f.l + (f.pro ? ' ' + proTag : '')}));
   if (type === 'products' && !rec && multiWh()) fields.splice(fields.findIndex(f => f.n === 'stock') + 1, 0, {n:'wh', l:'期初库存放在', type:'select', opts:whs().map(w => [w.id, w.name])});
-  const data = rec ? {...rec, batch:rec.batch ? '1' : ''} : {};
+  const data = rec ? {...rec, batch:rec.batch ? '1' : '', unitsText:unitsToText(rec.units)} : {};
   formModal({title:(rec ? '编辑' : '新增') + cfg.title, fields, data, onSubmit:v => {
+    if (type === 'products') { try { v.units = textToUnits(v.unitsText); } catch (e) { toast(e.message, 'error'); return; } delete v.unitsText; }
     if (type === 'products' && rec && rec.batch && !v.batch && batchesOf(rec.id).length) {
       return new Promise(ok => confirmBox('关闭后会清除该商品现有的批次记录（库存数量不变），之后重新开启会把当时的库存记为「期初」批次。确定关闭？', () => ok(mutate('PUT', '/api/products/' + rec.id, v, '已更新商品')), {title:'关闭批次管理'}));
     }
@@ -793,12 +799,12 @@ function pageProducts() {
     {t:'商品编码', r:p => `<span class="sub-t">${esc(p.sku)}</span>${p.barcode ? `<div class="sub-t">${ic('barcode')} ${esc(p.barcode)}</div>` : ''}`, s:p => p.sku},
     {t:'商品名称', r:p => `<b>${esc(p.name)}</b>${p.batch ? ' <span class="badge blue plain">批次</span>' : ''}${p.spec ? `<div class="sub-t">${esc(p.spec)}</div>` : ''}`, s:p => p.name},
     {t:'分类', r:p => badge(p.category, 'primary plain')},
-    {t:'单位', r:p => esc(p.unit)},
+    {t:'单位', r:p => esc(p.unit) + ((p.units || []).length ? `<div class="sub-t">${p.units.map(u => '1' + esc(u.name) + '=' + u.rate + esc(p.unit)).join(' ')}</div>` : '')},
     ...(pr ? [
       {t:'成本价', cls:'num', r:p => money(p.cost), s:p => p.cost},
       {t:'销售价', cls:'num', r:p => money(p.price), s:p => p.price},
       {t:'毛利率', cls:'num', r:p => p.price ? ((p.price - p.cost) / p.price * 100).toFixed(1) + '%' : '-', s:p => p.price ? (p.price - p.cost) / p.price : 0}] : []),
-    {t:'库存', cls:'num', r:p => `<b>${num(p.stock)}</b>`, s:p => p.stock},
+    {t:'库存', cls:'num', r:p => `<b>${num(p.stock)}</b>${stockText(p, p.stock) ? `<div class="sub-t">${esc(stockText(p, p.stock))}</div>` : ''}`, s:p => p.stock},
     {t:'状态', r:p => badge(...stockStatus(p))},
     {t:'操作', r:p => `<div class="ops">${can('prod.edit') ? tbtn('编辑', 'edit', 'products|' + p.id) : ''}${can('inv.in') ? tbtn('入库', 'stock', 'in|' + p.id) : ''}${can('prod.delete') ? tbtn('删除', 'del', 'products|' + p.id, 'danger-text') : ''}</div>`}
   ], exp:{name:'商品列表', cols:[['商品编码', p => p.sku], ['商品名称', p => p.name], ['规格型号', p => p.spec], ['分类', p => p.category], ['单位', p => p.unit], ...(pr ? [['成本价', p => p.cost], ['销售价', p => p.price]] : []), ['库存', p => p.stock], ['安全库存', p => p.safety]]}});
@@ -809,6 +815,31 @@ const docTitle = dir => dir === 'out' ? '出库单' : '入库单';
 const docPartyLabel = dir => dir === 'out' ? '领用 / 收货单位' : '供货单位';
 const docQty = o => sum(o.items, i => i.qty);
 const docAmount = o => sum(o.items, i => i.qty * (i.price || 0));
+/* ---------- 多单位：明细里 qty / price 始终是基本单位，unit / rate / uqty / uprice 记录开单时选的单位 ---------- */
+const lineQty = i => i.rate ? i.uqty : i.qty;
+const lineUnit = (i, p) => i.unit || (p && p.unit) || '';
+const linePrice = i => i.rate ? (i.uprice ?? (i.price || 0) * i.rate) : (i.price || 0);
+const unitsOf = p => [{name:p.unit, rate:1}, ...(p.units || [])];
+const rateOf = (p, name) => (p && unitsOf(p).find(u => u.name === name) || {rate:1}).rate;
+const unitByCode = (p, v) => ((p.units || []).find(u => u.barcode && u.barcode === String(v || '').trim()) || {}).name || '';
+// 300 个、1 箱 = 12 个 → 「25箱」；不足一个大单位时不显示
+function stockText(p, q) {
+  const u = (p.units || []).reduce((a, b) => (!a || b.rate > a.rate ? b : a), null);
+  if (!u || Math.abs(q) < u.rate) return '';
+  const big = Math.trunc(q / u.rate), rest = q - big * u.rate;
+  return big + u.name + (rest ? ' ' + rest + p.unit : '');
+}
+const unitSel = (p, cur, i) => p && p.units && p.units.length
+  ? `<select data-i="${i}" data-k="unit" style="min-width:64px">${unitsOf(p).map(u => `<option value="${esc(u.name)}" ${u.name === (cur || p.unit) ? 'selected' : ''}>${esc(u.name)}${u.rate > 1 ? '×' + u.rate : ''}</option>`).join('')}</select>`
+  : (p ? esc(p.unit) : '');
+const unitsToText = us => (us || []).map(u => u.name + '=' + u.rate + (u.barcode ? '/' + u.barcode : '')).join('；');
+function textToUnits(t) {
+  return String(t || '').split(/[;；,，\n]+/).map(x => x.trim()).filter(Boolean).map(x => {
+    const m = /^1?\s*([^=＝\s\/／\d][^=＝\s\/／]*)\s*[=＝]\s*(\d+)\s*[^\d\/／]*?(?:[\/／]\s*(\S+))?$/.exec(x);
+    if (!m) throw new Error('辅助单位格式不对：「' + x + '」，应写成 箱=12');
+    return {name:m[1], rate:+m[2], barcode:m[3] || ''};
+  });
+}
 const docByNo = no => db.stockDocs.find(o => o.no === no);
 const prodOf = id => byId(db.products, id) || {name:'已删除商品', sku:'', unit:'', spec:''};
 function pageInventory() {
@@ -845,7 +876,7 @@ function pageInventory() {
     const whSplit = p => multiWh() && !W ? `<div class="sub-t">${db.warehouses.filter(w => whQty(p, w.id)).map(w => esc(w.name) + ' ' + whQty(p, w.id)).join(' · ') || '各仓均无库存'}</div>` : '';
     mountList('inv', {rows:() => db.products, search:p => p.sku + (p.barcode || '') + p.name + (p.spec || ''), filters, columns:[
       {t:'商品', r:p => `<b>${esc(p.name)}</b>${p.batch ? ' <span class="badge blue plain">批次</span>' : ''}<div class="sub-t">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''} · ${esc(p.category)}</div>`, s:p => p.name},
-      {t:W ? whName(W) + '库存' : '当前库存', cls:'num', r:p => `<b>${num(q(p))}</b> ${esc(p.unit)}${whSplit(p)}`, s:q},
+      {t:W ? whName(W) + '库存' : '当前库存', cls:'num', r:p => `<b>${num(q(p))}</b> ${esc(p.unit)}${stockText(p, q(p)) ? `<div class="sub-t">${esc(stockText(p, q(p)))}</div>` : ''}${whSplit(p)}`, s:q},
       {t:'安全库存', cls:'num', r:p => num(p.safety)},
       {t:'库存水位', r:p => { const pct = Math.min(100, q(p) / ((p.safety || 1) * 3) * 100); const c = st(p)[1]; return `<div class="prog"><div class="bar"><i style="width:${pct}%;background:var(--${c})"></i></div></div>`; }},
       ...(pr ? [{t:'成本单价', cls:'num', r:p => money(p.cost)}, {t:'库存金额', cls:'num', r:p => money(q(p) * p.cost), s:p => q(p) * p.cost}] : []),
@@ -929,15 +960,16 @@ function prodLogs(id) {
 const prodLabel = p => p.sku + ' · ' + p.name + (p.spec ? ' ' + p.spec : '');
 function findProduct(v) {
   v = String(v || '').trim(); if (!v) return null;
-  return db.products.find(p => p.sku === v || p.barcode === v || prodLabel(p) === v) || db.products.find(p => p.sku.toLowerCase() === v.toLowerCase() || p.name === v) || null;
+  return db.products.find(p => p.sku === v || p.barcode === v || prodLabel(p) === v) || db.products.find(p => unitByCode(p, v)) || db.products.find(p => p.sku.toLowerCase() === v.toLowerCase() || p.name === v) || null;
 }
 function docModal(dir, productId, type0) {
   const mo = canMoney(), types = META.docTypes[dir];
   const parties = [...new Set([...db.stockDocs.filter(o => o.dir === dir).map(o => o.party), ...(dir === 'in' ? db.suppliers : db.customers).map(x => x.name)].filter(Boolean))];
-  const blank = () => ({productId:'', qty:1, price:'', note:'', batchNo:'', prodDate:'', expDate:''});
+  const blank = () => ({productId:'', unit:'', qty:1, price:'', note:'', batchNo:'', prodDate:'', expDate:''});
+  const baseQ = it => (+it.qty || 0) * rateOf(byId(db.products, it.productId), it.unit);
   const draft = {items:[], wh:ui.invWh && byId(db.warehouses, ui.invWh) ? ui.invWh : META.defaultWh};
   const p0 = productId && byId(db.products, productId);
-  draft.items.push(p0 ? {...blank(), productId:p0.id, price:p0.cost ?? ''} : blank());
+  draft.items.push(p0 ? {...blank(), productId:p0.id, unit:p0.unit, price:p0.cost ?? ''} : blank());
   const batchCol = db.products.some(p => p.batch);
   openModal(`${modalHead('新建' + docTitle(dir))}
   <div class="m-body"><div class="form-grid">
@@ -960,8 +992,8 @@ function docModal(dir, productId, type0) {
   };
   // 出库预览：按先到期先出，同一商品多行累计
   const fefoPreview = (p, i) => {
-    const before = sum(draft.items.slice(0, i).filter(x => x.productId === p.id), x => +x.qty || 0);
-    let skip = before, need = +draft.items[i].qty || 0; const out = [];
+    const before = sum(draft.items.slice(0, i).filter(x => x.productId === p.id), baseQ);
+    let skip = before, need = baseQ(draft.items[i]); const out = [];
     for (const b of fefoOrder(batchesOf(p.id, draft.wh), $('#dType').value)) {
       let q = b.qty; const s = Math.min(skip, q); skip -= s; q -= s;
       const n = Math.min(need, q); if (n > 0) { out.push({no:b.no, expDate:b.expDate, qty:n}); need -= n; }
@@ -976,10 +1008,10 @@ function docModal(dir, productId, type0) {
   const renderItems = focusLast => {
     tb.innerHTML = draft.items.map((it, i) => { const p = it.productId ? byId(db.products, it.productId) : null, have = p ? whQty(p, draft.wh) : 0; return `<tr>
       <td><input class="item-in" list="dProdList" data-i="${i}" data-k="product" value="${p ? esc(prodLabel(p)) : ''}" placeholder="编码 / 条码 / 名称"></td>
-      <td>${p ? esc(p.unit) : ''}</td>
-      <td class="num scell ${p && dir === 'out' && have < it.qty ? 'neg' : ''}">${p ? have : ''}</td>
+      <td>${unitSel(p, it.unit, i)}</td>
+      <td class="num scell ${p && dir === 'out' && have < baseQ(it) ? 'neg' : ''}" title="${p ? esc(stockText(p, have)) : ''}">${p ? have : ''}</td>
       <td><input type="number" min="1" step="1" data-i="${i}" data-k="qty" value="${it.qty}"></td>
-      ${mo ? (dir === 'in' ? `<td><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"></td>` : `<td class="num sub-t" title="出库按移动加权成本计价">${p ? money(p.cost) : ''}</td>`) + `<td class="num sub">${money((+it.qty || 0) * (+it.price || 0))}</td>` : ''}
+      ${mo ? (dir === 'in' ? `<td><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"></td>` : `<td class="num sub-t" title="出库按移动加权成本计价">${p ? money(p.cost * rateOf(p, it.unit)) : ''}</td>`) + `<td class="num sub">${money((+it.qty || 0) * (+it.price || 0))}</td>` : ''}
       ${batchCell(p, it, i)}
       <td><input data-i="${i}" data-k="note" value="${esc(it.note)}"></td>
       <td><button class="icon-btn sm" data-del="${i}" title="删除">${ic('trash')}</button></td></tr>`; }).join('');
@@ -989,14 +1021,19 @@ function docModal(dir, productId, type0) {
   const pick = (i, v) => {
     const p = findProduct(v);
     if (!p) { if (v) toast('未找到商品：' + v, 'error'); draft.items[i].productId = ''; renderItems(); return false; }
-    const dup = draft.items.findIndex((x, k) => k !== i && x.productId === p.id);
+    const unit = unitByCode(p, v) || p.unit;
+    const dup = draft.items.findIndex((x, k) => k !== i && x.productId === p.id && (x.unit || p.unit) === unit);
     if (dup >= 0) { draft.items[dup].qty = (+draft.items[dup].qty || 0) + (+draft.items[i].qty || 1); draft.items[i] = blank(); renderItems(true); toast(p.name + ' 已在明细中，数量 +1', 'info'); return true; }
-    Object.assign(draft.items[i], {productId:p.id, price:p.cost ?? ''});
+    Object.assign(draft.items[i], {productId:p.id, unit, price:p.cost != null ? +(p.cost * rateOf(p, unit)).toFixed(4) : ''});
     if (i === draft.items.length - 1) draft.items.push(blank());
     renderItems(true);
     return true;
   };
-  tb.addEventListener('change', e => { const t = e.target; if (t.dataset.k === 'product') pick(+t.dataset.i, t.value); });
+  tb.addEventListener('change', e => {
+    const t = e.target, i = +t.dataset.i;
+    if (t.dataset.k === 'product') pick(i, t.value);
+    if (t.dataset.k === 'unit') { const it = draft.items[i], p = byId(db.products, it.productId), r0 = rateOf(p, it.unit); it.unit = t.value; if (it.price !== '') it.price = +(it.price / r0 * rateOf(p, it.unit)).toFixed(4); renderItems(); }
+  });
   tb.addEventListener('keydown', e => { const t = e.target; if (e.key === 'Enter' && t.dataset.k === 'product') { e.preventDefault(); pick(+t.dataset.i, t.value); } });
   tb.addEventListener('input', e => {
     const t = e.target, i = +t.dataset.i, k = t.dataset.k;
@@ -1008,7 +1045,7 @@ function docModal(dir, productId, type0) {
       // 出库数量变了：原地刷新库存提示与批次预览，不重绘整表（以免打断输入）
       if (dir === 'out' && k === 'qty') tb.querySelectorAll('tr').forEach((tr, n) => {
         const it = draft.items[n], p = it && it.productId && byId(db.products, it.productId); if (!p) return;
-        tr.querySelector('.scell').classList.toggle('neg', whQty(p, draft.wh) < it.qty);
+        tr.querySelector('.scell').classList.toggle('neg', whQty(p, draft.wh) < baseQ(it));
         const bc = tr.querySelector('.bcell'); if (bc && p.batch) bc.innerHTML = fefoPreview(p, n);
       });
     }
@@ -1023,14 +1060,14 @@ function docModal(dir, productId, type0) {
     if (items.some(i => !Number.isInteger(+i.qty) || +i.qty <= 0)) return toast('数量必须为正整数', 'error');
     if (mo && items.some(i => i.price !== '' && +i.price < 0)) return toast('单价不能为负', 'error');
     if (dir === 'out') {
-      const need = {}; items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + +i.qty; });
+      const need = {}; items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + baseQ(i); });
       const lack = Object.entries(need).map(([pid, q]) => ({p:byId(db.products, pid), q})).filter(x => whQty(x.p, draft.wh) < x.q);
       if (lack.length) return toast((multiWh() ? whName(draft.wh) : '') + '库存不足：' + lack.map(x => `${x.p.name}（需 ${x.q}，现有 ${whQty(x.p, draft.wh)}）`).join('、'), 'error');
     }
     const badDate = items.find(i => i.prodDate && i.expDate && i.expDate < i.prodDate);
     if (badDate) return toast(`「${byId(db.products, badDate.productId).name}」有效期早于生产日期`, 'error');
     const body = {dir, type:$('#dType').value, wh:draft.wh, date:$('#dDate').value, party:$('#dParty').value.trim(), handler:$('#dHandler').value.trim(), remark:$('#dRemark').value.trim(),
-      items:items.map(i => ({productId:i.productId, qty:+i.qty, price:mo ? i.price : undefined, note:i.note, batchNo:i.batchNo, prodDate:i.prodDate, expDate:i.expDate}))};
+      items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:mo ? i.price : undefined, note:i.note, batchNo:i.batchNo, prodDate:i.prodDate, expDate:i.expDate}))};
     $('#dSave').disabled = true; if ($('#dSavePrint')) $('#dSavePrint').disabled = true;
     const r = await mutate('POST', '/api/stockdocs', body, r => docTitle(dir) + '已保存：' + r.no);
     if (!r) { $('#dSave').disabled = false; if ($('#dSavePrint')) $('#dSavePrint').disabled = false; return; }
@@ -1061,30 +1098,81 @@ function rmbUpper(v) {
 }
 const PAPERS = {a4:['A4 纵向', 'A4 portrait', 12], half:['二等分 241×140（针式）', '241mm 140mm', 6], a5:['A5 横向', 'A5 landscape', 7]};
 const PRINT_ONLY = {a4l:['A4 横向', 'A4 landscape', 0]};
-function slipHtml(o, {showMoney, minRows = 0}) {
-  const cols = showMoney ? 9 : 7, rows = o.items.map((i, n) => { const p = prodOf(i.productId); return `<tr><td class="c">${n + 1}</td><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.spec || '')}</td><td class="c">${esc(p.unit)}</td><td class="r">${i.qty}</td>${showMoney ? `<td class="r">${(+i.price || 0).toFixed(2)}</td><td class="r">${(i.qty * (+i.price || 0)).toFixed(2)}</td>` : ''}<td>${esc([i.batches ? '批次 ' + batchText(i.batches) : '', i.note].filter(Boolean).join('；'))}</td></tr>`; });
-  for (let k = rows.length; k < minRows; k++) rows.push(`<tr>${'<td>&nbsp;</td>'.repeat(cols)}</tr>`);
-  const amt = docAmount(o);
-  return `<div class="slip-wrap">${o.status === '已作废' ? '<div class="slip-stamp">作废</div>' : ''}
-  <div class="s-title"><h1>${esc(db.settings.company)}</h1><h2>${docTitle(o.dir)}</h2></div>
-  <div class="s-meta"><span>单号：<b>${o.no}</b></span><span>类型：${esc(o.type)}</span><span>日期：${o.date}</span></div>
-  <div class="s-meta"><span>${docPartyLabel(o.dir)}：${esc(o.party || '')}</span>${multiWh() || (o.wh && o.wh !== META.defaultWh) ? `<span>仓库：${esc(whName(o.wh))}</span>` : ''}<span>经手人：${esc(o.handler || '')}</span></div>
-  <table><thead><tr><th style="width:34px">序号</th><th>商品编码</th><th>商品名称</th><th>规格型号</th><th style="width:42px">单位</th><th style="width:60px">数量</th>${showMoney ? '<th style="width:70px">单价</th><th style="width:84px">金额</th>' : ''}<th>备注</th></tr></thead>
-  <tbody>${rows.join('')}
-  <tr><td colspan="5" class="r"><b>合计</b></td><td class="r"><b>${docQty(o)}</b></td>${showMoney ? `<td></td><td class="r"><b>${amt.toFixed(2)}</b></td>` : ''}<td></td></tr>
-  ${showMoney ? `<tr><td colspan="${cols}">金额大写：${rmbUpper(amt)}</td></tr>` : ''}
-  ${o.remark ? `<tr><td colspan="${cols}">备注：${esc(o.remark)}</td></tr>` : ''}</tbody></table>
-  <div class="s-sign"><span>制单：${esc(o.creator || '')}</span><span>经手：${esc(o.handler || '')}</span><span>仓管：</span><span>${o.dir === 'in' ? '送货人' : '领用 / 收货人'}：</span></div>
-  ${o.status === '已作废' ? `<div class="s-meta" style="margin-top:6px"><span>作废：${esc(o.voidBy || '')} ${fmtTime(o.voidAt)} ${esc(o.voidReason || '')}</span></div>` : ''}</div>`;
+/* ---------- 单据打印：入库 / 出库 / 调拨 / 销售 / 采购单共用一套排版，样式在 系统设置 → 打印模板 里调整 ---------- */
+const SLIP_COLS = {idx:'序号', sku:'商品编码', barcode:'条码', name:'商品名称', spec:'规格型号', unit:'单位', qty:'数量', price:'单价', amount:'金额', batch:'批次', note:'备注'};
+const SLIP_META = {no:'单号', type:'类型', date:'日期', party:'往来单位', contact:'联系人', address:'地址', wh:'仓库', handler:'经手人'};
+const SLIP_KINDS = {
+  in:{name:'入库单', meta:['no', 'type', 'date', 'party', 'wh', 'handler'], party:'供货单位', signs:'制单，经手，仓管，送货人'},
+  out:{name:'出库单', meta:['no', 'type', 'date', 'party', 'wh', 'handler'], party:'领用 / 收货单位', signs:'制单，经手，仓管，领用 / 收货人'},
+  transfer:{name:'调拨单', meta:['no', 'date', 'wh', 'handler'], signs:'制单，调出仓管，调入仓管，经手', price:'成本单价', amount:'成本金额'},
+  sales:{name:'销售单', meta:['no', 'date', 'party', 'contact', 'address', 'wh'], party:'客户', signs:'制单，审核，发货，客户签收'},
+  purchase:{name:'采购单', meta:['no', 'date', 'party', 'contact', 'wh'], party:'供应商', signs:'制单，审核，收货'}
+};
+const colLabel = (K, c) => c.label || (c.k === 'price' && K.price) || (c.k === 'amount' && K.amount) || SLIP_COLS[c.k];
+// 当前生效的模板：保存过的设置 + 默认值；以后新增的列补在后面（默认不打印）
+function slipTpl(kind) {
+  const K = SLIP_KINDS[kind], t = (db.settings.printTpl || {})[kind] || {};
+  const saved = (t.cols || []).filter(c => SLIP_COLS[c.k]);
+  const cols = saved.length ? [...saved, ...Object.keys(SLIP_COLS).filter(k => !saved.some(c => c.k === k)).map(k => ({k, label:'', on:false}))]
+    : Object.keys(SLIP_COLS).map(k => ({k, label:'', on:k !== 'barcode'}));
+  return {title:'', header:'', footer:'', signs:K.signs, fontSize:12, upper:true, printer:true, ...t,
+    cols:cols.map(c => ({...c})), meta:{...Object.fromEntries(K.meta.map(k => [k, true])), ...(t.meta || {})}};
 }
+// 各类单据统一成 { meta, items, creator, handler, remark, voided }
+function slipData(kind, o) {
+  const K = SLIP_KINDS[kind];
+  const row = (i, unitPrice) => { const p = prodOf(i.productId); return {p, qty:lineQty(i), unit:lineUnit(i, p), price:unitPrice, amount:i.qty * (kind === 'transfer' ? i.cost || 0 : +i.price || 0), batch:i.batches ? batchText(i.batches) : '', note:i.note || ''}; };
+  const voided = o.status === '已作废' ? ['作废：', o.voidBy, o.voidAt && fmtTime(o.voidAt), o.voidReason].filter(Boolean).join(' ') : '';
+  if (kind === 'transfer') return {meta:{no:o.no, date:o.date, wh:['仓库', whName(o.from) + ' → ' + whName(o.to)], handler:o.handler},
+    items:o.items.map(i => row(i, (i.cost || 0) * (i.rate || 1))), creator:o.creator, handler:o.handler, remark:o.remark, voided};
+  if (kind === 'sales' || kind === 'purchase') {
+    const C = ORD[kind], party = byId(db[C.party], o[C.partyKey]) || {};
+    return {meta:{no:o.no, date:o.date, party:[K.party, party.name || ''], contact:[party.contact, party.phone].filter(Boolean).join(' '), address:party.address || '', wh:o.wh && multiWh() ? whName(o.wh) : ''},
+      items:o.items.map(i => row(i, linePrice(i))), creator:o.creator, handler:'', remark:o.remark, voided:o.status === '已作废' ? '作废：' : ''};
+  }
+  return {meta:{no:o.no, type:o.type, date:o.date, party:[K.party, o.party || ''], wh:multiWh() || (o.wh && o.wh !== META.defaultWh) ? whName(o.wh) : '', handler:o.handler},
+    items:o.items.map(i => row(i, linePrice(i))), creator:o.creator, handler:o.handler, remark:o.remark, voided};
+}
+function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {}) {
+  const K = SLIP_KINDS[kind], d = slipData(kind, o), hasBatch = d.items.some(i => i.batch);
+  const cols = tpl.cols.filter(c => c.on && (showMoney || !['price', 'amount'].includes(c.k)) && (c.k !== 'batch' || hasBatch));
+  const batchInNote = hasBatch && !cols.some(c => c.k === 'batch');  // 没有单独的批次列时，批次写进备注
+  const val = (k, it, n) => ({idx:n + 1, sku:esc(it.p.sku), barcode:esc(it.p.barcode || ''), name:esc(it.p.name), spec:esc(it.p.spec || ''), unit:esc(it.unit), qty:it.qty,
+    price:(+it.price || 0).toFixed(2), amount:it.amount.toFixed(2), batch:esc(it.batch), note:esc(batchInNote ? [it.batch && '批次 ' + it.batch, it.note].filter(Boolean).join('；') : it.note)})[k];
+  const align = k => k === 'idx' || k === 'unit' ? 'c' : ['qty', 'price', 'amount'].includes(k) ? 'r' : '';
+  const rows = d.items.map((it, n) => `<tr>${cols.map(c => `<td class="${align(c.k)}">${val(c.k, it, n)}</td>`).join('')}</tr>`);
+  for (let k = rows.length; k < minRows; k++) rows.push(`<tr>${'<td>&nbsp;</td>'.repeat(cols.length)}</tr>`);
+  const amt = sum(d.items, i => i.amount), first = cols.findIndex(c => c.k === 'qty' || c.k === 'amount');
+  const total = first < 0 ? '' : `<tr>${first ? `<td colspan="${first}" class="r"><b>合计</b></td>` : ''}${cols.slice(first).map(c => `<td class="r">${c.k === 'qty' ? `<b>${sum(d.items, i => i.qty)}</b>` : c.k === 'amount' ? `<b>${amt.toFixed(2)}</b>` : ''}</td>`).join('')}</tr>`;
+  const meta = K.meta.filter(k => tpl.meta[k]).map(k => {
+    const v = d.meta[k], [l, x] = Array.isArray(v) ? v : [SLIP_META[k], v];
+    return x || k === 'party' || k === 'handler' ? `<span>${esc(l)}：${k === 'no' ? `<b>${esc(x)}</b>` : esc(x || '')}</span>` : '';
+  }).join('');
+  const auto = {'制单':d.creator, '制单人':d.creator, '经手':d.handler, '经手人':d.handler};
+  const signs = String(tpl.signs || '').split(/[,，、]+/).map(x => x.trim()).filter(Boolean);
+  const lines = t => String(t || '').split('\n').filter(x => x.trim()).map(x => `<div>${esc(x)}</div>`).join('');
+  return `<div class="slip-wrap" style="font-size:${+tpl.fontSize || 12}px">${d.voided ? '<div class="slip-stamp">作废</div>' : ''}
+  <div class="s-title"><h1>${esc(db.settings.company)}</h1>${tpl.header ? `<div class="s-head">${lines(tpl.header)}</div>` : ''}<h2>${esc(tpl.title || K.name)}</h2></div>
+  <div class="s-meta">${meta}</div>
+  <table><thead><tr>${cols.map(c => `<th>${esc(colLabel(K, c))}</th>`).join('')}</tr></thead>
+  <tbody>${rows.join('')}
+  ${total}
+  ${showMoney && tpl.upper && cols.some(c => c.k === 'amount') ? `<tr><td colspan="${cols.length}">金额大写：${rmbUpper(amt)}</td></tr>` : ''}
+  ${d.remark ? `<tr><td colspan="${cols.length}">备注：${esc(d.remark)}</td></tr>` : ''}</tbody></table>
+  ${signs.length ? `<div class="s-sign">${signs.map(x => `<span>${esc(x)}：${esc(auto[x] || '')}</span>`).join('')}</div>` : ''}
+  ${tpl.footer ? `<div class="s-foot">${lines(tpl.footer)}</div>` : ''}
+  ${d.voided.length > 3 ? `<div class="s-meta" style="margin-top:6px"><span>${esc(d.voided)}</span></div>` : ''}</div>`;
+}
+const slipHtml = (o, opts) => slipRender(o.dir, o, opts);
+const printFoot = (kind, n) => slipTpl(kind).printer ? `<div class="foot">打印人：${esc(ME.name)} · ${fmtTime(new Date())}${n ? ' · 第 ' + n + ' 次打印' : ''}</div>` : '';
 function printFrame(title, body, paperKey) {
   const paper = PAPERS[paperKey] || PRINT_ONLY[paperKey] || PAPERS.a4;
   const css = `@page{size:${paper[1]};margin:8mm 10mm}*{box-sizing:border-box;margin:0;padding:0}
   body{font-family:"SimSun","Songti SC","Microsoft YaHei",serif;color:#000;font-size:12px}
-  table{border-collapse:collapse;width:100%;margin-top:4px}th,td{border:1px solid #000;padding:3px 5px;font-size:12px;line-height:1.35}th{font-weight:700;text-align:center}
+  table{border-collapse:collapse;width:100%;margin-top:4px}th,td{border:1px solid #000;padding:3px 5px;font-size:1em;line-height:1.35}th{font-weight:700;text-align:center}
   thead{display:table-header-group}tr{page-break-inside:avoid}
-  .s-title{text-align:center}.s-title h1{font-size:17px}.s-title h2{font-size:15px;letter-spacing:.5em;margin:2px 0 6px}
-  .s-meta{display:flex;justify-content:space-between;gap:10px;margin:2px 0}.s-sign{display:flex;justify-content:space-between;margin-top:12px}
+  .s-title{text-align:center}.s-title h1{font-size:1.42em}.s-title h2{font-size:1.25em;letter-spacing:.5em;margin:2px 0 6px}.s-head{font-size:.92em}
+  .s-meta{display:flex;justify-content:space-between;flex-wrap:wrap;gap:2px 16px;margin:2px 0}.s-sign{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 16px;margin-top:12px}.s-foot{margin-top:8px;font-size:.92em}
   .r{text-align:right}.c{text-align:center}.slip-wrap{position:relative}.page{page-break-after:always}.page:last-child{page-break-after:auto}
   .slip-stamp{position:absolute;right:30px;top:10px;border:3px solid #000;font-size:22px;font-weight:800;padding:2px 14px;transform:rotate(-12deg);letter-spacing:.3em}
   .foot{margin-top:6px;font-size:10px;color:#444;text-align:right}`;
@@ -1117,7 +1205,7 @@ async function docPrint(id) {
   const paper = prefs.paper || 'a4', showMoney = canMoney() && prefs.slipMoney !== false;
   let n = (o.printCount || 0) + 1;
   try { n = (await api('POST', `/api/stockdocs/${id}/print`, {})).printCount; o.printCount = n; } catch (e) { return toast(e.message, 'error'); }
-  printFrame(o.no, `<div class="page">${slipHtml(o, {showMoney, minRows:PAPERS[paper][2]})}<div class="foot">打印人：${esc(ME.name)} · ${fmtTime(new Date())} · 第 ${n} 次打印</div></div>`, paper);
+  printFrame(o.no, `<div class="page">${slipHtml(o, {showMoney, minRows:PAPERS[paper][2]})}${printFoot(o.dir, n)}</div>`, paper);
 }
 function docView(id) {
   const o = byId(db.stockDocs, id); if (!o) return toast('单据不存在或无权查看', 'error');
@@ -1446,7 +1534,8 @@ function transferModal() {
   if (!multiWh()) return confirmBox('调拨需要至少两个仓库。现在只有一个仓库，先新增一个？', () => (isAdmin() ? whEdit() : toast('请让管理员在「库存管理 → 仓库」里新增仓库', 'info')), {title:'还没有第二个仓库', danger:false, okText:'新增仓库'});
   const W = whs(), draft = {from:ui.invWh && byId(db.warehouses, ui.invWh) ? ui.invWh : W[0].id, items:[]};
   draft.to = (W.find(w => w.id !== draft.from) || W[1]).id;
-  const blank = () => ({productId:'', qty:1, note:''});
+  const blank = () => ({productId:'', unit:'', qty:1, note:''});
+  const baseQ = it => (+it.qty || 0) * rateOf(byId(db.products, it.productId), it.unit);
   draft.items.push(blank());
   openModal(`${modalHead('新建调拨单')}<div class="m-body"><div class="form-grid">
     <label class="field"><span>调出仓库 <i>*</i></span><select id="tFrom">${whOpts(draft.from)}</select></label>
@@ -1462,8 +1551,8 @@ function transferModal() {
   const tb = $('#tItems');
   const renderRows = focusLast => {
     tb.innerHTML = draft.items.map((it, i) => { const p = it.productId && byId(db.products, it.productId); return `<tr>
-      <td><input list="tProdList" data-i="${i}" data-k="product" value="${p ? esc(prodLabel(p)) : ''}" placeholder="编码 / 条码 / 名称"></td><td>${p ? esc(p.unit) : ''}</td>
-      <td class="num ${p && whQty(p, draft.from) < it.qty ? 'neg' : ''}">${p ? whQty(p, draft.from) : ''}</td><td class="num sub-t">${p ? whQty(p, draft.to) : ''}</td>
+      <td><input list="tProdList" data-i="${i}" data-k="product" value="${p ? esc(prodLabel(p)) : ''}" placeholder="编码 / 条码 / 名称"></td><td>${unitSel(p, it.unit, i)}</td>
+      <td class="num ${p && whQty(p, draft.from) < baseQ(it) ? 'neg' : ''}">${p ? whQty(p, draft.from) : ''}</td><td class="num sub-t">${p ? whQty(p, draft.to) : ''}</td>
       <td><input type="number" min="1" step="1" data-i="${i}" data-k="qty" value="${it.qty}"></td><td><input data-i="${i}" data-k="note" value="${esc(it.note)}"></td>
       <td><button class="icon-btn sm" data-del="${i}">${ic('trash')}</button></td></tr>`; }).join('');
     $('#tQty').textContent = num(sum(draft.items.filter(i => i.productId), i => +i.qty || 0));
@@ -1472,13 +1561,14 @@ function transferModal() {
   const pick = (i, v) => {
     const p = findProduct(v);
     if (!p) { if (v) toast('未找到商品：' + v, 'error'); draft.items[i].productId = ''; renderRows(); return; }
-    const dup = draft.items.findIndex((x, k) => k !== i && x.productId === p.id);
+    const unit = unitByCode(p, v) || p.unit;
+    const dup = draft.items.findIndex((x, k) => k !== i && x.productId === p.id && (x.unit || p.unit) === unit);
     if (dup >= 0) { draft.items[dup].qty = (+draft.items[dup].qty || 0) + 1; draft.items[i] = blank(); renderRows(true); return toast(p.name + ' 已在明细中，数量 +1', 'info'); }
-    draft.items[i].productId = p.id;
+    Object.assign(draft.items[i], {productId:p.id, unit});
     if (i === draft.items.length - 1) draft.items.push(blank());
     renderRows(true);
   };
-  tb.addEventListener('change', e => { if (e.target.dataset.k === 'product') pick(+e.target.dataset.i, e.target.value); });
+  tb.addEventListener('change', e => { const k = e.target.dataset.k, i = +e.target.dataset.i; if (k === 'product') pick(i, e.target.value); if (k === 'unit') { draft.items[i].unit = e.target.value; renderRows(); } });
   tb.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.k === 'product') { e.preventDefault(); pick(+e.target.dataset.i, e.target.value); } });
   tb.addEventListener('input', e => { const k = e.target.dataset.k, i = +e.target.dataset.i; if (k === 'qty' || k === 'note') { draft.items[i][k] = k === 'qty' ? +e.target.value : e.target.value; if (k === 'qty') $('#tQty').textContent = num(sum(draft.items.filter(x => x.productId), x => +x.qty || 0)); } });
   tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { draft.items.splice(+b.dataset.del, 1); if (!draft.items.length) draft.items.push(blank()); renderRows(); } });
@@ -1490,12 +1580,12 @@ function transferModal() {
     if (draft.from === draft.to) return toast('调出仓库和调入仓库不能相同', 'error');
     if (!items.length) return toast('请至少添加一个商品', 'error');
     if (items.some(i => !Number.isInteger(+i.qty) || +i.qty <= 0)) return toast('数量必须为正整数', 'error');
-    const need = {}; items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + +i.qty; });
+    const need = {}; items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + baseQ(i); });
     const lack = Object.entries(need).map(([pid, q]) => ({p:byId(db.products, pid), q})).filter(x => whQty(x.p, draft.from) < x.q);
     if (lack.length) return toast(whName(draft.from) + '库存不足：' + lack.map(x => `${x.p.name}（需 ${x.q}，现有 ${whQty(x.p, draft.from)}）`).join('、'), 'error');
     $('#tSave').disabled = true;
     const r = await mutate('POST', '/api/transfers', {from:draft.from, to:draft.to, date:$('#tDate').value, handler:$('#tHandler').value.trim(), remark:$('#tRemark').value.trim(),
-      items:items.map(i => ({productId:i.productId, qty:+i.qty, note:i.note}))}, r => '调拨单已保存：' + r.no);
+      items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, note:i.note}))}, r => '调拨单已保存：' + r.no);
     if (!r) { $('#tSave').disabled = false; return; }
     ui.invTab = 'transfer'; if (current() === 'inventory') render();
     if (andPrint) transferPrint(r.id);
@@ -1504,19 +1594,7 @@ function transferModal() {
   if ($('#tSavePrint')) $('#tSavePrint').onclick = () => save(true);
   renderRows(); tb.querySelector('[data-k=product]').focus();
 }
-function transferSlip(o, showMoney) {
-  const cols = showMoney ? 8 : 7;
-  return `<div class="slip-wrap">${o.status === '已作废' ? '<div class="slip-stamp">作废</div>' : ''}
-  <div class="s-title"><h1>${esc(db.settings.company)}</h1><h2>调拨单</h2></div>
-  <div class="s-meta"><span>单号：<b>${o.no}</b></span><span>日期：${o.date}</span></div>
-  <div class="s-meta"><span>调出仓库：${esc(whName(o.from))}</span><span>调入仓库：${esc(whName(o.to))}</span><span>经手人：${esc(o.handler || '')}</span></div>
-  <table><thead><tr><th style="width:34px">序号</th><th>商品编码</th><th>商品名称</th><th>规格型号</th><th style="width:42px">单位</th><th style="width:60px">数量</th>${showMoney ? '<th style="width:84px">成本金额</th>' : ''}<th>批次 / 备注</th></tr></thead>
-  <tbody>${o.items.map((i, n) => { const p = prodOf(i.productId); return `<tr><td class="c">${n + 1}</td><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.spec || '')}</td><td class="c">${esc(p.unit)}</td><td class="r">${i.qty}</td>${showMoney ? `<td class="r">${(i.qty * (i.cost || 0)).toFixed(2)}</td>` : ''}<td>${esc([i.batches ? batchText(i.batches) : '', i.note].filter(Boolean).join('；'))}</td></tr>`; }).join('')}
-  <tr><td colspan="5" class="r"><b>合计</b></td><td class="r"><b>${trQty(o)}</b></td>${showMoney ? `<td class="r"><b>${sum(o.items, i => i.qty * (i.cost || 0)).toFixed(2)}</b></td>` : ''}<td></td></tr>
-  ${o.remark ? `<tr><td colspan="${cols}">备注：${esc(o.remark)}</td></tr>` : ''}</tbody></table>
-  <div class="s-sign"><span>制单：${esc(o.creator || '')}</span><span>调出仓管：</span><span>调入仓管：</span><span>经手：${esc(o.handler || '')}</span></div>
-  ${o.status === '已作废' ? `<div class="s-meta" style="margin-top:6px"><span>作废：${esc(o.voidBy || '')} ${fmtTime(o.voidAt)} ${esc(o.voidReason || '')}</span></div>` : ''}</div>`;
-}
+const transferSlip = (o, showMoney) => slipRender('transfer', o, {showMoney});
 function transferView(id) {
   const o = byId(db.transferDocs, id); if (!o) return toast('调拨单不存在或无权查看', 'error');
   openModal(`${modalHead('调拨单 · ' + o.no + ' ' + badge(o.status, o.status === '正常' ? 'blue' : 'gray'))}
@@ -1528,7 +1606,7 @@ async function transferPrint(id) {
   const o = byId(db.transferDocs, id); if (!o) return;
   let n;
   try { n = (await api('POST', `/api/transfers/${id}/print`, {})).printCount; o.printCount = n; } catch (e) { return toast(e.message, 'error'); }
-  printFrame(o.no, `<div class="page">${transferSlip(o, canMoney())}<div class="foot">打印人：${esc(ME.name)} · ${fmtTime(new Date())} · 第 ${n} 次打印</div></div>`, prefs.paper || 'a4');
+  printFrame(o.no, `<div class="page">${transferSlip(o, canMoney())}${printFoot('transfer', n)}</div>`, prefs.paper || 'a4');
 }
 function transferVoid(id) {
   const o = byId(db.transferDocs, id);
@@ -1867,38 +1945,40 @@ function orderOps(kind, o) {
 }
 function orderModal(kind, id) {
   const C = ORD[kind], o = id ? byId(db[C.db], id) : null;
-  const draft = {items:o ? o.items.map(i => ({...i})) : [{productId:'', qty:1, price:0}]};
+  const draft = {items:o ? o.items.map(i => ({productId:i.productId, unit:i.unit || '', qty:lineQty(i), price:linePrice(i)})) : [{productId:'', unit:'', qty:1, price:0}]};
   openModal(`${modalHead((o ? '编辑' : '新建') + C.title + (o ? ' · ' + o.no : ''))}
   <div class="m-body"><div class="form-grid">
     <label class="field"><span>${C.partyLabel} <i>*</i></span><select id="oParty"><option value="">请选择${C.partyLabel}</option>${db[C.party].map(p => `<option value="${p.id}" ${o && p.id === o[C.partyKey] ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
     <label class="field"><span>单据日期 <i>*</i></span><input type="date" id="oDate" value="${o ? o.date : today()}"></label>
   </div>
   <div class="line-head"><b>商品明细</b><button class="btn sm" id="oAdd">${ic('plus')}添加商品</button></div>
-  <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:240px">商品</th><th style="width:110px">数量</th><th style="width:130px">单价</th><th class="num" style="width:130px">小计</th><th style="width:44px"></th></tr></thead><tbody id="oItems"></tbody></table></div>
+  <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:240px">商品</th><th style="width:80px">单位</th><th style="width:110px">数量</th><th style="width:130px">单价</th><th class="num" style="width:130px">小计</th><th style="width:44px"></th></tr></thead><tbody id="oItems"></tbody></table></div>
   <label class="field" style="margin-top:16px"><span>备注</span><textarea id="oRemark" rows="2">${esc(o ? o.remark : '')}</textarea></label>
   <div class="o-total">合计金额<b id="oTotal">¥0.00</b></div></div>
   <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="oSave">保存订单</button></div>`, 'lg');
   const tb = $('#oItems');
   const updTotal = () => { $('#oTotal').textContent = money(sum(draft.items, i => i.qty * i.price)); };
   const renderItems = () => {
-    tb.innerHTML = draft.items.map((it, i) => `<tr>
+    tb.innerHTML = draft.items.map((it, i) => { const p = byId(db.products, it.productId); return `<tr>
       <td><select data-i="${i}" data-k="productId"><option value="">选择商品</option>${db.products.map(p => `<option value="${p.id}" ${p.id === it.productId ? 'selected' : ''}>${esc(p.name)}（库存 ${p.stock}${esc(p.unit)}）</option>`).join('')}</select></td>
+      <td>${unitSel(p, it.unit, i)}</td>
       <td><input type="number" min="1" data-i="${i}" data-k="qty" value="${it.qty}"></td>
       <td><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"></td>
       <td class="num sub">${money(it.qty * it.price)}</td>
-      <td><button class="icon-btn sm" data-del="${i}" title="删除">${ic('trash')}</button></td></tr>`).join('');
+      <td><button class="icon-btn sm" data-del="${i}" title="删除">${ic('trash')}</button></td></tr>`; }).join('');
     updTotal();
   };
   tb.addEventListener('change', e => {
     const t = e.target, i = +t.dataset.i;
-    if (t.dataset.k === 'productId') { const p = byId(db.products, t.value); draft.items[i].productId = t.value; if (p) { draft.items[i].price = p[C.priceKey]; draft.items[i].cost = p.cost; } renderItems(); }
+    if (t.dataset.k === 'productId') { const p = byId(db.products, t.value); draft.items[i].productId = t.value; draft.items[i].unit = p ? p.unit : ''; if (p) draft.items[i].price = p[C.priceKey]; renderItems(); }
+    if (t.dataset.k === 'unit') { const it = draft.items[i], p = byId(db.products, it.productId), r0 = rateOf(p, it.unit); it.unit = t.value; it.price = +(it.price / r0 * rateOf(p, it.unit)).toFixed(2); renderItems(); }
   });
   tb.addEventListener('input', e => {
     const t = e.target, i = +t.dataset.i, k = t.dataset.k;
     if (k === 'qty' || k === 'price') { draft.items[i][k] = +t.value || 0; t.closest('tr').querySelector('.sub').textContent = money(draft.items[i].qty * draft.items[i].price); updTotal(); }
   });
-  tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { draft.items.splice(+b.dataset.del, 1); if (!draft.items.length) draft.items.push({productId:'', qty:1, price:0}); renderItems(); } });
-  $('#oAdd').onclick = () => { draft.items.push({productId:'', qty:1, price:0}); renderItems(); };
+  tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { draft.items.splice(+b.dataset.del, 1); if (!draft.items.length) draft.items.push({productId:'', unit:'', qty:1, price:0}); renderItems(); } });
+  $('#oAdd').onclick = () => { draft.items.push({productId:'', unit:'', qty:1, price:0}); renderItems(); };
   $('#oSave').onclick = () => {
     const party = $('#oParty').value, date = $('#oDate').value, remark = $('#oRemark').value.trim();
     const items = draft.items.filter(i => i.productId);
@@ -1907,7 +1987,7 @@ function orderModal(kind, id) {
     if (!items.length) return toast('请至少添加一个商品', 'error');
     if (items.some(i => i.qty <= 0 || !Number.isInteger(i.qty))) return toast('数量必须为正整数', 'error');
     if (items.some(i => i.price < 0)) return toast('单价不能为负', 'error');
-    const body = {partyId:party, date, remark, items:items.map(i => ({productId:i.productId, qty:i.qty, price:i.price}))};
+    const body = {partyId:party, date, remark, items:items.map(i => ({productId:i.productId, unit:i.unit, qty:i.qty, price:i.price}))};
     const b = $('#oSave'); b.disabled = true;
     mutate(o ? 'PUT' : 'POST', '/api/orders/' + kind + (o ? '/' + o.id : ''), body, r => o ? '订单已更新' : '订单已创建：' + r.no)
       .finally(() => { b.disabled = false; });
@@ -1928,13 +2008,17 @@ function orderView(kind, id) {
       ${o.wh && multiWh() ? `<div><span>${kind === 'sales' ? '发货' : '入库'}仓库：</span>${esc(whName(o.wh))}</div>` : ''}
     </div>
     <table class="tbl compact"><thead><tr><th>#</th><th>商品</th><th>单位</th><th class="num">数量</th><th class="num">单价</th><th class="num">金额</th></tr></thead><tbody>
-    ${o.items.map((i, n) => { const p = byId(db.products, i.productId) || {name:'已删除商品', unit:''}; return `<tr><td>${n + 1}</td><td>${esc(p.name)}</td><td>${esc(p.unit)}</td><td class="num">${i.qty}</td><td class="num">${money(i.price)}</td><td class="num">${money(i.qty * i.price)}</td></tr>`; }).join('')}
+    ${o.items.map((i, n) => { const p = byId(db.products, i.productId) || {name:'已删除商品', unit:''}; return `<tr><td>${n + 1}</td><td>${esc(p.name)}</td><td>${esc(lineUnit(i, p))}</td><td class="num">${lineQty(i)}</td><td class="num">${money(linePrice(i))}</td><td class="num">${money(i.qty * i.price)}</td></tr>`; }).join('')}
     </tbody></table>
     <div class="doc-sum"><div>合计：<b>${money(total)}</b></div><div>已${C.payWord}：<b class="pos">${money(paid)}</b></div><div>未${C.payWord}：<b class="neg">${money(total - paid)}</b></div></div>
     ${o.remark ? `<p style="margin-top:12px;color:var(--muted)">备注：${esc(o.remark)}</p>` : ''}
     ${pays.length ? `<h4 style="margin:18px 0 8px">${C.payWord}记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(f.method || '')}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td></tr>`).join('')}</tbody></table>` : ''}
   </div></div>
-  <div class="m-foot"><div class="ops" style="margin-right:auto">${orderOps(kind, o).replace(tbtn('查看', 'orderView', kind + '|' + o.id), '')}</div><button class="btn" data-act="print">${ic('printer')}打印</button><button class="btn primary" data-act="closeModal">关闭</button></div>`, 'lg');
+  <div class="m-foot"><div class="ops" style="margin-right:auto">${orderOps(kind, o).replace(tbtn('查看', 'orderView', kind + '|' + o.id), '')}</div><button class="btn" data-act="orderPrint" data-id="${kind}|${o.id}">${ic('printer')}打印</button><button class="btn primary" data-act="closeModal">关闭</button></div>`, 'lg');
+}
+function orderPrint(kind, id) {
+  const o = byId(db[ORD[kind].db], id), paper = prefs.paper || 'a4'; if (!o) return;
+  printFrame(o.no, `<div class="page">${slipRender(kind, o, {showMoney:true, minRows:PAPERS[paper][2]})}${printFoot(kind)}</div>`, paper);
 }
 function orderAct(action, kind, id) {
   const C = ORD[kind], o = byId(db[C.db], id), url = `/api/orders/${kind}/${id}`;
@@ -2162,13 +2246,14 @@ function pageReports() {
 /* ================= 页面：设置 ================= */
 function pageSettings() {
   const items = [['general', '常规设置']];
-  if (isAdmin()) items.push(['users', '用户管理'], ['roles', '角色管理'], ['data', '数据管理'], ['audit', '操作日志']);
+  if (isAdmin()) items.push(['print', '打印模板'], ['users', '用户管理'], ['roles', '角色管理'], ['data', '数据管理'], ['audit', '操作日志']);
   items.push(['pro', '专业版' + (isPro() ? '' : ' ✦')]);
   if (!items.some(i => i[0] === ui.setTab)) ui.setTab = 'general';
   const st = db.settings;
   $('#view').innerHTML = pageHead('系统设置', '账户、偏好、用户权限与数据管理') + tabs('setTab', items) + '<div id="setBody"></div>';
   const body = $('#setBody');
   if (ui.setTab === 'pro') proPage(body);
+  else if (ui.setTab === 'print') printTplPage(body);
   else if (ui.setTab === 'general') {
     body.innerHTML = `<div class="grid g2">
     <div class="card"><div class="card-head"><h3>我的账户</h3></div><div class="card-body">
@@ -2225,6 +2310,55 @@ function pageSettings() {
       ${rows.map(r => `<tr><td>${fmtTime(r.time)}</td><td>${esc(r.username)}</td><td>${badge(r.action, 'primary plain')}</td><td>${esc(r.detail)}</td><td class="sub-t">${esc(r.ip)}</td></tr>`).join('') || '<tr><td colspan="5"><div class="empty">暂无日志</div></td></tr>'}</tbody></table></div>`;
     }).catch(e => toast(e.message, 'error'));
   }
+}
+/* ---------- 打印模板设置 ---------- */
+// 预览用最近一张该类单据；还没有单据时用前几个商品拼一张示例
+function sampleDoc(kind) {
+  const real = kind === 'in' || kind === 'out' ? db.stockDocs.find(o => o.dir === kind) : kind === 'transfer' ? db.transferDocs[0] : db[ORD[kind].db][0];
+  if (real) return real;
+  const items = db.products.slice(0, 3).map((p, n) => ({productId:p.id, qty:n + 2, price:p.cost || 0, cost:p.cost || 0, note:''}));
+  const base = {no:'示例单号', date:today(), items, creator:ME.name, handler:ME.name, remark:'', status:'正常'};
+  if (kind === 'transfer') return {...base, from:META.defaultWh, to:META.defaultWh};
+  if (kind === 'sales' || kind === 'purchase') return {...base, [ORD[kind].partyKey]:(db[ORD[kind].party][0] || {}).id};
+  return {...base, dir:kind, type:META.docTypes[kind][0], party:'示例单位'};
+}
+function printTplPage(body) {
+  const kind = SLIP_KINDS[ui.tplKind] ? ui.tplKind : 'out', K = SLIP_KINDS[kind], t = slipTpl(kind), cols = t.cols, sample = sampleDoc(kind);
+  const saved = db.settings.printTpl || {};
+  body.innerHTML = `<div class="tp-grid">
+  <div class="card"><div class="card-body tp-form">
+    <label class="field"><span>单据</span><select id="tpKind">${Object.entries(SLIP_KINDS).map(([k, v]) => `<option value="${k}" ${k === kind ? 'selected' : ''}>${v.name}${saved[k] ? '（已自定义）' : ''}</option>`).join('')}</select></label>
+    <label class="field"><span>单据标题</span><input id="tpTitle" maxlength="20" value="${esc(t.title)}" placeholder="${K.name}（例如改成「送货单」）"></label>
+    <label class="field"><span>抬头附加信息（公司名下方，可多行）</span><textarea id="tpHeader" rows="2" maxlength="300" placeholder="地址：…  电话：…">${esc(t.header)}</textarea></label>
+    <div class="field"><span>表头项目</span><div style="display:flex;flex-wrap:wrap;gap:4px 16px">${K.meta.map(k => `<label class="chk"><input type="checkbox" data-meta="${k}" ${t.meta[k] ? 'checked' : ''}>${k === 'party' ? K.party : SLIP_META[k]}</label>`).join('')}</div></div>
+    <div class="field"><span>明细列：勾选要打印的列，可以改列名、用箭头调顺序</span><div id="tpCols"></div></div>
+    <label class="field"><span>签字栏（逗号分隔；「制单」「经手」会自动填上名字）</span><input id="tpSigns" maxlength="100" value="${esc(t.signs)}"></label>
+    <label class="field"><span>底部说明（可多行）</span><textarea id="tpFooter" rows="2" maxlength="300" placeholder="例如：货物当面点清，质量问题请于 3 日内联系">${esc(t.footer)}</textarea></label>
+    <div style="display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center"><label class="chk">字号 <select id="tpFs" class="select" style="margin-left:6px">${[10, 11, 12, 13, 14, 16].map(n => `<option ${n === +t.fontSize ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label class="chk"><input type="checkbox" id="tpUpper" ${t.upper ? 'checked' : ''}>打印金额大写</label><label class="chk"><input type="checkbox" id="tpPrinter" ${t.printer ? 'checked' : ''}>页脚打印人和时间</label></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">${saved[kind] ? '<button class="btn" id="tpReset">恢复默认</button>' : ''}<button class="btn primary" id="tpSave">${ic('check')}保存模板</button></div>
+  </div></div>
+  <div class="card"><div class="card-head"><h3>预览</h3><span class="sub-t">${sample.no === '示例单号' ? '示例数据' : '用最近一张' + K.name + '预览'}；纸张在打印时选择</span></div><div class="card-body"><div class="slip-preview" id="tpPrev"></div></div></div></div>`;
+  const read = () => ({title:$('#tpTitle').value.trim(), header:$('#tpHeader').value.trim(), footer:$('#tpFooter').value.trim(), signs:$('#tpSigns').value.trim(), fontSize:+$('#tpFs').value,
+    upper:$('#tpUpper').checked, printer:$('#tpPrinter').checked, meta:Object.fromEntries([...body.querySelectorAll('[data-meta]')].map(x => [x.dataset.meta, x.checked])), cols});
+  const prev = () => { $('#tpPrev').innerHTML = slipRender(kind, sample, {showMoney:true, tpl:read()}); };
+  const drawCols = () => {
+    $('#tpCols').innerHTML = cols.map((c, i) => `<div class="tp-col"><input type="checkbox" data-c="${i}" ${c.on ? 'checked' : ''} title="打印这一列">
+      <input data-l="${i}" maxlength="10" value="${esc(c.label)}" placeholder="${esc(colLabel(K, {k:c.k}))}">
+      <button class="icon-btn sm" data-mv="${i}|-1" ${i ? '' : 'disabled'} title="上移">↑</button><button class="icon-btn sm" data-mv="${i}|1" ${i < cols.length - 1 ? '' : 'disabled'} title="下移">↓</button></div>`).join('');
+    prev();
+  };
+  body.addEventListener('input', e => { const x = e.target; if (x.dataset.l != null) cols[+x.dataset.l].label = x.value.trim(); if (x.id !== 'tpKind') prev(); });
+  body.addEventListener('change', e => { const x = e.target; if (x.dataset.c != null) cols[+x.dataset.c].on = x.checked; if (x.id !== 'tpKind') prev(); });
+  body.addEventListener('click', e => {
+    const b = e.target.closest('[data-mv]'); if (!b) return;
+    const [i, d] = b.dataset.mv.split('|').map(Number);
+    [cols[i], cols[i + d]] = [cols[i + d], cols[i]]; drawCols();
+  });
+  $('#tpKind').onchange = e => { ui.tplKind = e.target.value; render(); };
+  $('#tpSave').onclick = () => mutate('PUT', '/api/settings/print', {kind, tpl:read()}, K.name + '打印模板已保存');
+  if ($('#tpReset')) $('#tpReset').onclick = () => confirmBox(K.name + '的打印模板恢复成默认样式？', () => mutate('PUT', '/api/settings/print', {kind, tpl:null}, '已恢复默认'), {title:'恢复默认', danger:false, okText:'恢复'});
+  drawCols();
 }
 let USERS = [];
 const fmtTime = t => t ? new Date(t).toLocaleString('zh-CN', {hour12:false}) : '-';
@@ -2401,8 +2535,7 @@ const A = {
   orderNew: k => orderModal(k),
   orderEdit: v => { const [k, id] = split(v); closeModal(); orderModal(k, id); },
   orderView: v => orderView(...split(v)),
-  // 订单详情打印整页（页面的 @media print 只留单据区域）；安卓客户端把当前页面去掉脚本后交给系统打印
-  print: () => NATIVE ? printHtml('单据', document.documentElement.outerHTML.replace(/<script[\s\S]*?<\/script>/gi, '')) : window.print(),
+  orderPrint: v => orderPrint(...split(v)),
   finAdd,
   finDel: id => confirmBox('确定删除这条收支记录吗？', () => mutate('DELETE', '/api/finance/' + id, undefined, '已删除')),
   rptExport: () => exportCSV('月度经营报表', ['月份', '订单数', '销售额', '销售成本', '毛利', '毛利率%', '采购额', '运营费用', '净利润'], ui.rptStats.map(s => [s.mk, s.count, s.sales.toFixed(2), s.cost.toFixed(2), s.gp.toFixed(2), s.rate.toFixed(1), s.purchase.toFixed(2), s.exp.toFixed(2), s.net.toFixed(2)])),
