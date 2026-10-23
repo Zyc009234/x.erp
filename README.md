@@ -38,6 +38,13 @@
 node tools/license.js issue --to "客户名称" --years 1
 ```
 
+日常发码推荐用订单后台：双击 `tools/订单后台.cmd`（或 `node tools/orders.js`），会在本机浏览器打开一个只监听 127.0.0.1 的页面：
+
+- 填客户名称、微信、金额、付款方式，点「确认已收款，发码」，自动签发并生成可直接发给客户的微信消息
+- 续费：在原订单上点「续费」，新授权码的免费升级期从旧截止日顺延
+- 按客户 / 微信 / 电话 / 授权编号搜索；筛出 30 天内升级到期的客户，方便提醒续费；导出 CSV
+- 订单存在 `%USERPROFILE%\.xerp-license\orders.json`，和私钥同目录，密钥备份工具会一起备份；用命令行签发的码启动时自动补进订单
+
 ## 目录
 
 | 路径 | 说明 |
@@ -46,6 +53,7 @@ node tools/license.js issue --to "客户名称" --years 1
 | `src/index.html` | 前端单页应用（由服务端提供） |
 | `src/client.js` | Windows 桌面客户端外壳（基于系统 Edge 内核的独立窗口） |
 | `tools/license.js` | 专业版授权码签发工具（发码方使用） |
+| `tools/orders.js` | 本机订单后台：订单记录、一键发码、续费、查询（发码方使用） |
 | `fnos/` | 飞牛 fnOS 应用打包（manifest、生命周期脚本、安装向导） |
 
 ## 直接运行
