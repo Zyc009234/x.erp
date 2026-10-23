@@ -42,6 +42,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .nav-item.on::before{content:"";position:absolute;left:-12px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:#818cf8}
 .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:11px;border-radius:10px;padding:0 7px;line-height:18px}
 .side-foot{padding:14px 20px;font-size:12px;color:#475569;white-space:nowrap;overflow:hidden}
+.pro-tag{font-size:11px;margin-left:4px;vertical-align:1px}
 .main{flex:1;margin-left:236px;min-width:0;transition:margin .2s}
 .app.collapsed .sidebar{width:72px}
 .app.collapsed .main{margin-left:72px}
@@ -290,7 +291,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v1.0.2 · 数据保存在服务器</div>
+    <div class="side-foot">v1.0.3 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -365,7 +366,13 @@ const ICONS = {
   clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
   coin:'<circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .9-3 2s1 1.7 3 2 3 .9 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2"/>',
   trash:'<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
-  refresh:'<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15"/>'
+  refresh:'<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15"/>',
+  swap:'<path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
+  tag:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 01-2.8 0L2 12V2h10l8.6 8.6a2 2 0 010 2.8z"/><circle cx="7" cy="7" r="1.5"/>',
+  calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  bulb:'<path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0012 2z"/>',
+  crown:'<path d="M2 18l2-11 5 5 3-7 3 7 5-5 2 11H2zM2 21h20"/>',
+  barcode:'<path d="M3 5v14M7 5v14M10 5v14M14 5v14M17 5v14M21 5v14"/>'
 };
 const ic = n => `<svg class="i" viewBox="0 0 24 24">${ICONS[n] || ''}</svg>`;
 const emptySvg = '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="10" y="18" width="44" height="34" rx="4"/><path d="M10 28h44M24 18l4-8h8l4 8"/><path d="M26 40h12"/></svg>';
@@ -391,8 +398,34 @@ const LS = {
   set(k, v) { try { localStorage.setItem('erp_' + k, JSON.stringify(v)); } catch (e) {} }
 };
 const prefs = Object.assign({theme:'light', pageSize:10}, LS.get('prefs', {}));
-let db = {settings:{theme:prefs.theme, pageSize:prefs.pageSize}, products:[], customers:[], suppliers:[], employees:[], sales:[], purchases:[], stockLogs:[], stockDocs:[], checkDocs:[], finance:[]};
-let ME = null, META = {modules:{}, perms:[], templates:{}, docTypes:{in:[], out:[]}}, CLIENT_MODE = false, SERVER_ADDR = '', pending = 0, dataSig = '';
+let db = {settings:{theme:prefs.theme, pageSize:prefs.pageSize}, products:[], customers:[], suppliers:[], employees:[], sales:[], purchases:[], stockLogs:[], stockDocs:[], checkDocs:[], finance:[], warehouses:[], transferDocs:[], batches:[]};
+let ME = null, META = {modules:{}, perms:[], templates:{}, docTypes:{in:[], out:[]}, defaultWh:'w1', trialDays:15}, LIC = {pro:false, mode:'none'}, CLIENT_MODE = false, SERVER_ADDR = '', pending = 0, dataSig = '';
+/* ---------- 专业版 / 仓库 / 批次 ---------- */
+const isPro = () => !!LIC.pro;
+const proTag = '<span class="badge purple plain pro-tag">专业版</span>';
+// 未激活时点专业版功能：说明并引导到激活页
+function proGate(feature) {
+  if (isPro()) return true;
+  confirmBox(`「${feature}」是专业版功能。可以先免费试用 ${META.trialDays} 天，或购买授权码激活；已有的数据不受影响。`, () => { ui.setTab = 'pro'; go('settings'); }, {title:'专业版功能', danger:false, okText:'去看看'});
+  return false;
+}
+const whs = () => db.warehouses.length ? [...db.warehouses].sort((a, b) => (b.id === META.defaultWh) - (a.id === META.defaultWh) || String(a.code || '').localeCompare(String(b.code || ''))) : [{id:META.defaultWh, name:'主仓库'}];
+const multiWh = () => db.warehouses.length > 1;
+const whName = id => (byId(db.warehouses, id || META.defaultWh) || {}).name || '已删除仓库';
+const whQty = (p, w) => !w ? p.stock : ((p.wh || {})[w] || 0);
+const whOpts = (sel, all) => (all ? `<option value="">全部仓库</option>` : '') + whs().map(w => `<option value="${w.id}" ${w.id === sel ? 'selected' : ''}>${esc(w.name)}</option>`).join('');
+const batchesOf = (pid, wh) => db.batches.filter(b => b.productId === pid && (!wh || b.wh === wh) && b.qty > 0);
+const daysLeft = d => d ? daysBetween(today(), d) : null;
+const expiryDays = () => +db.settings.expiryDays || 30;
+const expState = b => { const n = daysLeft(b.expDate); return n == null ? ['无有效期', 'gray'] : n < 0 ? ['已过期', 'red'] : n <= expiryDays() ? [`${n} 天后到期`, 'orange'] : ['正常', 'green']; };
+// 与服务端一致：未过期的先到期先出 → 无有效期 → 已过期；报损出库先出已过期的
+const fefoSort = (a, b) => (a.expDate || '9999-12-31').localeCompare(b.expDate || '9999-12-31') || (a.inDate || '').localeCompare(b.inDate || '') || a.id.localeCompare(b.id);
+function fefoOrder(list, kind) {
+  const t = today(), bad = b => b.expDate && b.expDate < t;
+  const ok = list.filter(b => !bad(b)).sort(fefoSort), exp = list.filter(bad).sort(fefoSort);
+  return kind === '报损出库' ? [...exp, ...ok] : [...ok, ...exp];
+}
+const batchText = list => (list || []).map(b => `${b.no}${b.expDate ? '（至 ' + b.expDate + '）' : ''} × ${b.qty}`).join('；');
 const isAdmin = () => !!ME && ME.role === 'admin';
 const can = k => !!ME && (ME.perms || []).includes(k);
 const canMoney = () => can('inv.cost');  // 出入库单上的价格与金额
@@ -418,10 +451,10 @@ async function api(method, path, body) {
 }
 async function reload() {
   const d = await api('GET', '/api/data');
-  ME = d.user; META = d.meta || META;
-  const sig = JSON.stringify(d.data) + JSON.stringify(d.settings) + JSON.stringify(ME.perms);
+  ME = d.user; META = d.meta || META; LIC = d.license || LIC;
+  const sig = JSON.stringify(d.data) + JSON.stringify(d.settings) + JSON.stringify(ME.perms) + JSON.stringify(LIC);
   const changed = sig !== dataSig; dataSig = sig;
-  db = {...d.data, settings:{...d.settings, version:d.version, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
+  db = {warehouses:[], transferDocs:[], batches:[], ...d.data, settings:{...d.settings, version:d.version, releaseDate:d.releaseDate, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
   return changed;
 }
 // 发起写操作 → 成功后重新拉取数据并刷新界面；失败则提示错误并保持弹窗
@@ -698,10 +731,11 @@ function catStats(orders) {
 /* ================= 页面：商品 ================= */
 const ENT = {
   products: {title:'商品', fields:[
-    {n:'sku', l:'商品编码', req:1}, {n:'name', l:'商品名称', req:1}, {n:'spec', l:'规格型号', span:1},
+    {n:'sku', l:'商品编码', req:1}, {n:'barcode', l:'条码', ph:'留空则用商品编码'}, {n:'name', l:'商品名称', req:1, span:1}, {n:'spec', l:'规格型号', span:1},
     {n:'category', l:'商品分类', type:'combo', opts:cats, ph:'可选择或直接输入'}, {n:'unit', l:'计量单位', type:'combo', opts:units, def:'个'},
     {n:'cost', l:'成本价（元）', type:'number', req:1, money:1}, {n:'price', l:'销售价（元）', type:'number', req:1, money:1},
     {n:'stock', l:'期初库存', type:'number', def:0, lockOnEdit:1}, {n:'safety', l:'安全库存', type:'number', def:10},
+    {n:'batch', l:'批次 / 保质期管理', type:'select', opts:[['', '不启用'], ['1', '启用（入库记批次，出库先到期先出）']], pro:1}, {n:'shelfDays', l:'保质期（天，选填）', type:'number', ph:'填了可按生产日期自动算有效期', pro:1},
     {n:'remark', l:'备注', type:'textarea', span:1}]},
   customers: {title:'客户', fields:[
     {n:'name', l:'客户名称', req:1, span:1}, {n:'contact', l:'联系人', req:1}, {n:'phone', l:'联系电话', req:1}, {n:'email', l:'邮箱'},
@@ -718,10 +752,19 @@ const ENT = {
 function editEntity(type, id) {
   const cfg = ENT[type], rec = id ? byId(db[type], id) : null;
   const costLocked = type === 'products' && rec && rec.stock !== 0;
-  const fields = cfg.fields.filter(f => !f.money || seesPrice()).map(f => ({...f, disabled:rec && f.lockOnEdit || f.n === 'cost' && costLocked,
-    l:f.n === 'cost' ? (rec ? '成本价（元，移动加权自动计算' + (costLocked ? '' : '，无库存时可改') + '）' : '期初成本价（元）') : f.l}));
-  formModal({title:(rec ? '编辑' : '新增') + cfg.title, fields, data:rec || {}, onSubmit:v =>
-    mutate(rec ? 'PUT' : 'POST', '/api/' + type + (rec ? '/' + rec.id : ''), v, (rec ? '已更新' : '已新增') + cfg.title)});
+  // 专业版字段：未激活时只有已启用批次的商品能看到（可以关闭，不能新开）
+  const showPro = isPro() || (rec && rec.batch);
+  const fields = cfg.fields.filter(f => (!f.money || seesPrice()) && (!f.pro || showPro)).map(f => ({...f, disabled:rec && f.lockOnEdit || f.n === 'cost' && costLocked,
+    l:f.n === 'cost' ? (rec ? '成本价（元，移动加权自动计算' + (costLocked ? '' : '，无库存时可改') + '）' : '期初成本价（元）') : f.l + (f.pro ? ' ' + proTag : '')}));
+  if (type === 'products' && !rec && multiWh()) fields.splice(fields.findIndex(f => f.n === 'stock') + 1, 0, {n:'wh', l:'期初库存放在', type:'select', opts:whs().map(w => [w.id, w.name])});
+  const data = rec ? {...rec, batch:rec.batch ? '1' : ''} : {};
+  formModal({title:(rec ? '编辑' : '新增') + cfg.title, fields, data, onSubmit:v => {
+    if (type === 'products' && rec && rec.batch && !v.batch && batchesOf(rec.id).length) {
+      return new Promise(ok => confirmBox('关闭后会清除该商品现有的批次记录（库存数量不变），之后重新开启会把当时的库存记为「期初」批次。确定关闭？', () => ok(mutate('PUT', '/api/products/' + rec.id, v, '已更新商品')), {title:'关闭批次管理'}));
+    }
+    return mutate(rec ? 'PUT' : 'POST', '/api/' + type + (rec ? '/' + rec.id : ''), v, (rec ? '已更新' : '已新增') + cfg.title);
+  }});
+  if (type === 'products' && !isPro()) $('#mform').insertAdjacentHTML('beforeend', `<p class="span2 sub-t">${proTag} 专业版还可以开启批次 / 保质期管理、打印条码标签。<a class="link" data-act="goPro">了解专业版</a></p>`);
 }
 function delEntity(type, id) {
   const rec = byId(db[type], id), cfg = ENT[type];
@@ -733,7 +776,8 @@ function pageProducts() {
     {key:'stock', label:'库存状态', options:['正常', '预警', '缺货'], test:(p, v) => v === '预警' ? p.stock < p.safety : stockStatus(p)[0] === v}
   ];
   const pr = seesPrice();
-  const btns = (can('inv.export') || isAdmin() ? `<button class="btn" data-act="export" data-id="products">${ic('download')}导出</button>` : '')
+  const btns = `<button class="btn" data-act="labelOpen">${ic('tag')}打印标签</button>`
+    + (can('inv.export') || isAdmin() ? `<button class="btn" data-act="export" data-id="products">${ic('download')}导出</button>` : '')
     + (can('prod.edit') ? `<button class="btn" data-act="importOpen">${ic('upload')}导入</button><button class="btn primary" data-act="add" data-id="products">${ic('plus')}新增商品</button>` : '');
   $('#view').innerHTML = pageHead('商品管理', '维护商品档案、规格与安全库存') + `
   <div class="grid g4 mb">
@@ -743,9 +787,9 @@ function pageProducts() {
     ${kpi('库存预警', lowStock().length, 'alert', 'red')}
   </div>
   <div class="card">${toolbar('products', {placeholder:'搜索编码 / 名称 / 规格', filters, buttons:btns})}<div id="list-products"></div></div>`;
-  mountList('products', {rows:() => db.products, search:p => p.sku + p.name + (p.spec || '') + p.category, filters, columns:[
-    {t:'商品编码', r:p => `<span class="sub-t">${esc(p.sku)}</span>`, s:p => p.sku},
-    {t:'商品名称', r:p => `<b>${esc(p.name)}</b>${p.spec ? `<div class="sub-t">${esc(p.spec)}</div>` : ''}`, s:p => p.name},
+  mountList('products', {rows:() => db.products, search:p => p.sku + (p.barcode || '') + p.name + (p.spec || '') + p.category, filters, columns:[
+    {t:'商品编码', r:p => `<span class="sub-t">${esc(p.sku)}</span>${p.barcode ? `<div class="sub-t">${ic('barcode')} ${esc(p.barcode)}</div>` : ''}`, s:p => p.sku},
+    {t:'商品名称', r:p => `<b>${esc(p.name)}</b>${p.batch ? ' <span class="badge blue plain">批次</span>' : ''}${p.spec ? `<div class="sub-t">${esc(p.spec)}</div>` : ''}`, s:p => p.name},
     {t:'分类', r:p => badge(p.category, 'primary plain')},
     {t:'单位', r:p => esc(p.unit)},
     ...(pr ? [
@@ -770,42 +814,55 @@ function pageInventory() {
   const totalQty = sum(db.products, p => p.stock), pr = seesPrice();
   const m = monthKey(today()), ml = db.stockLogs.filter(l => monthKey(l.date) === m);
   const head = (can('inv.in') ? `<button class="btn primary" data-act="docNew" data-id="in">${ic('download')}新建入库单</button>` : '')
-    + (can('inv.out') ? `<button class="btn primary" data-act="docNew" data-id="out">${ic('upload')}新建出库单</button>` : '');
+    + (can('inv.out') ? `<button class="btn primary" data-act="docNew" data-id="out">${ic('upload')}新建出库单</button>` : '')
+    + (can('inv.transfer') && (isPro() || multiWh()) ? `<button class="btn" data-act="transferNew">${ic('swap')}调拨</button>` : '');
+  const hasBatch = db.products.some(p => p.batch), exp = db.batches.filter(b => expState(b)[1] !== 'green' && b.expDate).length;
+  const tabList = [['stock', '库存总览'], ['docs', '出入库单'], ...(isPro() || db.transferDocs.length ? [['transfer', '调拨单']] : []), ['check', '盘点单'],
+    ...(hasBatch ? [['batch', '批次 / 保质期' + (exp ? ` <span class="nav-badge" style="position:static;margin-left:4px">${exp}</span>` : '')]] : []), ['summary', '收发存汇总'], ['logs', '出入库流水'], ['replenish', '补货建议']];
+  if (!tabList.some(t => t[0] === ui.invTab)) ui.invTab = 'stock';
   $('#view').innerHTML = pageHead('库存管理', '实时库存、出入库单据、流水与盘点', head) + `
   <div class="grid g4 mb">
-    ${kpi('库存总量', num(totalQty), 'box', 'primary', `<div class="trend"><span>${db.products.length} 个 SKU</span></div>`)}
+    ${kpi('库存总量', num(totalQty), 'box', 'primary', `<div class="trend"><span>${db.products.length} 个 SKU${multiWh() ? ' · ' + db.warehouses.length + ' 个仓库' : ''}</span></div>`)}
     ${pr ? kpi('库存总值（成本）', moneyK(sum(db.products, p => p.stock * p.cost)), 'coin', 'green') : kpi('库存预警', lowStock().length, 'alert', 'red')}
-    ${kpi('本月入库', num(sum(ml.filter(l => l.qty > 0), l => l.qty)), 'download', 'blue')}
-    ${kpi('本月出库', num(-sum(ml.filter(l => l.qty < 0), l => l.qty)), 'upload', 'orange')}
+    ${kpi('本月入库', num(sum(ml.filter(l => l.qty > 0 && !/^调拨/.test(l.kind)), l => l.qty)), 'download', 'blue')}
+    ${kpi('本月出库', num(-sum(ml.filter(l => l.qty < 0 && !/^调拨/.test(l.kind)), l => l.qty)), 'upload', 'orange')}
   </div>
-  ${tabs('invTab', [['stock', '库存总览'], ['docs', '出入库单'], ['check', '盘点单'], ['summary', '收发存汇总'], ['logs', '出入库流水']])}
+  ${tabs('invTab', tabList)}
   <div class="card" id="invCard"></div>`;
   if (ui.invTab === 'stock') {
-    const filters = [{key:'cat', label:'全部分类', options:cats(), test:(p, v) => p.category === v}, {key:'st', label:'库存状态', options:['正常', '预警', '缺货'], test:(p, v) => stockStatus(p)[0] === v}];
-    const btns = (can('prod.edit') ? `<button class="btn" data-act="importOpen">${ic('upload')}导入商品 / 期初</button>` : '')
+    const W = multiWh() && ui.invWh && byId(db.warehouses, ui.invWh) ? ui.invWh : '';
+    const q = p => whQty(p, W), st = p => stockStatus({...p, stock:q(p)});
+    const filters = [{key:'cat', label:'全部分类', options:cats(), test:(p, v) => p.category === v}, {key:'st', label:'库存状态', options:['正常', '预警', '缺货'], test:(p, v) => st(p)[0] === v}];
+    const btns = (multiWh() ? `<select class="select" id="invWh">${whOpts(W, true)}</select>` : '')
+      + (isAdmin() ? `<button class="btn" data-act="whManage">${ic('warehouse')}仓库</button>` : '')
+      + (can('prod.edit') ? `<button class="btn" data-act="importOpen">${ic('upload')}导入商品 / 期初</button>` : '')
       + (can('inv.print') ? `<button class="btn" data-act="printCheck">${ic('printer')}打印盘点表</button>` : '')
       + (can('inv.export') ? `<button class="btn" data-act="export" data-id="inv">${ic('download')}导出库存</button>` : '');
     $('#invCard').innerHTML = toolbar('inv', {placeholder:'搜索编码 / 商品 / 规格', filters, buttons:btns}) + '<div id="list-inv"></div>';
-    mountList('inv', {rows:() => db.products, search:p => p.sku + p.name + (p.spec || ''), filters, columns:[
-      {t:'商品', r:p => `<b>${esc(p.name)}</b><div class="sub-t">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''} · ${esc(p.category)}</div>`, s:p => p.name},
-      {t:'当前库存', cls:'num', r:p => `<b>${num(p.stock)}</b> ${esc(p.unit)}`, s:p => p.stock},
+    if ($('#invWh')) $('#invWh').onchange = e => { ui.invWh = e.target.value; render(); };
+    const whSplit = p => multiWh() && !W ? `<div class="sub-t">${db.warehouses.filter(w => whQty(p, w.id)).map(w => esc(w.name) + ' ' + whQty(p, w.id)).join(' · ') || '各仓均无库存'}</div>` : '';
+    mountList('inv', {rows:() => db.products, search:p => p.sku + (p.barcode || '') + p.name + (p.spec || ''), filters, columns:[
+      {t:'商品', r:p => `<b>${esc(p.name)}</b>${p.batch ? ' <span class="badge blue plain">批次</span>' : ''}<div class="sub-t">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''} · ${esc(p.category)}</div>`, s:p => p.name},
+      {t:W ? whName(W) + '库存' : '当前库存', cls:'num', r:p => `<b>${num(q(p))}</b> ${esc(p.unit)}${whSplit(p)}`, s:q},
       {t:'安全库存', cls:'num', r:p => num(p.safety)},
-      {t:'库存水位', r:p => { const pct = Math.min(100, p.stock / ((p.safety || 1) * 3) * 100); const c = stockStatus(p)[1]; return `<div class="prog"><div class="bar"><i style="width:${pct}%;background:var(--${c})"></i></div></div>`; }},
-      ...(pr ? [{t:'成本单价', cls:'num', r:p => money(p.cost)}, {t:'库存金额', cls:'num', r:p => money(p.stock * p.cost), s:p => p.stock * p.cost}] : []),
-      {t:'状态', r:p => badge(...stockStatus(p))},
+      {t:'库存水位', r:p => { const pct = Math.min(100, q(p) / ((p.safety || 1) * 3) * 100); const c = st(p)[1]; return `<div class="prog"><div class="bar"><i style="width:${pct}%;background:var(--${c})"></i></div></div>`; }},
+      ...(pr ? [{t:'成本单价', cls:'num', r:p => money(p.cost)}, {t:'库存金额', cls:'num', r:p => money(q(p) * p.cost), s:p => q(p) * p.cost}] : []),
+      {t:'状态', r:p => badge(...st(p))},
       {t:'操作', r:p => `<div class="ops">${can('inv.in') ? tbtn('入库', 'stock', 'in|' + p.id) : ''}${can('inv.out') ? tbtn('出库', 'stock', 'out|' + p.id) : ''}${can('inv.checkpost') ? tbtn('调整', 'stock', 'check|' + p.id) : ''}${tbtn('流水', 'prodLogs', p.id)}</div>`}
-    ], exp:{name:'库存清单', cols:[['编码', p => p.sku], ['商品', p => p.name], ['规格型号', p => p.spec], ['分类', p => p.category], ['单位', p => p.unit], ['库存', p => p.stock], ['安全库存', p => p.safety], ...(pr ? [['成本', p => p.cost], ['库存金额', p => (p.stock * p.cost).toFixed(2)]] : []), ['状态', p => stockStatus(p)[0]]]}});
+    ], exp:{name:'库存清单' + (W ? '_' + whName(W) : ''), cols:[['编码', p => p.sku], ['商品', p => p.name], ['规格型号', p => p.spec], ['分类', p => p.category], ['单位', p => p.unit], ['库存', q],
+      ...(multiWh() && !W ? db.warehouses.map(w => [w.name, p => whQty(p, w.id)]) : []), ['安全库存', p => p.safety], ...(pr ? [['成本', p => p.cost], ['库存金额', p => (q(p) * p.cost).toFixed(2)]] : []), ['状态', p => st(p)[0]]]}});
   } else if (ui.invTab === 'docs') {
     const mo = canMoney();
     const filters = [
       {key:'dir', label:'入库 / 出库', options:[['in', '入库单'], ['out', '出库单']], test:(o, v) => o.dir === v},
       {key:'type', label:'全部类型', options:[...META.docTypes.in, ...META.docTypes.out], test:(o, v) => o.type === v},
       {key:'st', label:'全部状态', options:['正常', '已作废'], test:(o, v) => o.status === v},
-      {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(o, v) => monthKey(o.date) === v}];
+      {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(o, v) => monthKey(o.date) === v},
+      ...(multiWh() ? [{key:'wh', label:'全部仓库', options:whs().map(w => [w.id, w.name]), test:(o, v) => (o.wh || META.defaultWh) === v}] : [])];
     $('#invCard').innerHTML = toolbar('docs', {placeholder:'搜索单号 / 单位 / 商品', filters, buttons:can('inv.export') ? `<button class="btn" data-act="export" data-id="docs">${ic('download')}导出</button>` : ''}) + '<div id="list-docs"></div>';
     mountList('docs', {rows:() => db.stockDocs, search:o => o.no + o.party + o.handler + o.remark + o.creator + o.items.map(i => prodOf(i.productId).name).join(''), filters, empty:'暂无出入库单', columns:[
       {t:'单号', r:o => `<a class="link" data-act="docView" data-id="${o.id}">${o.no}</a>`, s:o => o.no},
-      {t:'类型', r:o => badge(o.type, o.dir === 'in' ? 'green' : 'orange')},
+      {t:'类型', r:o => badge(o.type, o.dir === 'in' ? 'green' : 'orange') + (multiWh() ? `<div class="sub-t">${esc(whName(o.wh))}</div>` : '')},
       {t:'日期', r:o => `${o.date} <span class="sub-t">${o.time || ''}</span>`, s:o => o.date + o.time},
       {t:'往来单位', r:o => esc(o.party || '-')},
       {t:'商品', r:o => esc(prodOf(o.items[0]?.productId).name) + (o.items.length > 1 ? `<span class="sub-t"> 等${o.items.length}项</span>` : '')},
@@ -817,32 +874,47 @@ function pageInventory() {
     ], exp:{name:'出入库单', cols:[['单号', o => o.no], ['类型', o => o.type], ['日期', o => o.date], ['单位', o => o.party], ['经手人', o => o.handler], ['商品数', o => o.items.length], ['数量', docQty], ...(mo ? [['金额', o => docAmount(o).toFixed(2)]] : []), ['制单人', o => o.creator], ['状态', o => o.status], ['备注', o => o.remark]]}});
   } else if (ui.invTab === 'check') pageCheckDocs();
   else if (ui.invTab === 'summary') pageSummary();
+  else if (ui.invTab === 'transfer') pageTransfers();
+  else if (ui.invTab === 'batch') pageBatches();
+  else if (ui.invTab === 'replenish') pageReplenish();
   else {
-    const kinds = ['期初库存', ...META.docTypes.in, ...META.docTypes.out, '作废冲回', '盘盈', '盘亏', '盘点调整', '手工入库', '手工出库'];
-    const filters = [{key:'kind', label:'全部类型', options:kinds, test:(l, v) => l.kind === v}, {key:'dir', label:'方向', options:[['in', '入库'], ['out', '出库']], test:(l, v) => v === 'in' ? l.qty > 0 : l.qty < 0}];
-    $('#invCard').innerHTML = toolbar('logs', {placeholder:'搜索商品 / 单号', filters, buttons:can('inv.export') ? `<button class="btn" data-act="export" data-id="logs">${ic('download')}导出</button>` : ''}) + '<div id="list-logs"></div>';
+    const kinds = ['期初库存', ...META.docTypes.in, ...META.docTypes.out, '调拨出库', '调拨入库', '作废冲回', '盘盈', '盘亏', '盘点调整', '手工入库', '手工出库'];
+    const filters = [{key:'kind', label:'全部类型', options:kinds, test:(l, v) => l.kind === v}, {key:'dir', label:'方向', options:[['in', '入库'], ['out', '出库']], test:(l, v) => v === 'in' ? l.qty > 0 : l.qty < 0},
+      ...(multiWh() ? [{key:'wh', label:'全部仓库', options:whs().map(w => [w.id, w.name]), test:(l, v) => (l.wh || META.defaultWh) === v}] : [])];
+    $('#invCard').innerHTML = toolbar('logs', {placeholder:'搜索商品 / 单号 / 批次', filters, buttons:can('inv.export') ? `<button class="btn" data-act="export" data-id="logs">${ic('download')}导出</button>` : ''}) + '<div id="list-logs"></div>';
     const pn = l => prodOf(l.productId).name;
-    mountList('logs', {rows:() => db.stockLogs, search:l => pn(l) + l.ref + l.note, filters, columns:[
+    mountList('logs', {rows:() => db.stockLogs, search:l => pn(l) + l.ref + l.note + batchText(l.batches), filters, columns:[
       {t:'时间', r:l => `${l.date} <span class="sub-t">${l.time || ''}</span>`, s:l => l.date + l.time},
-      {t:'商品', r:l => esc(pn(l))},
+      {t:'商品', r:l => esc(pn(l)) + (l.batches ? `<div class="sub-t">批次 ${esc(batchText(l.batches))}</div>` : '')},
+      ...(multiWh() ? [{t:'仓库', r:l => esc(whName(l.wh))}] : []),
       {t:'类型', r:l => badge(l.kind, l.qty > 0 ? 'green' : 'orange')},
       {t:'数量', cls:'num', r:l => `<span class="${l.qty > 0 ? 'pos' : 'neg'}">${l.qty > 0 ? '+' : ''}${l.qty}</span>`, s:l => l.qty},
-      {t:'关联单据', r:l => { const d = l.ref && docByNo(l.ref), c = l.ref && db.checkDocs.find(x => x.no === l.ref); return d ? `<a class="link" data-act="docView" data-id="${d.id}">${esc(l.ref)}</a>` : c ? `<a class="link" data-act="checkOpen" data-id="${c.id}">${esc(l.ref)}</a>` : l.ref ? `<span class="sub-t">${esc(l.ref)}</span>` : '-'; }},
+      {t:'关联单据', r:l => refLink(l.ref)},
       {t:'备注', r:l => esc(l.note) || '-'},
       {t:'操作人', r:l => esc(l.operator || '-')}
-    ], exp:{name:'出入库流水', cols:[['日期', l => l.date], ['时间', l => l.time], ['商品', pn], ['类型', l => l.kind], ['数量', l => l.qty], ['单据', l => l.ref], ['备注', l => l.note], ['操作人', l => l.operator]]}});
+    ], exp:{name:'出入库流水', cols:[['日期', l => l.date], ['时间', l => l.time], ['商品', pn], ...(multiWh() ? [['仓库', l => whName(l.wh)]] : []), ['类型', l => l.kind], ['数量', l => l.qty], ['批次', l => batchText(l.batches)], ['单据', l => l.ref], ['备注', l => l.note], ['操作人', l => l.operator]]}});
   }
+}
+// 单号 → 可点击打开对应单据
+function refLink(ref) {
+  if (!ref) return '-';
+  const d = docByNo(ref), c = db.checkDocs.find(x => x.no === ref), t = db.transferDocs.find(x => x.no === ref);
+  return d ? `<a class="link" data-act="docView" data-id="${d.id}">${esc(ref)}</a>` : c ? `<a class="link" data-act="checkOpen" data-id="${c.id}">${esc(ref)}</a>`
+    : t ? `<a class="link" data-act="transferView" data-id="${t.id}">${esc(ref)}</a>` : `<span class="sub-t">${esc(ref)}</span>`;
 }
 function stockModal(mode, id) {
   if (mode !== 'check') return docModal(mode, id);
-  const p = byId(db.products, id);
+  const p = byId(db.products, id), w0 = ui.invWh && byId(db.warehouses, ui.invWh) ? ui.invWh : META.defaultWh;
   formModal({title:'库存调整 · ' + esc(p.name), fields:[
-    {n:'qty', l:`实盘数量（账面 ${p.stock}）`, type:'number', req:1},
+    ...(multiWh() ? [{n:'wh', l:'仓库', type:'select', opts:whs().map(w => [w.id, `${w.name}（账面 ${whQty(p, w.id)}）`]), span:1}] : []),
+    {n:'qty', l:`实盘数量${multiWh() ? '' : `（账面 ${p.stock}）`}`, type:'number', req:1},
     {n:'note', l:'备注', type:'textarea', span:1}],
-    data:{qty:p.stock}, onSubmit:v => {
+    data:{qty:whQty(p, w0), wh:w0}, onSubmit:v => {
       if (!Number.isInteger(v.qty) || v.qty < 0) return toast('数量必须为非负整数', 'error');
-      return mutate('POST', '/api/stock/' + p.id, {mode:'check', qty:v.qty, note:v.note}, r => r.delta === 0 ? '库存无变化' : '盘点调整成功：' + (r.delta > 0 ? '+' : '') + r.delta);
+      return mutate('POST', '/api/stock/' + p.id, {mode:'check', qty:v.qty, note:v.note, wh:v.wh || META.defaultWh}, r => r.delta === 0 ? '库存无变化' : '盘点调整成功：' + (r.delta > 0 ? '+' : '') + r.delta);
     }});
+  const sel = $('#mform [name=wh]');
+  if (sel) sel.onchange = () => { $('#mform [name=qty]').value = whQty(p, sel.value); };
 }
 function prodLogs(id) {
   const p = byId(db.products, id), logs = db.stockLogs.filter(l => l.productId === id).slice(0, 50);
@@ -855,25 +927,27 @@ function prodLogs(id) {
 const prodLabel = p => p.sku + ' · ' + p.name + (p.spec ? ' ' + p.spec : '');
 function findProduct(v) {
   v = String(v || '').trim(); if (!v) return null;
-  return db.products.find(p => p.sku === v || prodLabel(p) === v) || db.products.find(p => p.sku.toLowerCase() === v.toLowerCase() || p.name === v) || null;
+  return db.products.find(p => p.sku === v || p.barcode === v || prodLabel(p) === v) || db.products.find(p => p.sku.toLowerCase() === v.toLowerCase() || p.name === v) || null;
 }
-function docModal(dir, productId) {
+function docModal(dir, productId, type0) {
   const mo = canMoney(), types = META.docTypes[dir];
   const parties = [...new Set([...db.stockDocs.filter(o => o.dir === dir).map(o => o.party), ...(dir === 'in' ? db.suppliers : db.customers).map(x => x.name)].filter(Boolean))];
-  const blank = () => ({productId:'', qty:1, price:'', note:''});
-  const draft = {items:[]};
+  const blank = () => ({productId:'', qty:1, price:'', note:'', batchNo:'', prodDate:'', expDate:''});
+  const draft = {items:[], wh:ui.invWh && byId(db.warehouses, ui.invWh) ? ui.invWh : META.defaultWh};
   const p0 = productId && byId(db.products, productId);
-  draft.items.push(p0 ? {productId:p0.id, qty:1, price:p0.cost ?? '', note:''} : blank());
+  draft.items.push(p0 ? {...blank(), productId:p0.id, price:p0.cost ?? ''} : blank());
+  const batchCol = db.products.some(p => p.batch);
   openModal(`${modalHead('新建' + docTitle(dir))}
   <div class="m-body"><div class="form-grid">
-    <label class="field"><span>${dir === 'in' ? '入库' : '出库'}类型 <i>*</i></span><select id="dType">${types.map(t => `<option>${t}</option>`).join('')}</select></label>
+    <label class="field"><span>${dir === 'in' ? '入库' : '出库'}类型 <i>*</i></span><select id="dType">${types.map(t => `<option ${t === type0 ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
     <label class="field"><span>单据日期${can('inv.backdate') ? '' : '（仅限当天）'}</span><input type="date" id="dDate" value="${today()}" max="${today()}" ${can('inv.backdate') ? '' : 'disabled'}></label>
     <label class="field"><span>${docPartyLabel(dir)}</span><input id="dParty" list="dPartyList" placeholder="可直接输入"><datalist id="dPartyList">${parties.map(x => `<option value="${esc(x)}">`).join('')}</datalist></label>
     <label class="field"><span>经手人</span><input id="dHandler" value="${esc(ME.name)}"></label>
+    ${multiWh() ? `<label class="field"><span>${dir === 'in' ? '入库' : '出库'}仓库 <i>*</i></span><select id="dWh">${whOpts(draft.wh)}</select></label>` : ''}
   </div>
-  <div class="line-head"><b>商品明细</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 名称搜索，支持扫码枪录入编码后回车</span><button class="btn sm" id="dAdd">${ic('plus')}添加一行</button></div>
+  <div class="line-head"><b>商品明细</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称搜索，支持扫码枪录入后回车</span><button class="btn sm" id="dAdd">${ic('plus')}添加一行</button></div>
   <datalist id="dProdList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
-  <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:230px">商品</th><th style="width:60px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th>${mo ? `<th style="width:110px">${dir === 'in' ? '单价' : '成本单价'}</th><th class="num" style="width:110px">金额</th>` : ''}<th style="width:140px">备注</th><th style="width:44px"></th></tr></thead><tbody id="dItems"></tbody></table></div>
+  <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:230px">商品</th><th style="width:60px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th>${mo ? `<th style="width:110px">${dir === 'in' ? '单价' : '成本单价'}</th><th class="num" style="width:110px">金额</th>` : ''}${batchCol ? `<th style="min-width:${dir === 'in' ? 300 : 180}px">${dir === 'in' ? '批号 / 生产日期 / 有效期至' : '出库批次（先到期先出）'}</th>` : ''}<th style="width:140px">备注</th><th style="width:44px"></th></tr></thead><tbody id="dItems"></tbody></table></div>
   <label class="field" style="margin-top:16px"><span>单据备注</span><textarea id="dRemark" rows="2"></textarea></label>
   <div class="o-total">合计数量<b id="dQty">0</b>${mo ? `&nbsp;&nbsp;合计金额<b id="dAmt">¥0.00</b>` : ''}</div></div>
   <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn" id="dSave">保存</button>${can('inv.print') ? `<button class="btn primary" id="dSavePrint">${ic('printer')}保存并打印</button>` : ''}</div>`, 'lg');
@@ -882,13 +956,29 @@ function docModal(dir, productId) {
     $('#dQty').textContent = num(sum(draft.items.filter(i => i.productId), i => +i.qty || 0));
     if (mo) $('#dAmt').textContent = money(sum(draft.items, i => (+i.qty || 0) * (+i.price || 0)));
   };
+  // 出库预览：按先到期先出，同一商品多行累计
+  const fefoPreview = (p, i) => {
+    const before = sum(draft.items.slice(0, i).filter(x => x.productId === p.id), x => +x.qty || 0);
+    let skip = before, need = +draft.items[i].qty || 0; const out = [];
+    for (const b of fefoOrder(batchesOf(p.id, draft.wh), $('#dType').value)) {
+      let q = b.qty; const s = Math.min(skip, q); skip -= s; q -= s;
+      const n = Math.min(need, q); if (n > 0) { out.push({no:b.no, expDate:b.expDate, qty:n}); need -= n; }
+      if (!need) break;
+    }
+    return out.map(b => `<span class="badge ${expState(b)[1]} plain" style="margin:1px">${esc(b.no)}${b.expDate ? ' 至' + b.expDate : ''} ×${b.qty}</span>`).join('') + (need > 0 ? '<span class="neg">批次不足</span>' : '');
+  };
+  const batchCell = (p, it, i) => !batchCol ? '' : `<td class="bcell">${!p || !p.batch ? '<span class="sub-t">-</span>' : dir === 'out' ? fefoPreview(p, i)
+    : `<div style="display:flex;gap:4px"><input data-i="${i}" data-k="batchNo" value="${esc(it.batchNo)}" placeholder="批号（留空自动）" style="min-width:90px">
+       <input type="date" data-i="${i}" data-k="prodDate" value="${it.prodDate}" title="生产日期">
+       <input type="date" data-i="${i}" data-k="expDate" value="${it.expDate}" title="有效期至${p.shelfDays ? '（留空按保质期 ' + p.shelfDays + ' 天自动算）' : ''}"></div>`}</td>`;
   const renderItems = focusLast => {
-    tb.innerHTML = draft.items.map((it, i) => { const p = it.productId ? byId(db.products, it.productId) : null; return `<tr>
-      <td><input class="item-in" list="dProdList" data-i="${i}" data-k="product" value="${p ? esc(prodLabel(p)) : ''}" placeholder="编码 / 名称"></td>
+    tb.innerHTML = draft.items.map((it, i) => { const p = it.productId ? byId(db.products, it.productId) : null, have = p ? whQty(p, draft.wh) : 0; return `<tr>
+      <td><input class="item-in" list="dProdList" data-i="${i}" data-k="product" value="${p ? esc(prodLabel(p)) : ''}" placeholder="编码 / 条码 / 名称"></td>
       <td>${p ? esc(p.unit) : ''}</td>
-      <td class="num ${p && dir === 'out' && p.stock < it.qty ? 'neg' : ''}">${p ? p.stock : ''}</td>
+      <td class="num scell ${p && dir === 'out' && have < it.qty ? 'neg' : ''}">${p ? have : ''}</td>
       <td><input type="number" min="1" step="1" data-i="${i}" data-k="qty" value="${it.qty}"></td>
       ${mo ? (dir === 'in' ? `<td><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"></td>` : `<td class="num sub-t" title="出库按移动加权成本计价">${p ? money(p.cost) : ''}</td>`) + `<td class="num sub">${money((+it.qty || 0) * (+it.price || 0))}</td>` : ''}
+      ${batchCell(p, it, i)}
       <td><input data-i="${i}" data-k="note" value="${esc(it.note)}"></td>
       <td><button class="icon-btn sm" data-del="${i}" title="删除">${ic('trash')}</button></td></tr>`; }).join('');
     updTotal();
@@ -908,12 +998,21 @@ function docModal(dir, productId) {
   tb.addEventListener('keydown', e => { const t = e.target; if (e.key === 'Enter' && t.dataset.k === 'product') { e.preventDefault(); pick(+t.dataset.i, t.value); } });
   tb.addEventListener('input', e => {
     const t = e.target, i = +t.dataset.i, k = t.dataset.k;
+    if (k === 'batchNo' || k === 'prodDate' || k === 'expDate') { draft.items[i][k] = t.value; return; }
     if (k === 'qty' || k === 'price' || k === 'note') {
       draft.items[i][k] = k === 'note' ? t.value : t.value === '' ? '' : +t.value;
       const s = t.closest('tr').querySelector('.sub'); if (s) s.textContent = money((+draft.items[i].qty || 0) * (+draft.items[i].price || 0));
       updTotal();
+      // 出库数量变了：原地刷新库存提示与批次预览，不重绘整表（以免打断输入）
+      if (dir === 'out' && k === 'qty') tb.querySelectorAll('tr').forEach((tr, n) => {
+        const it = draft.items[n], p = it && it.productId && byId(db.products, it.productId); if (!p) return;
+        tr.querySelector('.scell').classList.toggle('neg', whQty(p, draft.wh) < it.qty);
+        const bc = tr.querySelector('.bcell'); if (bc && p.batch) bc.innerHTML = fefoPreview(p, n);
+      });
     }
   });
+  if ($('#dWh')) $('#dWh').onchange = e => { draft.wh = e.target.value; renderItems(); };
+  $('#dType').onchange = () => { if (dir === 'out') renderItems(); };
   tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { draft.items.splice(+b.dataset.del, 1); if (!draft.items.length) draft.items.push(blank()); renderItems(); } });
   $('#dAdd').onclick = () => { draft.items.push(blank()); renderItems(true); };
   const save = async andPrint => {
@@ -923,11 +1022,13 @@ function docModal(dir, productId) {
     if (mo && items.some(i => i.price !== '' && +i.price < 0)) return toast('单价不能为负', 'error');
     if (dir === 'out') {
       const need = {}; items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + +i.qty; });
-      const lack = Object.entries(need).map(([pid, q]) => ({p:byId(db.products, pid), q})).filter(x => x.p.stock < x.q);
-      if (lack.length) return toast('库存不足：' + lack.map(x => `${x.p.name}（需 ${x.q}，现有 ${x.p.stock}）`).join('、'), 'error');
+      const lack = Object.entries(need).map(([pid, q]) => ({p:byId(db.products, pid), q})).filter(x => whQty(x.p, draft.wh) < x.q);
+      if (lack.length) return toast((multiWh() ? whName(draft.wh) : '') + '库存不足：' + lack.map(x => `${x.p.name}（需 ${x.q}，现有 ${whQty(x.p, draft.wh)}）`).join('、'), 'error');
     }
-    const body = {dir, type:$('#dType').value, date:$('#dDate').value, party:$('#dParty').value.trim(), handler:$('#dHandler').value.trim(), remark:$('#dRemark').value.trim(),
-      items:items.map(i => ({productId:i.productId, qty:+i.qty, price:mo ? i.price : undefined, note:i.note}))};
+    const badDate = items.find(i => i.prodDate && i.expDate && i.expDate < i.prodDate);
+    if (badDate) return toast(`「${byId(db.products, badDate.productId).name}」有效期早于生产日期`, 'error');
+    const body = {dir, type:$('#dType').value, wh:draft.wh, date:$('#dDate').value, party:$('#dParty').value.trim(), handler:$('#dHandler').value.trim(), remark:$('#dRemark').value.trim(),
+      items:items.map(i => ({productId:i.productId, qty:+i.qty, price:mo ? i.price : undefined, note:i.note, batchNo:i.batchNo, prodDate:i.prodDate, expDate:i.expDate}))};
     $('#dSave').disabled = true; if ($('#dSavePrint')) $('#dSavePrint').disabled = true;
     const r = await mutate('POST', '/api/stockdocs', body, r => docTitle(dir) + '已保存：' + r.no);
     if (!r) { $('#dSave').disabled = false; if ($('#dSavePrint')) $('#dSavePrint').disabled = false; return; }
@@ -959,13 +1060,13 @@ function rmbUpper(v) {
 const PAPERS = {a4:['A4 纵向', 'A4 portrait', 12], half:['二等分 241×140（针式）', '241mm 140mm', 6], a5:['A5 横向', 'A5 landscape', 7]};
 const PRINT_ONLY = {a4l:['A4 横向', 'A4 landscape', 0]};
 function slipHtml(o, {showMoney, minRows = 0}) {
-  const cols = showMoney ? 9 : 7, rows = o.items.map((i, n) => { const p = prodOf(i.productId); return `<tr><td class="c">${n + 1}</td><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.spec || '')}</td><td class="c">${esc(p.unit)}</td><td class="r">${i.qty}</td>${showMoney ? `<td class="r">${(+i.price || 0).toFixed(2)}</td><td class="r">${(i.qty * (+i.price || 0)).toFixed(2)}</td>` : ''}<td>${esc(i.note || '')}</td></tr>`; });
+  const cols = showMoney ? 9 : 7, rows = o.items.map((i, n) => { const p = prodOf(i.productId); return `<tr><td class="c">${n + 1}</td><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.spec || '')}</td><td class="c">${esc(p.unit)}</td><td class="r">${i.qty}</td>${showMoney ? `<td class="r">${(+i.price || 0).toFixed(2)}</td><td class="r">${(i.qty * (+i.price || 0)).toFixed(2)}</td>` : ''}<td>${esc([i.batches ? '批次 ' + batchText(i.batches) : '', i.note].filter(Boolean).join('；'))}</td></tr>`; });
   for (let k = rows.length; k < minRows; k++) rows.push(`<tr>${'<td>&nbsp;</td>'.repeat(cols)}</tr>`);
   const amt = docAmount(o);
   return `<div class="slip-wrap">${o.status === '已作废' ? '<div class="slip-stamp">作废</div>' : ''}
   <div class="s-title"><h1>${esc(db.settings.company)}</h1><h2>${docTitle(o.dir)}</h2></div>
   <div class="s-meta"><span>单号：<b>${o.no}</b></span><span>类型：${esc(o.type)}</span><span>日期：${o.date}</span></div>
-  <div class="s-meta"><span>${docPartyLabel(o.dir)}：${esc(o.party || '')}</span><span>经手人：${esc(o.handler || '')}</span></div>
+  <div class="s-meta"><span>${docPartyLabel(o.dir)}：${esc(o.party || '')}</span>${multiWh() || (o.wh && o.wh !== META.defaultWh) ? `<span>仓库：${esc(whName(o.wh))}</span>` : ''}<span>经手人：${esc(o.handler || '')}</span></div>
   <table><thead><tr><th style="width:34px">序号</th><th>商品编码</th><th>商品名称</th><th>规格型号</th><th style="width:42px">单位</th><th style="width:60px">数量</th>${showMoney ? '<th style="width:70px">单价</th><th style="width:84px">金额</th>' : ''}<th>备注</th></tr></thead>
   <tbody>${rows.join('')}
   <tr><td colspan="5" class="r"><b>合计</b></td><td class="r"><b>${docQty(o)}</b></td>${showMoney ? `<td></td><td class="r"><b>${amt.toFixed(2)}</b></td>` : ''}<td></td></tr>
@@ -1021,11 +1122,11 @@ function docVoid(id) {
   $('.m-body').insertAdjacentHTML('afterbegin', `<p class="span2" style="color:var(--muted)">作废后将${o.dir === 'in' ? '从库存中扣回' : '把货退回库存'}本单全部数量，单据保留并标记为「已作废」。</p>`);
 }
 function printCheck() {
-  const rows = (lists.inv && lists.inv.last) || db.products;
+  const rows = (lists.inv && lists.inv.last) || db.products, W = multiWh() && ui.invWh && byId(db.warehouses, ui.invWh) ? ui.invWh : '';
   const body = `<div class="s-title"><h1>${esc(db.settings.company)}</h1><h2>库存盘点表</h2></div>
-  <div class="s-meta"><span>盘点日期：${today()}</span><span>共 ${rows.length} 个商品</span></div>
+  <div class="s-meta"><span>盘点日期：${today()}</span>${multiWh() ? `<span>仓库：${W ? esc(whName(W)) : '全部仓库'}</span>` : ''}<span>共 ${rows.length} 个商品</span></div>
   <table><thead><tr><th style="width:34px">序号</th><th>商品编码</th><th>商品名称</th><th>规格型号</th><th style="width:42px">单位</th><th style="width:66px">账面数量</th><th style="width:66px">实盘数量</th><th style="width:56px">差异</th><th>备注</th></tr></thead>
-  <tbody>${rows.map((p, n) => `<tr><td class="c">${n + 1}</td><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.spec || '')}</td><td class="c">${esc(p.unit)}</td><td class="r">${p.stock}</td><td></td><td></td><td></td></tr>`).join('')}</tbody></table>
+  <tbody>${rows.map((p, n) => `<tr><td class="c">${n + 1}</td><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.spec || '')}</td><td class="c">${esc(p.unit)}</td><td class="r">${whQty(p, W)}</td><td></td><td></td><td></td></tr>`).join('')}</tbody></table>
   <div class="s-sign"><span>盘点人：</span><span>复核人：</span><span>仓库主管：</span></div><div class="foot">打印人：${esc(ME.name)} · ${fmtTime(new Date())}</div>`;
   printFrame('库存盘点表 ' + today(), body, 'a4');
 }
@@ -1045,7 +1146,7 @@ function pageCheckDocs() {
   mountList('checks', {rows:() => db.checkDocs, search:o => o.no + o.scope + o.remark + o.creator, filters, empty:'暂无盘点单，点「新建盘点单」开始盘点', columns:[
     {t:'单号', r:o => `<a class="link" data-act="checkOpen" data-id="${o.id}">${o.no}</a>`, s:o => o.no},
     {t:'日期', r:o => `${o.date} <span class="sub-t">${o.time || ''}</span>`, s:o => o.date + o.time},
-    {t:'范围', r:o => esc(o.scope)},
+    {t:'范围', r:o => esc(o.scope) + (multiWh() ? `<div class="sub-t">${esc(whName(o.wh))}</div>` : '')},
     {t:'已录入', cls:'num', r:o => `${checkStats(o).counted} / ${o.lines.length}`},
     {t:'盘盈 / 盘亏', r:o => { if (o.status !== '已完成') return '-'; const s = checkStats(o); return `<span class="pos">+${s.gq}</span> / <span class="neg">-${s.lq}</span>` + (mo ? `<div class="sub-t">${money(s.ga - s.la)}</div>` : ''); }},
     {t:'制单人', r:o => esc(o.creator)},
@@ -1055,7 +1156,8 @@ function pageCheckDocs() {
   ]});
 }
 function checkNew() {
-  formModal({title:'新建盘点单', okText:'开始盘点', fields:[
+  formModal({title:'新建盘点单', okText:'开始盘点', data:{wh:ui.invWh && byId(db.warehouses, ui.invWh) ? ui.invWh : META.defaultWh}, fields:[
+    ...(multiWh() ? [{n:'wh', l:'盘点仓库', type:'select', opts:whs().map(w => [w.id, w.name]), span:1}] : []),
     {n:'category', l:'盘点范围', type:'select', opts:[['', `全部商品（${db.products.length} 个）`], ...cats().map(c => [c, `分类：${c}（${db.products.filter(p => p.category === c).length} 个）`])], span:1},
     {n:'remark', l:'备注', ph:'例如：10 月月末盘点', span:1}],
     onSubmit:async v => {
@@ -1071,12 +1173,12 @@ function checkOpen(id) {
   const o = byId(db.checkDocs, id); if (!o) return toast('盘点单不存在或无权查看', 'error');
   const editable = o.status === '盘点中' && can('inv.check'), done = o.status === '已完成', mo = canMoney();
   const counts = Object.fromEntries(o.lines.map(l => [l.productId, l.counted == null ? '' : l.counted]));
-  const curBook = l => done ? l.bookAtPost : (byId(db.products, l.productId) || {stock:l.book}).stock;
+  const curBook = l => { if (done) return l.bookAtPost; const p = byId(db.products, l.productId); return p ? whQty(p, o.wh || META.defaultWh) : l.book; };
   const diffOf = l => done ? l.diff : counts[l.productId] === '' ? null : +counts[l.productId] - curBook(l);
   const costOf = l => done ? (l.cost || 0) : ((byId(db.products, l.productId) || {}).cost || 0);
   openModal(`${modalHead(`盘点单 · ${o.no} ${badge(o.status, CHECK_COLOR[o.status])}`)}
   <div class="m-body">
-    <div class="doc-info" style="margin-bottom:10px"><div><span>范围：</span>${esc(o.scope)}</div><div><span>创建：</span>${esc(o.creator)} ${o.date} ${o.time || ''}</div>
+    <div class="doc-info" style="margin-bottom:10px"><div><span>范围：</span>${esc(o.scope)}${multiWh() ? ' · ' + esc(whName(o.wh)) : ''}</div><div><span>创建：</span>${esc(o.creator)} ${o.date} ${o.time || ''}</div>
       ${done ? `<div><span>审核：</span>${esc(o.poster)} ${fmtTime(o.postedAt)}</div>` : ''}${o.remark ? `<div><span>备注：</span>${esc(o.remark)}</div>` : ''}</div>
     <div class="toolbar" style="padding:0 0 10px"><div class="tb-left"><div class="search">${ic('search')}<input id="ckQ" placeholder="编码 / 名称，扫码后回车定位"></div>
       <select class="select" id="ckF"><option value="">全部商品</option><option value="todo">未录入</option><option value="diff">有差异</option></select></div>
@@ -1154,13 +1256,13 @@ function checkOpen(id) {
 function checkPrint(id) {
   const o = byId(db.checkDocs, id), done = o.status === '已完成', mo = canMoney() && done;
   const rows = o.lines.map((l, n) => {
-    const p = prodOf(l.productId), book = done ? l.bookAtPost : (byId(db.products, l.productId) || {}).stock;
+    const p = prodOf(l.productId), cur = byId(db.products, l.productId), book = done ? l.bookAtPost : cur ? whQty(cur, o.wh || META.defaultWh) : undefined;
     const d = done ? l.diff : l.counted == null ? null : l.counted - book;
     return `<tr><td class="c">${n + 1}</td><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.spec || '')}</td><td class="c">${esc(p.unit)}</td><td class="r">${book ?? ''}</td><td class="r">${l.counted ?? ''}</td><td class="r">${d == null ? '' : d > 0 ? '+' + d : d}</td>${mo ? `<td class="r">${d ? (d * (l.cost || 0)).toFixed(2) : ''}</td>` : ''}<td></td></tr>`;
   });
   const s = checkStats(o);
   const body = `<div class="slip-wrap">${o.status === '已作废' ? '<div class="slip-stamp">作废</div>' : ''}<div class="s-title"><h1>${esc(db.settings.company)}</h1><h2>${done ? '盘点盈亏表' : '盘点表'}</h2></div>
-  <div class="s-meta"><span>单号：<b>${o.no}</b></span><span>范围：${esc(o.scope)}</span><span>日期：${done ? o.postDate || o.date : o.date}</span></div>
+  <div class="s-meta"><span>单号：<b>${o.no}</b></span><span>范围：${esc(o.scope)}${multiWh() ? ' · ' + esc(whName(o.wh)) : ''}</span><span>日期：${done ? o.postDate || o.date : o.date}</span></div>
   <table><thead><tr><th style="width:34px">序号</th><th>商品编码</th><th>商品名称</th><th>规格型号</th><th style="width:42px">单位</th><th style="width:62px">账面数量</th><th style="width:62px">实盘数量</th><th style="width:52px">差异</th>${mo ? '<th style="width:76px">差异金额</th>' : ''}<th>备注</th></tr></thead>
   <tbody>${rows.join('')}${done ? `<tr><td colspan="7" class="r"><b>合计 盘盈 +${s.gq} / 盘亏 -${s.lq}</b></td><td></td>${mo ? `<td class="r"><b>${(s.ga - s.la).toFixed(2)}</b></td>` : ''}<td></td></tr>` : ''}
   ${o.remark ? `<tr><td colspan="${mo ? 10 : 9}">备注：${esc(o.remark)}</td></tr>` : ''}</tbody></table>
@@ -1183,18 +1285,23 @@ function logsByProduct() {
 }
 // 期末结存 = 当前库存 − 截止日之后的变动；期初 = 期末 − 期间净变动（不依赖历史流水是否完整）
 // 金额：入 / 出按流水上的计价单价；期初 / 期末按当时的移动加权单位成本
-function stockSummary(from, to) {
+// wh：只统计该仓库（含调拨进出）；不传则统计全部仓库，此时调拨只是仓库间移动，不计入收发
+const isTransferLog = l => l.kind === '调拨出库' || l.kind === '调拨入库' || (l.kind === '作废冲回' && /^DB/.test(l.ref || ''));
+const logWh = l => l.wh || META.defaultWh;
+function stockSummary(from, to, wh = '') {
   const g = logsByProduct();
   return db.products.map(p => {
     let after = 0, inQ = 0, outQ = 0, inA = 0, outA = 0, costBegin = null, costEnd = null;
     for (const l of g[p.id] || []) {
+      if (wh && logWh(l) !== wh) { if (l.costAfter != null && l.date <= to) { if (l.date < from) costBegin = l.costAfter; costEnd = l.costAfter; } continue; }
       if (l.date > to) { after += l.qty; continue; }
       const c = l.cost ?? p.cost ?? 0;
-      if (l.date >= from) { if (l.qty > 0) { inQ += l.qty; inA += l.qty * c; } else { outQ -= l.qty; outA -= l.qty * c; } }
+      if (l.date >= from) { if (!wh && isTransferLog(l)) { /* 仓库间移动 */ } else if (l.qty > 0) { inQ += l.qty; inA += l.qty * c; } else { outQ -= l.qty; outA -= l.qty * c; } }
       else if (l.costAfter != null) costBegin = l.costAfter;
       if (l.costAfter != null) costEnd = l.costAfter;
     }
-    const endQ = p.stock - after, beginQ = endQ - inQ + outQ;
+    // 全部仓库时，期间内的调拨进出相互抵消，不影响期初期末
+    const endQ = whQty(p, wh) - after, beginQ = endQ - inQ + outQ;
     return {p, beginQ, inQ, outQ, endQ, beginA:beginQ * (costBegin ?? costEnd ?? p.cost ?? 0), inA, outA, endA:endQ * (costEnd ?? p.cost ?? 0)};
   });
 }
@@ -1202,12 +1309,14 @@ function monthRange(offset) { const d = new Date(), a = new Date(d.getFullYear()
 function pageSummary() {
   if (!ui.ssFrom) [ui.ssFrom, ui.ssTo] = monthRange(0);
   const mo = canMoney();
-  ui.ssRows = stockSummary(ui.ssFrom, ui.ssTo);
+  if (ui.ssWh && !byId(db.warehouses, ui.ssWh)) ui.ssWh = '';
+  ui.ssRows = stockSummary(ui.ssFrom, ui.ssTo, ui.ssWh || '');
   const filters = [{key:'cat', label:'全部分类', options:cats(), test:(r, v) => r.p.category === v},
     {key:'act', label:'全部商品', options:[['1', '只看有收发的'], ['2', '只看有结存的']], test:(r, v) => v === '1' ? r.inQ || r.outQ : r.endQ !== 0}];
   const btns = (can('inv.print') ? `<button class="btn" data-act="ssPrint">${ic('printer')}打印</button>` : '') + (can('inv.export') ? `<button class="btn" data-act="export" data-id="ss">${ic('download')}导出</button>` : '');
   $('#invCard').innerHTML = `<div class="toolbar" style="padding-bottom:0"><div class="tb-left"><b>期间</b><input type="date" class="select" id="ssFrom" value="${ui.ssFrom}" max="${today()}"><span>至</span><input type="date" class="select" id="ssTo" value="${ui.ssTo}" max="${today()}">
-    <button class="btn sm" data-act="ssRange" data-id="0">本月</button><button class="btn sm" data-act="ssRange" data-id="-1">上月</button><button class="btn sm" data-act="ssRange" data-id="y">本年</button></div></div>`
+    <button class="btn sm" data-act="ssRange" data-id="0">本月</button><button class="btn sm" data-act="ssRange" data-id="-1">上月</button><button class="btn sm" data-act="ssRange" data-id="y">本年</button>
+    ${multiWh() ? `<select class="select" id="ssWh">${whOpts(ui.ssWh || '', true)}</select>` : ''}</div></div>`
     + toolbar('ss', {placeholder:'搜索编码 / 商品 / 规格', filters, buttons:btns}) + '<div id="ssTotal" style="padding:0 20px 12px"></div><div id="list-ss"></div>';
   const cell = (q, a) => `${num(q)}${mo ? `<div class="sub-t">${money(a)}</div>` : ''}`;
   mountList('ss', {rows:() => ui.ssRows, search:r => r.p.sku + r.p.name + (r.p.spec || ''), filters, columns:[
@@ -1228,16 +1337,17 @@ function pageSummary() {
   const onDate = () => {
     const f = $('#ssFrom').value, t = $('#ssTo').value;
     if (!f || !t || f > t) return toast('起止日期不正确', 'error');
-    ui.ssFrom = f; ui.ssTo = t; ui.ssRows = stockSummary(f, t); renderList('ss');
+    ui.ssFrom = f; ui.ssTo = t; ui.ssRows = stockSummary(f, t, ui.ssWh || ''); renderList('ss');
   };
   $('#ssFrom').onchange = onDate; $('#ssTo').onchange = onDate;
+  if ($('#ssWh')) $('#ssWh').onchange = e => { ui.ssWh = e.target.value; render(); };
 }
 function ssPrint() {
   const rows = lists.ss.last || ui.ssRows, mo = canMoney(), T = k => sum(rows, r => r[k]);
   const c = (q, a) => `<td class="r">${q}</td>${mo ? `<td class="r">${a.toFixed(2)}</td>` : ''}`;
   const h = l => mo ? `<th colspan="2">${l}</th>` : `<th>${l}</th>`;
   const body = `<div class="s-title"><h1>${esc(db.settings.company)}</h1><h2>收发存汇总表</h2></div>
-  <div class="s-meta"><span>期间：${ui.ssFrom} 至 ${ui.ssTo}</span><span>共 ${rows.length} 个商品</span></div>
+  <div class="s-meta"><span>期间：${ui.ssFrom} 至 ${ui.ssTo}</span>${multiWh() ? `<span>仓库：${ui.ssWh ? esc(whName(ui.ssWh)) : '全部仓库'}</span>` : ''}<span>共 ${rows.length} 个商品</span></div>
   <table><thead><tr><th rowspan="${mo ? 2 : 1}" style="width:34px">序号</th><th rowspan="${mo ? 2 : 1}">商品编码</th><th rowspan="${mo ? 2 : 1}">商品名称</th><th rowspan="${mo ? 2 : 1}">规格型号</th><th rowspan="${mo ? 2 : 1}" style="width:40px">单位</th>${h('期初结存')}${h('本期入库')}${h('本期出库')}${h('期末结存')}</tr>
   ${mo ? `<tr>${'<th>数量</th><th>金额</th>'.repeat(4)}</tr>` : ''}</thead>
   <tbody>${rows.map((r, n) => `<tr><td class="c">${n + 1}</td><td>${esc(r.p.sku)}</td><td>${esc(r.p.name)}</td><td>${esc(r.p.spec || '')}</td><td class="c">${esc(r.p.unit)}</td>${c(r.beginQ, r.beginA)}${c(r.inQ, r.inA)}${c(r.outQ, r.outA)}${c(r.endQ, r.endA)}</tr>`).join('')}
@@ -1247,24 +1357,352 @@ function ssPrint() {
 }
 function ledger(pid) {
   const p = byId(db.products, pid); if (!p) return;
-  const from = ui.ssFrom || monthRange(0)[0], to = ui.ssTo || today(), mo = canMoney();
-  const r = stockSummary(from, to).find(x => x.p.id === pid);
-  const logs = (logsByProduct()[pid] || []).filter(l => l.date >= from && l.date <= to);
+  const from = ui.ssFrom || monthRange(0)[0], to = ui.ssTo || today(), mo = canMoney(), wh = ui.ssWh || '';
+  const r = stockSummary(from, to, wh).find(x => x.p.id === pid);
+  // 全部仓库视角下调拨只是换个地方放，不进明细账
+  const logs = (logsByProduct()[pid] || []).filter(l => l.date >= from && l.date <= to && (wh ? logWh(l) === wh : !isTransferLog(l)));
   let bal = r.beginQ;
   const rows = logs.map(l => {
-    bal += l.qty; const d = l.ref && docByNo(l.ref), c = l.ref && db.checkDocs.find(x => x.no === l.ref);
-    const ref = d ? `<a class="link" data-act="docView" data-id="${d.id}">${esc(l.ref)}</a>` : c ? `<a class="link" data-act="checkOpen" data-id="${c.id}">${esc(l.ref)}</a>` : esc(l.ref || '');
-    return `<tr><td>${l.date} <span class="sub-t">${l.time || ''}</span></td><td>${badge(l.kind, l.qty > 0 ? 'green' : 'orange')}</td><td>${ref}</td>
+    bal += l.qty;
+    const ref = refLink(l.ref);
+    return `<tr><td>${l.date} <span class="sub-t">${l.time || ''}</span></td><td>${badge(l.kind, l.qty > 0 ? 'green' : 'orange')}${l.batches ? `<div class="sub-t">${esc(batchText(l.batches))}</div>` : ''}</td><td>${ref}</td>
       <td class="num pos">${l.qty > 0 ? l.qty : ''}</td><td class="num neg">${l.qty < 0 ? -l.qty : ''}</td><td class="num"><b>${bal}</b></td>
       ${mo ? `<td class="num">${l.cost != null ? money(l.cost) : '-'}</td><td class="num">${l.costAfter != null ? money(l.costAfter) : '-'}</td>` : ''}<td class="sub-t">${esc(l.note || '')} ${esc(l.operator || '')}</td></tr>`;
   });
   openModal(`${modalHead('库存明细账 · ' + esc(p.name))}<div class="m-body" style="padding-top:12px">
-    <p class="sub-t" style="margin-bottom:10px">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''} · 期间 ${from} 至 ${to}（在「收发存汇总」里修改期间）</p>
+    <p class="sub-t" style="margin-bottom:10px">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''} · 期间 ${from} 至 ${to}${multiWh() ? ' · ' + (wh ? esc(whName(wh)) : '全部仓库') : ''}（在「收发存汇总」里修改期间${multiWh() ? '和仓库' : ''}）</p>
     <div class="table-wrap"><table class="tbl compact"><thead><tr><th>日期</th><th>类型</th><th>单据</th><th class="num">入库</th><th class="num">出库</th><th class="num">结存</th>${mo ? '<th class="num">计价单价</th><th class="num">结存单位成本</th>' : ''}<th>摘要 / 操作人</th></tr></thead><tbody>
     <tr style="background:var(--panel2)"><td colspan="5"><b>期初结存</b></td><td class="num"><b>${r.beginQ}</b></td>${mo ? `<td></td><td class="num">${money(r.beginQ ? r.beginA / r.beginQ : 0)}</td>` : ''}<td></td></tr>
     ${rows.join('') || `<tr><td colspan="${mo ? 9 : 7}"><div class="empty">本期无收发</div></td></tr>`}
     <tr style="background:var(--panel2)"><td colspan="3"><b>本期合计 / 期末结存</b></td><td class="num pos"><b>${r.inQ}</b></td><td class="num neg"><b>${r.outQ}</b></td><td class="num"><b>${r.endQ}</b></td>${mo ? `<td></td><td class="num">${money(r.endQ ? r.endA / r.endQ : p.cost)}</td>` : ''}<td></td></tr>
     </tbody></table></div></div>`, 'lg');
+}
+
+/* ---------- 仓库管理（专业版：新增仓库） ---------- */
+function whManage() {
+  const rows = whs().map(w => {
+    const q = sum(db.products, p => whQty(p, w.id)), n = db.products.filter(p => whQty(p, w.id)).length;
+    return `<tr><td><b>${esc(w.name)}</b>${w.id === META.defaultWh ? ' <span class="badge gray plain">默认</span>' : ''}<div class="sub-t">${esc(w.code || '')}${w.remark ? ' · ' + esc(w.remark) : ''}</div></td>
+      <td class="num">${n}</td><td class="num">${num(q)}</td>${seesPrice() ? `<td class="num">${money(sum(db.products, p => whQty(p, w.id) * p.cost))}</td>` : ''}
+      <td><div class="ops">${tbtn('编辑', 'whEdit', w.id)}${w.id === META.defaultWh ? '' : tbtn('删除', 'whDel', w.id, 'danger-text')}</div></td></tr>`;
+  }).join('');
+  openModal(`${modalHead('仓库')}<div class="m-body" style="padding-top:10px">
+    <p class="sub-t" style="margin-bottom:10px">多个仓库 / 门店分开记库存，出入库单、盘点单按仓库开，仓库之间用调拨单移库。成本按商品整体核算。${isPro() ? '' : '<br>' + proTag + ' 新增仓库需要专业版；已有的仓库可以照常使用和改名。'}</p>
+    <div class="table-wrap"><table class="tbl"><thead><tr><th>仓库</th><th class="num">有货商品</th><th class="num">库存数量</th>${seesPrice() ? '<th class="num">库存金额</th>' : ''}<th>操作</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">关闭</button><button class="btn primary" data-act="whEdit">${ic('plus')}新增仓库</button></div>`, 'lg');
+}
+function whEdit(id) {
+  const w = id ? byId(db.warehouses, id) : null;
+  if (!w && !proGate('多仓库')) return;
+  formModal({title:w ? '编辑仓库' : '新增仓库', data:w || {}, fields:[{n:'name', l:'仓库名称', req:1, ph:'例如：二号仓、城东门店'}, {n:'code', l:'仓库编码', ph:'留空自动生成'}, {n:'remark', l:'备注', span:1}],
+    onSubmit:async v => { if (await mutate(w ? 'PUT' : 'POST', '/api/warehouses' + (w ? '/' + w.id : ''), v, w ? '仓库已更新' : '仓库已新增：' + v.name)) whManage(); }});
+}
+function whDel(id) {
+  const w = byId(db.warehouses, id);
+  confirmBox(`确定删除仓库「${esc(w.name)}」吗？仓库里没有库存、也没有单据记录时才能删除。`, async () => { if (await mutate('DELETE', '/api/warehouses/' + id, undefined, '仓库已删除')) whManage(); });
+}
+
+/* ---------- 调拨单（专业版） ---------- */
+const trQty = o => sum(o.items, i => i.qty);
+function pageTransfers() {
+  const filters = [{key:'st', label:'全部状态', options:['正常', '已作废'], test:(o, v) => o.status === v},
+    {key:'wh', label:'涉及仓库', options:whs().map(w => [w.id, w.name]), test:(o, v) => o.from === v || o.to === v},
+    {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(o, v) => monthKey(o.date) === v}];
+  const btn = can('inv.transfer') ? `<button class="btn primary" data-act="transferNew">${ic('swap')}新建调拨单</button>` : '';
+  $('#invCard').innerHTML = toolbar('transfers', {placeholder:'搜索单号 / 商品 / 备注', filters, buttons:btn}) + '<div id="list-transfers"></div>';
+  mountList('transfers', {rows:() => db.transferDocs, search:o => o.no + o.remark + o.handler + o.creator + o.items.map(i => prodOf(i.productId).name).join(''), filters,
+    empty:multiWh() ? '暂无调拨单' : '先在「库存总览 → 仓库」里新增第二个仓库，再开调拨单', columns:[
+    {t:'单号', r:o => `<a class="link" data-act="transferView" data-id="${o.id}">${o.no}</a>`, s:o => o.no},
+    {t:'日期', r:o => `${o.date} <span class="sub-t">${o.time || ''}</span>`, s:o => o.date + o.time},
+    {t:'调出 → 调入', r:o => `${esc(whName(o.from))} <span class="sub-t">→</span> ${esc(whName(o.to))}`},
+    {t:'商品', r:o => esc(prodOf(o.items[0]?.productId).name) + (o.items.length > 1 ? `<span class="sub-t"> 等${o.items.length}项</span>` : '')},
+    {t:'数量', cls:'num', r:o => num(trQty(o)), s:trQty},
+    {t:'制单人', r:o => esc(o.creator)},
+    {t:'状态', r:o => badge(o.status, o.status === '正常' ? 'blue' : 'gray')},
+    {t:'操作', r:o => `<div class="ops">${tbtn('查看', 'transferView', o.id)}${can('inv.print') ? tbtn('打印', 'transferPrint', o.id) : ''}${can('inv.void') && o.status === '正常' ? tbtn('作废', 'transferVoid', o.id, 'danger-text') : ''}</div>`}
+  ]});
+}
+function transferModal() {
+  if (!proGate('调拨单')) return;
+  if (!multiWh()) return confirmBox('调拨需要至少两个仓库。现在只有一个仓库，先新增一个？', () => (isAdmin() ? whEdit() : toast('请让管理员在「库存管理 → 仓库」里新增仓库', 'info')), {title:'还没有第二个仓库', danger:false, okText:'新增仓库'});
+  const W = whs(), draft = {from:ui.invWh && byId(db.warehouses, ui.invWh) ? ui.invWh : W[0].id, items:[]};
+  draft.to = (W.find(w => w.id !== draft.from) || W[1]).id;
+  const blank = () => ({productId:'', qty:1, note:''});
+  draft.items.push(blank());
+  openModal(`${modalHead('新建调拨单')}<div class="m-body"><div class="form-grid">
+    <label class="field"><span>调出仓库 <i>*</i></span><select id="tFrom">${whOpts(draft.from)}</select></label>
+    <label class="field"><span>调入仓库 <i>*</i></span><select id="tTo">${whOpts(draft.to)}</select></label>
+    <label class="field"><span>单据日期${can('inv.backdate') ? '' : '（仅限当天）'}</span><input type="date" id="tDate" value="${today()}" max="${today()}" ${can('inv.backdate') ? '' : 'disabled'}></label>
+    <label class="field"><span>经手人</span><input id="tHandler" value="${esc(ME.name)}"></label></div>
+    <div class="line-head"><b>调拨商品</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称，支持扫码枪；批次商品按先到期先出带过去</span><button class="btn sm" id="tAdd">${ic('plus')}添加一行</button></div>
+    <datalist id="tProdList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
+    <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:230px">商品</th><th style="width:60px">单位</th><th class="num" style="width:90px">调出仓库存</th><th class="num" style="width:90px">调入仓库存</th><th style="width:100px">数量</th><th style="width:160px">备注</th><th style="width:44px"></th></tr></thead><tbody id="tItems"></tbody></table></div>
+    <label class="field" style="margin-top:16px"><span>备注</span><textarea id="tRemark" rows="2"></textarea></label>
+    <div class="o-total">合计数量<b id="tQty">0</b></div></div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn" id="tSave">保存</button>${can('inv.print') ? `<button class="btn primary" id="tSavePrint">${ic('printer')}保存并打印</button>` : ''}</div>`, 'lg');
+  const tb = $('#tItems');
+  const renderRows = focusLast => {
+    tb.innerHTML = draft.items.map((it, i) => { const p = it.productId && byId(db.products, it.productId); return `<tr>
+      <td><input list="tProdList" data-i="${i}" data-k="product" value="${p ? esc(prodLabel(p)) : ''}" placeholder="编码 / 条码 / 名称"></td><td>${p ? esc(p.unit) : ''}</td>
+      <td class="num ${p && whQty(p, draft.from) < it.qty ? 'neg' : ''}">${p ? whQty(p, draft.from) : ''}</td><td class="num sub-t">${p ? whQty(p, draft.to) : ''}</td>
+      <td><input type="number" min="1" step="1" data-i="${i}" data-k="qty" value="${it.qty}"></td><td><input data-i="${i}" data-k="note" value="${esc(it.note)}"></td>
+      <td><button class="icon-btn sm" data-del="${i}">${ic('trash')}</button></td></tr>`; }).join('');
+    $('#tQty').textContent = num(sum(draft.items.filter(i => i.productId), i => +i.qty || 0));
+    if (focusLast) { const ins = tb.querySelectorAll('[data-k=product]'); ins[ins.length - 1].focus(); }
+  };
+  const pick = (i, v) => {
+    const p = findProduct(v);
+    if (!p) { if (v) toast('未找到商品：' + v, 'error'); draft.items[i].productId = ''; renderRows(); return; }
+    const dup = draft.items.findIndex((x, k) => k !== i && x.productId === p.id);
+    if (dup >= 0) { draft.items[dup].qty = (+draft.items[dup].qty || 0) + 1; draft.items[i] = blank(); renderRows(true); return toast(p.name + ' 已在明细中，数量 +1', 'info'); }
+    draft.items[i].productId = p.id;
+    if (i === draft.items.length - 1) draft.items.push(blank());
+    renderRows(true);
+  };
+  tb.addEventListener('change', e => { if (e.target.dataset.k === 'product') pick(+e.target.dataset.i, e.target.value); });
+  tb.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.k === 'product') { e.preventDefault(); pick(+e.target.dataset.i, e.target.value); } });
+  tb.addEventListener('input', e => { const k = e.target.dataset.k, i = +e.target.dataset.i; if (k === 'qty' || k === 'note') { draft.items[i][k] = k === 'qty' ? +e.target.value : e.target.value; if (k === 'qty') $('#tQty').textContent = num(sum(draft.items.filter(x => x.productId), x => +x.qty || 0)); } });
+  tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { draft.items.splice(+b.dataset.del, 1); if (!draft.items.length) draft.items.push(blank()); renderRows(); } });
+  $('#tAdd').onclick = () => { draft.items.push(blank()); renderRows(true); };
+  $('#tFrom').onchange = e => { draft.from = e.target.value; renderRows(); };
+  $('#tTo').onchange = e => { draft.to = e.target.value; renderRows(); };
+  const save = async andPrint => {
+    const items = draft.items.filter(i => i.productId);
+    if (draft.from === draft.to) return toast('调出仓库和调入仓库不能相同', 'error');
+    if (!items.length) return toast('请至少添加一个商品', 'error');
+    if (items.some(i => !Number.isInteger(+i.qty) || +i.qty <= 0)) return toast('数量必须为正整数', 'error');
+    const need = {}; items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + +i.qty; });
+    const lack = Object.entries(need).map(([pid, q]) => ({p:byId(db.products, pid), q})).filter(x => whQty(x.p, draft.from) < x.q);
+    if (lack.length) return toast(whName(draft.from) + '库存不足：' + lack.map(x => `${x.p.name}（需 ${x.q}，现有 ${whQty(x.p, draft.from)}）`).join('、'), 'error');
+    $('#tSave').disabled = true;
+    const r = await mutate('POST', '/api/transfers', {from:draft.from, to:draft.to, date:$('#tDate').value, handler:$('#tHandler').value.trim(), remark:$('#tRemark').value.trim(),
+      items:items.map(i => ({productId:i.productId, qty:+i.qty, note:i.note}))}, r => '调拨单已保存：' + r.no);
+    if (!r) { $('#tSave').disabled = false; return; }
+    ui.invTab = 'transfer'; if (current() === 'inventory') render();
+    if (andPrint) transferPrint(r.id);
+  };
+  $('#tSave').onclick = () => save(false);
+  if ($('#tSavePrint')) $('#tSavePrint').onclick = () => save(true);
+  renderRows(); tb.querySelector('[data-k=product]').focus();
+}
+function transferSlip(o, showMoney) {
+  const cols = showMoney ? 8 : 7;
+  return `<div class="slip-wrap">${o.status === '已作废' ? '<div class="slip-stamp">作废</div>' : ''}
+  <div class="s-title"><h1>${esc(db.settings.company)}</h1><h2>调拨单</h2></div>
+  <div class="s-meta"><span>单号：<b>${o.no}</b></span><span>日期：${o.date}</span></div>
+  <div class="s-meta"><span>调出仓库：${esc(whName(o.from))}</span><span>调入仓库：${esc(whName(o.to))}</span><span>经手人：${esc(o.handler || '')}</span></div>
+  <table><thead><tr><th style="width:34px">序号</th><th>商品编码</th><th>商品名称</th><th>规格型号</th><th style="width:42px">单位</th><th style="width:60px">数量</th>${showMoney ? '<th style="width:84px">成本金额</th>' : ''}<th>批次 / 备注</th></tr></thead>
+  <tbody>${o.items.map((i, n) => { const p = prodOf(i.productId); return `<tr><td class="c">${n + 1}</td><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td>${esc(p.spec || '')}</td><td class="c">${esc(p.unit)}</td><td class="r">${i.qty}</td>${showMoney ? `<td class="r">${(i.qty * (i.cost || 0)).toFixed(2)}</td>` : ''}<td>${esc([i.batches ? batchText(i.batches) : '', i.note].filter(Boolean).join('；'))}</td></tr>`; }).join('')}
+  <tr><td colspan="5" class="r"><b>合计</b></td><td class="r"><b>${trQty(o)}</b></td>${showMoney ? `<td class="r"><b>${sum(o.items, i => i.qty * (i.cost || 0)).toFixed(2)}</b></td>` : ''}<td></td></tr>
+  ${o.remark ? `<tr><td colspan="${cols}">备注：${esc(o.remark)}</td></tr>` : ''}</tbody></table>
+  <div class="s-sign"><span>制单：${esc(o.creator || '')}</span><span>调出仓管：</span><span>调入仓管：</span><span>经手：${esc(o.handler || '')}</span></div>
+  ${o.status === '已作废' ? `<div class="s-meta" style="margin-top:6px"><span>作废：${esc(o.voidBy || '')} ${fmtTime(o.voidAt)} ${esc(o.voidReason || '')}</span></div>` : ''}</div>`;
+}
+function transferView(id) {
+  const o = byId(db.transferDocs, id); if (!o) return toast('调拨单不存在或无权查看', 'error');
+  openModal(`${modalHead('调拨单 · ' + o.no + ' ' + badge(o.status, o.status === '正常' ? 'blue' : 'gray'))}
+  <div class="m-body"><div class="slip-preview">${transferSlip(o, canMoney())}</div><p class="sub-t" style="margin-top:10px">开单时间 ${fmtTime(o.createdAt)} · 已打印 ${o.printCount || 0} 次</p></div>
+  <div class="m-foot">${can('inv.void') && o.status === '正常' ? `<button class="btn" style="margin-right:auto;color:var(--red)" data-act="transferVoid" data-id="${o.id}">作废</button>` : '<span style="margin-right:auto"></span>'}
+    ${can('inv.print') ? `<button class="btn primary" data-act="transferPrint" data-id="${o.id}">${ic('printer')}打印</button>` : ''}<button class="btn" data-act="closeModal">关闭</button></div>`, 'lg');
+}
+async function transferPrint(id) {
+  const o = byId(db.transferDocs, id); if (!o) return;
+  let n;
+  try { n = (await api('POST', `/api/transfers/${id}/print`, {})).printCount; o.printCount = n; } catch (e) { return toast(e.message, 'error'); }
+  printFrame(o.no, `<div class="page">${transferSlip(o, canMoney())}<div class="foot">打印人：${esc(ME.name)} · ${fmtTime(new Date())} · 第 ${n} 次打印</div></div>`, prefs.paper || 'a4');
+}
+function transferVoid(id) {
+  const o = byId(db.transferDocs, id);
+  formModal({title:'作废调拨单 · ' + o.no, okText:'确认作废', fields:[{n:'reason', l:'作废原因', req:1, span:1}], onSubmit:v => mutate('POST', `/api/transfers/${id}/void`, v, `已作废，货已从${whName(o.to)}退回${whName(o.from)}`)});
+}
+
+/* ---------- 批次 / 保质期 ---------- */
+function pageBatches() {
+  const filters = [{key:'st', label:'全部状态', options:['已过期', '临期', '正常', '无有效期'], test:(b, v) => { const s = expState(b)[0]; return v === '临期' ? /天后到期/.test(s) : s === v; }},
+    ...(multiWh() ? [{key:'wh', label:'全部仓库', options:whs().map(w => [w.id, w.name]), test:(b, v) => b.wh === v}] : [])];
+  const set = can('inv.checkpost') ? `<span class="sub-t">提前</span><input type="number" class="select" id="expDays" value="${expiryDays()}" min="1" max="365" style="width:70px"><span class="sub-t">天提醒</span><button class="btn sm" data-act="expirySave">保存</button>` : `<span class="sub-t">提前 ${expiryDays()} 天提醒</span>`;
+  $('#invCard').innerHTML = toolbar('batches', {placeholder:'搜索商品 / 批号', filters, buttons:set + (can('inv.export') ? `<button class="btn" data-act="export" data-id="batches">${ic('download')}导出</button>` : '')}) + '<div id="list-batches"></div>';
+  const rows = () => db.batches.filter(b => b.qty > 0).sort((a, b) => (a.expDate || '9999').localeCompare(b.expDate || '9999'));
+  mountList('batches', {rows, search:b => prodOf(b.productId).name + prodOf(b.productId).sku + b.no, filters, empty:'暂无批次库存', columns:[
+    {t:'商品', r:b => `<b>${esc(prodOf(b.productId).name)}</b><div class="sub-t">${esc(prodOf(b.productId).sku)}</div>`, s:b => prodOf(b.productId).name},
+    {t:'批号', r:b => esc(b.no), s:b => b.no},
+    ...(multiWh() ? [{t:'仓库', r:b => esc(whName(b.wh))}] : []),
+    {t:'生产日期', r:b => b.prodDate || '-', s:b => b.prodDate || ''},
+    {t:'有效期至', r:b => b.expDate ? `<b>${b.expDate}</b>` : '-', s:b => b.expDate || '9999'},
+    {t:'剩余天数', cls:'num', r:b => { const n = daysLeft(b.expDate); return n == null ? '-' : `<span class="${n < 0 ? 'neg' : ''}">${n}</span>`; }, s:b => daysLeft(b.expDate) ?? 1e9},
+    {t:'数量', cls:'num', r:b => `<b>${num(b.qty)}</b> ${esc(prodOf(b.productId).unit)}`, s:b => b.qty},
+    {t:'入库', r:b => `${b.inDate || '-'}<div class="sub-t">${refLink(b.ref)}</div>`, s:b => b.inDate},
+    {t:'状态', r:b => badge(...expState(b))},
+    {t:'操作', r:b => can('inv.out') && expState(b)[0] === '已过期' ? tbtn('报损出库', 'scrap', b.productId) : ''}
+  ], exp:{name:'批次库存', cols:[['商品编码', b => prodOf(b.productId).sku], ['商品', b => prodOf(b.productId).name], ['批号', b => b.no], ...(multiWh() ? [['仓库', b => whName(b.wh)]] : []), ['生产日期', b => b.prodDate], ['有效期至', b => b.expDate], ['剩余天数', b => daysLeft(b.expDate) ?? ''], ['数量', b => b.qty], ['状态', b => expState(b)[0]]]}});
+}
+
+/* ---------- 补货建议（专业版） ---------- */
+// 消耗 = 统计期内的销售出库、领料等出库（不含调拨、盘亏、作废冲回）
+const CONSUME = l => l.qty < 0 && !isTransferLog(l) && !['盘亏', '作废冲回', '盘点调整'].includes(l.kind);
+function replenishRows(o) {
+  const from = fmtDate(new Date(Date.now() - o.days * 864e5));
+  const used = {}; db.stockLogs.forEach(l => { if (CONSUME(l) && l.date > from && (!o.wh || logWh(l) === o.wh)) used[l.productId] = (used[l.productId] || 0) - l.qty; });
+  const onOrder = {}; db.purchases.filter(p => ['待审核', '已审核'].includes(p.status)).forEach(po => po.items.forEach(i => { onOrder[i.productId] = (onOrder[i.productId] || 0) + i.qty; }));
+  const lastBuy = {}; [...db.purchases].filter(p => p.status !== '已作废').sort((a, b) => a.date.localeCompare(b.date)).forEach(po => po.items.forEach(i => { lastBuy[i.productId] = {sup:po.supplierId, price:i.price}; }));
+  return db.products.map(p => {
+    const stock = whQty(p, o.wh), daily = (used[p.id] || 0) / o.days, inbound = o.wh ? 0 : onOrder[p.id] || 0;
+    const target = Math.ceil(daily * (o.lead + o.cover)) + (p.safety || 0);
+    const need = Math.max(0, target - stock - inbound);
+    return {p, stock, daily, inbound, target, need, cover:daily ? stock / daily : null, sup:(lastBuy[p.id] || {}).sup || '', price:(lastBuy[p.id] || {}).price ?? p.cost ?? 0};
+  }).filter(r => r.need > 0).sort((a, b) => (a.cover ?? 1e9) - (b.cover ?? 1e9));
+}
+function pageReplenish() {
+  if (!isPro()) {
+    $('#invCard').innerHTML = `<div class="card-body" style="text-align:center;padding:48px 20px"><div class="kpi-ic c-purple" style="margin:0 auto 14px">${ic('bulb')}</div>
+      <h3 style="margin-bottom:6px">补货建议 ${proTag}</h3><p class="sub-t" style="max-width:520px;margin:0 auto 18px">根据近期出库速度、安全库存和在途采购，自动算出哪些商品该补、补多少，并按供应商一键生成采购单。</p>
+      <button class="btn primary" data-act="goPro">${ic('crown')}了解专业版 / 免费试用</button></div>`;
+    return;
+  }
+  const o = ui.rep || (ui.rep = {days:30, lead:7, cover:14, wh:''});
+  if (o.wh && !byId(db.warehouses, o.wh)) o.wh = '';
+  const buy = can('purchase'), rows = replenishRows(o);
+  ui.repRows = rows; ui.repPick = ui.repPick || {};
+  $('#invCard').innerHTML = `<div class="toolbar" style="flex-wrap:wrap;gap:10px"><div class="tb-left" style="flex-wrap:wrap">
+      <span>按近</span><input type="number" class="select" id="rDays" value="${o.days}" min="7" max="365" style="width:70px"><span>天出库速度，</span>
+      <span>到货周期</span><input type="number" class="select" id="rLead" value="${o.lead}" min="0" max="180" style="width:64px"><span>天，备货</span><input type="number" class="select" id="rCover" value="${o.cover}" min="1" max="365" style="width:64px"><span>天</span>
+      ${multiWh() ? `<select class="select" id="rWh">${whOpts(o.wh, true)}</select>` : ''}<button class="btn sm" data-act="repCalc">${ic('refresh')}重新计算</button></div>
+    <div class="tb-right">${can('inv.export') ? `<button class="btn" data-act="repExport">${ic('download')}导出</button>` : ''}${buy && !o.wh ? `<button class="btn primary" data-act="repGen">${ic('cart')}生成采购单</button>` : ''}</div></div>
+    <p class="sub-t" style="padding:0 20px 10px">建议补货 = 日均出库 ×（到货周期 + 备货天数）+ 安全库存 − 当前库存 − 在途采购（未入库的采购单）。数量可以改，勾选后按供应商生成采购单${buy ? '' : '（需要采购管理权限）'}。</p>
+    <div class="table-wrap"><table class="tbl"><thead><tr>${buy && !o.wh ? '<th style="width:36px"><input type="checkbox" id="rAll" checked></th>' : ''}<th>商品</th><th class="num">当前库存</th><th class="num">安全库存</th><th class="num">日均出库</th><th class="num">可用天数</th><th class="num">在途</th><th style="width:110px">建议补货</th>${buy && !o.wh ? '<th>供应商</th>' : ''}</tr></thead><tbody>
+    ${rows.map(r => `<tr data-pid="${r.p.id}">${buy && !o.wh ? `<td><input type="checkbox" class="rPick" checked></td>` : ''}<td><b>${esc(r.p.name)}</b><div class="sub-t">${esc(r.p.sku)}</div></td>
+      <td class="num ${r.stock < r.p.safety ? 'neg' : ''}">${num(r.stock)}</td><td class="num">${num(r.p.safety)}</td><td class="num">${r.daily ? r.daily.toFixed(1) : '<span class="sub-t">无出库</span>'}</td>
+      <td class="num">${r.cover == null ? '-' : r.cover < 1 ? '<span class="neg">不足 1 天</span>' : Math.floor(r.cover) + ' 天'}</td><td class="num">${r.inbound || '-'}</td>
+      <td><input type="number" class="rQty" min="0" step="1" value="${r.need}"></td>
+      ${buy && !o.wh ? `<td><select class="rSup select" style="height:32px"><option value="">选择供应商</option>${db.suppliers.map(s => `<option value="${s.id}" ${s.id === r.sup ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></td>` : ''}</tr>`).join('')
+      || `<tr><td colspan="9"><div class="empty">${emptySvg}<p>按当前参数，暂时没有需要补货的商品</p></div></td></tr>`}</tbody></table></div>
+    ${o.wh ? '<p class="sub-t" style="padding:12px 20px">按单个仓库计算时不扣在途采购，用于门店向总仓要货，可导出后开调拨单。</p>' : ''}`;
+  if ($('#rAll')) $('#rAll').onchange = e => document.querySelectorAll('.rPick').forEach(x => { x.checked = e.target.checked; });
+}
+function repPicked() {
+  return [...document.querySelectorAll('#invCard tr[data-pid]')].map(tr => ({pid:tr.dataset.pid, on:!tr.querySelector('.rPick') || tr.querySelector('.rPick').checked,
+    qty:+tr.querySelector('.rQty').value || 0, sup:tr.querySelector('.rSup') ? tr.querySelector('.rSup').value : ''}));
+}
+async function repGen() {
+  const pick = repPicked().filter(x => x.on && x.qty > 0);
+  if (!pick.length) return toast('请勾选要补货的商品', 'error');
+  if (pick.some(x => !Number.isInteger(x.qty))) return toast('补货数量必须为整数', 'error');
+  const noSup = pick.filter(x => !x.sup);
+  if (noSup.length) return toast(`还有 ${noSup.length} 个商品没选供应商`, 'error');
+  const bySup = {}; pick.forEach(x => { (bySup[x.sup] = bySup[x.sup] || []).push(x); });
+  const price = pid => (ui.repRows.find(r => r.p.id === pid) || {}).price || 0;
+  confirmBox(`将为 ${Object.keys(bySup).length} 个供应商生成 ${Object.keys(bySup).length} 张采购单（待审核），共 ${pick.length} 个商品。单价取最近一次采购价，可在采购单里修改。`, async () => {
+    const nos = [];
+    try {
+      for (const [sup, xs] of Object.entries(bySup)) nos.push((await api('POST', '/api/orders/purchase', {partyId:sup, date:today(), remark:'由补货建议生成', items:xs.map(x => ({productId:x.pid, qty:x.qty, price:price(x.pid)}))})).no);
+      await reload(); render(); toast('已生成采购单：' + nos.join('、'));
+    } catch (e) { await reload(); render(); toast((nos.length ? '已生成 ' + nos.join('、') + '，' : '') + e.message, 'error'); }
+  }, {title:'生成采购单', danger:false, okText:'生成'});
+}
+
+/* ---------- 条码标签打印（专业版） ---------- */
+// Code 128：全数字且偶数位用 C 码集（更短），否则用 B 码集（ASCII 32~126）
+const C128 = '212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232 2331112'.split(' ');
+function code128(text) {
+  text = String(text);
+  if (!/^[\x20-\x7e]+$/.test(text)) return null;
+  const codes = /^\d+$/.test(text) && text.length % 2 === 0 && text.length >= 4 ? [105, ...text.match(/\d\d/g).map(Number)] : [104, ...[...text].map(c => c.charCodeAt(0) - 32)];
+  codes.push(codes.reduce((s, c, i) => s + c * (i || 1), 0) % 103, 106);
+  return codes.map(c => C128[c]).join('');
+}
+function barcodeSvg(text, h = 40) {
+  const pat = code128(text); if (!pat) return '';
+  let x = 10, bars = '';
+  [...pat].forEach((w, i) => { if (i % 2 === 0) bars += `<rect x="${x}" y="0" width="${w}" height="${h}"/>`; x += +w; });
+  return `<svg viewBox="0 0 ${x + 10} ${h}" preserveAspectRatio="none" style="width:100%;height:100%;display:block" fill="#000">${bars}</svg>`;
+}
+const LABELS = {l4030:['40×30 毫米（热敏标签）', 40, 30], l5030:['50×30 毫米（热敏标签）', 50, 30], l6040:['60×40 毫米（热敏标签）', 60, 40], a4:['A4 不干胶 3×8（70×37 毫米）', 70, 37]};
+function labelHtml(p, f) {
+  const code = p.barcode || p.sku;
+  return `<div class="lb">${f.company ? `<div class="lb-co">${esc(db.settings.company)}</div>` : ''}<div class="lb-name">${esc(p.name)}</div>
+    ${f.spec && p.spec ? `<div class="lb-spec">${esc(p.spec)}</div>` : ''}${f.price && p.price != null ? `<div class="lb-price">¥${(+p.price).toFixed(2)}${p.unit ? `<small>/${esc(p.unit)}</small>` : ''}</div>` : ''}
+    <div class="lb-bar">${barcodeSvg(code) || '<span>条码含不支持的字符</span>'}</div><div class="lb-code">${esc(code)}</div></div>`;
+}
+function labelOpen() {
+  if (!proGate('条码标签打印')) return;
+  const src = (lists.products && lists.products.last) || db.products;
+  if (!src.length) return toast('没有可打印的商品', 'error');
+  const f = Object.assign({tpl:'l4030', company:false, spec:true, price:seesPrice()}, prefs.label || {});
+  openModal(`${modalHead('打印条码标签')}<div class="m-body">
+    <div class="form-grid"><label class="field"><span>标签纸</span><select id="lbTpl">${Object.entries(LABELS).map(([k, v]) => `<option value="${k}" ${k === f.tpl ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></label>
+    <div class="field"><span>标签内容</span><div style="display:flex;gap:14px;flex-wrap:wrap;padding-top:8px">
+      <label class="chk"><input type="checkbox" id="lbCo" ${f.company ? 'checked' : ''}>公司名</label><label class="chk"><input type="checkbox" id="lbSpec" ${f.spec ? 'checked' : ''}>规格</label>
+      ${seesPrice() ? `<label class="chk"><input type="checkbox" id="lbPrice" ${f.price ? 'checked' : ''}>售价</label>` : ''}</div></div></div>
+    <div style="display:flex;gap:20px;align-items:flex-start;margin-top:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:300px"><div class="line-head" style="margin-top:0"><b>商品（${src.length} 个，来自商品列表当前筛选）</b><span style="margin-left:auto" class="sub-t">全部设为</span>
+        <input type="number" id="lbAll" min="0" value="1" style="width:64px;margin:0 6px" class="select"><button class="btn sm" id="lbStock">按库存数</button></div>
+        <div class="table-wrap" style="max-height:40vh;overflow:auto"><table class="tbl items compact"><thead><tr><th>商品</th><th>条码</th><th style="width:90px">张数</th></tr></thead><tbody id="lbRows">
+        ${src.map(p => `<tr data-pid="${p.id}"><td><b>${esc(p.name)}</b><div class="sub-t">${esc(p.spec || '')}</div></td><td class="sub-t">${esc(p.barcode || p.sku)}${code128(p.barcode || p.sku) ? '' : ' <span class="neg">不支持</span>'}</td><td><input type="number" min="0" step="1" value="1"></td></tr>`).join('')}</tbody></table></div></div>
+      <div><b>预览</b><div id="lbPrev" style="margin-top:8px;background:#fff;color:#000;border:1px dashed var(--border);border-radius:6px;padding:4px"></div><p class="sub-t" id="lbCount" style="margin-top:8px"></p></div></div>
+    <p class="sub-t" style="margin-top:12px">条码用 Code 128 编码，常见扫码枪都能识别。没填条码的商品用商品编码。打印前请在打印对话框里选对标签打印机和纸张尺寸、边距设为「无」。</p></div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="lbGo">${ic('printer')}打印</button></div>`, 'lg');
+  const opts = () => ({tpl:$('#lbTpl').value, company:$('#lbCo').checked, spec:$('#lbSpec').checked, price:!!($('#lbPrice') && $('#lbPrice').checked)});
+  const picks = () => [...document.querySelectorAll('#lbRows tr')].map(tr => ({p:byId(db.products, tr.dataset.pid), n:Math.max(0, Math.floor(+tr.querySelector('input').value || 0))})).filter(x => x.n > 0);
+  const css = tpl => { const [, w, h] = LABELS[tpl], sheet = tpl === 'a4', fs = Math.min(w, h * 1.4) / 40;
+    return `.lb{width:${w}mm;height:${h}mm;padding:${(1.5 * fs).toFixed(1)}mm ${(2 * fs).toFixed(1)}mm;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;font-family:"Microsoft YaHei","PingFang SC",sans-serif;color:#000;${sheet ? '' : 'page-break-after:always;'}}
+      .lb-co{font-size:${(6.5 * fs).toFixed(1)}pt;color:#333}.lb-name{font-size:${(9 * fs).toFixed(1)}pt;font-weight:700;line-height:1.15;max-height:2.3em;overflow:hidden}.lb-spec{font-size:${(7 * fs).toFixed(1)}pt}
+      .lb-price{font-size:${(11 * fs).toFixed(1)}pt;font-weight:800}.lb-price small{font-size:.6em;font-weight:400}.lb-bar{height:${(h * .3).toFixed(1)}mm;margin-top:1mm}.lb-code{font:${(7 * fs).toFixed(1)}pt/1 Consolas,monospace;text-align:center;letter-spacing:.5px}
+      ${sheet ? '.sheet{display:grid;grid-template-columns:repeat(3,70mm);grid-auto-rows:37mm;width:210mm}.sheet .lb{border:0}' : ''}`; };
+  const prev = () => {
+    const o = opts(), ps = picks(), p = (ps[0] || {p:src[0]}).p;
+    $('#lbPrev').innerHTML = `<style>${css(o.tpl).replace(/page-break-after:always;/g, '')}</style>${labelHtml(p, o)}`;
+    $('#lbCount').textContent = `共 ${sum(ps, x => x.n)} 张`;
+  };
+  $('#modal').addEventListener('change', prev); $('#modal').addEventListener('input', e => { if (e.target.closest('#lbRows')) prev(); });
+  $('#lbAll').onchange = e => { document.querySelectorAll('#lbRows input').forEach(x => { x.value = Math.max(0, Math.floor(+e.target.value || 0)); }); prev(); };
+  $('#lbStock').onclick = () => { document.querySelectorAll('#lbRows tr').forEach(tr => { tr.querySelector('input').value = Math.max(0, (byId(db.products, tr.dataset.pid) || {}).stock || 0); }); prev(); };
+  $('#lbGo').onclick = () => {
+    const o = opts(), ps = picks(), total = sum(ps, x => x.n);
+    if (!total) return toast('请至少打印 1 张', 'error');
+    if (total > 2000) return toast('一次最多打印 2000 张，请分批打印', 'error');
+    prefs.label = o; LS.set('prefs', prefs);
+    const labels = ps.flatMap(x => Array(x.n).fill(labelHtml(x.p, o))).join('');
+    const [, w, h] = LABELS[o.tpl], sheet = o.tpl === 'a4';
+    printLabels(`<style>@page{size:${sheet ? 'A4 portrait' : w + 'mm ' + h + 'mm'};margin:${sheet ? '10mm 0 0 0' : '0'}}body{margin:0}${css(o.tpl)}</style>${sheet ? `<div class="sheet">${labels}</div>` : labels}`);
+  };
+  prev();
+}
+function printLabels(body) {
+  const f = document.createElement('iframe');
+  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+  document.body.appendChild(f);
+  const d = f.contentDocument;
+  d.open(); d.write(`<!doctype html><html><head><meta charset="utf-8"><title>条码标签</title></head><body>${body}</body></html>`); d.close();
+  setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 1500); }, 200);
+}
+
+/* ---------- 专业版：激活 / 试用 ---------- */
+const PRO_FEATURES = [
+  ['warehouse', '多仓库 + 调拨单', '多个仓库或门店分开记库存，出入库、盘点按仓库开，仓库之间开调拨单移库，收发存可按仓库统计。'],
+  ['calendar', '批次 / 保质期', '入库记批号、生产日期和有效期，出库自动先到期先出，临期 / 过期自动提醒，批次跟着调拨走。'],
+  ['barcode', '条码标签打印', '一键批量打印商品条码标签（40×30、50×30、60×40 热敏纸或 A4 不干胶），可带品名、规格、售价。'],
+  ['bulb', '补货建议', '按近期出库速度、安全库存和在途采购，算出该补哪些货、补多少，按供应商一键生成采购单。']];
+function proPage(body) {
+  const L = LIC, mode = L.mode;
+  const status = mode === 'license' ? (L.pro ? `<span class="badge green">已激活</span>` : `<span class="badge orange">免费升级期已过</span>`)
+    : mode === 'trial' ? (L.pro ? `<span class="badge blue">试用中</span>` : `<span class="badge gray">试用已结束</span>`) : `<span class="badge gray">未激活</span>`;
+  body.innerHTML = `<div class="grid g2">
+    <div class="card"><div class="card-head"><h3>${ic('crown')} x.erp 专业版</h3>${status}</div><div class="card-body">
+      ${mode === 'license' ? `<div class="doc-info" style="margin-bottom:12px"><div><span>授权给：</span><b>${esc(L.to)}</b></div><div><span>编号：</span>${esc(L.id)}</div><div><span>签发日期：</span>${esc(L.issued)}</div><div><span>免费升级至：</span>${esc(L.upd)}</div></div>` : ''}
+      ${mode === 'trial' ? `<p style="margin-bottom:12px">试用${L.pro ? '至' : '已于'} <b>${esc(L.trialEnd)}</b>${L.pro ? `，还剩 ${Math.max(0, daysBetween(today(), L.trialEnd))} 天` : ' 结束'}。</p>` : ''}
+      ${L.note ? `<p class="sub-t" style="margin-bottom:12px;color:var(--orange)">${esc(L.note)}</p>` : ''}
+      <p class="sub-t" style="margin-bottom:14px">一次购买，永久使用；一年内发布的新版本免费升级。到期后已安装的版本照常可用，数据不受任何影响。</p>
+      ${isAdmin() ? `<label class="field"><span>授权码</span><textarea id="licKey" rows="3" placeholder="粘贴以 XERP- 开头的授权码"></textarea></label>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn primary" data-act="licActivate">${ic('check')}激活</button>
+        ${L.trialAvailable ? `<button class="btn" data-act="licTrial">免费试用 ${META.trialDays} 天</button>` : ''}
+        ${mode === 'license' ? `<button class="btn" style="margin-left:auto" data-act="licRemove">移除授权</button>` : ''}</div>` : '<p class="sub-t">激活和试用需要管理员操作。</p>'}
+      <div class="setting-row" style="margin-top:16px;border-top:1px solid var(--border)"><div class="sr-group"><b>购买授权码</b><small>在官网查看价格并联系购买，付款后会收到授权码</small></div>
+        <a class="btn" style="text-decoration:none" href="http://101.201.141.121/xerp/#pro" target="_blank" rel="noopener">${ic('cart')}去购买</a></div>
+    </div></div>
+    <div class="card"><div class="card-head"><h3>专业版包含</h3></div><div class="card-body">
+      ${PRO_FEATURES.map(([i, t, d]) => `<div style="display:flex;gap:12px;margin-bottom:16px"><div class="kpi-ic c-purple" style="flex-shrink:0">${ic(i)}</div><div><b>${t}</b><p class="sub-t">${d}</p></div></div>`).join('')}
+      <p class="sub-t">x.erp 的源码公开，专业版靠大家自觉付费支持持续开发，谢谢！</p>
+    </div></div></div>`;
 }
 
 /* ---------- Excel 导入商品与期初库存 ---------- */
@@ -1471,6 +1909,7 @@ function orderView(kind, id) {
       <div><span>${C.partyLabel}：</span>${esc(party.name || '-')}</div><div><span>单据日期：</span>${o.date}</div>
       <div><span>联系人：</span>${esc(party.contact || '-')} ${esc(party.phone || '')}</div><div><span>制单人：</span>${esc(db.settings.user)}</div>
       <div style="grid-column:1/-1"><span>地址：</span>${esc(party.address || '-')}</div>
+      ${o.wh && multiWh() ? `<div><span>${kind === 'sales' ? '发货' : '入库'}仓库：</span>${esc(whName(o.wh))}</div>` : ''}
     </div>
     <table class="tbl compact"><thead><tr><th>#</th><th>商品</th><th>单位</th><th class="num">数量</th><th class="num">单价</th><th class="num">金额</th></tr></thead><tbody>
     ${o.items.map((i, n) => { const p = byId(db.products, i.productId) || {name:'已删除商品', unit:''}; return `<tr><td>${n + 1}</td><td>${esc(p.name)}</td><td>${esc(p.unit)}</td><td class="num">${i.qty}</td><td class="num">${money(i.price)}</td><td class="num">${money(i.qty * i.price)}</td></tr>`; }).join('')}
@@ -1485,12 +1924,39 @@ function orderAct(action, kind, id) {
   const C = ORD[kind], o = byId(db[C.db], id), url = `/api/orders/${kind}/${id}`;
   const run = (act, msg, body) => mutate(act === 'delete' ? 'DELETE' : 'POST', act === 'delete' ? url : url + '/' + act, body || {}, msg);
   if (action === 'ship') {
-    const lack = o.items.map(i => ({i, p:byId(db.products, i.productId)})).filter(x => !x.p || x.p.stock < x.i.qty);
-    if (lack.length) return toast('库存不足：' + lack.map(x => (x.p ? x.p.name + '（缺 ' + (x.i.qty - x.p.stock) + '）' : '商品已删除')).join('、'), 'error');
-    confirmBox(`确认发货 ${o.no}？将扣减对应商品库存。`, () => run('ship', '已发货，库存已扣减'), {danger:false, okText:'确认发货'});
+    const need = {}; o.items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + i.qty; });
+    const lackIn = w => Object.entries(need).map(([pid, q]) => ({p:byId(db.products, pid), q})).filter(x => !x.p || whQty(x.p, w) < x.q);
+    const lackMsg = (w, l) => (multiWh() ? whName(w) : '') + '库存不足：' + l.map(x => (x.p ? x.p.name + '（缺 ' + (x.q - whQty(x.p, w)) + '）' : '商品已删除')).join('、');
+    if (!multiWh()) {
+      const lack = lackIn(META.defaultWh);
+      if (lack.length) return toast(lackMsg(META.defaultWh, lack), 'error');
+      return confirmBox(`确认发货 ${o.no}？将扣减对应商品库存。`, () => run('ship', '已发货，库存已扣减'), {danger:false, okText:'确认发货'});
+    }
+    const best = whs().find(w => !lackIn(w.id).length);
+    formModal({title:'发货 · ' + o.no, okText:'确认发货', data:{wh:(best || whs()[0]).id}, fields:[{n:'wh', l:'从哪个仓库发货', type:'select', opts:whs().map(w => [w.id, w.name + (lackIn(w.id).length ? '（库存不足）' : '')]), span:1}],
+      onSubmit:v => { const l = lackIn(v.wh); if (l.length) return toast(lackMsg(v.wh, l), 'error'); return run('ship', '已从' + whName(v.wh) + '发货，库存已扣减', {wh:v.wh}); }});
   } else if (action === 'complete') run('complete', '订单已完成');
   else if (action === 'approve') confirmBox(`审核通过采购单 ${o.no}？`, () => run('approve', '审核通过'), {danger:false, okText:'审核通过'});
-  else if (action === 'inbound') confirmBox(`确认采购单 ${o.no} 全部到货入库？`, () => run('inbound', '已入库，库存已增加'), {danger:false, okText:'确认入库'});
+  else if (action === 'inbound') {
+    const bItems = o.items.filter(i => (byId(db.products, i.productId) || {}).batch);
+    if (!multiWh() && !bItems.length) return confirmBox(`确认采购单 ${o.no} 全部到货入库？`, () => run('inbound', '已入库，库存已增加'), {danger:false, okText:'确认入库'});
+    openModal(`${modalHead('采购入库 · ' + o.no)}<div class="m-body">
+      ${multiWh() ? `<label class="field"><span>入库仓库 <i>*</i></span><select id="ibWh">${whOpts(META.defaultWh)}</select></label>` : ''}
+      ${bItems.length ? `<div class="line-head"><b>批次信息</b><span class="sub-t" style="margin-left:10px">批号留空则用采购单号</span></div>
+      <div class="table-wrap"><table class="tbl items"><thead><tr><th>商品</th><th class="num">数量</th><th>批号</th><th>生产日期</th><th>有效期至</th></tr></thead><tbody>
+      ${bItems.map(i => { const p = byId(db.products, i.productId); return `<tr data-pid="${p.id}"><td><b>${esc(p.name)}</b>${p.shelfDays ? `<div class="sub-t">保质期 ${p.shelfDays} 天</div>` : ''}</td><td class="num">${i.qty}</td>
+        <td><input data-k="no" placeholder="${esc(o.no)}"></td><td><input type="date" data-k="prodDate"></td><td><input type="date" data-k="expDate"></td></tr>`; }).join('')}</tbody></table></div>` : ''}
+      <p class="sub-t" style="margin-top:10px">确认后采购单全部数量入库。</p></div>
+      <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="ibOk">确认入库</button></div>`, bItems.length ? 'lg' : '');
+    $('#ibOk').onclick = () => {
+      const batches = {};
+      document.querySelectorAll('#modal tr[data-pid]').forEach(tr => { const g = k => tr.querySelector(`[data-k=${k}]`).value.trim(); batches[tr.dataset.pid] = {no:g('no'), prodDate:g('prodDate'), expDate:g('expDate')}; });
+      const bad = Object.entries(batches).find(([, b]) => b.prodDate && b.expDate && b.expDate < b.prodDate);
+      if (bad) return toast(`「${byId(db.products, bad[0]).name}」有效期早于生产日期`, 'error');
+      const wh = $('#ibWh') ? $('#ibWh').value : META.defaultWh;
+      run('inbound', '已入库' + (multiWh() ? '到' + whName(wh) : '') + '，库存已增加', {wh, batches});
+    };
+  }
   else if (action === 'cancel') confirmBox(`确定作废单据 ${o.no} 吗？`, () => run('cancel', '已作废'));
   else if (action === 'orderDel') confirmBox(`确定删除单据 ${o.no} 吗？此操作不可撤销。`, () => run('delete', '已删除'));
   else if (action === 'pay') {
@@ -1681,11 +2147,13 @@ function pageReports() {
 function pageSettings() {
   const items = [['general', '常规设置']];
   if (isAdmin()) items.push(['users', '用户管理'], ['roles', '角色管理'], ['data', '数据管理'], ['audit', '操作日志']);
+  items.push(['pro', '专业版' + (isPro() ? '' : ' ✦')]);
   if (!items.some(i => i[0] === ui.setTab)) ui.setTab = 'general';
   const st = db.settings;
   $('#view').innerHTML = pageHead('系统设置', '账户、偏好、用户权限与数据管理') + tabs('setTab', items) + '<div id="setBody"></div>';
   const body = $('#setBody');
-  if (ui.setTab === 'general') {
+  if (ui.setTab === 'pro') proPage(body);
+  else if (ui.setTab === 'general') {
     body.innerHTML = `<div class="grid g2">
     <div class="card"><div class="card-head"><h3>我的账户</h3></div><div class="card-body">
       <div style="display:flex;gap:14px;align-items:center;margin-bottom:6px"><div class="avatar" style="width:52px;height:52px;font-size:20px">${esc(ME.name.slice(0, 1))}</div>
@@ -1839,9 +2307,11 @@ function render() {
 }
 function updateBell() {
   const low = can('inv.view') ? lowStock() : [], ship = can('sales') ? db.sales.filter(o => o.status === '待发货') : [], appr = can('purchase') ? db.purchases.filter(o => o.status === '待审核') : [];
-  const n = low.length + (ship.length ? 1 : 0) + (appr.length ? 1 : 0);
+  const exps = can('inv.view') ? db.batches.filter(b => b.qty > 0 && b.expDate && daysLeft(b.expDate) <= expiryDays()) : [], expired = exps.filter(b => daysLeft(b.expDate) < 0);
+  const n = low.length + (ship.length ? 1 : 0) + (appr.length ? 1 : 0) + (exps.length ? 1 : 0);
   const dot = $('#bellDot'); dot.style.display = n ? 'block' : 'none'; dot.textContent = n;
   $('#bellDrop').innerHTML = `<div class="dd-head">消息提醒（${n}）</div>
+    ${exps.length ? `<div class="dd-item" data-act="goBatches"><span class="badge red plain">保质期</span><div>${expired.length ? expired.length + ' 个批次已过期，' : ''}${exps.length - expired.length} 个批次 ${expiryDays()} 天内到期<small>点击查看批次库存</small></div></div>` : ''}
     ${ship.length ? `<div class="dd-item" data-act="goFilter" data-id="sales|status|待发货"><span class="badge orange plain">订单</span><div>${ship.length} 个销售订单待发货<small>请尽快安排出库</small></div></div>` : ''}
     ${appr.length ? `<div class="dd-item" data-act="goFilter" data-id="purchase|status|待审核"><span class="badge purple plain">审核</span><div>${appr.length} 个采购订单待审核<small>点击前往处理</small></div></div>` : ''}
     ${low.slice(0, 6).map(p => `<div class="dd-item" ${can('inv.in') ? `data-act="stock" data-id="in|${p.id}"` : 'data-act="go" data-id="inventory"'}><span class="badge red plain">库存</span><div>${esc(p.name)} 库存不足<small>当前 ${p.stock}，安全库存 ${p.safety}${can('inv.in') ? '，点击开入库单' : ''}</small></div></div>`).join('')}
@@ -1883,6 +2353,7 @@ const A = {
   stock: v => { const [m, id] = split(v); $('#bellDrop').classList.remove('show'); stockModal(m, id); },
   prodLogs: id => { closeModal(); prodLogs(id); },
   docNew: dir => docModal(dir),
+  scrap: pid => docModal('out', pid, '报损出库'),
   docView: id => { closeModal(); docView(id); },
   docPrint: id => docPrint(id),
   docVoid: id => { closeModal(); docVoid(id); },
@@ -1890,6 +2361,19 @@ const A = {
   checkNew, checkOpen:id => { closeModal(); checkOpen(id); }, checkPrint, checkVoid,
   importOpen:() => { closeModal(); importOpen(); },
   ssPrint, ledger:id => { closeModal(); ledger(id); },
+  goPro: () => { closeModal(); ui.setTab = 'pro'; go('settings'); },
+  goBatches: () => { $('#bellDrop').classList.remove('show'); ui.invTab = 'batch'; const st = getState('batches'); st.f = {}; go('inventory'); },
+  licActivate: () => { const key = $('#licKey').value.replace(/\s+/g, ''); if (!key) return toast('请粘贴授权码', 'error'); mutate('POST', '/api/license', {key}, r => r.pro ? '专业版已激活，感谢支持！' : '授权码已保存：' + (r.note || '')); },
+  licTrial: () => confirmBox(`开始 ${META.trialDays} 天免费试用？每套系统只能试用一次，试用结束后已建的仓库、批次数据照常保留。`, () => mutate('POST', '/api/license/trial', {}, `专业版试用已开始，${META.trialDays} 天后结束`), {title:'免费试用专业版', danger:false, okText:'开始试用'}),
+  licRemove: () => confirmBox('移除授权码后专业版功能将不可用（数据不受影响）。确定移除？', () => mutate('DELETE', '/api/license', undefined, '已移除授权')),
+  whManage, whEdit: id => { closeModal(); whEdit(id); }, whDel: id => { closeModal(); whDel(id); },
+  transferNew: () => transferModal(), transferView: id => { closeModal(); transferView(id); }, transferPrint: id => transferPrint(id), transferVoid: id => { closeModal(); transferVoid(id); },
+  expirySave: () => mutate('PUT', '/api/settings/expiry', {days:+$('#expDays').value}, '临期提醒天数已保存'),
+  labelOpen,
+  repCalc: () => { ui.rep = {days:Math.max(7, +$('#rDays').value || 30), lead:Math.max(0, +$('#rLead').value || 0), cover:Math.max(1, +$('#rCover').value || 14), wh:$('#rWh') ? $('#rWh').value : ''}; render(); },
+  repGen,
+  repExport: () => { const pk = Object.fromEntries(repPicked().map(x => [x.pid, x])); exportCSV('补货建议', ['商品编码', '商品', '当前库存', '安全库存', '日均出库', '在途', '建议补货', '供应商'],
+    ui.repRows.map(r => [r.p.sku, r.p.name, r.stock, r.p.safety, r.daily.toFixed(2), r.inbound, pk[r.p.id] ? pk[r.p.id].qty : r.need, ((byId(db.suppliers, pk[r.p.id] && pk[r.p.id].sup || r.sup)) || {}).name || ''])); },
   ssRange:v => { const d = new Date(); [ui.ssFrom, ui.ssTo] = v === 'y' ? [d.getFullYear() + '-01-01', today()] : monthRange(+v); render(); },
   saveModules: () => {
     const modules = [...document.querySelectorAll('input[name=mod]:checked')].map(x => x.value);
