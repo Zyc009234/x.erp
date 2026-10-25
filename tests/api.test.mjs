@@ -240,3 +240,105 @@ test('原专业版功能免费可用：新建仓库、调拨单、批次，不�
   const q = await prod(p.id);
   assert.equal(q.stock, 6); assert.equal(q.wh[wid], 4); assert.equal(q.wh.w1, 2);
 });
+
+/* ---------- 序列号 ---------- */
+const serials = async pid => (await data()).serials.filter(r => r.productId === pid);
+test('序列号：入库逐件登记，数量要对得上，不能重复入库', async () => {
+  const p = await newProduct('S001', { serial: true });
+  let r = await inDoc(admin, [{ productId: p.id, qty: 2, price: 100, serials: ['SN-1'] }]);
+  assert.equal(r.http, 400); assert.match(r.error, /需要登记 2 个序列号/);
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', items: [{ productId: p.id, qty: 3, price: 100, serials: ['SN-1', 'SN-2', 'SN-3'] }] });
+  assert.equal((await prod(p.id)).stock, 3);
+  assert.deepEqual((await serials(p.id)).map(x => x.status), ['在库', '在库', '在库']);
+  r = await inDoc(admin, [{ productId: p.id, qty: 1, price: 100, serials: ['SN-2'] }]);
+  assert.equal(r.http, 400); assert.match(r.error, /已在库/);
+  // 不带序列号的入口一律拒绝
+  r = await call(admin, 'POST', '/api/stock/' + p.id, { mode: 'in', qty: 1 });
+  assert.equal(r.http, 400); assert.match(r.error, /序列号/);
+});
+
+test('序列号：出库只能出在库的号，作废出库单号回到在库', async () => {
+  const p = (await data()).products.find(x => x.sku === 'S001');
+  let r = await outDoc(admin, [{ productId: p.id, qty: 1, serials: ['SN-9'] }]);
+  assert.equal(r.http, 400); assert.match(r.error, /不存在/);
+  const o = await ok(admin, 'POST', '/api/stockdocs', { dir: 'out', type: '销售出库', party: '张三', items: [{ productId: p.id, qty: 1, serials: ['SN-2'] }] });
+  let sn2 = (await serials(p.id)).find(x => x.sn === 'SN-2');
+  assert.equal(sn2.status, '已出库'); assert.equal(sn2.hist.at(-1).party, '张三');
+  r = await outDoc(admin, [{ productId: p.id, qty: 1, serials: ['SN-2'] }]);
+  assert.equal(r.http, 400); assert.match(r.error, /已出库/);
+  await ok(admin, 'POST', `/api/stockdocs/${o.id}/void`, { reason: '退回' });
+  sn2 = (await serials(p.id)).find(x => x.sn === 'SN-2');
+  assert.equal(sn2.status, '在库'); assert.equal(sn2.hist.length, 1);
+  assert.equal((await prod(p.id)).stock, 3);
+});
+
+test('序列号：入库单里的号已出库时不能作废；调拨带着号走，作废调拨退回原仓', async () => {
+  const p = await newProduct('S002', { serial: true });
+  const a = await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', items: [{ productId: p.id, qty: 2, price: 5, serials: ['X1', 'X2'] }] });
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'out', type: '领料出库', items: [{ productId: p.id, qty: 1, serials: ['X1'] }] });
+  const r = await call(admin, 'POST', `/api/stockdocs/${a.id}/void`, { reason: 'x' });
+  assert.equal(r.http, 400);
+  assert.equal((await prod(p.id)).stock, 1, '作废失败不改库存');
+  const wid = (await data()).warehouses.find(x => x.name === '二号仓').id;
+  const t = await ok(admin, 'POST', '/api/transfers', { from: 'w1', to: wid, items: [{ productId: p.id, qty: 1, serials: ['X2'] }] });
+  let x2 = (await serials(p.id)).find(x => x.sn === 'X2');
+  assert.equal(x2.wh, wid); assert.equal(x2.status, '在库');
+  await ok(admin, 'POST', `/api/transfers/${t.id}/void`, { reason: '调错了' });
+  x2 = (await serials(p.id)).find(x => x.sn === 'X2');
+  assert.equal(x2.wh, 'w1'); assert.equal(x2.status, '在库');
+});
+
+test('序列号：有库存的商品不能直接开启', async () => {
+  const p = await newProduct('S003');
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', items: [{ productId: p.id, qty: 1, price: 1 }] });
+  const r = await call(admin, 'PUT', '/api/products/' + p.id, { serial: true });
+  assert.equal(r.http, 400); assert.match(r.error, /清零/);
+});
+
+test('序列号：开启审核时，待审核的入库单审核通过才登记', async () => {
+  await setApprove(true, true);
+  const p = await newProduct('S004', { serial: true });
+  const r = await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', items: [{ productId: p.id, qty: 1, price: 1, serials: ['P1'] }] });
+  assert.equal((await serials(p.id)).length, 0);
+  await ok(admin, 'POST', `/api/stockdocs/${r.id}/approve`, {});
+  assert.equal((await serials(p.id))[0].sn, 'P1');
+  await setApprove(false, false);
+});
+
+/* ---------- Excel 导入：条码与辅助单位 ---------- */
+test('导入：带条码和辅助单位，条码重复时整批不导入', async () => {
+  const r = await ok(admin, 'POST', '/api/products/import', { rows: [{ sku: 'I001', name: '导入一', barcode: '690000000001', units: '箱=24/690000000024；盒=6', stock: 48, cost: 1 }] });
+  assert.equal(r.created, 1);
+  const p = (await data()).products.find(x => x.sku === 'I001');
+  assert.equal(p.barcode, '690000000001'); assert.equal(p.stock, 48);
+  assert.deepEqual(p.units, [{ name: '箱', rate: 24, barcode: '690000000024' }, { name: '盒', rate: 6 }]);
+  const bad = await call(admin, 'POST', '/api/products/import', { rows: [{ sku: 'I002', name: '导入二', barcode: '690000000024' }, { sku: 'I003', name: '导入三' }] });
+  assert.equal(bad.http, 400); assert.match(bad.error, /已被商品 I001 使用/);
+  assert.ok(!(await data()).products.some(x => x.sku === 'I003'), '出错时一行都不导入');
+  const bad2 = await call(admin, 'POST', '/api/products/import', { rows: [{ sku: 'I004', name: '导入四', units: '箱十二' }] });
+  assert.equal(bad2.http, 400); assert.match(bad2.error, /辅助单位格式/);
+});
+
+/* ---------- 库存提醒推送 ---------- */
+test('推送：测试消息按机器人格式发出，推送地址只有管理员能看到', async () => {
+  const http = await import('node:http');
+  const got = [];
+  const hook = http.createServer((req, res) => { let b = ''; req.on('data', c => { b += c; }); req.on('end', () => { got.push({ url: req.url, body: JSON.parse(b) }); res.end('{"errcode":0}'); }); });
+  await new Promise(r => hook.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${hook.address().port}/hook`;
+  try {
+    const low = await newProduct('N001', { safety: 10 });
+    const prev = await ok(admin, 'GET', '/api/settings/notify/preview');
+    assert.match(prev.text, /库存不足/); assert.match(prev.text, /测试商品N001/);
+    await ok(admin, 'POST', '/api/settings/notify/test', { url });
+    assert.equal(got.length, 1); assert.match(got[0].body.text, /【测试】/);
+    await ok(admin, 'PUT', '/api/settings/notify', { enabled: true, url, time: '23:59', skipEmpty: true });
+    assert.equal((await ok(admin, 'GET', '/api/data')).settings.notify.url, url);
+    const clerk = await login('clerk1', 'test123456');
+    assert.equal((await ok(clerk, 'GET', '/api/data')).settings.notify, undefined, '普通账号看不到推送地址');
+    assert.equal((await call(admin, 'PUT', '/api/settings/notify', { enabled: true, url: 'ftp://x', time: '08:00' })).http, 400);
+    assert.equal((await call(admin, 'POST', '/api/settings/notify/test', { url: 'http://127.0.0.1:1/none' })).http, 400);
+    await ok(admin, 'PUT', '/api/settings/notify', { enabled: false, url: '', time: '08:30' });
+    assert.ok(low.id);
+  } finally { hook.close(); }
+});

@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.0.1';
+const VERSION = '2.0.2';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -93,7 +93,7 @@ const fail = (msg, status) => { throw new HttpError(msg, status); };
 function audit(ctx, action, detail = '') { S.audit.run(new Date().toISOString(), ctx.user ? ctx.user.name : '-', action, String(detail).slice(0, 300), ctx.ip || ''); }
 
 /* ================= 业务常量 ================= */
-const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches'];
+const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials'];
 const DATED = ['sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs'];
 const CATS = ['电子产品', '办公用品', '家居用品', '食品饮料'];
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
@@ -106,7 +106,7 @@ const ORD = {
 const ENTITY = {
   products: { name: '商品', required: { sku: '商品编码', name: '商品名称' },
     fields: { sku: ['s', '商品编码'], barcode: ['s', '条码'], name: ['s', '商品名称'], spec: ['s'], category: ['s'], unit: ['s'], cost: ['n', '成本价'], price: ['n', '销售价'], stock: ['n', '期初库存'], safety: ['n', '安全库存'],
-      batch: ['b'], shelfDays: ['n', '保质期天数'], remark: ['s'] } },
+      batch: ['b'], serial: ['b'], shelfDays: ['n', '保质期天数'], remark: ['s'] } },
   customers: { name: '客户', required: { name: '客户名称' },
     fields: { name: ['s'], contact: ['s'], phone: ['s'], email: ['s'], level: ['s'], address: ['s'], remark: ['s'] } },
   suppliers: { name: '供应商', required: { name: '供应商名称' },
@@ -349,6 +349,46 @@ function takeBatches(p, wh, qty, alloc, kind) {
   return out;
 }
 // 开启批次管理：现有各仓库存记为「期初」批次；关闭：清掉该商品的批次记录
+/* ---------- 序列号：启用的商品一件一个号，出入库单 / 调拨单逐件登记，可追溯每一件的来龙去脉 ---------- */
+// 记录 { id, sn, productId, status: 在库 / 已出库, wh, hist: [{ ref, kind, date, status, wh, party }] }，当前状态 = hist 最后一条
+const serialsOf = pid => list('serials').filter(r => r.productId === pid);
+function cleanSerials(p, raw, qty) {
+  const a = (Array.isArray(raw) ? raw : String(raw || '').split(/[\s,，;；]+/)).map(x => str(x, 64)).filter(Boolean);
+  if (new Set(a).size < a.length) fail(`「${p.name}」序列号有重复`);
+  if (a.length !== qty) fail(`「${p.name}」数量 ${qty}，需要登记 ${qty} 个序列号（现在 ${a.length} 个）`);
+  return a;
+}
+// 只校验不改动：入库的号不能已经在库，出库的号必须在这个仓库
+function checkSerials(p, sns, qty, wh) {
+  const map = new Map(serialsOf(p.id).map(r => [r.sn, r]));
+  for (const sn of sns) {
+    const r = map.get(sn);
+    if (qty > 0 && r && r.status === '在库') fail(`「${p.name}」序列号 ${sn} 已在库（${whName(r.wh)}），不能重复入库`);
+    if (qty < 0 && (!r || r.status !== '在库' || r.wh !== wh)) fail(`「${p.name}」序列号 ${sn} ${!r ? '不存在' : r.status !== '在库' ? '已出库' : '不在' + whName(wh)}`);
+  }
+}
+function moveSerials(p, qty, wh, { serials, undo, ref, kind, date, party }) {
+  if (undo) {  // 作废冲回：撤掉本单写入的那一步
+    const hit = serialsOf(p.id).filter(r => { const h = r.hist[r.hist.length - 1]; return h && h.ref === undo && (qty < 0 ? h.status === '在库' && r.wh === wh : h.status === '已出库'); });
+    if (hit.length < Math.abs(qty)) fail(`「${p.name}」本单登记的序列号有 ${Math.abs(qty) - hit.length} 个已经变动过（例如已出库），不能作废`);
+    for (const r of hit.slice(0, Math.abs(qty))) {
+      r.hist.pop();
+      const h = r.hist[r.hist.length - 1];
+      if (!h) { del('serials', r.id); continue; }
+      r.status = h.status; r.wh = h.wh; put('serials', r);
+    }
+    return;
+  }
+  if (!serials) fail(`「${p.name}」启用了序列号管理，只能用出入库单或调拨单变动库存，并逐件登记序列号`);
+  checkSerials(p, serials, qty, wh);
+  const map = new Map(serialsOf(p.id).map(r => [r.sn, r]));
+  const status = qty > 0 ? '在库' : '已出库';
+  for (const sn of serials) {
+    const r = map.get(sn) || { id: uid(), sn, productId: p.id, hist: [] };
+    r.hist.push({ ref, kind, date: date || today(), status, wh, party: str(party, 100) });
+    r.status = status; r.wh = wh; put('serials', r);
+  }
+}
 function setBatchMode(p, on) {
   if (on) for (const [w, q] of Object.entries(p.wh || {})) { if (q > 0 && !batchesOf(p.id, w).length) addBatch(p, w, q, { no: '期初' }, '', today()); }
   else for (const b of list('batches').filter(b => b.productId === p.id)) del('batches', b.id);
@@ -417,10 +457,11 @@ function addLog(ctx, productId, kind, qty, ref = '', note = '', date = '', extra
  * 启用批次的商品：入库按 batch（{ no, prodDate, expDate }）或 alloc（批次列表，冲回 / 调拨用）入批次；出库按 alloc 冲回指定批次，否则先到期先出
  * 返回 { unit: 计价单价, alloc: 本次涉及的批次 }
  */
-function moveStock(ctx, p, qty, kind, ref = '', note = '', { price, reversePrice, date, wh = DEFAULT_WH, batch, alloc } = {}) {
+function moveStock(ctx, p, qty, kind, ref = '', note = '', { price, reversePrice, date, wh = DEFAULT_WH, batch, alloc, serials, undo } = {}) {
   const before = p.stock || 0, cost0 = p.cost || 0, after = before + qty;
   if (!p.wh) p.wh = { [DEFAULT_WH]: before };
   if (qty < 0 && whQty(p, wh) + qty < 0) fail(`「${p.name}」在${whName(wh)}库存不足（需 ${-qty}，现有 ${whQty(p, wh)}）`);
+  if (p.serial && qty) moveSerials(p, qty, wh, { serials, undo, ref, kind, date, party: note });
   let unit = cost0;
   if (qty > 0 && price != null && Number.isFinite(+price)) {
     unit = +price;
@@ -437,7 +478,7 @@ function moveStock(ctx, p, qty, kind, ref = '', note = '', { price, reversePrice
     else used = takeBatches(p, wh, -qty, alloc, kind);
   }
   put('products', p);
-  addLog(ctx, p.id, kind, qty, ref, note, date, { cost: round4(unit), costAfter: p.cost, wh, ...(used ? { batches: used.map(({ no, expDate, qty }) => ({ no, expDate, qty })) } : {}) });
+  addLog(ctx, p.id, kind, qty, ref, note, date, { cost: round4(unit), costAfter: p.cost, wh, ...(used ? { batches: used.map(({ no, expDate, qty }) => ({ no, expDate, qty })) } : {}), ...(p.serial && serials ? { serials } : {}) });
   return { unit, alloc: used };
 }
 function nextNo(C) {
@@ -477,6 +518,11 @@ function saveEntity(ctx, col, id) {
       r.shelfDays = Math.round(r.shelfDays || 0);
       if (rec && rec.stock !== 0) r.cost = rec.cost;  // 有库存时成本由移动加权平均自动计算
       if (rec && !!rec.batch !== !!r.batch) setBatchMode(r, r.batch);
+      if (r.serial && !(rec && rec.serial)) {
+        if (rec && rec.stock) fail('开启序列号管理需要先把库存清零（例如出库或盘点为 0），之后用入库单逐件登记序列号入库');
+        if (!rec && r.stock > 0) fail('启用序列号的商品不能直接填期初库存，请建好后用入库单逐件登记序列号');
+      }
+      if (rec && rec.serial && !r.serial) serialsOf(r.id).filter(x => x.status === '在库').forEach(x => del('serials', x.id));  // 关闭后不再跟踪在库的号
     }
     if (col === 'employees' && !r.no) {
       const nos = new Set(list('employees').map(e => e.no));
@@ -608,7 +654,7 @@ const lackText = (lack, wh) => `${whName(wh)}库存不足：` + lack.map(x => x.
 // 单据入账：逐行改库存，出库行回填成本单价，批次写回明细
 function postStockDoc(ctx, o) {
   o.items.forEach(i => {
-    const m = moveStock(ctx, get('products', i.productId), o.dir === 'in' ? i.qty : -i.qty, o.type, o.no, i.note || o.party, { price: o.dir === 'in' ? i.price : undefined, date: o.date, wh: o.wh, batch: i.batch });
+    const m = moveStock(ctx, get('products', i.productId), o.dir === 'in' ? i.qty : -i.qty, o.type, o.no, i.note || o.party, { price: o.dir === 'in' ? i.price : undefined, date: o.date, wh: o.wh, batch: i.batch, serials: i.serials });
     if (o.dir === 'out') { i.price = round4(m.unit); if (i.rate) i.uprice = round4(m.unit * i.rate); }
     delete i.batch;
     if (m.alloc) i.batches = m.alloc;
@@ -630,6 +676,14 @@ function cleanUnits(raw, base) {
   });
 }
 const codesOf = p => [p.sku, p.barcode, ...(p.units || []).map(u => u.barcode)].filter(Boolean);
+// 「箱=12/条码；盒=6」→ [{ name, rate, barcode }]，和商品档案里的写法一致
+function parseUnitsText(t) {
+  return String(t || '').split(/[;；,，\n]+/).map(x => x.trim()).filter(Boolean).map(x => {
+    const m = /^1?\s*([^=＝\s\/／\d][^=＝\s\/／]*)\s*[=＝]\s*(\d+)\s*[^\d\/／]*?(?:[\/／]\s*(\S+))?$/.exec(x);
+    if (!m) fail('辅助单位格式不对：「' + x + '」，应写成 箱=12');
+    return { name: m[1], rate: +m[2], barcode: m[3] || '' };
+  });
+}
 // 明细数量按所选单位录入，换算成基本单位：返回 { qty: 基本单位数量, unit, rate, uqty: 录入数量 }
 function unitQty(p, i) {
   const n = Number(i.qty), name = str(i.unit, 10);
@@ -656,6 +710,7 @@ function saveStockDoc(ctx) {
       const price = dir === 'in' && withPrice && i.price !== undefined && i.price !== '' ? Number(i.price) : (p.cost || 0) * (l.rate || 1);
       if (!Number.isFinite(price) || price < 0) fail(`「${p.name}」单价不正确`);
       const it = { productId: p.id, ...l, price: dir === 'in' ? basePrice(round4(price), l) : 0, ...(dir === 'in' && l.rate ? { uprice: round4(price) } : {}), note: str(i.note, 100) };
+      if (p.serial) it.serials = cleanSerials(p, i.serials, l.qty);
       if (dir === 'in' && p.batch) {
         it.batch = { no: str(i.batchNo, 40), prodDate: isDate(i.prodDate) ? i.prodDate : '', expDate: isDate(i.expDate) ? i.expDate : '' };
         if (it.batch.expDate && it.batch.prodDate && it.batch.expDate < it.batch.prodDate) fail(`「${p.name}」有效期早于生产日期`);
@@ -664,6 +719,9 @@ function saveStockDoc(ctx) {
     });
     if (!items.length) fail('请至少添加一个商品');
     if (dir === 'out') { const lack = lackOf(items, wh); if (lack.length) fail(lackText(lack, wh)); }
+    const sn = items.flatMap(i => i.serials || []);
+    if (new Set(sn).size < sn.length) fail('同一张单据里序列号有重复');
+    items.forEach(i => { if (i.serials) checkSerials(get('products', i.productId), i.serials, dir === 'in' ? 1 : -1, wh); });
     const pending = needApprove(dir);
     const o = { id: uid(), no: nextNo(D), dir, type: b.type, wh, date, time: hhmm(), party: str(b.party, 100), handler: str(b.handler, 32), remark: str(b.remark, 500),
       items, status: pending ? '待审核' : '正常', creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), printCount: 0 };
@@ -712,7 +770,7 @@ function voidStockDoc(ctx, id) {
     o.items.forEach(i => {
       const p = get('products', i.productId); if (!p) return;
       const alloc = p.batch && i.batches ? i.batches : undefined;
-      moveStock(ctx, p, o.dir === 'in' ? -i.qty : i.qty, '作废冲回', o.no, reason, o.dir === 'in' ? { reversePrice: i.price, wh, alloc } : { price: i.price, wh, alloc });
+      moveStock(ctx, p, o.dir === 'in' ? -i.qty : i.qty, '作废冲回', o.no, reason, o.dir === 'in' ? { reversePrice: i.price, wh, alloc, undo: o.no } : { price: i.price, wh, alloc, undo: o.no });
     });
     Object.assign(o, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString(), voidReason: reason });
     put('stockDocs', o);
@@ -830,7 +888,8 @@ function saveTransfer(ctx) {
   return tx(() => {
     const items = (Array.isArray(b.items) ? b.items : []).filter(i => i && i.productId).map(i => {
       const p = get('products', i.productId) || fail('商品不存在或已删除');
-      return { productId: p.id, ...unitQty(p, i), note: str(i.note, 100) };
+      const l = unitQty(p, i);
+      return { productId: p.id, ...l, note: str(i.note, 100), ...(p.serial ? { serials: cleanSerials(p, i.serials, l.qty) } : {}) };
     });
     if (!items.length) fail('请至少添加一个商品');
     const lack = Object.entries(qtyByProduct(items)).map(([pid, q]) => ({ p: get('products', pid), q })).filter(x => whQty(x.p, from) < x.q);
@@ -838,8 +897,8 @@ function saveTransfer(ctx) {
     const o = { id: uid(), no: nextNo(TRANSFER), from, to, date, time: hhmm(), handler: str(b.handler, 32), remark: str(b.remark, 500), items, status: '正常',
       creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), printCount: 0 };
     items.forEach(i => {
-      const out = moveStock(ctx, get('products', i.productId), -i.qty, '调拨出库', o.no, '调往' + whName(to), { date, wh: from });
-      moveStock(ctx, get('products', i.productId), i.qty, '调拨入库', o.no, '来自' + whName(from), { date, wh: to, price: out.unit, alloc: out.alloc });
+      const out = moveStock(ctx, get('products', i.productId), -i.qty, '调拨出库', o.no, '调往' + whName(to), { date, wh: from, serials: i.serials });
+      moveStock(ctx, get('products', i.productId), i.qty, '调拨入库', o.no, '来自' + whName(from), { date, wh: to, price: out.unit, alloc: out.alloc, serials: i.serials });
       i.cost = round4(out.unit);
       if (out.alloc) i.batches = out.alloc;
     });
@@ -859,8 +918,8 @@ function voidTransfer(ctx, id) {
     o.items.forEach(i => {
       const p = get('products', i.productId); if (!p) return;
       const alloc = p.batch && i.batches ? i.batches : undefined;
-      const back = moveStock(ctx, p, -i.qty, '作废冲回', o.no, reason, { wh: o.to, alloc });
-      moveStock(ctx, get('products', i.productId), i.qty, '作废冲回', o.no, reason, { wh: o.from, price: back.unit, alloc: back.alloc });
+      const back = moveStock(ctx, p, -i.qty, '作废冲回', o.no, reason, { wh: o.to, alloc, undo: o.no });
+      moveStock(ctx, get('products', i.productId), i.qty, '作废冲回', o.no, reason, { wh: o.from, price: back.unit, alloc: back.alloc, undo: o.no });
     });
     Object.assign(o, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString(), voidReason: reason });
     put('transferDocs', o); audit(ctx, '作废调拨单', o.no + (reason ? ' ' + reason : ''));
@@ -875,6 +934,7 @@ function importProducts(ctx) {
   const update = ctx.body.update !== false, money = seesPrice(ctx.perms);
   return tx(() => {
     const bySku = new Map(list('products').map(p => [p.sku, p])), seen = new Set(), errors = [];
+    const codeOwner = new Map(list('products').flatMap(p => codesOf(p).filter(c => c !== p.sku).map(c => [c, p.sku])));
     let created = 0, updated = 0, skipped = 0;
     rows.forEach((raw, i) => {
       const line = Number.isInteger(raw._row) ? raw._row : i + 2, sku = str(raw.sku, 64), name = str(raw.name, 200);
@@ -892,6 +952,17 @@ function importProducts(ctx) {
       if ([cost, price, stock, safety].includes(null)) return;
       const fields = {};
       for (const k of ['name', 'spec', 'category', 'unit', 'remark']) if (raw[k] !== undefined && raw[k] !== null && String(raw[k]).trim() !== '') fields[k] = str(raw[k], k === 'remark' ? 500 : 200);
+      const old = bySku.get(sku);
+      if (raw.barcode !== undefined && raw.barcode !== null && String(raw.barcode).trim() !== '') fields.barcode = str(raw.barcode, 64);
+      if (raw.units !== undefined && raw.units !== null && String(raw.units).trim() !== '') {
+        try { fields.units = cleanUnits(parseUnitsText(raw.units), fields.unit || (old && old.unit) || '个'); } catch (e) { return err(e.message); }
+      }
+      // 条码（含辅助单位条码）不能和别的商品重复
+      const mine = [fields.barcode ?? (old && old.barcode), ...(fields.units || (old && old.units) || []).map(u => u.barcode)].filter(Boolean);
+      if (new Set(mine).size < mine.length) return err('条码重复：商品条码和各单位条码不能相同');
+      const clash = mine.find(c => codeOwner.has(c) && codeOwner.get(c) !== sku);
+      if (clash) return err(`条码 ${clash} 已被商品 ${codeOwner.get(clash)} 使用`);
+      mine.forEach(c => codeOwner.set(c, sku));
       if (safety !== undefined) fields.safety = safety;
       if (money && price !== undefined) fields.price = round2(price);
       const p = bySku.get(sku);
@@ -922,7 +993,7 @@ function visibleData(ctx) {
     sales: any('sales', 'dashboard', 'reports', 'parties'), purchases: any('purchase', 'dashboard', 'reports', 'parties'),
     customers: any('sales', 'parties', 'dashboard', 'reports'), suppliers: any('purchase', 'parties'),
     finance: any('finance', 'sales', 'purchase', 'reports'), employees: P.has('hr'),
-    warehouses: true, transferDocs: P.has('inv.view'), batches: any('inv.view', 'prod.view')
+    warehouses: true, transferDocs: P.has('inv.view'), batches: any('inv.view', 'prod.view'), serials: P.has('inv.view')
   };
   const byDate = (a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || ''));
   const data = {};
@@ -1007,8 +1078,9 @@ const route = (method, pattern, handler, opts = {}) =>
 route('GET', '/api/ping', () => ({ ok: true, app: 'XERP', version: VERSION, company: getMeta('settings', {}).company || '' }), { auth: false });
 route('POST', '/api/login', ctx => login(ctx, ctx.body), { auth: false });
 route('POST', '/api/logout', ctx => { db.prepare('DELETE FROM sessions WHERE token = ?').run(ctx.user.token); });
+const publicSettings = ctx => { const { notify, ...s } = getMeta('settings', {}); return ctx.user.role === 'admin' ? { ...s, notify } : s; };  // 推送地址带密钥，只给管理员看
 route('GET', '/api/data', ctx => ({
-  version: VERSION, settings: { ...getMeta('settings', {}), modules: enabledModules() },
+  version: VERSION, settings: { ...publicSettings(ctx), modules: enabledModules() },
   user: { ...publicUser(ctx.user), perms: [...ctx.perms] }, data: visibleData(ctx),
   meta: { modules: MODULES, perms: PERMS, docTypes: DOC_TYPES, defaultWh: DEFAULT_WH }
 }));
@@ -1031,6 +1103,23 @@ route('PUT', '/api/settings', ctx => {
   }
   setMeta('settings', s); audit(ctx, '修改设置', changes.join('；'));
 }, { admin: true });
+
+route('PUT', '/api/settings/notify', ctx => {
+  const b = ctx.body, s = getMeta('settings', {}), url = str(b.url, 500), time = /^([01]\d|2[0-3]):[0-5]\d$/.test(b.time) ? b.time : fail('推送时间格式应为 08:30');
+  if (url) { try { if (!/^https?:$/.test(new URL(url).protocol)) throw 0; } catch (e) { fail('推送地址必须以 http:// 或 https:// 开头'); } }
+  if (b.enabled && !url) fail('请填写推送地址');
+  s.notify = { enabled: !!b.enabled, url, time, skipEmpty: !!b.skipEmpty }; setMeta('settings', s);
+  if (hhmm() >= time && getMeta('notifyLast', '') !== today()) setMeta('notifyLast', today());  // 今天的时间已过就从明天开始，不在保存时立刻发
+  audit(ctx, '修改设置', '库存提醒推送' + (s.notify.enabled ? '：每天 ' + time : '：关闭'));
+}, { admin: true });
+route('POST', '/api/settings/notify/test', async ctx => {
+  const url = str(ctx.body.url, 500) || (getMeta('settings', {}).notify || {}).url || fail('请填写推送地址');
+  const m = notifyText();
+  await sendNotify(url, '【测试】' + m.text);
+  audit(ctx, '测试库存提醒推送');
+  return { text: m.text };
+}, { admin: true });
+route('GET', '/api/settings/notify/preview', () => notifyText(), { admin: true });
 
 // 打印模板：每种单据一份（标题、抬头、表头项目、明细列的显示 / 顺序 / 名称、签字栏、底部说明、字号），所有用户共用
 const PRINT_KINDS = { in: '入库单', out: '出库单', transfer: '调拨单', sales: '销售单', purchase: '采购单' };
@@ -1163,6 +1252,48 @@ route('POST', '/api/restore', ctx => restore(ctx), { admin: true });
 route('POST', '/api/reset-demo', ctx => tx(() => { writeAll(seed()); setMeta('counters', {}); audit(ctx, '重置演示数据'); }), { admin: true });
 route('POST', '/api/clear', ctx => tx(() => { writeAll({}); setMeta('counters', {}); audit(ctx, '清空业务数据'); }), { admin: true });
 
+/* ================= 消息推送：每天定时把库存预警发到企业微信 / 钉钉 / 飞书群机器人或任意 Webhook ================= */
+function notifyText() {
+  const s = getMeta('settings', {}), days = +s.expiryDays || 30, lines = [];
+  const ps = list('products'), low = ps.filter(p => p.safety > 0 && p.stock < p.safety).sort((a, b) => a.stock - b.stock);
+  const now = new Date(today()), left = b => Math.round((new Date(b.expDate) - now) / 864e5);
+  const exp = list('batches').filter(b => b.qty > 0 && b.expDate && left(b) <= days).sort((a, b) => a.expDate.localeCompare(b.expDate));
+  const pend = list('stockDocs').filter(o => o.status === '待审核');
+  if (low.length) lines.push(`【库存不足】${low.length} 个商品`, ...low.slice(0, 15).map(p => `· ${p.name}：${p.stock}${p.unit || ''}（安全库存 ${p.safety}）`), ...(low.length > 15 ? [`· ……另有 ${low.length - 15} 个`] : []));
+  if (exp.length) {
+    const pn = id => (get('products', id) || {}).name || '已删除商品';
+    lines.push(`【保质期】${exp.filter(b => left(b) < 0).length} 个批次已过期，${exp.filter(b => left(b) >= 0).length} 个批次 ${days} 天内到期`,
+      ...exp.slice(0, 10).map(b => `· ${pn(b.productId)} 批次 ${b.no}：${left(b) < 0 ? '已过期' : left(b) + ' 天后到期'}（${b.expDate}，${b.qty}）`));
+  }
+  if (pend.length) lines.push(`【待审核】${pend.length} 张出入库单等待审核`);
+  return { count: low.length + exp.length + pend.length, text: `${s.company || 'x.erp'} 库存提醒 ${today()}\n` + (lines.length ? lines.join('\n') : '今天没有需要处理的库存预警。') };
+}
+// 按地址判断机器人类型，拼对应的消息格式
+async function sendNotify(url, text) {
+  const u = new URL(url);
+  if (!/^https?:$/.test(u.protocol)) fail('推送地址必须以 http:// 或 https:// 开头');
+  const feishu = /feishu\.cn|larksuite\.com/.test(u.hostname);
+  const body = /qyapi\.weixin\.qq\.com|dingtalk\.com/.test(u.hostname) ? { msgtype: 'text', text: { content: text } }
+    : feishu ? { msg_type: 'text', content: { text } } : { title: 'x.erp 库存提醒', text, message: text };
+  let r;
+  try { r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) }); }
+  catch (e) { fail('推送失败：连不上推送地址（' + (e.cause && e.cause.code || e.message) + '）'); }
+  const t = await r.text();
+  if (!r.ok) fail(`推送失败：对方返回 HTTP ${r.status} ${t.slice(0, 200)}`);
+  let j = null; try { j = JSON.parse(t); } catch (e) {}
+  if (j && ((j.errcode && j.errcode !== 0) || (feishu && j.code && j.code !== 0))) fail('推送失败：' + (j.errmsg || j.msg || t.slice(0, 200)));
+}
+let notifyBusy = false;
+async function notifyTick() {
+  const n = getMeta('settings', {}).notify;
+  if (notifyBusy || !n || !n.enabled || !n.url || hhmm() < (n.time || '08:30') || getMeta('notifyLast', '') === today()) return;
+  notifyBusy = true; setMeta('notifyLast', today());
+  try {
+    const m = notifyText();
+    if (m.count || !n.skipEmpty) { await sendNotify(n.url, m.text); log('已推送库存提醒'); }
+  } catch (e) { log('库存提醒推送失败：' + e.message); } finally { notifyBusy = false; }
+}
+
 /* ================= HTTP 服务 ================= */
 let INDEX_HTML = null;
 function indexHtml() {
@@ -1224,7 +1355,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' || req.method === 'PUT') ctx.body = await readBody(req);
     const need = typeof r.perm === 'function' ? r.perm(ctx) : r.perm;
     if (need && !ctx.perms.has(need)) fail(`没有权限：${PERM_LABEL[need] || need}${enabledModules().includes(PERM_MOD[need]) ? '' : '（该模块未启用）'}`, 403);
-    const out = r.handler(ctx);
+    const out = await r.handler(ctx);
     send(res, 200, out === undefined ? { ok: true } : out);
   } catch (e) {
     const status = e.status || 500;
@@ -1243,6 +1374,7 @@ server.listen(config.port, config.host, () => {
   log('访问地址：' + ['127.0.0.1', ...ips].map(ip => `http://${ip}:${config.port}`).join('  '));
   setTimeout(autoBackup, 10e3);
   setInterval(autoBackup, 3600e3);
+  setInterval(notifyTick, 60e3);
 });
 const shutdown = () => { log('服务端停止'); try { db.close(); } catch (e) {} process.exit(0); };
 process.on('SIGINT', shutdown);
