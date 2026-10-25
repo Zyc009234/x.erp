@@ -125,7 +125,7 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
-                // 服务端自己的页面留在应用里，其他链接（购买页、GitHub 等）交给系统浏览器
+                // 服务端自己的页面留在应用里，其他链接（官网、GitHub 等）交给系统浏览器
                 if (!server.isEmpty() && u.toString().startsWith(server)) return false;
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (ActivityNotFoundException e) { toast("没有可以打开链接的应用"); }
                 return true;

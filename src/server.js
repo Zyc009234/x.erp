@@ -17,11 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '1.0.6';
-const RELEASE_DATE = '2026-10-23';  // 本版本发布日期：授权码的免费升级截止日不早于它，专业版功能才可用
-// 专业版授权码校验公钥（对应私钥只在发码方本机，见 tools/license.js）
-const LICENSE_PUBKEY = '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAlhmiG/CK2MaT2qX7LaziMR2fGn4BfkaXbavU3UeJD3s=\n-----END PUBLIC KEY-----\n';
-const TRIAL_DAYS = 15;
+const VERSION = '2.0.1';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -123,35 +119,6 @@ const DOC = { in: { col: 'stockDocs', prefix: 'RK', title: '入库单' }, out: {
 const TRANSFER = { col: 'transferDocs', prefix: 'DB', title: '调拨单' };
 const DEFAULT_WH = 'w1';
 
-/* ================= 专业版授权 ================= */
-// 授权码：XERP-<base64url(JSON)>.<base64url(Ed25519 签名)>，JSON 为 { id, to, ed, iat, upd }
-// 永久有效；upd（免费升级截止日）早于本版本发布日期时，本版本的专业版功能不可用，可继续使用之前的版本或续费
-function parseLicense(key) {
-  const m = /^XERP-([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/.exec(String(key || '').trim());
-  if (!m) return null;
-  try {
-    if (!crypto.verify(null, Buffer.from(m[1]), LICENSE_PUBKEY, Buffer.from(m[2], 'base64url'))) return null;
-    const p = JSON.parse(Buffer.from(m[1], 'base64url').toString('utf8'));
-    return p && p.ed === 'pro' && isDate(p.upd) ? p : null;
-  } catch (e) { return null; }
-}
-function licenseStatus() {
-  const lic = parseLicense(getMeta('license', ''));
-  if (lic) {
-    const ok = lic.upd >= RELEASE_DATE;
-    return { pro: ok, mode: 'license', id: lic.id, to: lic.to, issued: lic.iat, upd: lic.upd,
-      note: ok ? '' : `授权码的免费升级期已于 ${lic.upd} 结束，本版本（${RELEASE_DATE} 发布）的专业版功能不可用。可继续使用 ${lic.upd} 之前发布的版本，或续费升级。` };
-  }
-  const t = getMeta('trial', null);
-  if (t && t.start) {
-    const end = fmtDate(new Date(new Date(t.start).getTime() + TRIAL_DAYS * 864e5));
-    return { pro: today() <= end, mode: 'trial', trialEnd: end, note: today() <= end ? '' : `试用已于 ${end} 结束` };
-  }
-  return { pro: false, mode: 'none', trialAvailable: true };
-}
-const isPro = () => licenseStatus().pro;
-const needPro = feature => { if (!isPro()) fail(`「${feature}」是专业版功能，请到 系统设置 → 专业版 激活或试用`, 403); };
-
 /* ================= 模块 / 权限 ================= */
 const MODULES = { inventory: '库存管理', products: '商品管理', dashboard: '工作台', sales: '销售管理', purchase: '采购管理', parties: '客户 / 供应商', finance: '财务管理', hr: '人事管理', reports: '统计报表' };
 const DEFAULT_MODULES = ['inventory', 'products'];
@@ -159,6 +126,7 @@ const DEFAULT_MODULES = ['inventory', 'products'];
 const PERMS = [
   ['inv.view', '查看库存、出入库单与流水', 'inventory'], ['inv.in', '开入库单', 'inventory'], ['inv.out', '开出库单', 'inventory'],
   ['inv.check', '盘点录入（新建盘点单、录实盘数）', 'inventory'], ['inv.checkpost', '盘点审核（确认盘盈盘亏、调整库存）', 'inventory'], ['inv.void', '作废出入库单（冲回库存）', 'inventory'],
+  ['inv.approve', '审核出入库单（开启审核后，审核通过才改库存）', 'inventory'],
   ['inv.print', '打印单据 / 盘点表', 'inventory'], ['inv.export', '导出数据', 'inventory'],
   ['inv.cost', '查看价格与金额', 'inventory'], ['inv.backdate', '单据日期可选非当天（补录）', 'inventory'],
   ['inv.others', '查看 / 处理他人开的单据', 'inventory'], ['inv.transfer', '开调拨单（仓库之间移库）', 'inventory'],
@@ -174,7 +142,7 @@ const cleanPerms = a => [...new Set((Array.isArray(a) ? a : []).filter(k => PERM
 /* ---------- 角色 ---------- */
 // 预置角色：首次启动写入，之后可在「角色管理」里修改、删除，也可新增自定义角色
 const DEFAULT_ROLES = [
-  ['r_wh_mgr', '仓库主管', '库存全部操作，含作废、盘点审核、调拨、补录和查看金额', ['inv.view', 'inv.in', 'inv.out', 'inv.check', 'inv.checkpost', 'inv.void', 'inv.transfer', 'inv.print', 'inv.export', 'inv.cost', 'inv.backdate', 'inv.others', 'prod.view', 'prod.edit']],
+  ['r_wh_mgr', '仓库主管', '库存全部操作，含审核、作废、盘点审核、调拨、补录和查看金额', ['inv.view', 'inv.in', 'inv.out', 'inv.check', 'inv.checkpost', 'inv.void', 'inv.approve', 'inv.transfer', 'inv.print', 'inv.export', 'inv.cost', 'inv.backdate', 'inv.others', 'prod.view', 'prod.edit']],
   ['r_wh', '仓管员', '日常收发货：开入库单、出库单、调拨单并打印', ['inv.view', 'inv.in', 'inv.out', 'inv.transfer', 'inv.print', 'prod.view']],
   ['r_in', '入库员', '只负责收货入库', ['inv.view', 'inv.in', 'inv.print', 'prod.view']],
   ['r_out', '出库员', '只负责发货 / 领料出库', ['inv.view', 'inv.out', 'inv.print', 'prod.view']],
@@ -220,6 +188,15 @@ if (getMeta('permsVersion', 1) < 3) {
     if (p.includes('inv.in') && p.includes('inv.out') && !p.includes('inv.transfer')) db.prepare('UPDATE roles SET perms = ? WHERE id = ?').run(JSON.stringify([...p, 'inv.transfer']), r.id);
   }
   setMeta('permsVersion', 3);
+}
+// v1.0.7：新增出入库单审核权限，能作废出入库单的角色补上审核
+if (getMeta('permsVersion', 1) < 4) {
+  for (const r of db.prepare('SELECT * FROM roles').all()) {
+    const p = rolePerms(r);
+    if (p.includes('inv.void') && !p.includes('inv.approve')) db.prepare('UPDATE roles SET perms = ? WHERE id = ?').run(JSON.stringify([...p, 'inv.approve']), r.id);
+  }
+  db.prepare("UPDATE roles SET descr = '库存全部操作，含审核、作废、盘点审核、调拨、补录和查看金额' WHERE id = 'r_wh_mgr' AND descr = '库存全部操作，含作废、盘点审核、调拨、补录和查看金额'").run();
+  setMeta('permsVersion', 4);
 }
 const rawPerms = u => { if (u.role === 'admin') return PERM_KEYS; const r = u.role_id && roleById.get(u.role_id); return r ? rolePerms(r) : []; };
 function enabledModules() { const m = getMeta('settings', {}).modules; return Array.isArray(m) && m.length ? m : DEFAULT_MODULES; }
@@ -499,7 +476,6 @@ function saveEntity(ctx, col, id) {
       r.safety = Math.round(r.safety || 0);
       r.shelfDays = Math.round(r.shelfDays || 0);
       if (rec && rec.stock !== 0) r.cost = rec.cost;  // 有库存时成本由移动加权平均自动计算
-      if (r.batch && !(rec && rec.batch)) needPro('批次 / 保质期管理');
       if (rec && !!rec.batch !== !!r.batch) setBatchMode(r, r.batch);
     }
     if (col === 'employees' && !r.no) {
@@ -610,6 +586,7 @@ function adjustStock(ctx, id) {
   const { mode, note } = ctx.body, qty = Number(ctx.body.qty);
   const T = { in: '手工入库', out: '手工出库', check: '盘点调整' }[mode] || fail('不支持的操作');
   if (!Number.isInteger(qty)) fail('数量必须为整数');
+  if (mode !== 'check' && needApprove(mode)) fail(`已开启${DOC[mode].title}审核，请开${DOC[mode].title}`);
   return tx(() => {
     const p = get('products', id) || fail('商品不存在', 404), wh = pickWh(ctx.body.wh), cur = whQty(p, wh);
     let d;
@@ -622,6 +599,21 @@ function adjustStock(ctx, id) {
 /* ---------- 出入库单 ---------- */
 const hhmm = () => { const d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
 function ownDoc(ctx, o) { if (o.creatorId !== ctx.user.id && !ctx.perms.has('inv.others')) fail('只能处理自己开的单据', 403); }
+// 出入库审核：系统设置里按入库 / 出库分别开启；开启后新单据为「待审核」，审核通过才改库存，驳回的单据不影响库存
+const needApprove = dir => !!(getMeta('settings', {}).docApprove || {})[dir];
+function lackOf(items, wh) {
+  return Object.entries(qtyByProduct(items)).map(([pid, q]) => ({ p: get('products', pid), q })).filter(x => !x.p || whQty(x.p, wh) < x.q);
+}
+const lackText = (lack, wh) => `${whName(wh)}库存不足：` + lack.map(x => x.p ? `${x.p.name}（需 ${x.q}，现有 ${whQty(x.p, wh)}）` : '商品已删除').join('、');
+// 单据入账：逐行改库存，出库行回填成本单价，批次写回明细
+function postStockDoc(ctx, o) {
+  o.items.forEach(i => {
+    const m = moveStock(ctx, get('products', i.productId), o.dir === 'in' ? i.qty : -i.qty, o.type, o.no, i.note || o.party, { price: o.dir === 'in' ? i.price : undefined, date: o.date, wh: o.wh, batch: i.batch });
+    if (o.dir === 'out') { i.price = round4(m.unit); if (i.rate) i.uprice = round4(m.unit * i.rate); }
+    delete i.batch;
+    if (m.alloc) i.batches = m.alloc;
+  });
+}
 function qtyByProduct(items) { const q = {}; items.forEach(i => { q[i.productId] = (q[i.productId] || 0) + i.qty; }); return q; }
 /* ---------- 多单位：商品可设辅助单位（如 1 箱 = 12 个），开单可按辅助单位录入；库存、成本一律按基本单位核算 ---------- */
 function cleanUnits(raw, base) {
@@ -671,21 +663,29 @@ function saveStockDoc(ctx) {
       return it;
     });
     if (!items.length) fail('请至少添加一个商品');
-    const need = qtyByProduct(items);
-    if (dir === 'out') {
-      const lack = Object.entries(need).map(([pid, q]) => ({ p: get('products', pid), q })).filter(x => whQty(x.p, wh) < x.q);
-      if (lack.length) fail(`${whName(wh)}库存不足：` + lack.map(x => `${x.p.name}（需 ${x.q}，现有 ${whQty(x.p, wh)}）`).join('、'));
-    }
+    if (dir === 'out') { const lack = lackOf(items, wh); if (lack.length) fail(lackText(lack, wh)); }
+    const pending = needApprove(dir);
     const o = { id: uid(), no: nextNo(D), dir, type: b.type, wh, date, time: hhmm(), party: str(b.party, 100), handler: str(b.handler, 32), remark: str(b.remark, 500),
-      items, status: '正常', creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), printCount: 0 };
-    items.forEach(i => {
-      const m = moveStock(ctx, get('products', i.productId), dir === 'in' ? i.qty : -i.qty, o.type, o.no, i.note || o.party, { price: dir === 'in' ? i.price : undefined, date, wh, batch: i.batch });
-      if (dir === 'out') { i.price = round4(m.unit); if (i.rate) i.uprice = round4(m.unit * i.rate); }
-      delete i.batch;
-      if (m.alloc) i.batches = m.alloc;
-    });
+      items, status: pending ? '待审核' : '正常', creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), printCount: 0 };
+    if (!pending) postStockDoc(ctx, o);
     put('stockDocs', o);
-    audit(ctx, '新建' + D.title, `${o.no} ${o.type} ${items.length} 项`);
+    audit(ctx, (pending ? '提交' : '新建') + D.title, `${o.no} ${o.type} ${items.length} 项`);
+    return o;
+  });
+}
+function approveStockDoc(ctx, id, pass) {
+  return tx(() => {
+    const o = get('stockDocs', id) || fail('单据不存在', 404);
+    if (o.status !== '待审核') fail(`单据当前状态为「${o.status}」，不能审核`);
+    const wh = o.wh || DEFAULT_WH, now = new Date().toISOString();
+    if (pass) {
+      if (o.items.some(i => !get('products', i.productId))) fail('单据里有商品已被删除，不能审核通过，请驳回');
+      if (o.dir === 'out') { const lack = lackOf(o.items, wh); if (lack.length) fail(lackText(lack, wh)); }
+      postStockDoc(ctx, o);
+      Object.assign(o, { status: '正常', approver: ctx.user.name, approvedAt: now });
+    } else Object.assign(o, { status: '已驳回', approver: ctx.user.name, approvedAt: now, rejectReason: str(ctx.body.reason, 200) || fail('请填写驳回原因') });
+    put('stockDocs', o);
+    audit(ctx, (pass ? '审核' : '驳回') + DOC[o.dir].title, o.no + (pass ? '' : ' ' + o.rejectReason));
     return o;
   });
 }
@@ -694,6 +694,14 @@ function voidStockDoc(ctx, id) {
     const o = get('stockDocs', id) || fail('单据不存在', 404);
     ownDoc(ctx, o);
     if (o.status === '已作废') fail('单据已作废');
+    if (o.status === '待审核' || o.status === '已驳回') {  // 还没改过库存，作废只改状态；制单人可以作废自己的
+      if (!ctx.perms.has('inv.void') && o.creatorId !== ctx.user.id) fail('没有权限：' + PERM_LABEL['inv.void'], 403);
+      Object.assign(o, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString(), voidReason: str(ctx.body.reason, 200) });
+      put('stockDocs', o);
+      audit(ctx, '作废' + DOC[o.dir].title, o.no + (o.voidReason ? ' ' + o.voidReason : ''));
+      return o;
+    }
+    if (!ctx.perms.has('inv.void')) fail('没有权限：' + PERM_LABEL['inv.void'], 403);
     const need = qtyByProduct(o.items), wh = o.wh || DEFAULT_WH;
     if (o.dir === 'in') {  // 入库单作废要把货扣回来
       const lack = Object.entries(need).map(([pid, q]) => ({ p: get('products', pid), q })).filter(x => x.p && whQty(x.p, wh) < x.q);
@@ -787,7 +795,7 @@ const voidCheck = (ctx, id) => editCheck(ctx, id, o => {
   return o;
 });
 
-/* ---------- 仓库（专业版：新增仓库） ---------- */
+/* ---------- 仓库 ---------- */
 function saveWarehouse(ctx, id) {
   const b = ctx.body, name = str(b.name, 30) || fail('请填写仓库名称'), code = str(b.code, 20);
   return tx(() => {
@@ -796,7 +804,7 @@ function saveWarehouse(ctx, id) {
     if (code && all.some(w => w.code === code && w.id !== id)) fail('仓库编码已存在');
     let w;
     if (id) { w = get('warehouses', id) || fail('仓库不存在', 404); Object.assign(w, { name, code, remark: str(b.remark, 200) }); }
-    else { needPro('多仓库'); w = { id: 'w' + uid(), code: code || 'W' + String(all.length + 1).padStart(2, '0'), name, remark: str(b.remark, 200), createdAt: today() }; }
+    else { w = { id: 'w' + uid(), code: code || 'W' + String(all.length + 1).padStart(2, '0'), name, remark: str(b.remark, 200), createdAt: today() }; }
     put('warehouses', w); audit(ctx, (id ? '修改' : '新增') + '仓库', name);
     return w;
   });
@@ -812,9 +820,8 @@ function deleteWarehouse(ctx, id) {
     del('warehouses', id); audit(ctx, '删除仓库', w.name);
   });
 }
-/* ---------- 调拨单（专业版）：从一个仓库移到另一个仓库，总库存与成本不变，批次跟着走 ---------- */
+/* ---------- 调拨单：从一个仓库移到另一个仓库，总库存与成本不变，批次跟着走 ---------- */
 function saveTransfer(ctx) {
-  needPro('调拨单');
   const b = ctx.body, from = pickWh(b.from), to = pickWh(b.to);
   if (from === to) fail('调出仓库和调入仓库不能相同');
   const date = isDate(b.date) ? b.date : today();
@@ -921,7 +928,8 @@ function visibleData(ctx) {
   const data = {};
   COLS.forEach(c => { data[c] = want[c] ? list(c) : []; if (DATED.includes(c)) data[c].sort(byDate); });
   if (!seesPrice(P)) data.products = data.products.map(({ cost, price, ...p }) => p);
-  if (!P.has('inv.others')) for (const c of ['stockDocs', 'checkDocs', 'transferDocs']) data[c] = data[c].filter(o => o.creatorId === ctx.user.id);
+  // 有审核权限的账号即使不能看他人单据，也能看到待审核的出入库单
+  if (!P.has('inv.others')) for (const c of ['stockDocs', 'checkDocs', 'transferDocs']) data[c] = data[c].filter(o => o.creatorId === ctx.user.id || c === 'stockDocs' && o.status === '待审核' && P.has('inv.approve'));
   if (!P.has('inv.cost')) {
     data.stockDocs = data.stockDocs.map(o => ({ ...o, items: o.items.map(({ price, uprice, ...i }) => i) }));
     data.transferDocs = data.transferDocs.map(o => ({ ...o, items: o.items.map(({ cost, ...i }) => i) }));
@@ -1000,23 +1008,10 @@ route('GET', '/api/ping', () => ({ ok: true, app: 'XERP', version: VERSION, comp
 route('POST', '/api/login', ctx => login(ctx, ctx.body), { auth: false });
 route('POST', '/api/logout', ctx => { db.prepare('DELETE FROM sessions WHERE token = ?').run(ctx.user.token); });
 route('GET', '/api/data', ctx => ({
-  version: VERSION, releaseDate: RELEASE_DATE, settings: { ...getMeta('settings', {}), modules: enabledModules() },
-  user: { ...publicUser(ctx.user), perms: [...ctx.perms] }, data: visibleData(ctx), license: licenseStatus(),
-  meta: { modules: MODULES, perms: PERMS, docTypes: DOC_TYPES, defaultWh: DEFAULT_WH, trialDays: TRIAL_DAYS }
+  version: VERSION, settings: { ...getMeta('settings', {}), modules: enabledModules() },
+  user: { ...publicUser(ctx.user), perms: [...ctx.perms] }, data: visibleData(ctx),
+  meta: { modules: MODULES, perms: PERMS, docTypes: DOC_TYPES, defaultWh: DEFAULT_WH }
 }));
-route('POST', '/api/license', ctx => {
-  const key = str(ctx.body.key, 2000), lic = parseLicense(key) || fail('授权码无效，请检查是否完整复制（以 XERP- 开头）');
-  setMeta('license', key);
-  audit(ctx, '激活专业版', `${lic.to}（编号 ${lic.id}，免费升级至 ${lic.upd}）`);
-  return licenseStatus();
-}, { admin: true });
-route('DELETE', '/api/license', ctx => { setMeta('license', ''); audit(ctx, '移除专业版授权'); return licenseStatus(); }, { admin: true });
-route('POST', '/api/license/trial', ctx => {
-  if (getMeta('trial', null)) fail('每套系统只能试用一次');
-  if (parseLicense(getMeta('license', ''))) fail('已激活授权码，无需试用');
-  setMeta('trial', { start: today() }); audit(ctx, '开始试用专业版', TRIAL_DAYS + ' 天');
-  return licenseStatus();
-}, { admin: true });
 route('PUT', '/api/settings/expiry', ctx => {
   const n = Math.round(Number(ctx.body.days));
   if (!(n >= 1 && n <= 365)) fail('临期提醒天数需在 1 ~ 365 之间');
@@ -1029,6 +1024,10 @@ route('PUT', '/api/settings', ctx => {
     s.modules = b.modules.filter(m => m in MODULES);
     if (!s.modules.length) fail('至少启用一个模块');
     changes.push('启用模块：' + s.modules.map(m => MODULES[m]).join('、'));
+  }
+  if (b.docApprove && typeof b.docApprove === 'object') {
+    s.docApprove = { in: !!b.docApprove.in, out: !!b.docApprove.out };
+    changes.push('出入库审核：入库单' + (s.docApprove.in ? '需审核' : '不审核') + '，出库单' + (s.docApprove.out ? '需审核' : '不审核'));
   }
   setMeta('settings', s); audit(ctx, '修改设置', changes.join('；'));
 }, { admin: true });
@@ -1076,7 +1075,9 @@ route('POST', '/api/checkdocs/:id/post', ctx => postCheck(ctx, ctx.params.id), {
 route('POST', '/api/checkdocs/:id/void', ctx => voidCheck(ctx, ctx.params.id), { perm: 'inv.check' });
 route('POST', '/api/products/import', ctx => importProducts(ctx), { perm: 'prod.edit' });
 route('POST', '/api/stockdocs', ctx => saveStockDoc(ctx), { perm: ctx => ctx.body.dir === 'out' ? 'inv.out' : 'inv.in' });
-route('POST', '/api/stockdocs/:id/void', ctx => voidStockDoc(ctx, ctx.params.id), { perm: 'inv.void' });
+route('POST', '/api/stockdocs/:id/void', ctx => voidStockDoc(ctx, ctx.params.id), { perm: 'inv.view' });  // 具体权限在函数里按单据状态判断
+route('POST', '/api/stockdocs/:id/approve', ctx => approveStockDoc(ctx, ctx.params.id, true), { perm: 'inv.approve' });
+route('POST', '/api/stockdocs/:id/reject', ctx => approveStockDoc(ctx, ctx.params.id, false), { perm: 'inv.approve' });
 route('POST', '/api/stockdocs/:id/print', ctx => markPrinted(ctx, ctx.params.id), { perm: 'inv.print' });
 route('POST', '/api/transfers', ctx => saveTransfer(ctx), { perm: 'inv.transfer' });
 route('POST', '/api/transfers/:id/void', ctx => voidTransfer(ctx, ctx.params.id), { perm: 'inv.void' });
