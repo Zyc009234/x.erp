@@ -342,3 +342,133 @@ test('推送：测试消息按机器人格式发出，推送地址只有管理�
     assert.ok(low.id);
   } finally { hook.close(); }
 });
+
+/* ---------- 物流运费 ---------- */
+const ZONES = [
+  { name: '江浙沪', provinces: ['上海', '江苏', '浙江'], bands: [{ upTo: 0.5, fee: 2.8 }, { upTo: 1, fee: 3.2 }, { upTo: 2, fee: 4 }, { upTo: 3, fee: 5 }], addStep: 1, addFee: 1 },
+  { name: '其余', provinces: [], first: 1, firstFee: 8, addStep: 1, addFee: 5 }
+];
+let shipCarrier, shipProd;
+async function shipSetup() {
+  if (shipCarrier) return;
+  await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'shipping', 'finance'] });
+  shipCarrier = await ok(admin, 'POST', '/api/carriers', { name: '测试快递', code: 'TST', step: 0.1, volDiv: 0, pack: 0.1, tol: 0.5, zones: ZONES });
+  shipProd = await newProduct('WL001', { weight: 0.6 });
+  await inDoc(admin, [{ productId: shipProd.id, qty: 100, price: 1 }]);
+}
+const shipOut = async (qty, extra = {}) => ok(admin, 'POST', '/api/stockdocs', { dir: 'out', type: '销售出库', items: [{ productId: shipProd.id, qty }], party: '测试客户', ...extra });
+
+test('物流：模块未启用时接口拒绝访问', async () => {
+  const r = await call(admin, 'POST', '/api/ship/quote', { address: '浙江杭州' });
+  assert.equal(r.http, 403); assert.match(r.error, /模块未启用/);
+});
+
+test('物流：地址识别省份（省份开头、只写城市、区县同名、路名同名）', async () => {
+  await shipSetup();
+  const prov = async address => (await ok(admin, 'POST', '/api/ship/quote', { address })).province;
+  assert.equal(await prov('浙江省杭州市西湖区文三路 100 号'), '浙江');
+  assert.equal(await prov('杭州市余杭区仓前街道'), '浙江');
+  assert.equal(await prov('广西壮族自治区南宁市青秀区'), '广西');
+  assert.equal(await prov('北京朝阳区建国路 1 号'), '北京');
+  assert.equal(await prov('朝阳区建国路 1 号'), '', '只写区名识别不了，不能误判成辽宁朝阳');
+  assert.equal(await prov('朝阳市双塔区'), '辽宁');
+  assert.equal(await prov('海南藏族自治州共和县'), '青海');
+  assert.equal(await prov('张三 13800000000 收货地址：广东省深圳市南山区'), '广东', '地址中间的「X省」也能识别');
+  assert.equal(await prov('东莞长安镇'), '广东');
+});
+
+test('物流：按重量段 / 首重续重估算运费，称重覆盖估算，缺省份给出提示', async () => {
+  await shipSetup();
+  const items = [{ productId: shipProd.id, qty: 2 }];  // 1.2kg + 包材 0.1 = 1.3kg
+  let q = await ok(admin, 'POST', '/api/ship/quote', { address: '上海浦东新区', items });
+  assert.equal(q.weight, 1.2);
+  let t = q.quotes.find(x => x.carrierId === shipCarrier.id);
+  assert.equal(t.chargeWeight, 1.3); assert.equal(t.fee, 4, '江浙沪 1~2kg 段 4 元');
+  q = await ok(admin, 'POST', '/api/ship/quote', { address: '广州天河区', items });
+  t = q.quotes.find(x => x.carrierId === shipCarrier.id);
+  assert.equal(t.fee, 13, '首重 1kg 8 元 + 续重 1kg 5 元');
+  q = await ok(admin, 'POST', '/api/ship/quote', { address: '杭州', items, weight: 3.4 });
+  t = q.quotes.find(x => x.carrierId === shipCarrier.id);
+  assert.equal(t.chargeWeight, 3.4); assert.equal(t.fee, 6, '超出 3kg 段按续重：5 + 1');
+  q = await ok(admin, 'POST', '/api/ship/quote', { address: '某某路 8 号', items });
+  assert.match(q.quotes.find(x => x.carrierId === shipCarrier.id).error, /缺少收件省份/);
+  const bad = await call(admin, 'POST', '/api/carriers', { name: '坏报价', zones: [{ name: 'A', provinces: ['浙江'], first: 1, firstFee: 5 }, { name: 'B', provinces: ['浙江省'], first: 1, firstFee: 6 }] });
+  assert.equal(bad.http, 400); assert.match(bad.error, /同时在/);
+});
+
+test('物流：出库单登记运单，单号不能重复，作废出库单时未对账的运单一起作废', async () => {
+  await shipSetup();
+  const o = await shipOut(2, { address: '江苏省南京市鼓楼区' });
+  const [s] = (await ok(admin, 'POST', '/api/shipments', { srcType: 'out', srcId: o.id, carrierId: shipCarrier.id, packages: [{ trackNo: 'tst 0001' }] })).list;
+  assert.equal(s.trackNo, 'TST0001', '单号去空格转大写');
+  assert.equal(s.province, '江苏'); assert.equal(s.estFee, 4); assert.equal(s.srcNo, o.no); assert.equal(s.status, '待对账');
+  const dup = await call(admin, 'POST', '/api/shipments', { carrierId: shipCarrier.id, address: '浙江宁波', packages: [{ trackNo: 'TST0001', weight: 1 }] });
+  assert.equal(dup.http, 400); assert.match(dup.error, /已经登记过/);
+  const noW = await call(admin, 'POST', '/api/shipments', { carrierId: shipCarrier.id, address: '浙江宁波', packages: [{ trackNo: 'TST0002' }] });
+  assert.equal(noW.http, 400); assert.match(noW.error, /包裹重量/, '没有来源单据时必须填重量');
+  const ed = await ok(admin, 'PUT', '/api/shipments/' + s.id, { weight: 2.5 });
+  assert.equal(ed.estFee, 5); assert.equal(ed.weighed, true);
+  await ok(admin, 'POST', `/api/stockdocs/${o.id}/void`, { reason: '测试' });
+  assert.equal((await data()).shipments.find(x => x.id === s.id).status, '已作废');
+});
+
+test('物流：账单对账（一致 / 称重差异 / 价格差异 / 系统无 / 重复 / 漏账），确认后生成快递费支出，可撤销', async () => {
+  await shipSetup();
+  const mk = async (trackNo, qty, address) => (await ok(admin, 'POST', '/api/shipments', { srcType: 'out', srcId: (await shipOut(qty, { address })).id, carrierId: shipCarrier.id, packages: [{ trackNo }], date: '2026-09-15' })).list[0];
+  const a = await mk('B001', 2, '浙江杭州');   // 1.3kg ¥4
+  const b = await mk('B002', 2, '浙江杭州');   // 账单称重 2.6kg → ¥5（报价对，重量多了）
+  const c = await mk('B003', 2, '浙江杭州');   // 账单 1.3kg 收 ¥6（没按报价）
+  const d = await mk('B004', 2, '浙江杭州');   // 账单里没有 → 漏账
+  const rows = [
+    { trackNo: 'B001', fee: 4, weight: 1.3, province: '浙江省', _row: 2 },
+    { trackNo: 'B002', fee: 5, weight: 2.6, province: '浙江', _row: 3 },
+    { trackNo: 'b003', fee: 6, weight: 1.3, province: '浙江', _row: 4 },
+    { trackNo: 'X999', fee: 8, weight: 1, province: '广东', _row: 5 },
+    { trackNo: 'B001', fee: 4, weight: 1.3, province: '浙江', _row: 6 }];
+  const bad = await call(admin, 'POST', '/api/shipbills', { carrierId: shipCarrier.id, period: '2026-09', rows: [{ trackNo: '', fee: 1 }] });
+  assert.equal(bad.http, 400); assert.match(bad.error, /快递单号为空/);
+  const bill = await ok(admin, 'POST', '/api/shipbills', { carrierId: shipCarrier.id, period: '2026-09', fileName: '9月账单.xlsx', rows });
+  const cat = t => bill.rows.filter(r => r.trackNo === t).map(r => r.cat);
+  assert.deepEqual(cat('B001'), ['ok', 'dup']); assert.deepEqual(cat('B002'), ['diff']); assert.deepEqual(cat('B003'), ['diff']); assert.deepEqual(cat('X999'), ['extra']);
+  assert.match(bill.rows[1].reason, /价格没问题，差异来自称重/);
+  assert.match(bill.rows[2].reason, /应为 ¥4，账单收 ¥6/);
+  assert.deepEqual(bill.missing, [d.id]);
+  assert.equal(bill.total, 27);
+  const listed = (await data()).shipBills.find(x => x.id === bill.id);
+  assert.equal(listed.rows, undefined, '/api/data 里不带账单明细');
+  // 认可 B002（按账单 5 元），B003 申诉，X999 不认
+  const done = await ok(admin, 'POST', `/api/shipbills/${bill.id}/confirm`, { acts: { 1: 'ok', 2: 'dispute', 3: 'dispute' }, notes: { 2: '按合同应 4 元' }, finance: true });
+  assert.equal(done.status, '已确认'); assert.equal(done.payable, 9); assert.equal(done.disputed, 3);
+  let D = await data();
+  const st = id => D.shipments.find(x => x.id === id);
+  assert.equal(st(a.id).status, '已对账'); assert.equal(st(a.id).billFee, 4);
+  assert.equal(st(b.id).status, '已对账'); assert.equal(st(b.id).billFee, 5);
+  assert.equal(st(c.id).status, '申诉中'); assert.equal(st(c.id).disputeNote, '按合同应 4 元');
+  assert.equal(st(d.id).status, '待对账');
+  assert.equal(D.finance.find(f => f.ref === bill.no).amount, 9);
+  assert.equal((await call(admin, 'PUT', '/api/shipments/' + a.id, { weight: 9 })).http, 400, '已对账的运单不能改');
+  await ok(admin, 'POST', `/api/shipments/${c.id}/resolve`, { fee: 4, note: '快递已同意按 4 元' });
+  D = await data();
+  assert.equal(st(c.id).status, '已对账'); assert.equal(st(c.id).billFee, 4);
+  assert.equal(D.finance.filter(f => f.ref === bill.no).length, 2);
+  assert.equal((await call(admin, 'DELETE', '/api/shipbills/' + bill.id)).http, 400, '已确认的账单不能删');
+  const again = await ok(admin, 'POST', '/api/shipbills', { carrierId: shipCarrier.id, rows: [{ trackNo: 'B001', fee: 4 }] });
+  assert.equal(again.rows[0].cat, 'dup'); assert.match(again.rows[0].reason, /已经在账单/);
+  await ok(admin, 'DELETE', '/api/shipbills/' + again.id);
+  await ok(admin, 'POST', `/api/shipbills/${bill.id}/undo`);
+  D = await data();
+  assert.equal(st(a.id).status, '待对账'); assert.equal(st(a.id).billFee, undefined);
+  assert.equal(D.finance.filter(f => f.ref === bill.no).length, 0, '撤销后删掉生成的支出');
+  await ok(admin, 'DELETE', '/api/shipbills/' + bill.id);
+});
+
+test('物流：权限按角色生效，出库员能登记运单但不能改报价和对账', async () => {
+  await shipSetup();
+  const clerk = await newUser('shipper1', 'r_out');
+  const o = await shipOut(1);
+  const r = await call(clerk, 'POST', '/api/shipments', { srcType: 'out', srcId: o.id, carrierId: shipCarrier.id, address: '上海', packages: [{ trackNo: 'P001' }] });
+  assert.equal(r.http, 200, r.error);
+  assert.equal((await call(clerk, 'PUT', '/api/carriers/' + shipCarrier.id, { name: 'x', zones: ZONES })).http, 403);
+  assert.equal((await call(clerk, 'POST', '/api/shipbills', { carrierId: shipCarrier.id, rows: [{ trackNo: 'P001', fee: 1 }] })).http, 403);
+  assert.equal((await call(admin, 'DELETE', '/api/carriers/' + shipCarrier.id)).http, 400, '有运单的快递不能删');
+});

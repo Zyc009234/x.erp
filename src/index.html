@@ -183,7 +183,22 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .modal-mask{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(3px);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:6vh 16px;overflow-y:auto}
 .modal-mask.show{display:flex}
 .modal{background:var(--panel);border-radius:16px;width:560px;max-width:100%;box-shadow:0 24px 60px rgba(0,0,0,.25);animation:pop .18s ease-out}
-.modal.lg{width:860px}.modal.sm{width:420px}
+.modal.lg{width:860px}.modal.sm{width:420px}.modal.xl{width:1120px}
+/* 物流运费 */
+.ship-est{margin-top:12px;padding:10px 12px;border:1px dashed var(--border);border-radius:10px;font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
+.ship-est b{color:var(--text)}
+.qt-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;margin-top:6px;cursor:pointer}
+.qt-row.on{border-color:var(--primary);background:var(--primary-soft)}
+.qt-row.bad{cursor:default;opacity:.6}
+.qt-row .fee{margin-left:auto;font-weight:700;font-size:15px}
+.prov-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:2px 8px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;margin-top:6px;background:var(--panel2)}
+.prov-grid .chk.used{opacity:.45}
+.zone-card{border:1px solid var(--border);border-radius:12px;padding:12px;margin-top:10px}
+.zone-card .zgrid{display:grid;grid-template-columns:2fr repeat(6,1fr);gap:8px;margin-top:8px}
+.zone-card input{width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:var(--panel);outline:none}
+.zone-card label{font-size:12px;color:var(--muted)}
+.rate-tbl td,.rate-tbl th{font-size:12px}
+@media (max-width:768px){.zone-card .zgrid{grid-template-columns:repeat(2,1fr)}}
 @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
 .m-head{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid var(--border)}
 .m-head h3{font-size:16px}
@@ -298,7 +313,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.0.2 · 数据保存在服务器</div>
+    <div class="side-foot">v2.0.3 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -391,7 +406,7 @@ const units = () => [...new Set([...UNITS, ...db.products.map(p => p.unit).filte
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
 const DEPTS = ['销售部', '采购部', '仓储部', '财务部', '行政部', '技术部'];
 const METHODS = ['银行转账', '现金', '支付宝', '微信', '承兑汇票'];
-const FIN_CATS = {income: ['销售收款', '其他收入', '投资收益', '退款'], expense: ['采购付款', '工资', '房租', '水电', '办公费', '差旅', '营销推广', '其他支出']};
+const FIN_CATS = {income: ['销售收款', '其他收入', '投资收益', '退款'], expense: ['采购付款', '工资', '房租', '水电', '办公费', '差旅', '营销推广', '快递费', '其他支出']};
 const STATUS_COLOR = {'待发货':'orange','已发货':'blue','已完成':'green','已作废':'gray','待审核':'orange','已审核':'blue','已入库':'green','在职':'green','试用期':'blue','离职':'gray'};
 const ORD = {
   sales:    {db:'sales', title:'销售订单', doc:'销售单', prefix:'SO', party:'customers', partyKey:'customerId', partyLabel:'客户', priceKey:'price', paidKey:'received', payWord:'收款', statuses:['待发货','已发货','已完成','已作废']},
@@ -405,7 +420,7 @@ const LS = {
 };
 const prefs = Object.assign({theme:'light', pageSize:10}, LS.get('prefs', {}));
 const NATIVE = window.XerpApp || null;  // 在 x.erp 安卓客户端里运行时，由客户端注入（扫码、保存文件、打印、切换服务器）
-let db = {settings:{theme:prefs.theme, pageSize:prefs.pageSize}, products:[], customers:[], suppliers:[], employees:[], sales:[], purchases:[], stockLogs:[], stockDocs:[], checkDocs:[], finance:[], warehouses:[], transferDocs:[], batches:[], serials:[]};
+let db = {settings:{theme:prefs.theme, pageSize:prefs.pageSize}, products:[], customers:[], suppliers:[], employees:[], sales:[], purchases:[], stockLogs:[], stockDocs:[], checkDocs:[], finance:[], warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[]};
 let ME = null, META = {modules:{}, perms:[], templates:{}, docTypes:{in:[], out:[]}, defaultWh:'w1'}, CLIENT_MODE = false, SERVER_ADDR = '', pending = 0, dataSig = '';
 /* ---------- 仓库 / 批次 ---------- */
 const whs = () => db.warehouses.length ? [...db.warehouses].sort((a, b) => (b.id === META.defaultWh) - (a.id === META.defaultWh) || String(a.code || '').localeCompare(String(b.code || ''))) : [{id:META.defaultWh, name:'主仓库'}];
@@ -453,7 +468,7 @@ async function reload() {
   ME = d.user; META = d.meta || META;
   const sig = JSON.stringify(d.data) + JSON.stringify(d.settings) + JSON.stringify(ME.perms);
   const changed = sig !== dataSig; dataSig = sig;
-  db = {warehouses:[], transferDocs:[], batches:[], serials:[], ...d.data, settings:{...d.settings, version:d.version, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
+  db = {warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[], ...d.data, settings:{...d.settings, version:d.version, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
   return changed;
 }
 // 发起写操作 → 成功后重新拉取数据并刷新界面；失败则提示错误并保持弹窗
@@ -734,6 +749,7 @@ const ENT = {
     {n:'stock', l:'期初库存', type:'number', def:0, lockOnEdit:1}, {n:'safety', l:'安全库存', type:'number', def:10},
     {n:'batch', l:'批次 / 保质期管理', type:'select', opts:[['', '不启用'], ['1', '启用（入库记批次，出库先到期先出）']]}, {n:'shelfDays', l:'保质期（天，选填）', type:'number', ph:'填了可按生产日期自动算有效期'},
     {n:'serial', l:'序列号管理', type:'select', opts:[['', '不启用'], ['1', '启用（一件一个号，出入库逐件登记）']]},
+    {n:'weight', l:'重量（kg / 每个基本单位，算运费用）', type:'number', ship:1}, {n:'size', l:'包装尺寸（厘米 长×宽×高，选填，算体积重）', ph:'例如 30×20×15', ship:1},
     {n:'remark', l:'备注', type:'textarea', span:1}]},
   customers: {title:'客户', fields:[
     {n:'name', l:'客户名称', req:1, span:1}, {n:'contact', l:'联系人', req:1}, {n:'phone', l:'联系电话', req:1}, {n:'email', l:'邮箱'},
@@ -750,7 +766,7 @@ const ENT = {
 function editEntity(type, id) {
   const cfg = ENT[type], rec = id ? byId(db[type], id) : null;
   const costLocked = type === 'products' && rec && rec.stock !== 0;
-  const fields = cfg.fields.filter(f => !f.money || seesPrice()).map(f => ({...f, disabled:rec && f.lockOnEdit || f.n === 'cost' && costLocked,
+  const fields = cfg.fields.filter(f => (!f.money || seesPrice()) && (!f.ship || shipOn())).map(f => ({...f, disabled:rec && f.lockOnEdit || f.n === 'cost' && costLocked,
     l:f.n === 'cost' ? (rec ? '成本价（元，移动加权自动计算' + (costLocked ? '' : '，无库存时可改') + '）' : '期初成本价（元）') : f.l}));
   if (type === 'products' && !rec && multiWh()) fields.splice(fields.findIndex(f => f.n === 'stock') + 1, 0, {n:'wh', l:'期初库存放在', type:'select', opts:whs().map(w => [w.id, w.name])});
   const data = rec ? {...rec, batch:rec.batch ? '1' : '', serial:rec.serial ? '1' : '', unitsText:unitsToText(rec.units)} : {};
@@ -1012,6 +1028,7 @@ function docModal(dir, productId, type0, src) {
   }
   if (!draft.items.length) draft.items.push(p0 ? {...blank(), productId:p0.id, unit:p0.unit, price:p0.cost ?? ''} : blank());
   const batchCol = db.products.some(p => p.batch);
+  const estOn = dir === 'out' && shipOn() && (can('ship.view') || can('ship.edit'));
   openModal(`${modalHead((src ? '重开' : '新建') + docTitle(dir))}
   <div class="m-body"><div class="form-grid">
     <label class="field"><span>${dir === 'in' ? '入库' : '出库'}类型 <i>*</i></span><select id="dType">${types.map(t => `<option ${t === type0 ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -1019,18 +1036,42 @@ function docModal(dir, productId, type0, src) {
     <label class="field"><span>${docPartyLabel(dir)}</span><input id="dParty" list="dPartyList" placeholder="可直接输入" value="${esc(src ? src.party : '')}"><datalist id="dPartyList">${parties.map(x => `<option value="${esc(x)}">`).join('')}</datalist></label>
     <label class="field"><span>经手人</span><input id="dHandler" value="${esc(src ? src.handler : ME.name)}"></label>
     ${multiWh() ? `<label class="field"><span>${dir === 'in' ? '入库' : '出库'}仓库 <i>*</i></span><select id="dWh">${whOpts(draft.wh)}</select></label>` : ''}
+    ${dir === 'out' ? `<label class="field span2"><span>收货地址${estOn ? '（填了自动估算运费）' : ''}</span><input id="dAddr" value="${esc(src ? src.address || '' : '')}" placeholder="省 市 区 详细地址；选了客户会自动带出"></label>` : ''}
   </div>
   <div class="line-head"><b>商品明细</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称搜索，支持扫码枪录入后回车</span><button class="btn sm" id="dAdd">${ic('plus')}添加一行</button></div>
   <datalist id="dProdList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
   <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:230px">商品</th><th style="width:60px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th>${mo ? `<th style="width:110px">${dir === 'in' ? '单价' : '成本单价'}</th><th class="num" style="width:110px">金额</th>` : ''}${batchCol ? `<th style="min-width:${dir === 'in' ? 300 : 180}px">${dir === 'in' ? '批号 / 生产日期 / 有效期至' : '出库批次（先到期先出）'}</th>` : ''}${snCol ? '<th style="min-width:170px">序列号</th>' : ''}<th style="width:140px">备注</th><th style="width:44px"></th></tr></thead><tbody id="dItems"></tbody></table></div>
   <label class="field" style="margin-top:16px"><span>单据备注</span><textarea id="dRemark" rows="2">${esc(src ? src.remark : '')}</textarea></label>
-  <div class="o-total">合计数量<b id="dQty">0</b>${mo ? `&nbsp;&nbsp;合计金额<b id="dAmt">¥0.00</b>` : ''}</div></div>
+  <div class="o-total">合计数量<b id="dQty">0</b>${mo ? `&nbsp;&nbsp;合计金额<b id="dAmt">¥0.00</b>` : ''}</div>
+  ${estOn ? `<div class="ship-est" id="dShip">填写收货地址后自动估算运费</div>` : ''}
+  ${dir === 'out' && shipOn() && can('ship.edit') ? `<label class="chk" style="margin-top:8px"><input type="checkbox" id="dShipNext" ${type0 === '销售出库' || !type0 && types[0] === '销售出库' ? 'checked' : ''}>保存后登记快递单号</label>` : ''}</div>
   <div class="m-foot">${docApproveOn(dir) ? `<span class="sub-t" style="margin-right:auto">已开启审核：保存后为「待审核」，审核通过才改库存</span>` : ''}<button class="btn" data-act="closeModal">取消</button><button class="btn" id="dSave">${docApproveOn(dir) ? '提交审核' : '保存'}</button>${can('inv.print') ? `<button class="btn primary" id="dSavePrint">${ic('printer')}${docApproveOn(dir) ? '提交并打印' : '保存并打印'}</button>` : ''}</div>`, 'lg');
   const tb = $('#dItems');
+  // 运费估算：地址或明细变了 0.5 秒后向服务端要报价（服务端识别省份、按商品重量算）
+  let estTimer = 0, estSeq = 0;
+  const estShip = () => {
+    if (!estOn) return;
+    clearTimeout(estTimer);
+    estTimer = setTimeout(async () => {
+      const items = draft.items.filter(i => i.productId && +i.qty > 0).map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty})), seq = ++estSeq;
+      const address = $('#dAddr') ? $('#dAddr').value.trim() : '';
+      if (!items.length || !address) { if ($('#dShip')) $('#dShip').innerHTML = '<span>填写收货地址后自动估算运费</span>'; return; }
+      try { const q = await api('POST', '/api/ship/quote', {address, items}); if (seq === estSeq && $('#dShip')) { $('#dShip').innerHTML = shipQuoteLine(q); draft.carrierId = (q.quotes.find(x => !x.error) || {}).carrierId || ''; } } catch (e) {}
+    }, 500);
+  };
   const updTotal = () => {
     $('#dQty').textContent = num(sum(draft.items.filter(i => i.productId), i => +i.qty || 0));
     if (mo) $('#dAmt').textContent = money(sum(draft.items, i => (+i.qty || 0) * (+i.price || 0)));
+    estShip();
   };
+  // 选了客户：地址为空（或是上次自动带出的）就带出客户档案里的地址
+  if ($('#dAddr')) {
+    $('#dParty').addEventListener('change', e => {
+      const cu = db.customers.find(c => c.name === e.target.value.trim()), a = $('#dAddr');
+      if (cu && cu.address && (!a.value.trim() || a.dataset.auto)) { a.value = cu.address; a.dataset.auto = '1'; estShip(); }
+    });
+    $('#dAddr').addEventListener('input', e => { delete e.target.dataset.auto; estShip(); });
+  }
   // 出库预览：按先到期先出，同一商品多行累计
   const fefoPreview = (p, i) => {
     const before = sum(draft.items.slice(0, i).filter(x => x.productId === p.id), baseQ);
@@ -1094,7 +1135,7 @@ function docModal(dir, productId, type0, src) {
     }
   });
   if ($('#dWh')) $('#dWh').onchange = e => { draft.wh = e.target.value; renderItems(); };
-  $('#dType').onchange = () => { if (dir === 'out') renderItems(); };
+  $('#dType').onchange = () => { if (dir === 'out') renderItems(); if ($('#dShipNext')) $('#dShipNext').checked = $('#dType').value === '销售出库'; };
   tb.addEventListener('click', e => {
     const a = e.target.closest('[data-snauto]');
     if (a) {
@@ -1121,13 +1162,15 @@ function docModal(dir, productId, type0, src) {
     if (badSn) return toast(`「${byId(db.products, badSn.productId).name}」需要登记 ${baseQ(badSn)} 个序列号`, 'error');
     const badDate = items.find(i => i.prodDate && i.expDate && i.expDate < i.prodDate);
     if (badDate) return toast(`「${byId(db.products, badDate.productId).name}」有效期早于生产日期`, 'error');
+    const shipNext = $('#dShipNext') && $('#dShipNext').checked, carrierId = draft.carrierId;
     const body = {dir, type:$('#dType').value, wh:draft.wh, date:$('#dDate').value, party:$('#dParty').value.trim(), handler:$('#dHandler').value.trim(), remark:$('#dRemark').value.trim(),
-      items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:mo ? i.price : undefined, note:i.note, batchNo:i.batchNo, prodDate:i.prodDate, expDate:i.expDate, ...(byId(db.products, i.productId).serial ? {serials:snList(i.serials)} : {})}))};
+      address:$('#dAddr') ? $('#dAddr').value.trim() : '', items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:mo ? i.price : undefined, note:i.note, batchNo:i.batchNo, prodDate:i.prodDate, expDate:i.expDate, ...(byId(db.products, i.productId).serial ? {serials:snList(i.serials)} : {})}))};
     $('#dSave').disabled = true; if ($('#dSavePrint')) $('#dSavePrint').disabled = true;
     const r = await mutate('POST', '/api/stockdocs', body, r => docTitle(dir) + (r.status === '待审核' ? '已提交审核：' : '已保存：') + r.no);
     if (!r) { $('#dSave').disabled = false; if ($('#dSavePrint')) $('#dSavePrint').disabled = false; return; }
     ui.invTab = 'docs'; if (current() === 'inventory') render();
     if (andPrint) docPrint(r.id);
+    if (shipNext) shipModal({srcType:'out', srcId:r.id, carrierId});
   };
   $('#dSave').onclick = () => save(false);
   if ($('#dSavePrint')) $('#dSavePrint').onclick = () => save(true);
@@ -1155,12 +1198,12 @@ const PAPERS = {a4:['A4 纵向', 'A4 portrait', 12], half:['二等分 241×140�
 const PRINT_ONLY = {a4l:['A4 横向', 'A4 landscape', 0]};
 /* ---------- 单据打印：入库 / 出库 / 调拨 / 销售 / 采购单共用一套排版，样式在 系统设置 → 打印模板 里调整 ---------- */
 const SLIP_COLS = {idx:'序号', sku:'商品编码', barcode:'条码', name:'商品名称', spec:'规格型号', unit:'单位', qty:'数量', price:'单价', amount:'金额', batch:'批次', note:'备注'};
-const SLIP_META = {no:'单号', type:'类型', date:'日期', party:'往来单位', contact:'联系人', address:'地址', wh:'仓库', handler:'经手人'};
+const SLIP_META = {no:'单号', type:'类型', date:'日期', party:'往来单位', contact:'联系人', address:'地址', wh:'仓库', handler:'经手人', express:'快递'};
 const SLIP_KINDS = {
   in:{name:'入库单', meta:['no', 'type', 'date', 'party', 'wh', 'handler'], party:'供货单位', signs:'制单，经手，仓管，送货人'},
-  out:{name:'出库单', meta:['no', 'type', 'date', 'party', 'wh', 'handler'], party:'领用 / 收货单位', signs:'制单，经手，仓管，领用 / 收货人'},
+  out:{name:'出库单', meta:['no', 'type', 'date', 'party', 'address', 'express', 'wh', 'handler'], party:'领用 / 收货单位', signs:'制单，经手，仓管，领用 / 收货人'},
   transfer:{name:'调拨单', meta:['no', 'date', 'wh', 'handler'], signs:'制单，调出仓管，调入仓管，经手', price:'成本单价', amount:'成本金额'},
-  sales:{name:'销售单', meta:['no', 'date', 'party', 'contact', 'address', 'wh'], party:'客户', signs:'制单，审核，发货，客户签收'},
+  sales:{name:'销售单', meta:['no', 'date', 'party', 'contact', 'address', 'wh', 'express'], party:'客户', signs:'制单，审核，发货，客户签收'},
   purchase:{name:'采购单', meta:['no', 'date', 'party', 'contact', 'wh'], party:'供应商', signs:'制单，审核，收货'}
 };
 const colLabel = (K, c) => c.label || (c.k === 'price' && K.price) || (c.k === 'amount' && K.amount) || SLIP_COLS[c.k];
@@ -1183,10 +1226,11 @@ function slipData(kind, o) {
     items:o.items.map(i => row(i, (i.cost || 0) * (i.rate || 1))), creator:o.creator, handler:o.handler, remark:o.remark, voided, stamp};
   if (kind === 'sales' || kind === 'purchase') {
     const C = ORD[kind], party = byId(db[C.party], o[C.partyKey]) || {};
-    return {meta:{no:o.no, date:o.date, party:[K.party, party.name || ''], contact:[party.contact, party.phone].filter(Boolean).join(' '), address:party.address || '', wh:o.wh && multiWh() ? whName(o.wh) : ''},
+    return {meta:{no:o.no, date:o.date, party:[K.party, party.name || ''], contact:[party.contact, party.phone].filter(Boolean).join(' '), address:party.address || '', wh:o.wh && multiWh() ? whName(o.wh) : '', express:kind === 'sales' ? shipText('sales', o.id) : ''},
       items:o.items.map(i => row(i, linePrice(i))), creator:o.creator, handler:'', remark:o.remark, voided:o.status === '已作废' ? '作废：' : '', stamp:o.status === '已作废' ? '作废' : ''};
   }
-  return {meta:{no:o.no, type:o.type, date:o.date, party:[K.party, o.party || ''], wh:multiWh() || (o.wh && o.wh !== META.defaultWh) ? whName(o.wh) : '', handler:o.handler},
+  return {meta:{no:o.no, type:o.type, date:o.date, party:[K.party, o.party || ''], wh:multiWh() || (o.wh && o.wh !== META.defaultWh) ? whName(o.wh) : '', handler:o.handler,
+    address:o.address || '', express:o.dir === 'out' && o.id ? shipText('out', o.id) : ''},
     items:o.items.map(i => estItem(o, i)).map(i => row(i, linePrice(i))), creator:o.creator, handler:o.handler, remark:o.remark, voided, stamp, approver:o.status === '正常' ? o.approver || '' : ''};
 }
 function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {}) {
@@ -1271,7 +1315,8 @@ function docView(id) {
     : o.approver ? ` · ${esc(o.approver)} 于 ${fmtTime(o.approvedAt)} 审核` : '';
   openModal(`${modalHead(docTitle(o.dir) + ' · ' + o.no + ' ' + docBadge(o))}
   <div class="m-body"><div class="slip-preview" id="slipPrev">${slipHtml(o, {showMoney:mo && prefs.slipMoney !== false})}</div>
-  <p class="sub-t" style="margin-top:10px">开单时间 ${fmtTime(o.createdAt)} · 已打印 ${o.printCount || 0} 次${o.approver && o.status === '正常' ? appr : ''}</p>${o.status === '正常' ? '' : appr}</div>
+  <p class="sub-t" style="margin-top:10px">开单时间 ${fmtTime(o.createdAt)} · 已打印 ${o.printCount || 0} 次${o.approver && o.status === '正常' ? appr : ''}</p>${o.status === '正常' ? '' : appr}
+  ${o.dir === 'out' ? shipBlock('out', o, o.status !== '已作废') : ''}</div>
   <div class="m-foot" style="flex-wrap:wrap">
     <span style="margin-right:auto;display:flex;gap:8px">${canDocVoid(o) ? `<button class="btn" style="color:var(--red)" data-act="docVoid" data-id="${o.id}">作废</button>` : ''}${canDocRedo(o) ? `<button class="btn" data-act="docRedo" data-id="${o.id}">重新开单</button>` : ''}${canDocApprove(o) ? `<button class="btn" style="color:var(--red)" data-act="docReject" data-id="${o.id}">驳回</button><button class="btn primary" data-act="docApprove" data-id="${o.id}">${ic('check')}审核通过</button>` : ''}</span>
     ${can('inv.print') ? `<select class="select" id="pPaper">${Object.entries(PAPERS).map(([k, v]) => `<option value="${k}" ${(prefs.paper || 'a4') === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select>
@@ -2007,7 +2052,7 @@ function printLabels(body) {
 const IMPORT_COLS = [['sku', '商品编码', ['编码', 'sku', '货号', '商品编号', '物料编码']], ['name', '商品名称', ['名称', '品名', '物料名称']], ['spec', '规格型号', ['规格', '型号']],
   ['category', '分类', ['商品分类', '类别']], ['unit', '单位', ['计量单位']], ['cost', '成本价', ['成本', '进价', '期初成本', '期初单价']], ['price', '销售价', ['售价', '零售价']],
   ['stock', '期初库存', ['期初数量', '库存', '数量', '库存数量']], ['safety', '安全库存', ['最低库存', '库存下限']], ['remark', '备注', []],
-  ['barcode', '条码', ['商品条码', '条形码']], ['units', '辅助单位', ['多单位', '单位换算']]];
+  ['barcode', '条码', ['商品条码', '条形码']], ['units', '辅助单位', ['多单位', '单位换算']], ['weight', '重量kg', ['重量', '单重', '毛重', '重量公斤', '重量(kg)']]];
 function loadXLSX() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
   return new Promise((ok, bad) => {
@@ -2049,7 +2094,7 @@ function sheetToRows(aoa) {
     .filter(([o]) => Object.values(o).some(v => v !== '' && v != null)).map(([o, n]) => ({...o, _row:n}));
 }
 async function downloadTemplate() {
-  const head = IMPORT_COLS.map(c => c[1]), demo = [['A1001', '示例商品一', '500ml', '食品饮料', '瓶', 3.5, 6, 120, 20, '', '6901234567892', '箱=24/16901234567899'], ['A1002', '示例商品二', 'M10×30', '五金配件', '个', 0.2, 0.5, 1000, 200, '', '', '盒=100']];
+  const head = IMPORT_COLS.map(c => c[1]), demo = [['A1001', '示例商品一', '500ml', '食品饮料', '瓶', 3.5, 6, 120, 20, '', '6901234567892', '箱=24/16901234567899', 0.55], ['A1002', '示例商品二', 'M10×30', '五金配件', '个', 0.2, 0.5, 1000, 200, '', '', '盒=100', 0.012]];
   try {
     const X = await loadXLSX(), ws = X.utils.aoa_to_sheet([head, ...demo]), wb = X.utils.book_new();
     ws['!cols'] = head.map(() => ({wch:12}));
@@ -2088,7 +2133,7 @@ function importPreview(rows, update, fileName) {
     const sku = String(r.sku ?? '').trim(), ex = bySku.get(sku), msg = [];
     if (!sku) msg.push('编码为空'); else if (seen.has(sku)) msg.push('编码重复'); seen.add(sku);
     if (!ex && !String(r.name ?? '').trim()) msg.push('新商品缺少名称');
-    [['cost', '成本价'], ['price', '销售价']].forEach(([k, l]) => { if (!isNum(r[k])) msg.push(l + '不正确'); });
+    [['cost', '成本价'], ['price', '销售价'], ['weight', '重量']].forEach(([k, l]) => { if (!isNum(r[k])) msg.push(l + '不正确'); });
     [['stock', '期初库存'], ['safety', '安全库存']].forEach(([k, l]) => { if (!isNum(r[k], true)) msg.push(l + '须为非负整数'); });
     if (r.units !== '' && r.units != null) { try { textToUnits(r.units); } catch (e) { msg.push(e.message); } }
     const st = msg.length ? '错误' : ex ? (update ? '更新' : '跳过') : '新增';
@@ -2222,6 +2267,7 @@ function orderView(kind, id) {
     <div class="doc-sum"><div>合计：<b>${money(total)}</b></div><div>已${C.payWord}：<b class="pos">${money(paid)}</b></div><div>未${C.payWord}：<b class="neg">${money(total - paid)}</b></div></div>
     ${o.remark ? `<p style="margin-top:12px;color:var(--muted)">备注：${esc(o.remark)}</p>` : ''}
     ${pays.length ? `<h4 style="margin:18px 0 8px">${C.payWord}记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(f.method || '')}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td></tr>`).join('')}</tbody></table>` : ''}
+    ${kind === 'sales' && o.status !== '待发货' ? shipBlock('sales', o, o.status !== '已作废') : ''}
   </div></div>
   <div class="m-foot"><div class="ops" style="margin-right:auto">${orderOps(kind, o).replace(tbtn('查看', 'orderView', kind + '|' + o.id), '')}</div><button class="btn" data-act="orderPrint" data-id="${kind}|${o.id}">${ic('printer')}打印</button><button class="btn primary" data-act="closeModal">关闭</button></div>`, 'lg');
 }
@@ -2236,14 +2282,16 @@ function orderAct(action, kind, id) {
     const need = {}; o.items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + i.qty; });
     const lackIn = w => Object.entries(need).map(([pid, q]) => ({p:byId(db.products, pid), q})).filter(x => !x.p || whQty(x.p, w) < x.q);
     const lackMsg = (w, l) => (multiWh() ? whName(w) : '') + '库存不足：' + l.map(x => (x.p ? x.p.name + '（缺 ' + (x.q - whQty(x.p, w)) + '）' : '商品已删除')).join('、');
+    // 发货成功后接着登记快递单号（启用了物流运费模块时）
+    const then = r => { if (r && shipOn() && can('ship.edit')) shipModal({srcType:'sales', srcId:id}); return r; };
     if (!multiWh()) {
       const lack = lackIn(META.defaultWh);
       if (lack.length) return toast(lackMsg(META.defaultWh, lack), 'error');
-      return confirmBox(`确认发货 ${o.no}？将扣减对应商品库存。`, () => run('ship', '已发货，库存已扣减'), {danger:false, okText:'确认发货'});
+      return confirmBox(`确认发货 ${o.no}？将扣减对应商品库存。`, () => run('ship', '已发货，库存已扣减').then(then), {danger:false, okText:'确认发货'});
     }
     const best = whs().find(w => !lackIn(w.id).length);
     formModal({title:'发货 · ' + o.no, okText:'确认发货', data:{wh:(best || whs()[0]).id}, fields:[{n:'wh', l:'从哪个仓库发货', type:'select', opts:whs().map(w => [w.id, w.name + (lackIn(w.id).length ? '（库存不足）' : '')]), span:1}],
-      onSubmit:v => { const l = lackIn(v.wh); if (l.length) return toast(lackMsg(v.wh, l), 'error'); return run('ship', '已从' + whName(v.wh) + '发货，库存已扣减', {wh:v.wh}); }});
+      onSubmit:v => { const l = lackIn(v.wh); if (l.length) return toast(lackMsg(v.wh, l), 'error'); return run('ship', '已从' + whName(v.wh) + '发货，库存已扣减', {wh:v.wh}).then(then); }});
   } else if (action === 'complete') run('complete', '订单已完成');
   else if (action === 'approve') confirmBox(`审核通过采购单 ${o.no}？`, () => run('approve', '审核通过'), {danger:false, okText:'审核通过'});
   else if (action === 'inbound') {
@@ -2279,6 +2327,538 @@ function orderAct(action, kind, id) {
       }});
   }
 }
+
+/* ================= 页面：物流运费 ================= */
+const shipOn = () => (db.settings.modules || []).includes('shipping');
+const SHIP_STATUS = {'待对账':'orange', '已对账':'green', '申诉中':'red', '已作废':'gray'};
+const BILL_CAT = {diff:['金额差异', 'orange'], extra:['账单有、系统无', 'red'], dup:['重复计费', 'purple'], ok:['一致', 'green'], missing:['系统有、账单无', 'blue']};
+const carrierLabel = id => (byId(db.carriers, id) || {}).name || '已删除快递';
+const shipsOf = (type, id) => db.shipments.filter(s => s.srcType === type && s.srcId === id && s.status !== '已作废');
+const shipText = (type, id) => shipsOf(type, id).map(s => carrierLabel(s.carrierId) + ' ' + s.trackNo).join('，');
+const shipFee = s => s.billFee != null ? s.billFee : s.estFee;  // 对过账的按账单金额，否则按估算
+const diffHtml = d => Math.abs(d) < 0.005 ? '<span class="sub-t">0</span>' : `<span class="${d > 0 ? 'neg' : 'pos'}">${d > 0 ? '+' : ''}${d.toFixed(2)}</span>`;
+const provOpts = (sel, blank = '按地址自动识别') => `<option value="">${blank}</option>` + (META.provinces || []).map(p => `<option ${p === sel ? 'selected' : ''}>${p}</option>`).join('');
+function shipSrcLink(s) {
+  if (!s.srcNo) return '<span class="sub-t">-</span>';
+  if (s.srcType === 'sales') return byId(db.sales, s.srcId) ? `<a class="link" data-act="orderView" data-id="sales|${s.srcId}">${esc(s.srcNo)}</a>` : esc(s.srcNo);
+  return refLink(s.srcNo);
+}
+// 一行运费估算：收件省份 · 估重 · 各家快递价格（最便宜的排第一）
+function shipQuoteLine(q) {
+  if (!q.province) return `<span class="neg">${q.address ? '识别不出收件省份，请在地址前写上省份' : '请填写收货地址'}</span>`;
+  const okQ = q.quotes.filter(x => !x.error);
+  return `<span>收件 <b>${esc(q.province)}${q.city ? ' · ' + esc(q.city) : ''}</b></span><span>估重 <b>${q.weight}kg</b>${q.missing.length ? `<span class="neg" title="${esc(q.missing.join('、'))}">（${q.missing.length} 个商品没填重量）</span>` : ''}</span>`
+    + (!db.carriers.length ? '<span class="neg">还没有设置快递报价</span>' : okQ.length ? okQ.slice(0, 4).map((x, i) => `<span>${esc(x.name)} <b>${money(x.fee)}</b>${i === 0 && okQ.length > 1 ? ' <span class="badge green plain">最低</span>' : ''}</span>`).join('') : '<span class="neg">没有发往该省份的报价</span>');
+}
+// 单据详情里的「快递」区：已登记的运单 + 登记按钮
+function shipBlock(type, o, canAdd) {
+  if (!shipOn() || !(can('ship.view') || can('ship.edit'))) return '';
+  const rows = shipsOf(type, o.id), add = canAdd && can('ship.edit') ? `<button class="btn sm" data-act="shipNew" data-id="${type}|${o.id}">${ic('truck')}登记快递</button>` : '';
+  if (!rows.length && !add) return '';
+  return `<div class="line-head"><b>快递</b>${add}</div>` + (rows.length ? `<table class="tbl compact"><thead><tr><th>快递单号</th><th>快递</th><th>省份</th><th class="num">计费重</th><th class="num">运费</th><th>状态</th></tr></thead><tbody>
+    ${rows.map(s => `<tr><td><a class="link" data-act="shipView" data-id="${s.id}">${esc(s.trackNo)}</a></td><td>${esc(carrierLabel(s.carrierId))}</td><td>${esc(s.province)}</td><td class="num">${s.chargeWeight}kg</td>
+      <td class="num">${money(shipFee(s))}${s.billFee != null ? '' : ' <span class="sub-t">估</span>'}</td><td>${badge(s.status, SHIP_STATUS[s.status])}</td></tr>`).join('')}</tbody></table>` : '<p class="sub-t">还没有登记快递单号</p>');
+}
+function shipOps(s, inView) {
+  const b = inView ? [] : [tbtn('查看', 'shipView', s.id)];
+  if (s.status === '待对账' && can('ship.edit')) b.push(tbtn('修改', 'shipEdit', s.id), tbtn('作废', 'shipVoid', s.id, 'danger-text'));
+  if (s.status === '申诉中' && can('ship.bill')) b.push(tbtn('处理申诉', 'shipResolve', s.id, 'primary'));
+  return b.join('');
+}
+function pageShipping() {
+  if (!ui.shipTab) ui.shipTab = 'list';
+  const m = monthKey(today()), S = db.shipments.filter(s => s.status !== '已作废'), mS = S.filter(s => monthKey(s.date) === m), dis = S.filter(s => s.status === '申诉中');
+  const head = `<button class="btn" data-act="shipCalc">${ic('coin')}运费试算</button>` + (can('ship.edit') ? `<button class="btn primary" data-act="shipNew">${ic('plus')}登记运单</button>` : '')
+    + (can('ship.bill') ? `<button class="btn primary" data-act="billImport">${ic('upload')}导入快递账单</button>` : '');
+  $('#view').innerHTML = pageHead('物流运费', '按收货地址自动估算运费、登记快递单号，导入快递月结账单逐单对账', head) + `
+  <div class="grid g4 mb">
+    ${kpi('本月运单', mS.length, 'truck', 'primary', `<div class="trend"><span>共 ${S.length} 单</span></div>`)}
+    ${kpi('本月运费', moneyK(sum(mS, shipFee)), 'coin', 'green', `<div class="trend"><span>单均 ${money(mS.length ? sum(mS, shipFee) / mS.length : 0)}</span></div>`)}
+    ${kpi('待对账', S.filter(s => s.status === '待对账').length, 'clock', 'orange')}
+    ${kpi('申诉中', dis.length, 'alert', 'red', dis.length ? `<div class="trend"><span>争议 ${money(sum(dis, s => s.billFee - s.estFee))}</span></div>` : '')}
+  </div>
+  ${tabs('shipTab', [['list', '运单'], ['bills', '快递账单对账'], ['stats', '运费统计'], ['rates', '快递报价']])}
+  <div class="card" id="shipCard"></div>`;
+  const card = $('#shipCard'), carOpts = db.carriers.map(c => [c.id, c.name]);
+  if (ui.shipTab === 'list') {
+    const filters = [
+      {key:'car', label:'全部快递', options:carOpts, test:(s, v) => s.carrierId === v},
+      {key:'st', label:'全部状态', options:Object.keys(SHIP_STATUS), test:(s, v) => s.status === v},
+      {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(s, v) => monthKey(s.date) === v},
+      {key:'prov', label:'全部省份', options:META.provinces || [], test:(s, v) => s.province === v}];
+    card.innerHTML = toolbar('ships', {placeholder:'搜索快递单号 / 单据 / 收件人 / 地址', filters, buttons:`<button class="btn" data-act="export" data-id="ships">${ic('download')}导出</button>`}) + '<div id="list-ships"></div>';
+    mountList('ships', {rows:() => db.shipments, search:s => s.trackNo + s.no + (s.srcNo || '') + (s.party || '') + (s.address || ''), filters, empty:'暂无运单。开出库单时勾选「保存后登记快递单号」，或点右上角「登记运单」', columns:[
+      {t:'快递单号', r:s => `<a class="link" data-act="shipView" data-id="${s.id}">${esc(s.trackNo)}</a><div class="sub-t">${esc(carrierLabel(s.carrierId))}</div>`, s:s => s.trackNo},
+      {t:'发货日期', r:s => s.date, s:s => s.date},
+      {t:'来源单据', r:shipSrcLink},
+      {t:'收件', r:s => `<b>${esc(s.province)}</b> ${esc(s.party || '')}<div class="sub-t" style="max-width:240px;overflow:hidden;text-overflow:ellipsis">${esc(s.address || '')}</div>`},
+      {t:'计费重', cls:'num', r:s => s.chargeWeight + 'kg' + `<div class="sub-t">${s.weighed ? '称重' : '估重'}</div>`, s:s => s.chargeWeight},
+      {t:'估算运费', cls:'num', r:s => money(s.estFee), s:s => s.estFee},
+      {t:'账单运费', cls:'num', r:s => s.billFee != null ? money(s.billFee) : '-', s:s => s.billFee ?? -1},
+      {t:'差额', cls:'num', r:s => s.billFee != null ? diffHtml(s.billFee - s.estFee) : '-', s:s => s.billFee != null ? s.billFee - s.estFee : 0},
+      {t:'状态', r:s => badge(s.status, SHIP_STATUS[s.status])},
+      {t:'操作', r:s => `<div class="ops">${shipOps(s)}</div>`}
+    ], exp:{name:'运单', cols:[['快递单号', s => s.trackNo], ['快递', s => carrierLabel(s.carrierId)], ['发货日期', s => s.date], ['来源单据', s => s.srcNo], ['收件人', s => s.party], ['省份', s => s.province], ['地址', s => s.address],
+      ['实重kg', s => s.weight], ['计费重量kg', s => s.chargeWeight], ['估算运费', s => s.estFee], ['账单运费', s => s.billFee ?? ''], ['账单号', s => s.billNo || ''], ['状态', s => s.status], ['差异说明', s => s.diffReason || ''], ['备注', s => s.note]]}});
+  } else if (ui.shipTab === 'bills') {
+    const filters = [{key:'car', label:'全部快递', options:carOpts, test:(b, v) => b.carrierId === v}, {key:'st', label:'全部状态', options:['草稿', '已确认'], test:(b, v) => b.status === v}];
+    card.innerHTML = toolbar('bills', {placeholder:'搜索账单号 / 文件名 / 账期', filters, buttons:can('ship.bill') ? `<button class="btn primary" data-act="billImport">${ic('upload')}导入快递账单</button>` : ''}) + '<div id="list-bills"></div>';
+    const n = b => b.counts ? ['ok', 'diff', 'extra', 'dup'].reduce((t, k) => t + (b.counts[k] || 0), 0) : 0;
+    mountList('bills', {rows:() => db.shipBills, search:b => b.no + (b.fileName || '') + (b.period || '') + carrierLabel(b.carrierId), filters, empty:'还没有导入快递账单', columns:[
+      {t:'账单号', r:b => `<a class="link" data-act="billView" data-id="${b.id}">${b.no}</a><div class="sub-t">${esc(b.fileName || '')}</div>`, s:b => b.no},
+      {t:'快递', r:b => esc(carrierLabel(b.carrierId))},
+      {t:'账期', r:b => b.period || '-', s:b => b.period || ''},
+      {t:'行数', cls:'num', r:n},
+      {t:'账单金额', cls:'num', r:b => money(b.total), s:b => b.total},
+      {t:'我方估算', cls:'num', r:b => money(b.estTotal)},
+      {t:'对账结果', r:b => Object.entries(BILL_CAT).filter(([k]) => b.counts && b.counts[k]).map(([k, [l, c]]) => badge(l + ' ' + b.counts[k], c + ' plain')).join(' ')},
+      {t:'应付', cls:'num', r:b => b.status === '已确认' ? `<b>${money(b.payable)}</b>` : '-'},
+      {t:'状态', r:b => badge(b.status, b.status === '草稿' ? 'orange' : 'green')},
+      {t:'操作', r:b => `<div class="ops">${tbtn(b.status === '草稿' && can('ship.bill') ? '对账' : '查看', 'billView', b.id, b.status === '草稿' ? 'primary' : '')}</div>`}]});
+  } else if (ui.shipTab === 'stats') shipStats(card, S);
+  else {
+    card.innerHTML = `<div class="toolbar"><div class="tb-left"><span class="sub-t">每家快递按省份分区报价：可以按重量段（0.5kg / 1kg / 2kg…）或首重 + 续重计价，也可以直接导入快递给的 Excel 报价表</span></div>
+      <div class="tb-right">${can('ship.rate') ? `<button class="btn primary" data-act="carrierEdit">${ic('plus')}新增快递公司</button>` : ''}</div></div>`
+      + (db.carriers.length ? db.carriers.map(carrierCard).join('') : `<div class="empty">${emptySvg}<p>还没有快递报价${can('ship.rate') ? '，点右上角新增' : ''}</p></div>`);
+  }
+}
+const zoneText = z => (z.bands.length ? z.bands.map(b => `≤${b.upTo}kg ¥${b.fee}`).join(' / ') + (z.addFee ? ` · 超出每 ${z.addStep}kg +¥${z.addFee}` : '')
+  : `首重 ${z.first}kg ¥${z.firstFee} · 续重每 ${z.addStep}kg ¥${z.addFee}`) + (z.extra ? ` · 附加 ¥${z.extra}` : '') + (z.min ? ` · 最低 ¥${z.min}` : '');
+function carrierCard(c) {
+  const opt = [c.step ? `计费重量按 ${c.step}kg 进位` : '计费重量不进位', c.volDiv ? `抛比 ${c.volDiv}` : '不计体积重', `包材 ${c.pack || 0}kg`,
+    c.insureRate ? `保价 ${c.insureRate}%（最低 ¥${c.insureMin || 0}）` : '', `对账容差 ¥${c.tol ?? 0.5}`].filter(Boolean).join(' · ');
+  return `<div class="card-body" style="border-top:1px solid var(--border)">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b style="font-size:15px">${esc(c.name)}</b>${c.code ? `<span class="sub-t">${esc(c.code)}</span>` : ''}${badge(c.enabled ? '启用' : '停用', c.enabled ? 'green' : 'gray')}
+      <span class="sub-t">${esc(opt)}</span><span class="ops" style="margin-left:auto">${can('ship.rate') ? tbtn('编辑报价', 'carrierEdit', c.id) + tbtn('删除', 'carrierDel', c.id, 'danger-text') : ''}</span></div>
+    ${c.remark ? `<div class="sub-t" style="margin-top:4px">${esc(c.remark)}</div>` : ''}
+    <table class="tbl compact rate-tbl" style="margin-top:8px"><thead><tr><th style="width:140px">分区</th><th>省份</th><th>计价</th></tr></thead><tbody>
+    ${c.zones.map(z => `<tr><td><b>${esc(z.name)}</b></td><td style="white-space:normal">${z.provinces.length ? esc(z.provinces.join('、')) : '<span class="sub-t">其余省份</span>'}</td><td style="white-space:normal">${esc(zoneText(z))}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function shipStats(card, S) {
+  const months = lastMonths(6), byM = mk => S.filter(s => monthKey(s.date) === mk), rec = S.filter(s => s.billFee != null);
+  const est = sum(rec, s => s.estFee), dev = est ? (sum(rec, s => s.billFee) - est) / est * 100 : 0, six = S.filter(s => months.includes(monthKey(s.date)));
+  const group = key => { const g = {}; six.forEach(s => { const k = key(s); (g[k] = g[k] || []).push(s); }); return Object.entries(g).map(([k, a]) => ({k, n:a.length, fee:sum(a, shipFee), rec:a.filter(s => s.billFee != null)})).sort((a, b) => b.fee - a.fee); };
+  const devOf = r => { const e = sum(r.rec, s => s.estFee); return e ? ((sum(r.rec, s => s.billFee) - e) / e * 100).toFixed(1) + '%' : '-'; };
+  const tbl = (title, rows, label) => `<div class="card"><div class="card-head"><h3>${title}</h3><span class="sub-t">近 6 个月</span></div><div class="card-body" style="padding:8px 0 0"><table class="tbl compact"><thead><tr><th>${label}</th><th class="num">运单</th><th class="num">运费</th><th class="num">单均</th><th class="num">账单比估算</th></tr></thead><tbody>
+    ${rows.map(r => `<tr><td>${esc(r.k)}</td><td class="num">${r.n}</td><td class="num">${money(r.fee)}</td><td class="num">${money(r.fee / r.n)}</td><td class="num">${devOf(r)}</td></tr>`).join('') || '<tr><td colspan="5"><div class="empty">暂无数据</div></td></tr>'}</tbody></table></div></div>`;
+  card.outerHTML = `<div class="grid g4 mb">
+    ${kpi('近 6 个月运费', moneyK(sum(six, shipFee)), 'coin', 'primary', `<div class="trend"><span>${six.length} 单</span></div>`)}
+    ${kpi('单均运费', money(six.length ? sum(six, shipFee) / six.length : 0), 'truck', 'green')}
+    ${kpi('账单比估算', (dev >= 0 ? '+' : '') + dev.toFixed(1) + '%', 'chart', Math.abs(dev) > 5 ? 'red' : 'blue', `<div class="trend"><span>已对账 ${rec.length} 单；偏差大说明商品重量或报价表需要更新</span></div>`)}
+    ${kpi('申诉中金额', money(sum(S.filter(s => s.status === '申诉中'), s => s.billFee - s.estFee)), 'alert', 'orange')}
+  </div>
+  <div class="card mb"><div class="card-head"><h3>每月运费</h3><span class="sub-t">估算：登记运单时按报价算；账单：快递账单确认后的金额</span></div><div class="card-body"><div class="chart-box"><canvas id="shipC1"></canvas></div></div></div>
+  <div class="grid g2">${tbl('按快递', group(s => carrierLabel(s.carrierId)), '快递')}${tbl('按省份', group(s => s.province).slice(0, 15), '省份')}</div>`;
+  chart('shipC1', {data:{labels:months.map(mLabel), datasets:[
+    {type:'bar', label:'估算运费', data:months.map(mk => sum(byM(mk), s => s.estFee)), backgroundColor:'#6366f1', borderRadius:6, maxBarThickness:28},
+    {type:'bar', label:'账单运费', data:months.map(mk => sum(byM(mk).filter(s => s.billFee != null), s => s.billFee)), backgroundColor:'#10b981', borderRadius:6, maxBarThickness:28},
+    {type:'line', label:'运单数', data:months.map(mk => byM(mk).length), borderColor:'#f59e0b', backgroundColor:'#f59e0b', tension:.35, pointRadius:4, yAxisID:'y1'}
+  ]}, options:{scales:{y:yMoney, y1:{position:'right', grid:{display:false}, beginAtZero:true}, x:{grid:{display:false}}}}});
+}
+
+/* ---------- 登记 / 修改运单 ---------- */
+function shipSrc(type, id) {
+  if (type === 'out') { const o = byId(db.stockDocs, id); return o && {type, id, no:o.no, party:o.party || '', address:o.address || ((db.customers.find(c => c.name === o.party) || {}).address || '')}; }
+  if (type === 'sales') { const o = byId(db.sales, id), c = o && byId(db.customers, o.customerId) || {}; return o && {type, id, no:o.no, party:c.name || '', address:c.address || ''}; }
+  return null;
+}
+// 报价选择列表：点一行选中这家快递
+function quoteRows(q, sel) {
+  if (!q) return '<p class="sub-t">计算中…</p>';
+  if (!q.quotes.length) return '<p class="neg">没有启用的快递公司，请先到「快递报价」里添加</p>';
+  const best = (q.quotes.find(x => !x.error) || {}).carrierId;
+  return q.quotes.map(x => x.error ? `<div class="qt-row bad"><b>${esc(x.name)}</b><span class="sub-t">${esc(x.error)}</span></div>`
+    : `<div class="qt-row ${x.carrierId === sel ? 'on' : ''}" data-car="${x.carrierId}"><input type="radio" ${x.carrierId === sel ? 'checked' : ''} tabindex="-1"><b>${esc(x.name)}</b>
+      <span class="sub-t">${esc(x.zone)} · 计费 ${x.chargeWeight}kg${x.volWeight > x.weight ? '（体积重）' : ''}${x.insure ? ' · 保价 ' + money(x.insure) : ''}</span>${x.carrierId === best && q.quotes.filter(y => !y.error).length > 1 ? '<span class="badge green plain">最低</span>' : ''}<span class="fee">${money(x.fee)}</span></div>`).join('');
+}
+function shipModal(o = {}) {
+  const edit = o.edit ? byId(db.shipments, o.edit) : null;
+  const src = edit ? (edit.srcType ? {type:edit.srcType, id:edit.srcId, no:edit.srcNo, party:edit.party} : null) : o.srcType ? shipSrc(o.srcType, o.srcId) : null;
+  if (!db.carriers.some(c => c.enabled)) return toast('还没有启用的快递公司，请先在「物流运费 → 快递报价」里添加', 'error');
+  const st = {carrierId:edit ? edit.carrierId : o.carrierId || '', q:null, seq:0, timer:0};
+  const pk = edit ? [{trackNo:edit.trackNo, weight:edit.weight}] : [{trackNo:o.trackNo || '', weight:o.weight || ''}];
+  openModal(`${modalHead(edit ? '修改运单 · ' + esc(edit.trackNo) : '登记快递运单')}<div class="m-body">
+    ${src ? `<p class="sub-t" style="margin-bottom:12px">来源单据 <b>${esc(src.no)}</b>${src.party ? ' · ' + esc(src.party) : ''}${edit ? '' : ' · 没称重时按单据商品的重量估算'}</p>` : ''}
+    <div class="form-grid">
+      <label class="field span2"><span>收件地址</span><input id="sAddr" value="${esc(edit ? edit.address : o.address || (src && src.address) || '')}" placeholder="省 市 区 详细地址（用来识别省份）"></label>
+      <label class="field"><span>收件省份</span><select id="sProv">${provOpts(edit ? edit.province : o.province || '')}</select></label>
+      <label class="field"><span>收件人 / 单位</span><input id="sParty" value="${esc(edit ? edit.party || '' : o.party || (src && src.party) || '')}"></label>
+      <label class="field"><span>保价金额 ¥（选填）</span><input id="sDecl" type="number" step="any" min="0" value="${edit && edit.declared ? edit.declared : ''}"></label>
+      <label class="field"><span>发货日期</span><input id="sDate" type="date" value="${edit ? edit.date : o.date || today()}"></label>
+    </div>
+    <div class="line-head"><b>选择快递</b><span class="sub-t" id="sInfo" style="margin-left:10px;margin-right:auto"></span></div>
+    <div id="sQuotes"></div>
+    <div class="line-head"><b>包裹</b>${edit ? '' : `<button class="btn sm" id="sAdd">${ic('plus')}加一个包裹</button>`}</div>
+    <p class="sub-t" style="margin:-4px 0 8px">${edit ? '改了重量会重新计算运费' : '扫快递单号后回车自动加下一行；只有一个包裹时称重可以留空（按商品重量估算）'}</p>
+    <div class="table-wrap"><table class="tbl items"><thead><tr><th>快递单号 <i style="color:var(--red);font-style:normal">*</i></th><th style="width:110px">称重 kg</th><th style="width:44px"></th></tr></thead><tbody id="sPk"></tbody></table></div>
+    <label class="field" style="margin-top:12px"><span>备注</span><input id="sNote" value="${esc(edit ? edit.note || '' : '')}"></label>
+  </div><div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="sSave">${ic('check')}保存</button></div>`, 'lg');
+  const drawQ = () => {
+    const q = st.q;
+    if (q && !q.quotes.some(x => !x.error && x.carrierId === st.carrierId)) st.carrierId = (q.quotes.find(x => !x.error) || {}).carrierId || st.carrierId;
+    $('#sQuotes').innerHTML = quoteRows(q, st.carrierId);
+    $('#sInfo').innerHTML = !q ? '' : (q.province ? `收件 <b>${esc(q.province)}</b>${$('#sProv').value ? '' : '（按地址识别）'}` : '<span class="neg">识别不出省份，请选择</span>')
+      + (src && !edit ? ` · 商品估重 ${q.weight}kg${q.missing.length ? `<span class="neg">（${q.missing.length} 个商品没填重量）</span>` : ''}` : '') + (pk.length > 1 ? ' · 多个包裹各按自己的重量计费，这里按第一个包裹试算' : '');
+  };
+  const requote = () => {
+    clearTimeout(st.timer);
+    st.timer = setTimeout(async () => {
+      const seq = ++st.seq, w = +pk[0].weight || undefined;
+      const body = {srcType:src && !edit ? src.type : undefined, srcId:src && !edit ? src.id : undefined, address:$('#sAddr').value.trim(), province:$('#sProv').value, declared:$('#sDecl').value, weight:w};
+      try { const q = await api('POST', '/api/ship/quote', body); if (seq === st.seq && $('#sQuotes')) { st.q = q; drawQ(); } } catch (e) { toast(e.message, 'error'); }
+    }, 300);
+  };
+  const drawPk = focus => {
+    $('#sPk').innerHTML = pk.map((p, i) => `<tr><td><input data-pi="${i}" data-pk="trackNo" value="${esc(p.trackNo)}" placeholder="扫码或输入快递单号"></td>
+      <td><input type="number" step="any" min="0" data-pi="${i}" data-pk="weight" value="${p.weight}" placeholder="${i || pk.length > 1 || edit ? '必填' : '留空按估算'}"></td>
+      <td>${pk.length > 1 ? `<button class="icon-btn sm" data-pdel="${i}" title="删除">${ic('trash')}</button>` : ''}</td></tr>`).join('');
+    if (focus != null) $(`#sPk [data-pi="${focus}"][data-pk=trackNo]`).focus();
+  };
+  $('#sPk').addEventListener('input', e => { const t = e.target, i = +t.dataset.pi; if (!t.dataset.pk) return; pk[i][t.dataset.pk] = t.value; if (t.dataset.pk === 'weight' && i === 0) requote(); });
+  $('#sPk').addEventListener('keydown', e => {
+    const t = e.target; if (e.key !== 'Enter' || t.dataset.pk !== 'trackNo' || edit) return;
+    e.preventDefault(); const i = +t.dataset.pi;
+    if (i === pk.length - 1 && t.value.trim()) { pk.push({trackNo:'', weight:''}); drawPk(i + 1); drawQ(); } else if (i < pk.length - 1) $(`#sPk [data-pi="${i + 1}"][data-pk=trackNo]`).focus();
+  });
+  $('#sPk').addEventListener('click', e => { const b = e.target.closest('[data-pdel]'); if (b) { pk.splice(+b.dataset.pdel, 1); drawPk(); drawQ(); requote(); } });
+  if ($('#sAdd')) $('#sAdd').onclick = () => { pk.push({trackNo:'', weight:''}); drawPk(pk.length - 1); drawQ(); };
+  $('#sQuotes').addEventListener('click', e => { const r = e.target.closest('[data-car]'); if (r) { st.carrierId = r.dataset.car; drawQ(); } });
+  ['#sAddr', '#sDecl'].forEach(s => $(s).addEventListener('input', requote));
+  $('#sProv').onchange = requote;
+  $('#sSave').onclick = async () => {
+    if (!st.carrierId) return toast('请选择快递公司', 'error');
+    const rows = pk.filter(p => String(p.trackNo).trim() || p.weight !== '');
+    if (!rows.length || rows.some(p => !String(p.trackNo).trim())) return toast('请填写快递单号', 'error');
+    if (rows.some(p => p.weight !== '' && !(+p.weight > 0))) return toast('称重必须大于 0', 'error');
+    const common = {carrierId:st.carrierId, address:$('#sAddr').value.trim(), province:$('#sProv').value, party:$('#sParty').value.trim(), declared:$('#sDecl').value, date:$('#sDate').value, note:$('#sNote').value.trim()};
+    $('#sSave').disabled = true;
+    const r = edit ? await mutate('PUT', '/api/shipments/' + edit.id, {...common, trackNo:rows[0].trackNo, weight:rows[0].weight}, '运单已修改')
+      : await mutate('POST', '/api/shipments', {...common, srcType:src ? src.type : '', srcId:src ? src.id : '', packages:rows}, r => `已登记 ${r.length} 个运单，估算运费 ${money(sum(r, s => s.estFee))}`);
+    if (!r) { if ($('#sSave')) $('#sSave').disabled = false; return; }
+    if (o.after) o.after();
+  };
+  drawPk(edit ? null : 0); requote();
+}
+function shipView(id) {
+  const s = byId(db.shipments, id); if (!s) return toast('运单不存在或无权查看', 'error');
+  const row = (l, v, full) => `<div ${full ? 'style="grid-column:1/-1"' : ''}><span>${l}：</span>${v}</div>`;
+  openModal(`${modalHead('运单 · ' + esc(s.trackNo) + ' ' + badge(s.status, SHIP_STATUS[s.status]))}<div class="m-body"><div class="doc-info">
+    ${row('快递', esc(carrierLabel(s.carrierId)))}${row('登记号', esc(s.no))}${row('发货日期', s.date)}${row('来源单据', shipSrcLink(s))}
+    ${row('收件人', esc(s.party || '-'))}${row('省份 / 分区', esc(s.province) + (s.zone ? ' · ' + esc(s.zone) : ''))}${row('地址', esc(s.address || '-'), 1)}
+    ${row('实重', s.weight + 'kg（' + (s.weighed ? '称重' : '按商品估算，含包材') + '）')}${row('计费重量', s.chargeWeight + 'kg' + (s.volWeight > s.weight ? '（体积重 ' + s.volWeight + 'kg）' : ''))}
+    ${s.declared ? row('保价金额', money(s.declared)) : ''}${row('估算运费', money(s.estFee))}
+    ${s.billFee != null ? row('账单运费', money(s.billFee) + ' · ' + diffHtml(s.billFee - s.estFee) + (s.billNo ? ` <span class="sub-t">${esc(s.billNo)}</span>` : '')) : ''}
+    ${s.billWeight != null && s.billFee != null ? row('账单计费重量', s.billWeight + 'kg') : ''}
+    ${s.diffReason ? row('差异说明', esc(s.diffReason), 1) : ''}${s.disputeNote ? row('申诉说明', esc(s.disputeNote), 1) : ''}${s.resolveNote ? row('申诉结果', esc(s.resolveNote) + ' · ' + esc(s.resolvedBy || ''), 1) : ''}
+    ${row('登记人', esc(s.creator || '-') + ' · ' + fmtTime(s.createdAt))}${s.note ? row('备注', esc(s.note)) : ''}
+  </div></div><div class="m-foot"><div class="ops" style="margin-right:auto">${shipOps(s, true)}</div><button class="btn primary" data-act="closeModal">关闭</button></div>`, 'lg');
+}
+function shipResolve(id) {
+  const s = byId(db.shipments, id);
+  formModal({title:'处理运费申诉 · ' + esc(s.trackNo), okText:'确认结算', data:{fee:s.billFee, note:''}, fields:[
+    {n:'fee', l:`最终运费（账单 ${money(s.billFee)}，我方估算 ${money(s.estFee)}）`, type:'number', req:1, span:1}, {n:'note', l:'处理结果（例如：快递同意按合同价退差价）', span:1}],
+    onSubmit:v => v.fee < 0 ? toast('运费不能为负', 'error') : mutate('POST', `/api/shipments/${id}/resolve`, v, '申诉已处理，按 ' + money(v.fee) + ' 结算')});
+  $('.m-body').insertAdjacentHTML('afterbegin', `<p class="span2 sub-t">${esc(s.diffReason || '')}${s.disputeNote ? '<br>申诉说明：' + esc(s.disputeNote) : ''}</p>`);
+}
+// 运费试算：不登记，只看各家快递的价格
+function shipCalc() {
+  openModal(`${modalHead('运费试算')}<div class="m-body"><div class="form-grid">
+    <label class="field span2"><span>收件地址</span><input id="qAddr" placeholder="例如 浙江省杭州市西湖区…，或只写「杭州」"></label>
+    <label class="field"><span>收件省份</span><select id="qProv">${provOpts('')}</select></label>
+    <label class="field"><span>包裹重量 kg</span><input id="qW" type="number" step="any" min="0" value="1"></label>
+    <label class="field"><span>保价金额 ¥（选填）</span><input id="qDecl" type="number" step="any" min="0"></label></div>
+    <div class="line-head"><b>各家快递报价</b><span class="sub-t" id="qInfo"></span></div><div id="qRes"><p class="sub-t">填写地址或选择省份</p></div></div>
+    <div class="m-foot"><button class="btn primary" data-act="closeModal">关闭</button></div>`);
+  let t = 0, seq = 0;
+  const go = () => { clearTimeout(t); t = setTimeout(async () => {
+    const n = ++seq, body = {address:$('#qAddr').value.trim(), province:$('#qProv').value, weight:+$('#qW').value || 0.01, declared:$('#qDecl').value};
+    try { const q = await api('POST', '/api/ship/quote', body); if (n !== seq || !$('#qRes')) return; $('#qRes').innerHTML = quoteRows(q, ''); $('#qInfo').innerHTML = q.province ? '收件 ' + esc(q.province) + (q.city ? ' · ' + esc(q.city) : '') : '<span class="neg">识别不出省份</span>'; } catch (e) { toast(e.message, 'error'); }
+  }, 300); };
+  ['#qAddr', '#qW', '#qDecl'].forEach(s => $(s).addEventListener('input', go)); $('#qProv').onchange = go;
+  $('#qAddr').focus();
+}
+
+/* ---------- 快递公司与报价编辑 ---------- */
+// 和服务端同样的算法，编辑报价时现场试算用
+function zoneFeeJs(z, cw) {
+  const steps = over => Math.ceil(+(over / (+z.addStep || 1)).toFixed(4) - 1e-9);
+  if (z.bands.length) {
+    const b = z.bands.find(x => cw <= x.upTo + 1e-9); if (b) return b.fee;
+    const last = z.bands[z.bands.length - 1];
+    return +z.addFee > 0 ? last.fee + steps(cw - last.upTo) * +z.addFee : null;
+  }
+  return cw <= +z.first + 1e-9 ? +z.firstFee : +z.firstFee + steps(cw - +z.first) * +z.addFee;
+}
+const parseBands = t => String(t || '').split(/[\s,，;；]+/).filter(Boolean).map(x => {
+  const m = /^(\d+(?:\.\d+)?)\s*(?:kg|KG|公斤)?\s*[=＝:：]\s*(\d+(?:\.\d+)?)$/.exec(x);
+  if (!m) throw new Error('重量段格式不对：「' + x + '」，应写成 0.5=2.8（0.5kg 以内 2.8 元）');
+  return {upTo:+m[1], fee:+m[2]};
+}).sort((a, b) => a.upTo - b.upTo);
+const blankZone = (name, provinces = []) => ({name, provinces, first:1, firstFee:'', addStep:1, addFee:'', bands:[], extra:0, min:0});
+function carrierEdit(id) {
+  const c = id ? byId(db.carriers, id) : null;
+  const d = c ? JSON.parse(JSON.stringify(c)) : {name:'', code:'', enabled:true, step:0.1, volDiv:8000, pack:0.1, insureRate:0, insureMin:0, tol:0.5, remark:'', zones:[blankZone('江浙沪', ['上海', '江苏', '浙江']), blankZone('其余省份')]};
+  d.zones.forEach(z => { z.bandsText = z.bands.map(b => b.upTo + '=' + b.fee).join(' '); });
+  let open = -1;
+  const opt = (list, cur) => list.map(([v, l]) => `<option value="${v}" ${+cur === v ? 'selected' : ''}>${l}</option>`).join('');
+  const inp = (idn, label, v, extra = '') => `<label class="field"><span>${label}</span><input id="${idn}" value="${esc(v ?? '')}" ${extra}></label>`;
+  openModal(`${modalHead((c ? '编辑' : '新增') + '快递公司 / 报价')}<div class="m-body">
+    <div class="form-grid" style="grid-template-columns:repeat(4,1fr)">
+      ${inp('cName', '名称 <i>*</i>', d.name, 'placeholder="如 中通快递"')}${inp('cCode', '编码（选填）', d.code, 'placeholder="如 ZTO"')}
+      <label class="field"><span>计费重量进位</span><select id="cStep">${opt([[0, '不进位'], [0.01, '0.01kg'], [0.1, '0.1kg'], [0.5, '0.5kg'], [1, '1kg（不足 1kg 按 1kg）']], d.step)}</select></label>
+      <label class="field"><span>抛比（体积重 = 长×宽×高 ÷ 抛比）</span><select id="cVol">${opt([[0, '不计体积重'], [5000, '5000'], [6000, '6000'], [8000, '8000'], [12000, '12000']], d.volDiv)}</select></label>
+      ${inp('cPack', '包材重量 kg（估重时加上）', d.pack, 'type="number" step="any" min="0"')}${inp('cIns', '保价费率 %', d.insureRate, 'type="number" step="any" min="0"')}
+      ${inp('cInsMin', '最低保价费 ¥', d.insureMin, 'type="number" step="any" min="0"')}${inp('cTol', '对账容差 ¥（差额以内算一致）', d.tol, 'type="number" step="any" min="0"')}
+      <label class="field" style="grid-column:span 3"><span>备注</span><input id="cRemark" value="${esc(d.remark || '')}"></label>
+      <div class="field"><span>状态</span><label class="chk" style="padding-top:8px"><input type="checkbox" id="cOn" ${d.enabled ? 'checked' : ''}>启用</label></div>
+    </div>
+    <div class="line-head"><b>分区报价</b>
+      <span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="zTpl">${ic('download')}报价模板</button><button class="btn sm" id="zImp">${ic('upload')}从 Excel 导入</button><button class="btn sm" id="zAdd">${ic('plus')}添加分区</button></span></div>
+    <p class="sub-t">一个省份只能在一个分区；不选省份的分区 = 其余省份。填了重量段就按重量段，超出最后一段按续重加价；没填重量段按首重 + 续重。</p>
+    <div id="zones"></div>
+    <div class="ship-est"><span>试算：</span><select class="select" id="zProv">${provOpts('', '选择省份')}</select><input class="select" id="zW" type="number" step="any" min="0" placeholder="计费重量 kg" style="width:130px"><span id="zRes"></span></div>
+  </div><div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="cSave">${ic('check')}保存报价</button></div>`, 'xl');
+  const zbox = $('#zones');
+  const draw = () => {
+    zbox.innerHTML = d.zones.map((z, i) => {
+      const other = new Map(); d.zones.forEach((x, k) => { if (k !== i) x.provinces.forEach(p => other.set(p, x.name)); });
+      const f = (k, label, ph = '') => `<div><label>${label}</label><input data-zi="${i}" data-k="${k}" value="${esc(z[k] ?? '')}" placeholder="${ph}"></div>`;
+      return `<div class="zone-card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input data-zi="${i}" data-k="name" value="${esc(z.name)}" style="max-width:170px;font-weight:600" placeholder="分区名称">
+        <span class="sub-t" style="flex:1;min-width:200px">${z.provinces.length ? esc(z.provinces.join('、')) : '其余省份（没被其他分区选中的省份都按这个分区算）'}</span>
+        <button class="btn sm" data-zopen="${i}">${open === i ? '收起' : '选择省份'}</button><button class="icon-btn sm" data-zdel="${i}" title="删除分区">${ic('trash')}</button></div>
+        ${open === i ? `<div class="prov-grid" style="grid-template-columns:repeat(auto-fill,minmax(70px,1fr))">${Object.keys(META.regions || {}).map(r => `<button class="btn sm" type="button" data-zreg="${i}|${r}">${r}</button>`).join('')}</div>
+          <div class="prov-grid">${(META.provinces || []).map(p => `<label class="chk ${other.has(p) ? 'used' : ''}" title="${other.has(p) ? '现在在「' + esc(other.get(p)) + '」，勾选后移到本分区' : ''}"><input type="checkbox" data-zc="${i}|${p}" ${z.provinces.includes(p) ? 'checked' : ''}>${p}</label>`).join('')}</div>` : ''}
+        <div class="zgrid">${f('bandsText', '重量段（kg=元，空格分开）', '如 0.5=2.8 1=3.2 2=4 3=5')}${f('first', '首重 kg')}${f('firstFee', '首重价 ¥')}${f('addStep', '续重每 kg')}${f('addFee', '续重价 ¥')}${f('extra', '附加费 ¥')}${f('min', '最低收费 ¥')}</div></div>`;
+    }).join('');
+    test();
+  };
+  // 勾选省份：从其他分区移过来
+  const take = (i, ps, on) => { d.zones.forEach((z, k) => { z.provinces = k === i ? (on ? [...new Set([...z.provinces, ...ps])] : z.provinces.filter(p => !ps.includes(p))) : on ? z.provinces.filter(p => !ps.includes(p)) : z.provinces; }); };
+  const zones = () => d.zones.map(z => ({...z, bands:parseBands(z.bandsText)}));
+  const test = () => {
+    const p = $('#zProv').value, w = +$('#zW').value;
+    if (!p || !(w > 0)) { $('#zRes').textContent = '选省份、填重量，看看按当前报价算多少钱'; return; }
+    try {
+      const zs = zones(), z = zs.find(x => x.provinces.includes(p)) || zs.find(x => !x.provinces.length);
+      if (!z) { $('#zRes').innerHTML = '<span class="neg">没有发往该省份的报价</span>'; return; }
+      const f = zoneFeeJs(z, w);
+      $('#zRes').innerHTML = f == null ? '<span class="neg">超出重量段且没有续重价</span>' : `「${esc(z.name)}」<b>${money(Math.max(f + (+z.extra || 0), +z.min || 0))}</b>`;
+    } catch (e) { $('#zRes').innerHTML = `<span class="neg">${esc(e.message)}</span>`; }
+  };
+  zbox.addEventListener('input', e => { const t = e.target; if (t.dataset.zi != null && t.dataset.k) { d.zones[+t.dataset.zi][t.dataset.k] = t.value; test(); } });
+  zbox.addEventListener('change', e => { const t = e.target; if (t.dataset.zc) { const [i, p] = split(t.dataset.zc); take(+i, [p], t.checked); draw(); } });
+  zbox.addEventListener('click', e => {
+    const b = e.target.closest('[data-zopen],[data-zdel],[data-zreg]'); if (!b) return;
+    if (b.dataset.zopen != null) { open = open === +b.dataset.zopen ? -1 : +b.dataset.zopen; draw(); }
+    else if (b.dataset.zdel != null) { if (d.zones.length < 2) return toast('至少保留一个分区', 'error'); d.zones.splice(+b.dataset.zdel, 1); open = -1; draw(); }
+    else { const [i, r] = split(b.dataset.zreg), ps = META.regions[r], all = ps.every(p => d.zones[+i].provinces.includes(p)); take(+i, ps, !all); draw(); }
+  });
+  ['#zProv', '#zW'].forEach(s => $(s).addEventListener('input', test)); $('#zProv').onchange = test;
+  $('#zAdd').onclick = () => { d.zones.push(blankZone('分区' + (d.zones.length + 1))); open = d.zones.length - 1; draw(); };
+  $('#zTpl').onclick = rateTemplate;
+  $('#zImp').onclick = () => pickSheet(aoa => {
+    const zs = parseRateSheet(aoa);
+    d.zones = zs.map(z => ({...z, bandsText:z.bands.map(b => b.upTo + '=' + b.fee).join(' ')})); open = -1; draw();
+    toast(`已读入 ${zs.length} 个分区，核对无误后点「保存报价」`, 'info');
+  });
+  $('#cSave').onclick = () => {
+    let zs; try { zs = zones(); } catch (e) { return toast(e.message, 'error'); }
+    const body = {name:$('#cName').value.trim(), code:$('#cCode').value.trim(), step:+$('#cStep').value, volDiv:+$('#cVol').value, pack:$('#cPack').value, insureRate:$('#cIns').value, insureMin:$('#cInsMin').value,
+      tol:$('#cTol').value, remark:$('#cRemark').value.trim(), enabled:$('#cOn').checked, zones:zs.map(({bandsText, ...z}) => z)};
+    if (!body.name) return toast('请填写快递公司名称', 'error');
+    mutate(c ? 'PUT' : 'POST', '/api/carriers' + (c ? '/' + c.id : ''), body, c ? '报价已保存' : '已添加快递公司');
+  };
+  draw();
+}
+// 选一个 Excel / CSV 文件，读成二维数组交给 fn
+function pickSheet(fn) {
+  const f = document.createElement('input'); f.type = 'file'; f.accept = '.xlsx,.xls,.csv';
+  f.onchange = async () => {
+    const file = f.files[0]; if (!file) return;
+    try { busy(true); fn(await readSheet(file), file.name); } catch (e) { toast('读取失败：' + e.message, 'error'); } finally { busy(false); }
+  };
+  f.click();
+}
+async function rateTemplate() {
+  const head = ['省份', '首重重量kg', '首重价格', '续重价格(每kg)', '附加费'];
+  const demo = [['上海、江苏、浙江', 1, 3, 1, ''], ['安徽、福建、江西、山东、河南、湖北、湖南、广东、北京、天津、河北', 1, 4, 2, ''], ['其余', 1, 5, 3, ''], ['新疆、西藏', 1, 15, 12, '']];
+  try {
+    const X = await loadXLSX(), wb = X.utils.book_new(), ws = X.utils.aoa_to_sheet([head, ...demo]);
+    ws['!cols'] = [{wch:50}, {wch:12}, {wch:10}, {wch:16}, {wch:10}];
+    X.utils.book_append_sheet(wb, ws, '首重续重');
+    const ws2 = X.utils.aoa_to_sheet([['省份', '0.5kg', '1kg', '2kg', '3kg', '续重价格(每kg)'], ['上海、江苏、浙江', 2.8, 3.2, 4, 5, 1], ['其余', 4, 5, 7.5, 10, 3], ['新疆、西藏', 12, 15, 27, 39, 12]]);
+    ws2['!cols'] = [{wch:50}, {wch:8}, {wch:8}, {wch:8}, {wch:8}, {wch:16}];
+    X.utils.book_append_sheet(wb, ws2, '重量段（任选一种）');
+    if (NATIVE) saveFile('快递报价模板.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', X.write(wb, {type:'array', bookType:'xlsx'}));
+    else X.writeFile(wb, '快递报价模板.xlsx');
+  } catch (e) { exportCSV('快递报价模板', head, demo); }
+}
+// 读快递报价表：每行一个（或一组）省份；列可以是 首重 / 续重，也可以是重量段（0.5kg、1kg、0-0.5、1.01-2kg…）；价格相同的行合并成一个分区
+function parseRateSheet(aoa) {
+  const norm = s => String(s ?? '').replace(/\s/g, ''), isProv = h => /省|目的地|地区|区域|到达|城市/.test(h);
+  const hi = aoa.findIndex(r => r.some(c => isProv(norm(c))));
+  if (hi < 0) throw new Error('没找到表头：需要一列「省份」或「目的地」');
+  const head = aoa[hi].map(norm), pc = head.findIndex(isProv), cols = [];
+  head.forEach((h, i) => {
+    if (i === pc || !h) return;
+    const nums = (h.match(/\d+(?:\.\d+)?/g) || []).map(Number);
+    if (/续重/.test(h) && /价|费|元/.test(h) || /续重$/.test(h)) cols.push({i, k:'addFee', step:(/每([\d.]+)/.exec(h) || [])[1]});
+    else if (/续重/.test(h)) cols.push({i, k:'addStep'});
+    else if (/首重/.test(h) && /重量|公斤/.test(h) && !/价|费|元/.test(h)) cols.push({i, k:'first'});
+    else if (/首重/.test(h)) cols.push({i, k:'firstFee', first:nums[0]});
+    else if (/附加|偏远|中转|操作费/.test(h)) cols.push({i, k:'extra'});
+    else if (/最低/.test(h)) cols.push({i, k:'min'});
+    else if (nums.length && /kg|公斤|千克|^[\d.\-~≤<＜（(]/i.test(h)) cols.push({i, k:'band', upTo:nums[nums.length - 1]});
+  });
+  if (!cols.some(c => c.k === 'band' || c.k === 'firstFee')) throw new Error('没认出价格列：需要「首重价格 / 续重价格」或「0.5kg / 1kg / 2kg」这样的重量段列');
+  const val = v => { if (v === '' || v == null) return null; const n = +String(v).replace(/[¥元,，\s]/g, ''); return Number.isFinite(n) ? n : NaN; };
+  const groups = new Map(), errs = [];
+  aoa.slice(hi + 1).forEach((r, j) => {
+    const cell = String(r[pc] ?? '').trim(); if (!cell) return;
+    const line = hi + 2 + j, z = {first:1, firstFee:'', addStep:1, addFee:'', bands:[], extra:0, min:0};
+    const rest = /^(其他|其余|其它|全国|默认)/.test(cell);
+    const ps = rest ? [] : cell.split(/[、,，\/\s;；]+/).filter(Boolean).map(x => (META.provinces || []).find(p => x.startsWith(p)) || (errs.push(`第 ${line} 行：认不出省份「${x}」`), null)).filter(Boolean);
+    for (const c of cols) {
+      const v = val(r[c.i]); if (v == null) continue;
+      if (Number.isNaN(v) || v < 0) { errs.push(`第 ${line} 行：「${aoa[hi][c.i]}」不是数字`); continue; }
+      if (c.k === 'band') z.bands.push({upTo:c.upTo, fee:v});
+      else { z[c.k] = v; if (c.k === 'addFee' && c.step) z.addStep = +c.step; if (c.k === 'firstFee' && c.first) z.first = c.first; }
+    }
+    z.bands.sort((a, b) => a.upTo - b.upTo);
+    if (!z.bands.length && z.firstFee === '') return errs.push(`第 ${line} 行：没有价格`);
+    const key = JSON.stringify([rest, z]), g = groups.get(key);
+    if (g) g.provinces.push(...ps); else groups.set(key, {...z, provinces:ps, rest, cell});
+  });
+  if (errs.length) throw new Error(errs.slice(0, 8).join('；'));
+  if (!groups.size) throw new Error('表格里没有报价行');
+  return [...groups.values()].map((g, n) => ({name:g.rest ? '其余省份' : g.provinces.length > 3 ? g.provinces.slice(0, 3).join('') + '等' : g.provinces.join('') || '分区' + (n + 1),
+    provinces:[...new Set(g.provinces)], first:g.first, firstFee:g.firstFee, addStep:g.addStep, addFee:g.addFee, bands:g.bands, extra:g.extra, min:g.min}));
+}
+
+/* ---------- 快递账单：导入（列对应）→ 对账 → 确认 ---------- */
+const BILL_FIELDS = [['trackNo', '快递单号', ['运单号', '快递单号', '面单号', '运单编号', '单号']], ['fee', '应付金额', ['应付金额', '结算金额', '总金额', '总费用', '合计', '应付', '金额', '运费', '费用']],
+  ['weight', '计费重量', ['计费重量', '结算重量', '计费重', '重量']], ['province', '目的省份 / 地址', ['目的省', '到达省', '收件省', '省份', '目的地', '收件地址', '地址']], ['date', '日期', ['寄件日期', '揽收日期', '发货日期', '日期', '时间']]];
+const xlsDate = v => {
+  if (typeof v === 'number' && v > 20000 && v < 80000) return fmtDate(new Date(Date.UTC(1899, 11, 30) + Math.round(v * 864e5)));
+  const m = /(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/.exec(String(v ?? ''));
+  return m ? m[1] + '-' + pad(+m[2]) + '-' + pad(+m[3]) : '';
+};
+const cellText = v => typeof v === 'number' ? (Number.isInteger(v) ? v.toFixed(0) : String(v)) : String(v ?? '').trim();
+function billImport() {
+  if (!db.carriers.length) return toast('请先在「快递报价」里添加快递公司', 'error');
+  const lm = lastMonths(2)[0];
+  openModal(`${modalHead('导入快递账单')}<div class="m-body"><div class="form-grid">
+    <label class="field"><span>快递公司 <i>*</i></span><select id="bCar">${db.carriers.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></label>
+    <label class="field"><span>账期（找出「系统有、账单无」的运单）</span><input type="month" id="bPer" value="${lm}"></label></div>
+    <ol style="padding-left:18px;line-height:2;margin-top:12px">
+      <li>快递网点给的月结账单 Excel / CSV，需要「快递单号」和「金额」两列，最好还有「计费重量」「目的省份」</li>
+      <li>下一步可以调整每一项对应表格里的哪一列；同一家快递下次会自动用上次的对应关系</li>
+      <li>导入后按快递单号逐单匹配，差异单会自动分析原因（称重 / 省份 / 没按报价收费）</li></ol></div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="bPick">${ic('upload')}选择账单文件</button></div>`);
+  $('#bPick').onclick = () => { const cid = $('#bCar').value, per = $('#bPer').value; pickSheet((aoa, name) => billMap(aoa, cid, per, name)); };
+}
+function billMap(aoa, cid, period, fileName) {
+  const hi = Math.max(0, aoa.slice(0, 20).findIndex(r => r.some(c => /单号/.test(String(c ?? '')))));
+  const head = (aoa[hi] || []).map(h => String(h ?? '').trim());
+  const prev = (db.shipBills.find(b => b.carrierId === cid && b.map && Object.keys(b.map).length) || {}).map || {};
+  const map = {}, used = new Set();
+  for (const [k, , keys] of BILL_FIELDS) {
+    let i = prev[k] ? head.indexOf(prev[k]) : -1;
+    if (i < 0) for (const kw of keys) { i = head.findIndex((h, j) => !used.has(j) && h.replace(/\s/g, '').includes(kw)); if (i >= 0) break; }
+    if (i >= 0) { map[k] = i; used.add(i); }
+  }
+  const body = aoa.slice(hi + 1).map((r, j) => [r, hi + 2 + j]).filter(([r]) => r.some(c => c !== '' && c != null));
+  const rowsOf = () => body.map(([r, line]) => ({_row:line, trackNo:map.trackNo != null ? cellText(r[map.trackNo]) : '', fee:map.fee != null ? cellText(r[map.fee]).replace(/[¥元,，]/g, '') : '',
+    weight:map.weight != null ? cellText(r[map.weight]).replace(/(kg|KG|公斤)$/, '') : '', province:map.province != null ? cellText(r[map.province]) : '', date:map.date != null ? xlsDate(r[map.date]) : ''}))
+    .filter(x => x.trackNo && !/合计|总计|小计/.test(x.trackNo));
+  openModal(`${modalHead('核对账单列 · ' + esc(fileName))}<div class="m-body">
+    <div class="form-grid" style="grid-template-columns:repeat(5,1fr)">${BILL_FIELDS.map(([k, l]) => `<label class="field"><span>${l}${k === 'trackNo' || k === 'fee' ? ' <i>*</i>' : ''}</span><select data-map="${k}"><option value="">（没有）</option>${head.map((h, i) => `<option value="${i}" ${map[k] === i ? 'selected' : ''}>${esc(h || '第 ' + (i + 1) + ' 列')}</option>`).join('')}</select></label>`).join('')}</div>
+    <div class="line-head"><b>预览</b><span class="sub-t" id="bCnt" style="margin-left:10px;margin-right:auto"></span></div><div class="table-wrap" id="bPrev" style="max-height:44vh;overflow:auto"></div></div>
+    <div class="m-foot"><button class="btn" style="margin-right:auto" data-act="billImport">重新选择</button><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="bGo">${ic('check')}导入并对账</button></div>`, 'lg');
+  const prevDraw = () => {
+    const rows = rowsOf();
+    $('#bCnt').textContent = `共 ${rows.length} 行（已跳过空单号和合计行）` + (rows.length > 20 ? '，下表只显示前 20 行' : '');
+    $('#bPrev').innerHTML = `<table class="tbl compact"><thead><tr><th>行</th>${BILL_FIELDS.map(([, l]) => `<th>${l}</th>`).join('')}</tr></thead><tbody>${rows.slice(0, 20).map(r => `<tr><td class="sub-t">${r._row}</td>${BILL_FIELDS.map(([k]) => `<td>${esc(r[k])}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="6"><div class="empty">没有数据行</div></td></tr>'}</tbody></table>`;
+  };
+  $('#modal .m-body').addEventListener('change', e => { const k = e.target.dataset.map; if (k) { if (e.target.value === '') delete map[k]; else map[k] = +e.target.value; prevDraw(); } });
+  $('#bGo').onclick = async () => {
+    if (map.trackNo == null || map.fee == null) return toast('请选好「快递单号」和「应付金额」对应的列', 'error');
+    const rows = rowsOf(); if (!rows.length) return toast('没有可导入的行', 'error');
+    $('#bGo').disabled = true;
+    const r = await mutate('POST', '/api/shipbills', {carrierId:cid, period, fileName, rows, map:Object.fromEntries(Object.entries(map).map(([k, i]) => [k, head[i]]))}, r => `账单已导入：${r.rows.length} 行，${r.counts.diff + r.counts.extra + r.counts.dup} 行需要处理`);
+    if (!r) { $('#bGo').disabled = false; return; }
+    ui.shipTab = 'bills'; if (current() === 'shipping') render();
+    billView(r.id);
+  };
+  prevDraw();
+}
+async function billView(id) {
+  let b; try { b = await api('GET', '/api/shipbills/' + id); } catch (e) { return toast(e.message, 'error'); }
+  const draft = b.status === '草稿' && can('ship.bill'), car = byId(db.carriers, b.carrierId);
+  const keep = ui.billDraft && ui.billDraft.id === id ? ui.billDraft : (ui.billDraft = {id, acts:{}, notes:{}});
+  b.rows.forEach((r, i) => { if (!(i in keep.acts)) keep.acts[i] = r.cat === 'ok' ? 'ok' : r.act || 'dispute'; if (r.note && !(i in keep.notes)) keep.notes[i] = r.note; });
+  const missing = (b.missing || []).map(x => byId(db.shipments, x)).filter(Boolean);
+  let cat = b.rows.some(r => r.cat !== 'ok') ? 'todo' : 'all';
+  const actOf = (r, i) => r.cat === 'ok' ? 'ok' : draft ? keep.acts[i] : r.act;
+  const cnt = k => k === 'missing' ? missing.length : b.rows.filter(r => r.cat === k).length;
+  openModal(`${modalHead('快递账单 · ' + b.no + ' ' + badge(b.status, b.status === '草稿' ? 'orange' : 'green'))}<div class="m-body">
+    <p class="sub-t" style="margin-bottom:10px">${esc(carrierLabel(b.carrierId))}${b.period ? ' · 账期 ' + b.period : ''} · ${esc(b.fileName || '')} · 导入 ${esc(b.creator)} ${fmtTime(b.createdAt)}${b.confirmedBy ? ' · 确认 ' + esc(b.confirmedBy) + ' ' + fmtTime(b.confirmedAt) : ''}</p>
+    <div class="grid g4" id="bSum" style="margin-bottom:12px"></div>
+    <div class="tabs" id="bTabs" style="margin-bottom:10px"></div><div class="table-wrap" id="bRows" style="max-height:48vh;overflow:auto"></div></div>
+    <div class="m-foot" style="flex-wrap:wrap"><span style="margin-right:auto;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="bExp">${ic('download')}导出明细</button>
+      ${draft ? `<button class="btn" style="color:var(--red)" id="bDel">删除账单</button><button class="btn" id="bAllOk">差异全部认可</button>` : ''}${b.status === '已确认' && can('ship.bill') ? '<button class="btn" id="bUndo">撤销确认</button>' : ''}</span>
+      ${draft && shipOnFinance() ? `<label class="chk"><input type="checkbox" id="bFin" checked>认可的金额记一笔「快递费」支出</label>` : ''}
+      <button class="btn" data-act="closeModal">关闭</button>${draft ? `<button class="btn primary" id="bOk">${ic('check')}确认账单</button>` : ''}</div>`, 'xl');
+  const drawSum = () => {
+    const okFee = sum(b.rows.filter((r, i) => actOf(r, i) === 'ok'), r => r.fee), disp = b.rows.filter((r, i) => actOf(r, i) !== 'ok');
+    $('#bSum').innerHTML = kpi('账单金额', money(b.total), 'coin', 'primary', `<div class="trend"><span>${b.rows.length} 行</span></div>`)
+      + kpi('我方估算', money(b.estTotal), 'chart', 'blue', `<div class="trend"><span>匹配上的运单</span></div>`)
+      + kpi(b.status === '已确认' ? '应付（已认可）' : '认可后应付', money(b.status === '已确认' ? b.payable : okFee), 'check', 'green')
+      + kpi('申诉 / 不认', money(sum(disp, r => r.fee)), 'alert', 'red', `<div class="trend"><span>${disp.length} 行</span></div>`);
+  };
+  const drawRows = () => {
+    $('#bTabs').innerHTML = [['todo', '需要处理', b.rows.filter(r => r.cat !== 'ok').length], ['all', '全部', b.rows.length], ...Object.entries(BILL_CAT).map(([k, [l]]) => [k, l, cnt(k)])]
+      .filter(([k, , n]) => n || k === 'all' || k === cat).map(([k, l, n]) => `<button class="tab ${cat === k ? 'on' : ''}" data-bcat="${k}">${l} ${n}</button>`).join('');
+    if (cat === 'missing') {
+      $('#bRows').innerHTML = `<p class="sub-t" style="margin:4px 0 8px">这些运单是账期内用「${esc(carrierLabel(b.carrierId))}」发的，但账单里没有：可能快递漏计费，或者会出现在下个月的账单里。</p><table class="tbl compact"><thead><tr><th>快递单号</th><th>发货日期</th><th>来源单据</th><th>省份</th><th class="num">计费重</th><th class="num">估算运费</th></tr></thead><tbody>
+        ${missing.map(s => `<tr><td><a class="link" data-act="shipView" data-id="${s.id}">${esc(s.trackNo)}</a></td><td>${s.date}</td><td>${shipSrcLink(s)}</td><td>${esc(s.province)}</td><td class="num">${s.chargeWeight}kg</td><td class="num">${money(s.estFee)}</td></tr>`).join('')}</tbody></table>`;
+      return;
+    }
+    const list = b.rows.map((r, i) => [r, i]).filter(([r]) => cat === 'all' || (cat === 'todo' ? r.cat !== 'ok' : r.cat === cat));
+    $('#bRows').innerHTML = `<table class="tbl compact"><thead><tr><th>行</th><th>快递单号</th><th>日期</th><th>省份</th><th class="num">账单重量</th><th class="num">账单金额</th><th class="num">我方估算</th><th class="num">差额</th><th>结果</th><th style="min-width:150px">处理</th><th style="min-width:260px">说明</th></tr></thead><tbody>
+      ${list.slice(0, 500).map(([r, i]) => { const s = r.shipId && byId(db.shipments, r.shipId), a = actOf(r, i); return `<tr>
+        <td class="sub-t">${r.line}</td><td>${s ? `<a class="link" data-act="shipView" data-id="${s.id}">${esc(r.trackNo)}</a>` : esc(r.trackNo)}</td><td>${r.date || '-'}</td><td>${esc(r.province || '-')}</td>
+        <td class="num">${r.weight != null ? r.weight + 'kg' : '-'}</td><td class="num"><b>${money(r.fee)}</b></td><td class="num">${r.est != null ? money(r.est) : '-'}</td><td class="num">${r.diff != null ? diffHtml(r.diff) : '-'}</td>
+        <td>${badge(BILL_CAT[r.cat][0], BILL_CAT[r.cat][1])}</td>
+        <td>${r.cat === 'ok' ? '<span class="sub-t">自动认可</span>' : draft ? `<div style="display:flex;gap:4px;flex-wrap:wrap"><select class="select" style="height:30px" data-bact="${i}"><option value="ok" ${a === 'ok' ? 'selected' : ''}>认可</option><option value="dispute" ${a !== 'ok' ? 'selected' : ''}>${r.cat === 'extra' || r.cat === 'dup' ? '不认' : '申诉'}</option></select>
+          ${r.cat === 'extra' && can('ship.edit') ? `<button class="btn sm" data-badd="${i}">补录运单</button>` : ''}${a !== 'ok' ? `<input class="select" style="height:30px;width:100%" data-bnote="${i}" value="${esc(keep.notes[i] || '')}" placeholder="申诉说明（选填）">` : ''}</div>`
+          : b.status === '草稿' ? '<span class="sub-t">待确认</span>' : badge(a === 'ok' ? '已认可' : '申诉', a === 'ok' ? 'green' : 'red') + (r.note ? `<div class="sub-t">${esc(r.note)}</div>` : '')}</td>
+        <td style="white-space:normal;font-size:12px">${esc(r.reason || '')}</td></tr>`; }).join('') || '<tr><td colspan="11"><div class="empty">没有这类记录</div></td></tr>'}
+      ${list.length > 500 ? `<tr><td colspan="11" class="sub-t">只显示前 500 行，完整明细请导出</td></tr>` : ''}</tbody></table>`;
+  };
+  const m = $('#modal .m-body');  // #modal 本身一直存在，监听挂在每次新建的内容上，关掉弹窗就跟着没了
+  m.addEventListener('click', e => {
+    const t = e.target.closest('[data-bcat],[data-badd]'); if (!t) return;
+    if (t.dataset.bcat) { cat = t.dataset.bcat; drawRows(); return; }
+    const r = b.rows[+t.dataset.badd];
+    closeModal(); shipModal({carrierId:b.carrierId, trackNo:r.trackNo, province:(META.provinces || []).includes(r.province) ? r.province : '', weight:r.weight || '', date:r.date || '', after:() => billView(id)});
+  });
+  m.addEventListener('change', e => { const i = e.target.dataset.bact; if (i != null) { keep.acts[i] = e.target.value; drawRows(); drawSum(); } });
+  m.addEventListener('input', e => { const i = e.target.dataset.bnote; if (i != null) keep.notes[i] = e.target.value; });
+  $('#bExp').onclick = () => exportCSV('快递账单对账_' + b.no, ['行', '快递单号', '日期', '省份', '账单重量kg', '账单金额', '我方估算', '差额', '结果', '说明', '处理', '申诉说明'],
+    b.rows.map((r, i) => [r.line, r.trackNo, r.date, r.province, r.weight ?? '', r.fee, r.est ?? '', r.diff ?? '', BILL_CAT[r.cat][0], r.reason, actOf(r, i) === 'ok' ? '认可' : '申诉', (draft ? keep.notes[i] : r.note) || '']));
+  if ($('#bAllOk')) $('#bAllOk').onclick = () => { b.rows.forEach((r, i) => { if (r.cat === 'diff') keep.acts[i] = 'ok'; }); drawRows(); drawSum(); };
+  if ($('#bDel')) $('#bDel').onclick = () => confirmBox(`删除账单 ${b.no}？只删除导入的账单，不影响运单。`, () => { ui.billDraft = null; mutate('DELETE', '/api/shipbills/' + id, undefined, '账单已删除'); });
+  if ($('#bUndo')) $('#bUndo').onclick = () => confirmBox(`撤销确认 ${b.no}？对过账的运单退回「待对账」，这张账单生成的快递费支出会删除。`, () => mutate('POST', `/api/shipbills/${id}/undo`, {}, '已撤销确认').then(r => r && billView(id)), {danger:false, okText:'撤销确认'});
+  if ($('#bOk')) $('#bOk').onclick = () => {
+    const disp = b.rows.filter((r, i) => actOf(r, i) !== 'ok').length, pay = sum(b.rows.filter((r, i) => actOf(r, i) === 'ok'), r => r.fee), fin = $('#bFin') && $('#bFin').checked;
+    confirmBox(`确认账单 ${b.no}：认可 ${money(pay)}${disp ? `，${disp} 行申诉 / 不认` : ''}${fin ? '，并记一笔快递费支出' : ''}。确认后运单标记为已对账${disp ? '，申诉的运单在「运单」里处理' : ''}。`,
+      () => mutate('POST', `/api/shipbills/${id}/confirm`, {acts:keep.acts, notes:keep.notes, finance:fin}, `账单已确认，应付 ${money(pay)}`).then(r => { if (r) ui.billDraft = null; }), {danger:false, okText:'确认账单'});
+  };
+  drawSum(); drawRows();
+}
+const shipOnFinance = () => (db.settings.modules || []).includes('finance') && can('ship.bill');
 
 /* ================= 页面：客户 / 供应商 ================= */
 function pageParty(type) {
@@ -2584,7 +3164,8 @@ let USERS = [];
 const fmtTime = t => t ? new Date(t).toLocaleString('zh-CN', {hour12:false}) : '-';
 let ROLES = [];
 const PERM_SHORT = {'inv.view':'查看', 'inv.in':'入库', 'inv.out':'出库', 'inv.check':'盘点录入', 'inv.void':'作废', 'inv.approve':'出入库审核', 'inv.print':'打印', 'inv.export':'导出', 'inv.cost':'金额',
-  'inv.backdate':'补录', 'inv.others':'他人单据', 'inv.checkpost':'盘点审核', 'prod.view':'商品查看', 'prod.edit':'商品编辑', 'prod.delete':'商品删除'};
+  'inv.backdate':'补录', 'inv.others':'他人单据', 'inv.checkpost':'盘点审核', 'prod.view':'商品查看', 'prod.edit':'商品编辑', 'prod.delete':'商品删除',
+  'ship.view':'运单查看', 'ship.edit':'登记运单', 'ship.rate':'快递报价', 'ship.bill':'快递对账'};
 const permBrief = perms => perms.length ? perms.map(k => `<span class="badge primary plain" style="margin:1px">${esc(PERM_SHORT[k] || (META.perms.find(p => p[0] === k) || [k, k])[1])}</span>`).join('') : '<span class="sub-t">无权限</span>';
 function userEdit(id) {
   const u = id ? USERS.find(x => x.id === id) : null;
@@ -2637,6 +3218,7 @@ const NAV = [
   {id:'products', label:'商品管理', icon:'box', fn:pageProducts, perm:'prod.view'},
   {id:'sales', label:'销售管理', icon:'sales', fn:() => pageOrders('sales'), badge:() => db.sales.filter(o => o.status === '待发货').length, perm:'sales'},
   {id:'purchase', label:'采购管理', icon:'cart', fn:() => pageOrders('purchase'), badge:() => db.purchases.filter(o => o.status === '待审核').length, perm:'purchase'},
+  {id:'shipping', label:'物流运费', icon:'truck', fn:pageShipping, badge:() => db.shipments.filter(s => s.status === '申诉中').length, perm:'ship.view'},
   {group:'往来单位'},
   {id:'customers', label:'客户管理', icon:'users', fn:() => pageParty('customers'), perm:'parties'},
   {id:'suppliers', label:'供应商管理', icon:'truck', fn:() => pageParty('suppliers'), perm:'parties'},
@@ -2699,9 +3281,11 @@ function globalSearch(q) {
   const cu = can('parties') ? db.customers.filter(c => hit(c.name) || hit(c.contact) || hit(c.phone)).slice(0, 6) : [];
   const sd = db.stockDocs.filter(o => hit(o.no) || hit(o.party)).slice(0, 6);
   const sn = db.serials.filter(r => hit(r.sn)).slice(0, 6);
+  const sh = db.shipments.filter(s => hit(s.trackNo)).slice(0, 6);
   const sec = (title, arr, f) => arr.length ? `<h4 style="margin:14px 0 6px;color:var(--muted);font-size:12px">${title}</h4>${arr.map(f).join('')}` : '';
   const row = (act, id, main, sub) => `<div class="dd-item" style="border-radius:8px;border:none" data-act="${act}" data-id="${id}"><div>${main}<small>${sub}</small></div></div>`;
-  const html = sec('序列号', sn, r => row('snView', r.id, esc(r.sn), esc(prodOf(r.productId).name) + ' · ' + r.status + (r.status === '在库' ? ' · ' + esc(whName(r.wh)) : '')))
+  const html = sec('快递运单', sh, s => row('shipView', s.id, esc(s.trackNo), esc(carrierLabel(s.carrierId)) + ' · ' + esc(s.province) + ' · ' + (s.srcNo ? esc(s.srcNo) + ' · ' : '') + s.status))
+    + sec('序列号', sn, r => row('snView', r.id, esc(r.sn), esc(prodOf(r.productId).name) + ' · ' + r.status + (r.status === '在库' ? ' · ' + esc(whName(r.wh)) : '')))
     + sec('出入库单', sd, o => row('docView', o.id, o.no, o.type + ' · ' + esc(o.party || '-') + ' · ' + o.date + ' · ' + o.status))
     + sec('销售订单', so, o => row('orderView', 'sales|' + o.id, o.no, partyName('sales', o) + ' · ' + money(orderTotal(o)) + ' · ' + o.status))
     + sec('采购订单', po, o => row('orderView', 'purchase|' + o.id, o.no, partyName('purchase', o) + ' · ' + money(orderTotal(o)) + ' · ' + o.status))
@@ -2735,6 +3319,14 @@ const A = {
   docApprove,
   stPrint, stExport,
   snView: id => { closeModal(); snView(id); },
+  shipNew: v => { closeModal(); const [t, id] = v ? split(v) : []; shipModal(t ? {srcType:t, srcId:id} : {}); },
+  shipView: id => { closeModal(); shipView(id); },
+  shipEdit: id => { closeModal(); shipModal({edit:id}); },
+  shipVoid: id => { const s = byId(db.shipments, id); confirmBox(`作废运单 ${esc(s.trackNo)}？作废后不参与对账和运费统计。`, () => mutate('POST', `/api/shipments/${id}/void`, {}, '运单已作废')); },
+  shipResolve: id => { closeModal(); shipResolve(id); },
+  shipCalc, billImport: () => { closeModal(); billImport(); }, billView: id => { closeModal(); billView(id); },
+  carrierEdit: id => carrierEdit(id),
+  carrierDel: id => { const c = byId(db.carriers, id); confirmBox(`删除快递公司「${esc(c.name)}」和它的报价？已有运单的快递不能删除，可以改成停用。`, () => mutate('DELETE', '/api/carriers/' + id, undefined, '已删除')); },
   notifySave: () => mutate('PUT', '/api/settings/notify', {enabled:$('#nfOn').checked, url:$('#nfUrl').value.trim(), time:$('#nfTime').value || '08:30', skipEmpty:$('#nfSkip').checked}, '推送设置已保存'),
   notifyTest: async () => {
     const url = $('#nfUrl').value.trim(); if (!url) return toast('请先填写推送地址', 'error');

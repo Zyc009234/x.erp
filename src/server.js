@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.0.2';
+const VERSION = '2.0.3';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -84,6 +84,7 @@ function tx(fn) {
 const uid = () => Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
 const sum = (a, f) => a.reduce((s, x) => s + (f(x) || 0), 0);
 const round2 = n => Math.round(n * 100) / 100;
+const round3 = n => Math.round(n * 1e3) / 1e3;
 const round4 = n => Math.round(n * 1e4) / 1e4;
 const orderTotal = o => round2(sum(o.items, i => i.qty * i.price));
 const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
@@ -93,12 +94,12 @@ const fail = (msg, status) => { throw new HttpError(msg, status); };
 function audit(ctx, action, detail = '') { S.audit.run(new Date().toISOString(), ctx.user ? ctx.user.name : '-', action, String(detail).slice(0, 300), ctx.ip || ''); }
 
 /* ================= 业务常量 ================= */
-const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials'];
-const DATED = ['sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs'];
+const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials', 'carriers', 'shipments', 'shipBills'];
+const DATED = ['sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs', 'shipments', 'shipBills'];
 const CATS = ['电子产品', '办公用品', '家居用品', '食品饮料'];
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
 const METHODS = ['银行转账', '现金', '支付宝', '微信', '承兑汇票'];
-const FIN_CATS = { income: ['其他收入', '投资收益', '退款'], expense: ['工资', '房租', '水电', '办公费', '差旅', '营销推广', '其他支出'] };
+const FIN_CATS = { income: ['其他收入', '投资收益', '退款'], expense: ['工资', '房租', '水电', '办公费', '差旅', '营销推广', '快递费', '其他支出'] };
 const ORD = {
   sales: { col: 'sales', prefix: 'SO', title: '销售单', party: 'customers', partyKey: 'customerId', partyLabel: '客户', paidKey: 'received', payWord: '收款', statuses: ['待发货', '已发货', '已完成', '已作废'] },
   purchase: { col: 'purchases', prefix: 'PO', title: '采购单', party: 'suppliers', partyKey: 'supplierId', partyLabel: '供应商', paidKey: 'paid', payWord: '付款', statuses: ['待审核', '已审核', '已入库', '已作废'] }
@@ -106,7 +107,7 @@ const ORD = {
 const ENTITY = {
   products: { name: '商品', required: { sku: '商品编码', name: '商品名称' },
     fields: { sku: ['s', '商品编码'], barcode: ['s', '条码'], name: ['s', '商品名称'], spec: ['s'], category: ['s'], unit: ['s'], cost: ['n', '成本价'], price: ['n', '销售价'], stock: ['n', '期初库存'], safety: ['n', '安全库存'],
-      batch: ['b'], serial: ['b'], shelfDays: ['n', '保质期天数'], remark: ['s'] } },
+      batch: ['b'], serial: ['b'], shelfDays: ['n', '保质期天数'], weight: ['w', '重量'], size: ['z'], remark: ['s'] } },
   customers: { name: '客户', required: { name: '客户名称' },
     fields: { name: ['s'], contact: ['s'], phone: ['s'], email: ['s'], level: ['s'], address: ['s'], remark: ['s'] } },
   suppliers: { name: '供应商', required: { name: '供应商名称' },
@@ -120,7 +121,7 @@ const TRANSFER = { col: 'transferDocs', prefix: 'DB', title: '调拨单' };
 const DEFAULT_WH = 'w1';
 
 /* ================= 模块 / 权限 ================= */
-const MODULES = { inventory: '库存管理', products: '商品管理', dashboard: '工作台', sales: '销售管理', purchase: '采购管理', parties: '客户 / 供应商', finance: '财务管理', hr: '人事管理', reports: '统计报表' };
+const MODULES = { inventory: '库存管理', products: '商品管理', dashboard: '工作台', sales: '销售管理', purchase: '采购管理', parties: '客户 / 供应商', finance: '财务管理', hr: '人事管理', reports: '统计报表', shipping: '物流运费' };
 const DEFAULT_MODULES = ['inventory', 'products'];
 // [权限键, 名称, 所属模块]
 const PERMS = [
@@ -132,7 +133,9 @@ const PERMS = [
   ['inv.others', '查看 / 处理他人开的单据', 'inventory'], ['inv.transfer', '开调拨单（仓库之间移库）', 'inventory'],
   ['prod.view', '查看商品档案', 'products'], ['prod.edit', '新增 / 编辑商品', 'products'], ['prod.delete', '删除商品', 'products'],
   ['dashboard', '工作台', 'dashboard'], ['sales', '销售管理（全部操作）', 'sales'], ['purchase', '采购管理（全部操作）', 'purchase'],
-  ['parties', '客户 / 供应商管理', 'parties'], ['finance', '财务管理', 'finance'], ['hr', '人事管理', 'hr'], ['reports', '统计报表', 'reports']
+  ['parties', '客户 / 供应商管理', 'parties'], ['finance', '财务管理', 'finance'], ['hr', '人事管理', 'hr'], ['reports', '统计报表', 'reports'],
+  ['ship.view', '查看运单、快递账单与运费统计', 'shipping'], ['ship.edit', '登记运单（快递单号、称重）', 'shipping'],
+  ['ship.rate', '维护快递公司与报价', 'shipping'], ['ship.bill', '导入快递账单、对账确认', 'shipping']
 ];
 const PERM_KEYS = PERMS.map(p => p[0]);
 const PERM_MOD = Object.fromEntries(PERMS.map(p => [p[0], p[2]]));
@@ -142,13 +145,13 @@ const cleanPerms = a => [...new Set((Array.isArray(a) ? a : []).filter(k => PERM
 /* ---------- 角色 ---------- */
 // 预置角色：首次启动写入，之后可在「角色管理」里修改、删除，也可新增自定义角色
 const DEFAULT_ROLES = [
-  ['r_wh_mgr', '仓库主管', '库存全部操作，含审核、作废、盘点审核、调拨、补录和查看金额', ['inv.view', 'inv.in', 'inv.out', 'inv.check', 'inv.checkpost', 'inv.void', 'inv.approve', 'inv.transfer', 'inv.print', 'inv.export', 'inv.cost', 'inv.backdate', 'inv.others', 'prod.view', 'prod.edit']],
-  ['r_wh', '仓管员', '日常收发货：开入库单、出库单、调拨单并打印', ['inv.view', 'inv.in', 'inv.out', 'inv.transfer', 'inv.print', 'prod.view']],
+  ['r_wh_mgr', '仓库主管', '库存全部操作，含审核、作废、盘点审核、调拨、补录和查看金额', ['inv.view', 'inv.in', 'inv.out', 'inv.check', 'inv.checkpost', 'inv.void', 'inv.approve', 'inv.transfer', 'inv.print', 'inv.export', 'inv.cost', 'inv.backdate', 'inv.others', 'prod.view', 'prod.edit', 'ship.view', 'ship.edit', 'ship.rate', 'ship.bill']],
+  ['r_wh', '仓管员', '日常收发货：开入库单、出库单、调拨单并打印', ['inv.view', 'inv.in', 'inv.out', 'inv.transfer', 'inv.print', 'prod.view', 'ship.view', 'ship.edit']],
   ['r_in', '入库员', '只负责收货入库', ['inv.view', 'inv.in', 'inv.print', 'prod.view']],
-  ['r_out', '出库员', '只负责发货 / 领料出库', ['inv.view', 'inv.out', 'inv.print', 'prod.view']],
+  ['r_out', '出库员', '只负责发货 / 领料出库', ['inv.view', 'inv.out', 'inv.print', 'prod.view', 'ship.view', 'ship.edit']],
   ['r_check', '盘点员', '新建盘点单、录入实盘数（审核由主管完成）', ['inv.view', 'inv.check', 'inv.print', 'inv.others', 'prod.view']],
   ['r_prod', '商品专员', '维护商品档案（编码、规格、安全库存）', ['inv.view', 'prod.view', 'prod.edit']],
-  ['r_acct', '成本会计', '查看全部单据与金额，导出对账', ['inv.view', 'inv.cost', 'inv.export', 'inv.print', 'inv.others', 'prod.view', 'finance', 'reports']],
+  ['r_acct', '成本会计', '查看全部单据与金额，导出对账', ['inv.view', 'inv.cost', 'inv.export', 'inv.print', 'inv.others', 'prod.view', 'finance', 'reports', 'ship.view', 'ship.bill']],
   ['r_read', '只读查询', '只能查看和打印，不能改动库存', ['inv.view', 'inv.print', 'inv.export', 'inv.others', 'prod.view']],
   ['r_staff', '业务员', '旧版「业务员」：全部业务功能（不含用户与数据管理）', PERM_KEYS]
 ];
@@ -198,6 +201,18 @@ if (getMeta('permsVersion', 1) < 4) {
   db.prepare("UPDATE roles SET descr = '库存全部操作，含审核、作废、盘点审核、调拨、补录和查看金额' WHERE id = 'r_wh_mgr' AND descr = '库存全部操作，含作废、盘点审核、调拨、补录和查看金额'").run();
   setMeta('permsVersion', 4);
 }
+// v2.0.3：新增物流运费模块，按原有职责补上运费权限（模块默认不启用，启用前这些权限不生效）
+if (getMeta('permsVersion', 1) < 5) {
+  for (const r of db.prepare('SELECT * FROM roles').all()) {
+    const p = rolePerms(r), add = [];
+    if (p.includes('inv.void')) add.push('ship.view', 'ship.edit', 'ship.rate', 'ship.bill');
+    if (p.includes('inv.out')) add.push('ship.view', 'ship.edit');
+    if (p.includes('finance')) add.push('ship.view', 'ship.bill');
+    const next = [...new Set([...p, ...add])];
+    if (next.length > p.length) db.prepare('UPDATE roles SET perms = ? WHERE id = ?').run(JSON.stringify(next), r.id);
+  }
+  setMeta('permsVersion', 5);
+}
 const rawPerms = u => { if (u.role === 'admin') return PERM_KEYS; const r = u.role_id && roleById.get(u.role_id); return r ? rolePerms(r) : []; };
 function enabledModules() { const m = getMeta('settings', {}).modules; return Array.isArray(m) && m.length ? m : DEFAULT_MODULES; }
 // 实际生效的权限 = 账号权限 ∩ 已启用模块
@@ -221,7 +236,8 @@ function seed() {
     ['精品咖啡豆 1kg', '食品饮料', '袋', 68, 138], ['有机绿茶礼盒', '食品饮料', '盒', 85, 188], ['天然矿泉水', '食品饮料', '箱', 18, 32],
     ['每日坚果礼盒', '食品饮料', '盒', 56, 118], ['进口干红葡萄酒', '食品饮料', '瓶', 120, 268]
   ];
-  const products = P.map((p, i) => ({ id: 'p' + (i + 1), sku: 'SKU' + (1001 + i), name: p[0], category: p[1], unit: p[2], cost: p[3], price: p[4], stock: ri(30, 280), safety: ri(20, 40), remark: '', createdAt: dayAgo(200) }));
+  const W = [0.15, 1.1, 6.5, 0.1, 0.3, 0.45, 12.5, 0.3, 0.5, 18, 35, 0.9, 0.4, 1.6, 8, 1.05, 1.2, 9, 0.9, 1.4];  // 演示重量（kg / 基本单位）
+  const products = P.map((p, i) => ({ id: 'p' + (i + 1), sku: 'SKU' + (1001 + i), name: p[0], category: p[1], unit: p[2], cost: p[3], price: p[4], stock: ri(30, 280), safety: ri(20, 40), weight: W[i], remark: '', createdAt: dayAgo(200) }));
   // 演示多单位：鼠标、中性笔、葡萄酒可按箱进出
   Object.assign(products[3], { units: [{ name: '箱', rate: 20 }] }); Object.assign(products[7], { units: [{ name: '箱', rate: 40 }] }); Object.assign(products[19], { units: [{ name: '箱', rate: 6 }] });
   products[2].stock = 8; products[9].stock = 12; products[14].stock = 0; products[19].stock = 15;
@@ -270,7 +286,21 @@ function seed() {
       if (date <= today()) finance.push({ id: 'fe' + mk + k, date, type: 'expense', category: c, amount: a, method: '银行转账', ref: '', note: mk + ' ' + c });
     });
   }
-  return { products, customers, suppliers, employees, sales, purchases, stockLogs, finance };
+  // 演示快递报价：一家按重量段（电商件常见），一家按首重 + 续重
+  const zone = (name, provinces, extra) => ({ name, provinces, first: 1, firstFee: 0, addStep: 1, addFee: 0, bands: [], extra: 0, min: 0, ...extra });
+  const bands = (...f) => [0.5, 1, 2, 3].map((upTo, i) => ({ upTo, fee: f[i] }));
+  const carriers = [
+    { id: 'k1', name: '中通快递', code: 'ZTO', enabled: true, step: 0.1, volDiv: 8000, pack: 0.1, insureRate: 0, insureMin: 0, tol: 0.5, remark: '演示报价，请按合同改成自己的价格', createdAt: dayAgo(200), zones: [
+      zone('江浙沪', ['上海', '江苏', '浙江'], { bands: bands(2.8, 3.2, 4, 5), addFee: 1 }),
+      zone('一区', ['安徽', '福建', '江西', '山东', '河南', '湖北', '湖南', '广东', '北京', '天津', '河北'], { bands: bands(3.2, 3.8, 5.5, 7.5), addFee: 2 }),
+      zone('二区（其余省份）', [], { bands: bands(4, 5, 7.5, 10), addFee: 3 }),
+      zone('偏远', ['新疆', '西藏'], { firstFee: 15, addFee: 12 })] },
+    { id: 'k2', name: '顺丰速运', code: 'SF', enabled: true, step: 0.1, volDiv: 6000, pack: 0.1, insureRate: 0.5, insureMin: 1, tol: 0.5, remark: '演示报价', createdAt: dayAgo(200), zones: [
+      zone('江浙沪', ['上海', '江苏', '浙江'], { firstFee: 13, addFee: 2 }),
+      zone('其余省份', [], { firstFee: 18, addFee: 6 }),
+      zone('偏远', ['新疆', '西藏'], { firstFee: 23, addFee: 15 })] }
+  ];
+  return { products, customers, suppliers, employees, sales, purchases, stockLogs, finance, carriers };
 }
 function writeAll(data) {
   db.exec('DELETE FROM docs');
@@ -494,6 +524,8 @@ function clean(col, body) {
     if (!(k in body)) continue;
     if (t === 'n') { const n = Number(body[k]); if (!Number.isFinite(n) || n < 0) fail((label || k) + '必须是非负数字'); v[k] = round2(n); }
     else if (t === 'b') v[k] = body[k] === true || body[k] === 1 || body[k] === '1';
+    else if (t === 'w') { const n = Number(body[k] || 0); if (!Number.isFinite(n) || n < 0 || n > 100000) fail((label || k) + '必须是 0 ~ 100000 的数字（kg）'); v[k] = round3(n); }
+    else if (t === 'z') { const s = str(body[k], 40), d = parseSize(s); if (s && !d) fail('包装尺寸格式应为 长×宽×高（厘米），例如 30×20×15'); v[k] = d ? d.join('×') : ''; }
     else v[k] = str(body[k], 500);
   }
   return v;
@@ -724,7 +756,7 @@ function saveStockDoc(ctx) {
     items.forEach(i => { if (i.serials) checkSerials(get('products', i.productId), i.serials, dir === 'in' ? 1 : -1, wh); });
     const pending = needApprove(dir);
     const o = { id: uid(), no: nextNo(D), dir, type: b.type, wh, date, time: hhmm(), party: str(b.party, 100), handler: str(b.handler, 32), remark: str(b.remark, 500),
-      items, status: pending ? '待审核' : '正常', creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), printCount: 0 };
+      ...(dir === 'out' && str(b.address, 200) ? { address: str(b.address, 200) } : {}), items, status: pending ? '待审核' : '正常', creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), printCount: 0 };
     if (!pending) postStockDoc(ctx, o);
     put('stockDocs', o);
     audit(ctx, (pending ? '提交' : '新建') + D.title, `${o.no} ${o.type} ${items.length} 项`);
@@ -756,6 +788,7 @@ function voidStockDoc(ctx, id) {
       if (!ctx.perms.has('inv.void') && o.creatorId !== ctx.user.id) fail('没有权限：' + PERM_LABEL['inv.void'], 403);
       Object.assign(o, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString(), voidReason: str(ctx.body.reason, 200) });
       put('stockDocs', o);
+      voidShipmentsOf('out', o.id);
       audit(ctx, '作废' + DOC[o.dir].title, o.no + (o.voidReason ? ' ' + o.voidReason : ''));
       return o;
     }
@@ -774,6 +807,7 @@ function voidStockDoc(ctx, id) {
     });
     Object.assign(o, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString(), voidReason: reason });
     put('stockDocs', o);
+    voidShipmentsOf('out', o.id);
     audit(ctx, '作废' + DOC[o.dir].title, o.no + (reason ? ' ' + reason : ''));
     return o;
   });
@@ -927,6 +961,387 @@ function voidTransfer(ctx, id) {
   });
 }
 
+/* ================= 物流运费：快递报价、运费估算、运单登记、快递账单对账 ================= */
+const PROVINCES = ['北京', '天津', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江', '上海', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南', '湖北', '湖南',
+  '广东', '广西', '海南', '重庆', '四川', '贵州', '云南', '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆', '台湾', '香港', '澳门'];
+// 报价表里常用的省份分组，前端选省份时一键勾选
+const REGIONS = { 江浙沪: ['上海', '江苏', '浙江'], 华东: ['安徽', '福建', '江西', '山东'], 华南: ['广东', '广西', '海南'], 华北: ['北京', '天津', '河北', '山西', '内蒙古'],
+  华中: ['河南', '湖北', '湖南'], 西南: ['重庆', '四川', '贵州', '云南'], 西北: ['陕西', '甘肃', '青海', '宁夏'], 东北: ['辽宁', '吉林', '黑龙江'], 偏远: ['新疆', '西藏'], 港澳台: ['香港', '澳门', '台湾'] };
+// 地级市（含常见县级市）→ 省份：地址没写省份时按城市识别
+const CITIES = {
+  河北: '石家庄 唐山 秦皇岛 邯郸 邢台 保定 张家口 承德 沧州 廊坊 衡水 雄安', 山西: '太原 大同 阳泉 长治 晋城 朔州 晋中 运城 忻州 临汾 吕梁',
+  内蒙古: '呼和浩特 包头 乌海 赤峰 通辽 鄂尔多斯 呼伦贝尔 巴彦淖尔 乌兰察布 兴安盟 锡林郭勒 阿拉善', 辽宁: '沈阳 大连 鞍山 抚顺 本溪 丹东 锦州 营口 阜新 辽阳 盘锦 铁岭 朝阳 葫芦岛',
+  吉林: '长春 吉林 四平 辽源 通化 白山 松原 白城 延边', 黑龙江: '哈尔滨 齐齐哈尔 鸡西 鹤岗 双鸭山 大庆 伊春 佳木斯 七台河 牡丹江 黑河 绥化 大兴安岭',
+  江苏: '南京 无锡 徐州 常州 苏州 南通 连云港 淮安 盐城 扬州 镇江 泰州 宿迁 昆山 江阴 张家港 常熟', 浙江: '杭州 宁波 温州 嘉兴 湖州 绍兴 金华 衢州 舟山 台州 丽水 义乌 慈溪 余姚 乐清 瑞安',
+  安徽: '合肥 芜湖 蚌埠 淮南 马鞍山 淮北 铜陵 安庆 黄山 滁州 阜阳 宿州 六安 亳州 池州 宣城', 福建: '福州 厦门 莆田 三明 泉州 漳州 南平 龙岩 宁德 晋江 石狮',
+  江西: '南昌 景德镇 萍乡 九江 新余 鹰潭 赣州 吉安 宜春 抚州 上饶', 山东: '济南 青岛 淄博 枣庄 东营 烟台 潍坊 济宁 泰安 威海 日照 临沂 德州 聊城 滨州 菏泽',
+  河南: '郑州 开封 洛阳 平顶山 安阳 鹤壁 新乡 焦作 濮阳 许昌 漯河 三门峡 南阳 商丘 信阳 周口 驻马店 济源', 湖北: '武汉 黄石 十堰 宜昌 襄阳 鄂州 荆门 孝感 荆州 黄冈 咸宁 随州 恩施 仙桃 潜江 天门 神农架',
+  湖南: '长沙 株洲 湘潭 衡阳 邵阳 岳阳 常德 张家界 益阳 郴州 永州 怀化 娄底 湘西', 广东: '广州 韶关 深圳 珠海 汕头 佛山 江门 湛江 茂名 肇庆 惠州 梅州 汕尾 河源 阳江 清远 东莞 中山 潮州 揭阳 云浮',
+  广西: '南宁 柳州 桂林 梧州 北海 防城港 钦州 贵港 玉林 百色 贺州 河池 来宾 崇左', 海南: '海口 三亚 三沙 儋州 琼海 万宁 文昌 五指山',
+  四川: '成都 自贡 攀枝花 泸州 德阳 绵阳 广元 遂宁 内江 乐山 南充 眉山 宜宾 广安 达州 雅安 巴中 资阳 阿坝 甘孜 凉山', 贵州: '贵阳 六盘水 遵义 安顺 毕节 铜仁 黔西南 黔东南 黔南',
+  云南: '昆明 曲靖 玉溪 保山 昭通 丽江 普洱 临沧 楚雄 红河 文山 西双版纳 大理 德宏 怒江 迪庆', 西藏: '拉萨 日喀则 昌都 林芝 山南 那曲 阿里',
+  陕西: '西安 铜川 宝鸡 咸阳 渭南 延安 汉中 榆林 安康 商洛', 甘肃: '兰州 嘉峪关 金昌 白银 天水 武威 张掖 平凉 酒泉 庆阳 定西 陇南 临夏 甘南',
+  青海: '西宁 海东 海北 黄南 海南藏族自治州 海南州 果洛 玉树 海西', 宁夏: '银川 石嘴山 吴忠 固原 中卫',
+  新疆: '乌鲁木齐 克拉玛依 吐鲁番 哈密 昌吉 博尔塔拉 巴音郭楞 阿克苏 克孜勒苏 喀什 和田 伊犁 塔城 阿勒泰 石河子'
+};
+const CITY_PROV = new Map(Object.entries(CITIES).flatMap(([p, t]) => t.split(' ').map(c => [c, p])));
+// 城市名后面紧跟这些字时其实是区县 / 路名（如「北京朝阳区」「上海南京路」），不当城市
+const NOT_CITY = /^[区县路街道镇乡村巷里弄大]/;
+function cityAt(s, i) {
+  let best = '';
+  for (const c of CITY_PROV.keys()) if (c.length > best.length && s.startsWith(c, i) && !NOT_CITY.test(s.slice(i + c.length))) best = c;
+  return best;
+}
+// 从地址里识别省份和城市：先看开头的省份 / 城市，再找地址中间的「X省」「X市」
+function parseAddr(addr) {
+  const s = String(addr || '').replace(/[\s,，、]+/g, '').replace(/^(中华人民共和国|中国)/, '');
+  if (!s) return { province: '', city: '' };
+  const p = PROVINCES.find(x => s.startsWith(x)), c0 = cityAt(s, 0);
+  if (p && !(c0 && c0.length > p.length)) {
+    const rest = s.slice(p.length).replace(/^(省|市|壮族自治区|回族自治区|维吾尔自治区|自治区|特别行政区)/, ''), c = cityAt(s, s.length - rest.length);
+    return { province: p, city: c && CITY_PROV.get(c) === p ? c : '' };
+  }
+  if (c0) return { province: CITY_PROV.get(c0), city: c0 };
+  let hit = null;
+  const take = (i, province, city) => { if (i >= 0 && (!hit || i < hit.i)) hit = { i, province, city }; };
+  for (const x of PROVINCES) for (const suf of ['省', '市', '自治区', '壮族', '回族', '维吾尔']) take(s.indexOf(x + suf), x, '');
+  for (const [c, x] of CITY_PROV) take(s.indexOf(c + '市'), x, c);
+  return hit ? { province: hit.province, city: hit.city } : { province: '', city: '' };
+}
+const normProv = x => { x = str(x, 30); return PROVINCES.includes(x) ? x : parseAddr(x).province; };
+function parseSize(t) {
+  const m = /^(\d+(?:\.\d+)?)\s*[x×*Xｘ✕]\s*(\d+(?:\.\d+)?)\s*[x×*Xｘ✕]\s*(\d+(?:\.\d+)?)$/.exec(String(t || '').trim().replace(/(cm|厘米)$/i, ''));
+  return m && +m[1] > 0 && +m[2] > 0 && +m[3] > 0 ? [+m[1], +m[2], +m[3]] : null;
+}
+// 按商品重量 / 包装尺寸估算一票货：weight 实重 kg（不含包材），vol 体积 cm³；没填重量的商品列在 missing
+function itemsWeight(items) {
+  let weight = 0, vol = 0; const missing = new Set();
+  for (const i of items) {
+    const p = get('products', i.productId); if (!p) continue;
+    if (!(p.weight > 0)) missing.add(p.name);
+    weight += i.qty * (p.weight || 0);
+    const d = parseSize(p.size); if (d) vol += i.qty * d[0] * d[1] * d[2];
+  }
+  return { weight: round3(weight), vol: Math.round(vol), missing: [...missing] };
+}
+const ceilTo = (x, step) => step > 0 ? round3(Math.ceil(round4(x / step) - 1e-9) * step) : round3(x);
+const zoneOf = (c, prov) => (c.zones || []).find(z => z.provinces.includes(prov)) || (c.zones || []).find(z => !z.provinces.length);
+// 分区运费：有重量段先按段取价，超过最高一段按续重加价；没有重量段按首重 + 续重
+function zoneFee(z, cw) {
+  const steps = over => Math.ceil(round4(over / (z.addStep || 1)) - 1e-9);
+  if (z.bands.length) {
+    const b = z.bands.find(x => cw <= x.upTo + 1e-9); if (b) return b.fee;
+    const last = z.bands[z.bands.length - 1];
+    return z.addFee > 0 ? last.fee + steps(cw - last.upTo) * z.addFee : null;
+  }
+  return cw <= z.first + 1e-9 ? z.firstFee : z.firstFee + steps(cw - z.first) * z.addFee;
+}
+/**
+ * 一家快递发往某省的运费
+ * - weight：实重 kg；packed 为真表示已经含包材（称重得到的），否则加上快递公司设置的包材重量
+ * - vol：体积 cm³，按抛比折算体积重，计费重 = max(实重, 体积重) 按进位规则取整
+ * - charge：直接指定计费重量（对账时按账单重量反算用）
+ */
+function quoteCarrier(c, prov, { weight = 0, vol = 0, declared = 0, packed = false, charge } = {}) {
+  const head = { carrierId: c.id, name: c.name };
+  const z = prov && zoneOf(c, prov);
+  if (!z) return { ...head, error: prov ? `没有发往${prov}的报价` : '缺少收件省份' };
+  const real = round3(weight + (packed ? 0 : c.pack || 0)), volWeight = c.volDiv > 0 && vol > 0 ? round3(vol / c.volDiv) : 0;
+  const chargeWeight = charge != null ? round3(charge) : ceilTo(Math.max(real, volWeight), c.step);
+  const base = zoneFee(z, chargeWeight);
+  if (base == null) return { ...head, error: `超出报价表最高重量 ${z.bands[z.bands.length - 1].upTo}kg，且没有设续重价` };
+  const insure = declared > 0 && c.insureRate > 0 ? Math.max(c.insureMin || 0, declared * c.insureRate / 100) : 0;
+  return { ...head, zone: z.name, weight: real, volWeight, chargeWeight, base: round2(base), extra: z.extra || 0, insure: round2(insure), fee: round2(Math.max(base + (z.extra || 0), z.min || 0) + insure) };
+}
+
+/* ---------- 快递公司与报价 ---------- */
+function cleanZones(raw) {
+  if (!Array.isArray(raw) || !raw.length) fail('请至少设置一个分区的报价');
+  if (raw.length > 40) fail('分区最多 40 个');
+  const used = new Map(); let rest = 0;
+  return raw.map((z, n) => {
+    z = z && typeof z === 'object' ? z : {};
+    const name = str(z.name, 20) || `分区${n + 1}`;
+    const provinces = [...new Set((Array.isArray(z.provinces) ? z.provinces : []).map(normProv).filter(Boolean))];
+    for (const p of provinces) { if (used.has(p)) fail(`「${p}」同时在「${used.get(p)}」和「${name}」两个分区里`); used.set(p, name); }
+    if (!provinces.length && ++rest > 1) fail('只能有一个不选省份的分区（表示「其余省份」）');
+    const nn = (v, label, d = 0) => { if (v === '' || v == null) return d; const x = Number(v); if (!Number.isFinite(x) || x < 0 || x > 1e6) fail(`「${name}」${label}不正确`); return round4(x); };
+    const bands = (Array.isArray(z.bands) ? z.bands : []).map(b => ({ upTo: nn(b && b.upTo, '重量段'), fee: nn(b && b.fee, '重量段价格') })).filter(b => b.upTo > 0).sort((a, b) => a.upTo - b.upTo);
+    if (bands.length > 50) fail(`「${name}」重量段最多 50 个`);
+    if (bands.some((b, i) => i && b.upTo === bands[i - 1].upTo)) fail(`「${name}」有重复的重量段`);
+    const r = { name, provinces, first: nn(z.first, '首重', 1), firstFee: nn(z.firstFee, '首重价'), addStep: nn(z.addStep, '续重步长', 1) || 1, addFee: nn(z.addFee, '续重价'), bands, extra: nn(z.extra, '附加费'), min: nn(z.min, '最低收费') };
+    if (!bands.length && !(r.first > 0)) fail(`「${name}」首重必须大于 0`);
+    if (!bands.length && !(r.firstFee > 0)) fail(`「${name}」请填写首重价格，或者填写重量段价格`);
+    return r;
+  });
+}
+function saveCarrier(ctx, id) {
+  const b = ctx.body, name = str(b.name, 20) || fail('请填写快递公司名称');
+  const nn = (v, label, d, max) => { if (v === '' || v == null) return d; const x = Number(v); if (!Number.isFinite(x) || x < 0 || x > max) fail(label + '不正确'); return round4(x); };
+  return tx(() => {
+    if (list('carriers').some(c => c.name === name && c.id !== id)) fail('快递公司名称已存在');
+    const old = id ? get('carriers', id) || fail('快递公司不存在', 404) : null;
+    const c = { ...(old || { id: uid(), createdAt: today() }), name, code: str(b.code, 20), enabled: b.enabled !== false, remark: str(b.remark, 200),
+      step: nn(b.step, '计费重量进位', 0.1, 10), volDiv: nn(b.volDiv, '抛比', 0, 100000), pack: nn(b.pack, '包材重量', 0, 100),
+      insureRate: nn(b.insureRate, '保价费率', 0, 100), insureMin: nn(b.insureMin, '最低保价费', 0, 10000), tol: nn(b.tol, '对账容差', 0.5, 1000), zones: cleanZones(b.zones) };
+    put('carriers', c); audit(ctx, (old ? '修改' : '新增') + '快递公司', `${name}（${c.zones.length} 个分区）`);
+    return c;
+  });
+}
+function deleteCarrier(ctx, id) {
+  return tx(() => {
+    const c = get('carriers', id) || fail('快递公司不存在', 404);
+    if (list('shipments').some(s => s.carrierId === id) || list('shipBills').some(x => x.carrierId === id)) fail('这家快递已有运单或账单，不能删除，可以停用');
+    del('carriers', id); audit(ctx, '删除快递公司', c.name);
+  });
+}
+
+/* ---------- 运单：一个包裹一条，记估算运费；对账后写入账单运费 ---------- */
+const SHIP = { col: 'shipments', prefix: 'YD', title: '运单' };
+const BILL = { col: 'shipBills', prefix: 'ZD', title: '快递账单' };
+const normTrack = v => str(v, 60).replace(/\s+/g, '').toUpperCase().slice(0, 40);
+const findShipment = (trackNo, except) => list('shipments').find(s => s.trackNo === trackNo && s.status !== '已作废' && s.id !== except);
+const carrierName = id => (get('carriers', id) || {}).name || '已删除快递';
+function shipSource(type, id) {
+  if (!type) return null;
+  if (type === 'out') {
+    const o = get('stockDocs', id);
+    if (!o || o.dir !== 'out') fail('出库单不存在');
+    if (o.status === '已作废') fail('出库单已作废');
+    return { type, id: o.id, no: o.no, party: o.party || '', address: o.address || '', items: o.items };
+  }
+  if (type === 'sales') {
+    const o = get('sales', id) || fail('销售单不存在');
+    if (o.status === '已作废') fail('销售单已作废');
+    const c = get('customers', o.customerId) || {};
+    return { type, id: o.id, no: o.no, party: c.name || '', address: c.address || '', items: o.items };
+  }
+  fail('来源单据类型不正确');
+}
+function pickProv(province, address) {
+  const p = str(province, 10);
+  if (p) return PROVINCES.includes(p) ? p : fail('省份不正确');
+  return parseAddr(address).province || fail('识别不出收件省份，请在地址前写上省份，或者手动选择省份');
+}
+const optNum = (v, label, max = 1e6) => { if (v === '' || v == null) return null; const x = Number(v); if (!Number.isFinite(x) || x < 0 || x > max) fail(label + '不正确'); return x; };
+function shipQuote(ctx) {
+  const b = ctx.body, src = shipSource(str(b.srcType, 10), str(b.srcId, 64));
+  const items = src ? src.items : (Array.isArray(b.items) ? b.items : []).filter(i => i && i.productId).slice(0, 500).map(i => {
+    const p = get('products', i.productId); if (!p) return null;
+    try { return { productId: p.id, qty: unitQty(p, i).qty }; } catch (e) { return null; }
+  }).filter(Boolean);
+  const address = str(b.address, 200) || (src ? src.address : ''), pa = parseAddr(address);
+  const province = PROVINCES.includes(b.province) ? b.province : pa.province;
+  const est = itemsWeight(items), w = optNum(b.weight, '重量', 10000), declared = optNum(b.declared, '保价金额') || 0;
+  const opt = w ? { weight: w, packed: true, vol: est.vol, declared } : { weight: est.weight, vol: est.vol, declared };
+  const quotes = list('carriers').filter(c => c.enabled).map(c => quoteCarrier(c, province, opt)).sort((x, y) => !!x.error - !!y.error || (x.fee || 0) - (y.fee || 0));
+  return { province, city: pa.city, detected: pa.province, address, weight: est.weight, vol: est.vol, missing: est.missing, items: items.length, quotes };
+}
+function createShipments(ctx, b) {
+  const src = shipSource(str(b.srcType, 10), str(b.srcId, 64));
+  const c = get('carriers', str(b.carrierId, 64)) || fail('请选择快递公司');
+  if (!c.enabled) fail(`「${c.name}」已停用`);
+  const address = str(b.address, 200) || (src ? src.address : ''), province = pickProv(b.province, address);
+  const pk = (Array.isArray(b.packages) ? b.packages : []).filter(x => x && (str(x.trackNo, 60) || (x.weight !== '' && x.weight != null)));
+  if (!pk.length) fail('请填写快递单号');
+  if (pk.length > 50) fail('一次最多登记 50 个包裹');
+  const est = src ? itemsWeight(src.items) : { weight: 0, vol: 0 };
+  const declared = optNum(b.declared, '保价金额') || 0, date = isDate(b.date) ? b.date : today(), seen = new Set();
+  return tx(() => {
+    const out = pk.map((x, n) => {
+      const trackNo = normTrack(x.trackNo) || fail(`第 ${n + 1} 个包裹没有填快递单号`);
+      if (seen.has(trackNo)) fail(`快递单号 ${trackNo} 重复`);
+      seen.add(trackNo);
+      if (findShipment(trackNo)) fail(`快递单号 ${trackNo} 已经登记过`);
+      const w = optNum(x.weight, `快递单号 ${trackNo} 的重量`, 10000);
+      if (!w && (pk.length > 1 || !(est.weight > 0))) fail(`请填写快递单号 ${trackNo} 的包裹重量（kg）`);
+      const first = n === 0, vol = pk.length === 1 ? est.vol : 0;
+      const q = quoteCarrier(c, province, w ? { weight: w, packed: true, vol, declared: first ? declared : 0 } : { weight: est.weight, vol, declared });
+      if (q.error) fail(`${c.name}：${q.error}`);
+      const s = { id: uid(), no: nextNo(SHIP), date, carrierId: c.id, trackNo, srcType: src ? src.type : '', srcId: src ? src.id : '', srcNo: src ? src.no : '',
+        party: str(b.party, 100) || (src ? src.party : ''), address, province, weight: q.weight, weighed: !!w, vol, volWeight: q.volWeight, chargeWeight: q.chargeWeight,
+        declared: first ? declared : 0, zone: q.zone, estFee: q.fee, status: '待对账', note: str(b.note, 200), creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString() };
+      put('shipments', s);
+      return s;
+    });
+    if (src && src.type === 'out' && !src.address && address) { const o = get('stockDocs', src.id); o.address = address; put('stockDocs', o); }
+    audit(ctx, '登记运单', `${c.name} ${out.map(s => s.trackNo).join('、')}${src ? ' ← ' + src.no : ''}`);
+    return out;
+  });
+}
+function editShipment(ctx, id) {
+  const b = ctx.body;
+  return tx(() => {
+    const s = get('shipments', id) || fail('运单不存在', 404);
+    if (s.status !== '待对账') fail(`运单状态为「${s.status}」，不能修改`);
+    const c = get('carriers', str(b.carrierId, 64) || s.carrierId) || fail('快递公司不存在');
+    const trackNo = 'trackNo' in b ? normTrack(b.trackNo) || fail('请填写快递单号') : s.trackNo;
+    if (findShipment(trackNo, s.id)) fail(`快递单号 ${trackNo} 已经登记过`);
+    const address = 'address' in b ? str(b.address, 200) : s.address;
+    const province = 'province' in b || 'address' in b ? pickProv(b.province, address) : s.province;
+    const w = 'weight' in b ? optNum(b.weight, '重量', 10000) : s.weight;
+    if (!w) fail('请填写包裹重量（kg）');
+    const declared = 'declared' in b ? optNum(b.declared, '保价金额') || 0 : s.declared || 0;
+    const q = quoteCarrier(c, province, { weight: w, packed: true, vol: s.vol || 0, declared });
+    if (q.error) fail(`${c.name}：${q.error}`);
+    Object.assign(s, { carrierId: c.id, trackNo, address, province, weight: q.weight, weighed: s.weighed || w !== s.weight, volWeight: q.volWeight, chargeWeight: q.chargeWeight,
+      declared, zone: q.zone, estFee: q.fee, date: isDate(b.date) ? b.date : s.date, note: 'note' in b ? str(b.note, 200) : s.note });
+    put('shipments', s); audit(ctx, '修改运单', `${s.trackNo} ¥${s.estFee}`);
+    return s;
+  });
+}
+function voidShipment(ctx, id) {
+  return tx(() => {
+    const s = get('shipments', id) || fail('运单不存在', 404);
+    if (s.status !== '待对账') fail(`运单状态为「${s.status}」，不能作废`);
+    s.status = '已作废'; s.voidBy = ctx.user.name; s.voidAt = new Date().toISOString();
+    put('shipments', s); audit(ctx, '作废运单', s.trackNo);
+    return s;
+  });
+}
+// 出库单作废时，它名下还没对账的运单一起作废（已对账的是实际发生的运费，保留）
+function voidShipmentsOf(type, id) {
+  for (const s of list('shipments')) if (s.srcType === type && s.srcId === id && s.status === '待对账') { s.status = '已作废'; s.voidAt = new Date().toISOString(); put('shipments', s); }
+}
+const shipFinanceOn = () => enabledModules().includes('finance');
+const shipExpense = (ctx, amount, ref, note) => put('finance', { id: uid(), date: today(), type: 'expense', category: '快递费', amount: round2(amount), method: '银行转账', ref, note, operator: ctx.user.name });
+// 申诉处理完：按最终金额结算
+function resolveShipment(ctx, id) {
+  const fee = optNum(ctx.body.fee, '最终运费');
+  if (fee == null) fail('请填写最终运费');
+  return tx(() => {
+    const s = get('shipments', id) || fail('运单不存在', 404);
+    if (s.status !== '申诉中') fail('只有申诉中的运单需要处理');
+    const bill = get('shipBills', s.billId);
+    Object.assign(s, { status: '已对账', billFee: round2(fee), resolveNote: str(ctx.body.note, 200), resolvedBy: ctx.user.name, resolvedAt: new Date().toISOString() });
+    put('shipments', s);
+    if (bill && bill.toFinance && shipFinanceOn() && fee > 0) shipExpense(ctx, fee, bill.no, `申诉结算 ${s.trackNo}`);
+    audit(ctx, '处理运费申诉', `${s.trackNo} 最终 ¥${s.billFee}`);
+    return s;
+  });
+}
+
+/* ---------- 快递账单：导入 → 按快递单号匹配 → 差异诊断 → 确认（认可 / 申诉） ---------- */
+const BILL_CATS = { ok: '一致', diff: '金额差异', extra: '账单有、系统无', dup: '重复计费' };
+function matchBill(bill, c) {
+  const ships = list('shipments').filter(s => s.status !== '已作废'), byTrack = new Map(ships.map(s => [s.trackNo, s]));
+  const seen = new Map(), tol = c.tol ?? 0.5;
+  for (const r of bill.rows) {
+    Object.assign(r, { cat: '', shipId: '', est: null, diff: null, reason: '' });
+    if (seen.has(r.trackNo)) { r.cat = 'dup'; r.reason = `和表格第 ${seen.get(r.trackNo)} 行是同一个快递单号`; continue; }
+    seen.set(r.trackNo, r.line);
+    const s = byTrack.get(r.trackNo);
+    if (!s) { r.cat = 'extra'; r.reason = '系统里没有登记这个快递单号（漏登记，或不是我们发的件）'; continue; }
+    r.shipId = s.id; r.est = s.estFee; r.diff = round2(r.fee - s.estFee);
+    if (s.billId && s.billId !== bill.id) { r.cat = 'dup'; r.reason = `已经在账单 ${s.billNo || ''} 里结算过`; continue; }
+    const why = [], prov = PROVINCES.includes(r.province) ? r.province : s.province;
+    if (s.carrierId !== c.id) why.push(`系统登记的快递是「${carrierName(s.carrierId)}」`);
+    if (Math.abs(r.diff) <= tol + 1e-9 && !why.length) { r.cat = 'ok'; continue; }
+    r.cat = 'diff';
+    const wDiff = r.weight != null && Math.abs(r.weight - s.chargeWeight) > 0.0005, pDiff = prov !== s.province;
+    if (pDiff) why.push(`省份不符：系统 ${s.province}，账单 ${prov}`);
+    if (wDiff) why.push(`计费重量：系统 ${s.chargeWeight}kg，账单 ${r.weight}kg（${r.weight > s.chargeWeight ? '多' : '少'} ${round3(Math.abs(r.weight - s.chargeWeight))}kg）`);
+    if (Math.abs(r.diff) > tol + 1e-9) {
+      // 用账单上的重量和省份套我们的报价重算：算得一致说明价格没问题，差异出在重量 / 省份；不一致说明没按报价收费
+      const q = quoteCarrier(c, prov, { charge: r.weight != null ? r.weight : s.chargeWeight, declared: s.declared || 0 });
+      if (q.error) why.push('按账单重量重算失败：' + q.error);
+      else if (Math.abs(q.fee - r.fee) <= tol + 1e-9) why.push(`按账单的重量和省份套报价是 ¥${q.fee}，和账单一致 → 价格没问题，差异来自${[wDiff && '称重', pDiff && '省份'].filter(Boolean).join('和') || '估算口径（体积重 / 包材 / 保价）'}`);
+      else why.push(`按账单的重量和省份套报价应为 ¥${q.fee}，账单收 ¥${r.fee} → 没按约定报价收费，或者报价表需要更新`);
+    }
+    r.reason = why.join('；');
+  }
+  const inBill = new Set(bill.rows.map(r => r.shipId).filter(Boolean));
+  bill.missing = bill.period ? ships.filter(s => s.carrierId === c.id && String(s.date).startsWith(bill.period) && !s.billId && !inBill.has(s.id)).map(s => s.id) : [];
+  bill.counts = Object.fromEntries(Object.keys(BILL_CATS).map(k => [k, bill.rows.filter(r => r.cat === k).length]));
+  bill.counts.missing = bill.missing.length;
+  bill.total = round2(sum(bill.rows, r => r.fee));
+  bill.estTotal = round2(sum(bill.rows.filter(r => r.est != null && r.cat !== 'dup'), r => r.est));
+}
+const cleanMap = m => Object.fromEntries(Object.entries(m && typeof m === 'object' ? m : {}).slice(0, 10).map(([k, v]) => [str(k, 20), str(v, 40)]));
+function importBill(ctx) {
+  const b = ctx.body, raw = Array.isArray(b.rows) ? b.rows : fail('账单里没有数据');
+  if (!raw.length) fail('账单里没有数据');
+  if (raw.length > 20000) fail('一个账单最多 20000 行，请按月拆开导入');
+  const c = get('carriers', str(b.carrierId, 64)) || fail('请选择快递公司');
+  const period = /^\d{4}-\d{2}$/.test(b.period) ? b.period : '', errors = [];
+  const rows = raw.map((r, i) => {
+    r = r && typeof r === 'object' ? r : {};
+    const line = Number.isInteger(r._row) ? r._row : i + 2, err = m => { errors.push(`第 ${line} 行：${m}`); return null; };
+    const trackNo = normTrack(r.trackNo); if (!trackNo) return err('快递单号为空');
+    const fee = Number(r.fee); if (r.fee === '' || r.fee == null || !Number.isFinite(fee) || fee < 0) return err(`金额「${str(r.fee, 20)}」不正确`);
+    const weight = r.weight === '' || r.weight == null ? null : Number(r.weight);
+    if (weight != null && !(Number.isFinite(weight) && weight >= 0 && weight < 1e5)) return err(`重量「${str(r.weight, 20)}」不正确`);
+    return { line, trackNo, date: isDate(r.date) ? r.date : '', province: r.province ? normProv(r.province) || str(r.province, 20) : '', weight: weight == null ? null : round3(weight), fee: round2(fee) };
+  });
+  if (errors.length) fail('账单有错误，没有导入：\n' + errors.slice(0, 20).join('\n') + (errors.length > 20 ? `\n……共 ${errors.length} 处错误` : ''));
+  return tx(() => {
+    const bill = { id: uid(), no: nextNo(BILL), date: today(), carrierId: c.id, period, fileName: str(b.fileName, 100), map: cleanMap(b.map), rows, status: '草稿',
+      creator: ctx.user.name, createdAt: new Date().toISOString() };
+    matchBill(bill, c);
+    put('shipBills', bill);
+    audit(ctx, '导入快递账单', `${bill.no} ${c.name} ${period} ${rows.length} 行 ¥${bill.total}`);
+    return bill;
+  });
+}
+// 打开账单：草稿每次都重新匹配（期间可能补录了运单）
+function getBill(ctx, id) {
+  return tx(() => {
+    const bill = get('shipBills', id) || fail('账单不存在', 404);
+    if (bill.status === '草稿') { matchBill(bill, get('carriers', bill.carrierId) || { id: bill.carrierId, name: '已删除快递', zones: [] }); put('shipBills', bill); }
+    return bill;
+  });
+}
+// 确认账单：一致的自动认可；其余按前端传来的 acts（行序号 → ok / dispute）处理，没传的算申诉
+function confirmBill(ctx, id) {
+  const b = ctx.body || {}, acts = b.acts && typeof b.acts === 'object' ? b.acts : {}, notes = b.notes && typeof b.notes === 'object' ? b.notes : {};
+  return tx(() => {
+    const bill = get('shipBills', id) || fail('账单不存在', 404);
+    if (bill.status !== '草稿') fail('账单已经确认过');
+    const c = get('carriers', bill.carrierId) || fail('快递公司已删除，不能确认');
+    matchBill(bill, c);
+    let pay = 0, disputed = 0;
+    bill.rows.forEach((r, i) => {
+      r.act = r.cat === 'ok' || acts[i] === 'ok' ? 'ok' : 'dispute';
+      r.note = r.act === 'dispute' ? str(notes[i], 200) : '';
+      if (r.act === 'ok') pay += r.fee; else disputed++;
+      const s = r.shipId && r.cat !== 'dup' && get('shipments', r.shipId);
+      if (!s) return;
+      Object.assign(s, { billId: bill.id, billNo: bill.no, billFee: r.fee, billWeight: r.weight, billProvince: r.province, diffReason: r.reason,
+        status: r.act === 'ok' ? '已对账' : '申诉中', disputeNote: r.note });
+      put('shipments', s);
+    });
+    Object.assign(bill, { status: '已确认', payable: round2(pay), disputed, toFinance: !!b.finance && shipFinanceOn(), confirmedBy: ctx.user.name, confirmedAt: new Date().toISOString() });
+    if (bill.toFinance && pay > 0) shipExpense(ctx, pay, bill.no, `${c.name}${bill.period ? ' ' + bill.period : ''} 快递账单`);
+    put('shipBills', bill);
+    audit(ctx, '确认快递账单', `${bill.no} 应付 ¥${bill.payable}，申诉 ${disputed} 条`);
+    return bill;
+  });
+}
+// 撤销确认：运单退回待对账，删掉这张账单生成的财务支出
+function undoBill(ctx, id) {
+  return tx(() => {
+    const bill = get('shipBills', id) || fail('账单不存在', 404);
+    if (bill.status !== '已确认') fail('账单还没确认');
+    for (const s of list('shipments').filter(s => s.billId === bill.id)) {
+      ['billId', 'billNo', 'billFee', 'billWeight', 'billProvince', 'diffReason', 'disputeNote', 'resolveNote', 'resolvedBy', 'resolvedAt'].forEach(k => delete s[k]);
+      s.status = '待对账'; put('shipments', s);
+    }
+    for (const f of list('finance').filter(f => f.ref === bill.no)) del('finance', f.id);
+    bill.rows.forEach(r => { delete r.act; delete r.note; });
+    ['payable', 'disputed', 'toFinance', 'confirmedBy', 'confirmedAt'].forEach(k => delete bill[k]);
+    bill.status = '草稿'; put('shipBills', bill);
+    audit(ctx, '撤销确认快递账单', bill.no);
+    return bill;
+  });
+}
+function deleteBill(ctx, id) {
+  return tx(() => {
+    const bill = get('shipBills', id) || fail('账单不存在', 404);
+    if (bill.status !== '草稿') fail('已确认的账单不能删除，请先撤销确认');
+    del('shipBills', id); audit(ctx, '删除快递账单', bill.no);
+  });
+}
+
 /* ---------- 导入商品与期初库存 ---------- */
 function importProducts(ctx) {
   const rows = Array.isArray(ctx.body.rows) ? ctx.body.rows : fail('没有可导入的数据');
@@ -948,8 +1363,8 @@ function importProducts(ctx) {
         if (!Number.isFinite(n) || n < 0 || (int && !Number.isInteger(n))) { err(`${label}「${raw[k]}」不正确`); return null; }
         return round4(n);
       };
-      const cost = num('cost', '成本价'), price = num('price', '销售价'), stock = num('stock', '期初库存', true), safety = num('safety', '安全库存', true);
-      if ([cost, price, stock, safety].includes(null)) return;
+      const cost = num('cost', '成本价'), price = num('price', '销售价'), stock = num('stock', '期初库存', true), safety = num('safety', '安全库存', true), weight = num('weight', '重量');
+      if ([cost, price, stock, safety, weight].includes(null)) return;
       const fields = {};
       for (const k of ['name', 'spec', 'category', 'unit', 'remark']) if (raw[k] !== undefined && raw[k] !== null && String(raw[k]).trim() !== '') fields[k] = str(raw[k], k === 'remark' ? 500 : 200);
       const old = bySku.get(sku);
@@ -964,6 +1379,7 @@ function importProducts(ctx) {
       if (clash) return err(`条码 ${clash} 已被商品 ${codeOwner.get(clash)} 使用`);
       mine.forEach(c => codeOwner.set(c, sku));
       if (safety !== undefined) fields.safety = safety;
+      if (weight !== undefined) fields.weight = round3(weight);
       if (money && price !== undefined) fields.price = round2(price);
       const p = bySku.get(sku);
       if (p) {
@@ -993,12 +1409,14 @@ function visibleData(ctx) {
     sales: any('sales', 'dashboard', 'reports', 'parties'), purchases: any('purchase', 'dashboard', 'reports', 'parties'),
     customers: any('sales', 'parties', 'dashboard', 'reports'), suppliers: any('purchase', 'parties'),
     finance: any('finance', 'sales', 'purchase', 'reports'), employees: P.has('hr'),
-    warehouses: true, transferDocs: P.has('inv.view'), batches: any('inv.view', 'prod.view'), serials: P.has('inv.view')
+    warehouses: true, transferDocs: P.has('inv.view'), batches: any('inv.view', 'prod.view'), serials: P.has('inv.view'),
+    carriers: any('ship.view', 'ship.edit', 'ship.rate'), shipments: any('ship.view', 'ship.edit'), shipBills: P.has('ship.view')
   };
   const byDate = (a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || ''));
   const data = {};
   COLS.forEach(c => { data[c] = want[c] ? list(c) : []; if (DATED.includes(c)) data[c].sort(byDate); });
   if (!seesPrice(P)) data.products = data.products.map(({ cost, price, ...p }) => p);
+  data.shipBills = data.shipBills.map(({ rows, ...b }) => b);  // 账单明细可能上万行，打开账单时再单独取
   // 有审核权限的账号即使不能看他人单据，也能看到待审核的出入库单
   if (!P.has('inv.others')) for (const c of ['stockDocs', 'checkDocs', 'transferDocs']) data[c] = data[c].filter(o => o.creatorId === ctx.user.id || c === 'stockDocs' && o.status === '待审核' && P.has('inv.approve'));
   if (!P.has('inv.cost')) {
@@ -1082,7 +1500,7 @@ const publicSettings = ctx => { const { notify, ...s } = getMeta('settings', {})
 route('GET', '/api/data', ctx => ({
   version: VERSION, settings: { ...publicSettings(ctx), modules: enabledModules() },
   user: { ...publicUser(ctx.user), perms: [...ctx.perms] }, data: visibleData(ctx),
-  meta: { modules: MODULES, perms: PERMS, docTypes: DOC_TYPES, defaultWh: DEFAULT_WH }
+  meta: { modules: MODULES, perms: PERMS, docTypes: DOC_TYPES, defaultWh: DEFAULT_WH, provinces: PROVINCES, regions: REGIONS }
 }));
 route('PUT', '/api/settings/expiry', ctx => {
   const n = Math.round(Number(ctx.body.days));
@@ -1124,7 +1542,7 @@ route('GET', '/api/settings/notify/preview', () => notifyText(), { admin: true }
 // 打印模板：每种单据一份（标题、抬头、表头项目、明细列的显示 / 顺序 / 名称、签字栏、底部说明、字号），所有用户共用
 const PRINT_KINDS = { in: '入库单', out: '出库单', transfer: '调拨单', sales: '销售单', purchase: '采购单' };
 const PRINT_COLS = ['idx', 'sku', 'barcode', 'name', 'spec', 'unit', 'qty', 'price', 'amount', 'batch', 'note'];
-const PRINT_META = ['no', 'type', 'date', 'party', 'wh', 'handler', 'contact', 'address'];
+const PRINT_META = ['no', 'type', 'date', 'party', 'wh', 'handler', 'contact', 'address', 'express'];
 function cleanTpl(t) {
   if (!t || typeof t !== 'object') return null;
   const cols = (Array.isArray(t.cols) ? t.cols : []).filter((c, i, a) => c && PRINT_COLS.includes(c.k) && a.findIndex(x => x && x.k === c.k) === i)
@@ -1176,6 +1594,19 @@ route('POST', '/api/transfers/:id/print', ctx => tx(() => {
   audit(ctx, '打印调拨单', `${o.no} 第 ${o.printCount} 次`);
   return { printCount: o.printCount };
 }), { perm: 'inv.print' });
+route('POST', '/api/ship/quote', ctx => shipQuote(ctx), { perm: ctx => ctx.perms.has('ship.edit') ? 'ship.edit' : 'ship.view' });
+route('POST', '/api/carriers', ctx => saveCarrier(ctx, null), { perm: 'ship.rate' });
+route('PUT', '/api/carriers/:id', ctx => saveCarrier(ctx, ctx.params.id), { perm: 'ship.rate' });
+route('DELETE', '/api/carriers/:id', ctx => deleteCarrier(ctx, ctx.params.id), { perm: 'ship.rate' });
+route('POST', '/api/shipments', ctx => createShipments(ctx, ctx.body), { perm: 'ship.edit' });
+route('PUT', '/api/shipments/:id', ctx => editShipment(ctx, ctx.params.id), { perm: 'ship.edit' });
+route('POST', '/api/shipments/:id/void', ctx => voidShipment(ctx, ctx.params.id), { perm: 'ship.edit' });
+route('POST', '/api/shipments/:id/resolve', ctx => resolveShipment(ctx, ctx.params.id), { perm: 'ship.bill' });
+route('POST', '/api/shipbills', ctx => importBill(ctx), { perm: 'ship.bill' });
+route('GET', '/api/shipbills/:id', ctx => getBill(ctx, ctx.params.id), { perm: 'ship.view' });
+route('POST', '/api/shipbills/:id/confirm', ctx => confirmBill(ctx, ctx.params.id), { perm: 'ship.bill' });
+route('POST', '/api/shipbills/:id/undo', ctx => undoBill(ctx, ctx.params.id), { perm: 'ship.bill' });
+route('DELETE', '/api/shipbills/:id', ctx => deleteBill(ctx, ctx.params.id), { perm: 'ship.bill' });
 route('POST', '/api/warehouses', ctx => saveWarehouse(ctx, null), { admin: true });
 route('PUT', '/api/warehouses/:id', ctx => saveWarehouse(ctx, ctx.params.id), { admin: true });
 route('DELETE', '/api/warehouses/:id', ctx => deleteWarehouse(ctx, ctx.params.id), { admin: true });
