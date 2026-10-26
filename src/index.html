@@ -313,7 +313,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.0.3 · 数据保存在服务器</div>
+    <div class="side-foot">v2.0.4 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -2361,7 +2361,9 @@ function shipBlock(type, o, canAdd) {
 }
 function shipOps(s, inView) {
   const b = inView ? [] : [tbtn('查看', 'shipView', s.id)];
-  if (s.status === '待对账' && can('ship.edit')) b.push(tbtn('修改', 'shipEdit', s.id), tbtn('作废', 'shipVoid', s.id, 'danger-text'));
+  if (inView && s.eorder && !s.eorder.canceled) b.push(tbtn('打印面单', 'labelPrint', s.id));
+  if (inView && kdn().ready) b.push(tbtn('查询物流', 'shipTrack', s.id));
+  if (s.status === '待对账' && can('ship.edit')) b.push(tbtn('修改', 'shipEdit', s.id), s.eorder ? tbtn('取消面单', 'eorderCancel', s.id, 'danger-text') : tbtn('作废', 'shipVoid', s.id, 'danger-text'));
   if (s.status === '申诉中' && can('ship.bill')) b.push(tbtn('处理申诉', 'shipResolve', s.id, 'primary'));
   return b.join('');
 }
@@ -2386,7 +2388,8 @@ function pageShipping() {
       {key:'st', label:'全部状态', options:Object.keys(SHIP_STATUS), test:(s, v) => s.status === v},
       {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(s, v) => monthKey(s.date) === v},
       {key:'prov', label:'全部省份', options:META.provinces || [], test:(s, v) => s.province === v}];
-    card.innerHTML = toolbar('ships', {placeholder:'搜索快递单号 / 单据 / 收件人 / 地址', filters, buttons:`<button class="btn" data-act="export" data-id="ships">${ic('download')}导出</button>`}) + '<div id="list-ships"></div>';
+    filters.push({key:'track', label:'物流状态', options:[['3', '已签收'], ['4', '问题件'], ['open', '未签收'], ['none', '未查询']], test:(s, v) => v === 'open' ? !(s.track && s.track.state === '3') : v === 'none' ? !s.track : s.track && s.track.state === v});
+    card.innerHTML = toolbar('ships', {placeholder:'搜索快递单号 / 单据 / 收件人 / 地址', filters, buttons:(kdn().ready ? `<button class="btn" data-act="trackAll" title="最近 30 天未签收的运单，每次最多 50 单">${ic('refresh')}刷新物流</button>` : '') + `<button class="btn" data-act="export" data-id="ships">${ic('download')}导出</button>`}) + '<div id="list-ships"></div>';
     mountList('ships', {rows:() => db.shipments, search:s => s.trackNo + s.no + (s.srcNo || '') + (s.party || '') + (s.address || ''), filters, empty:'暂无运单。开出库单时勾选「保存后登记快递单号」，或点右上角「登记运单」', columns:[
       {t:'快递单号', r:s => `<a class="link" data-act="shipView" data-id="${s.id}">${esc(s.trackNo)}</a><div class="sub-t">${esc(carrierLabel(s.carrierId))}</div>`, s:s => s.trackNo},
       {t:'发货日期', r:s => s.date, s:s => s.date},
@@ -2397,6 +2400,7 @@ function pageShipping() {
       {t:'账单运费', cls:'num', r:s => s.billFee != null ? money(s.billFee) : '-', s:s => s.billFee ?? -1},
       {t:'差额', cls:'num', r:s => s.billFee != null ? diffHtml(s.billFee - s.estFee) : '-', s:s => s.billFee != null ? s.billFee - s.estFee : 0},
       {t:'状态', r:s => badge(s.status, SHIP_STATUS[s.status])},
+      ...(kdn().ready || db.shipments.some(s => s.track) ? [{t:'物流', r:s => trackBadge(s) + (s.track && s.track.traces.length ? `<div class="sub-t" style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${esc(s.track.traces.at(-1).station)}">${esc(s.track.traces.at(-1).station)}</div>` : ''), s:s => s.track ? s.track.state : ''}] : []),
       {t:'操作', r:s => `<div class="ops">${shipOps(s)}</div>`}
     ], exp:{name:'运单', cols:[['快递单号', s => s.trackNo], ['快递', s => carrierLabel(s.carrierId)], ['发货日期', s => s.date], ['来源单据', s => s.srcNo], ['收件人', s => s.party], ['省份', s => s.province], ['地址', s => s.address],
       ['实重kg', s => s.weight], ['计费重量kg', s => s.chargeWeight], ['估算运费', s => s.estFee], ['账单运费', s => s.billFee ?? ''], ['账单号', s => s.billNo || ''], ['状态', s => s.status], ['差异说明', s => s.diffReason || ''], ['备注', s => s.note]]}});
@@ -2458,8 +2462,8 @@ function shipStats(card, S) {
 
 /* ---------- 登记 / 修改运单 ---------- */
 function shipSrc(type, id) {
-  if (type === 'out') { const o = byId(db.stockDocs, id); return o && {type, id, no:o.no, party:o.party || '', address:o.address || ((db.customers.find(c => c.name === o.party) || {}).address || '')}; }
-  if (type === 'sales') { const o = byId(db.sales, id), c = o && byId(db.customers, o.customerId) || {}; return o && {type, id, no:o.no, party:c.name || '', address:c.address || ''}; }
+  if (type === 'out') { const o = byId(db.stockDocs, id), c = o && db.customers.find(x => x.name === o.party) || {}; return o && {type, id, no:o.no, party:o.party || '', address:o.address || c.address || '', mobile:c.phone || ''}; }
+  if (type === 'sales') { const o = byId(db.sales, id), c = o && byId(db.customers, o.customerId) || {}; return o && {type, id, no:o.no, party:c.name || '', address:c.address || '', mobile:c.phone || ''}; }
   return null;
 }
 // 报价选择列表：点一行选中这家快递
@@ -2477,12 +2481,14 @@ function shipModal(o = {}) {
   if (!db.carriers.some(c => c.enabled)) return toast('还没有启用的快递公司，请先在「物流运费 → 快递报价」里添加', 'error');
   const st = {carrierId:edit ? edit.carrierId : o.carrierId || '', q:null, seq:0, timer:0};
   const pk = edit ? [{trackNo:edit.trackNo, weight:edit.weight}] : [{trackNo:o.trackNo || '', weight:o.weight || ''}];
+  const eo = !edit && !o.trackNo && kdn().eorder && can('ship.edit');  // 快递鸟配好了：可以直接下电子面单
   openModal(`${modalHead(edit ? '修改运单 · ' + esc(edit.trackNo) : '登记快递运单')}<div class="m-body">
     ${src ? `<p class="sub-t" style="margin-bottom:12px">来源单据 <b>${esc(src.no)}</b>${src.party ? ' · ' + esc(src.party) : ''}${edit ? '' : ' · 没称重时按单据商品的重量估算'}</p>` : ''}
     <div class="form-grid">
       <label class="field span2"><span>收件地址</span><input id="sAddr" value="${esc(edit ? edit.address : o.address || (src && src.address) || '')}" placeholder="省 市 区 详细地址（用来识别省份）"></label>
       <label class="field"><span>收件省份</span><select id="sProv">${provOpts(edit ? edit.province : o.province || '')}</select></label>
       <label class="field"><span>收件人 / 单位</span><input id="sParty" value="${esc(edit ? edit.party || '' : o.party || (src && src.party) || '')}"></label>
+      <label class="field"><span>收件电话${eo ? '（电子面单必填）' : ''}</span><input id="sTel" value="${esc(edit ? edit.mobile || '' : o.mobile || (src && src.mobile) || '')}"></label>
       <label class="field"><span>保价金额 ¥（选填）</span><input id="sDecl" type="number" step="any" min="0" value="${edit && edit.declared ? edit.declared : ''}"></label>
       <label class="field"><span>发货日期</span><input id="sDate" type="date" value="${edit ? edit.date : o.date || today()}"></label>
     </div>
@@ -2492,7 +2498,7 @@ function shipModal(o = {}) {
     <p class="sub-t" style="margin:-4px 0 8px">${edit ? '改了重量会重新计算运费' : '扫快递单号后回车自动加下一行；只有一个包裹时称重可以留空（按商品重量估算）'}</p>
     <div class="table-wrap"><table class="tbl items"><thead><tr><th>快递单号 <i style="color:var(--red);font-style:normal">*</i></th><th style="width:110px">称重 kg</th><th style="width:44px"></th></tr></thead><tbody id="sPk"></tbody></table></div>
     <label class="field" style="margin-top:12px"><span>备注</span><input id="sNote" value="${esc(edit ? edit.note || '' : '')}"></label>
-  </div><div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="sSave">${ic('check')}保存</button></div>`, 'lg');
+  </div><div class="m-foot">${eo ? `<span class="sub-t" style="margin-right:auto">电子面单：自动取快递单号并打印面单，单号不用填</span>` : ''}<button class="btn" data-act="closeModal">取消</button><button class="btn ${eo ? '' : 'primary'}" id="sSave">${ic('check')}${eo ? '手工登记' : '保存'}</button>${eo ? `<button class="btn primary" id="sEo">${ic('printer')}电子面单下单并打印</button>` : ''}</div>`, 'lg');
   const drawQ = () => {
     const q = st.q;
     if (q && !q.quotes.some(x => !x.error && x.carrierId === st.carrierId)) st.carrierId = (q.quotes.find(x => !x.error) || {}).carrierId || st.carrierId;
@@ -2530,11 +2536,27 @@ function shipModal(o = {}) {
     const rows = pk.filter(p => String(p.trackNo).trim() || p.weight !== '');
     if (!rows.length || rows.some(p => !String(p.trackNo).trim())) return toast('请填写快递单号', 'error');
     if (rows.some(p => p.weight !== '' && !(+p.weight > 0))) return toast('称重必须大于 0', 'error');
-    const common = {carrierId:st.carrierId, address:$('#sAddr').value.trim(), province:$('#sProv').value, party:$('#sParty').value.trim(), declared:$('#sDecl').value, date:$('#sDate').value, note:$('#sNote').value.trim()};
+    const common = {carrierId:st.carrierId, address:$('#sAddr').value.trim(), province:$('#sProv').value, party:$('#sParty').value.trim(), mobile:$('#sTel').value.trim(), declared:$('#sDecl').value, date:$('#sDate').value, note:$('#sNote').value.trim()};
     $('#sSave').disabled = true;
     const r = edit ? await mutate('PUT', '/api/shipments/' + edit.id, {...common, trackNo:rows[0].trackNo, weight:rows[0].weight}, '运单已修改')
       : await mutate('POST', '/api/shipments', {...common, srcType:src ? src.type : '', srcId:src ? src.id : '', packages:rows}, r => `已登记 ${r.length} 个运单，估算运费 ${money(sum(r, s => s.estFee))}`);
     if (!r) { if ($('#sSave')) $('#sSave').disabled = false; return; }
+    if (o.after) o.after();
+  };
+  // 电子面单：一个包裹一单，快递鸟取号成功后登记运单并直接打印面单
+  if ($('#sEo')) $('#sEo').onclick = async () => {
+    const c = byId(db.carriers, st.carrierId);
+    if (!c) return toast('请选择快递公司', 'error');
+    if (!c.code) return toast(`「${c.name}」没有填快递鸟编码，请先在快递报价里补上`, 'error');
+    if (!$('#sParty').value.trim() || !$('#sTel').value.trim()) return toast('电子面单需要收件人和电话', 'error');
+    if (pk.length > 1) return toast('电子面单一次下一个包裹，多个包裹请分开下单', 'error');
+    if (pk[0].weight !== '' && !(+pk[0].weight > 0)) return toast('称重必须大于 0', 'error');
+    $('#sEo').disabled = true;
+    const body = {carrierId:st.carrierId, srcType:src ? src.type : '', srcId:src ? src.id : '', address:$('#sAddr').value.trim(), province:$('#sProv').value, party:$('#sParty').value.trim(),
+      mobile:$('#sTel').value.trim(), declared:$('#sDecl').value, date:$('#sDate').value, note:$('#sNote').value.trim(), weight:pk[0].weight};
+    const r = await mutate('POST', '/api/ship/eorder', body, r => `电子面单已下单：${c.name} ${r.trackNo}`);
+    if (!r) { if ($('#sEo')) $('#sEo').disabled = false; return; }
+    if (r.hasLabel) printLabel(r.id); else toast('快递鸟没有返回面单模板，可以在运单详情里重新打印', 'info');
     if (o.after) o.after();
   };
   drawPk(edit ? null : 0); requote();
@@ -2544,14 +2566,20 @@ function shipView(id) {
   const row = (l, v, full) => `<div ${full ? 'style="grid-column:1/-1"' : ''}><span>${l}：</span>${v}</div>`;
   openModal(`${modalHead('运单 · ' + esc(s.trackNo) + ' ' + badge(s.status, SHIP_STATUS[s.status]))}<div class="m-body"><div class="doc-info">
     ${row('快递', esc(carrierLabel(s.carrierId)))}${row('登记号', esc(s.no))}${row('发货日期', s.date)}${row('来源单据', shipSrcLink(s))}
-    ${row('收件人', esc(s.party || '-'))}${row('省份 / 分区', esc(s.province) + (s.zone ? ' · ' + esc(s.zone) : ''))}${row('地址', esc(s.address || '-'), 1)}
+    ${row('收件人', esc(s.party || '-') + (s.mobile ? ' · ' + esc(s.mobile) : ''))}${row('省份 / 分区', esc(s.province) + (s.zone ? ' · ' + esc(s.zone) : ''))}${row('地址', esc(s.address || '-'), 1)}
+    ${s.eorder ? row('电子面单', `快递鸟订单号 ${esc(s.eorder.orderCode)}${s.eorder.canceled ? ' <span class="badge gray">已取消</span>' : ''}`, 1) : ''}
     ${row('实重', s.weight + 'kg（' + (s.weighed ? '称重' : '按商品估算，含包材') + '）')}${row('计费重量', s.chargeWeight + 'kg' + (s.volWeight > s.weight ? '（体积重 ' + s.volWeight + 'kg）' : ''))}
     ${s.declared ? row('保价金额', money(s.declared)) : ''}${row('估算运费', money(s.estFee))}
     ${s.billFee != null ? row('账单运费', money(s.billFee) + ' · ' + diffHtml(s.billFee - s.estFee) + (s.billNo ? ` <span class="sub-t">${esc(s.billNo)}</span>` : '')) : ''}
     ${s.billWeight != null && s.billFee != null ? row('账单计费重量', s.billWeight + 'kg') : ''}
     ${s.diffReason ? row('差异说明', esc(s.diffReason), 1) : ''}${s.disputeNote ? row('申诉说明', esc(s.disputeNote), 1) : ''}${s.resolveNote ? row('申诉结果', esc(s.resolveNote) + ' · ' + esc(s.resolvedBy || ''), 1) : ''}
     ${row('登记人', esc(s.creator || '-') + ' · ' + fmtTime(s.createdAt))}${s.note ? row('备注', esc(s.note)) : ''}
-  </div></div><div class="m-foot"><div class="ops" style="margin-right:auto">${shipOps(s, true)}</div><button class="btn primary" data-act="closeModal">关闭</button></div>`, 'lg');
+  </div>
+  ${s.track ? `<div class="line-head"><b>物流轨迹 ${trackBadge(s)}</b><span class="sub-t">更新于 ${fmtTime(s.track.at)}</span></div>
+    ${s.track.traces.length ? `<div style="border-left:2px solid var(--border);margin-left:6px;padding-left:14px">${[...s.track.traces].reverse().map((t, i) => `<div style="position:relative;padding:4px 0 10px">
+      <span style="position:absolute;left:-20px;top:9px;width:10px;height:10px;border-radius:50%;background:${i ? 'var(--border)' : 'var(--primary)'}"></span>
+      <div style="${i ? 'color:var(--muted)' : 'font-weight:600'}">${esc(t.station)}</div><div class="sub-t">${esc(t.time)}</div></div>`).join('')}</div>` : `<p class="sub-t">${esc(s.track.reason || '暂时没有物流信息')}</p>`}` : ''}
+  </div><div class="m-foot"><div class="ops" style="margin-right:auto">${shipOps(s, true)}</div><button class="btn primary" data-act="closeModal">关闭</button></div>`, 'lg');
 }
 function shipResolve(id) {
   const s = byId(db.shipments, id);
@@ -2604,7 +2632,7 @@ function carrierEdit(id) {
   const inp = (idn, label, v, extra = '') => `<label class="field"><span>${label}</span><input id="${idn}" value="${esc(v ?? '')}" ${extra}></label>`;
   openModal(`${modalHead((c ? '编辑' : '新增') + '快递公司 / 报价')}<div class="m-body">
     <div class="form-grid" style="grid-template-columns:repeat(4,1fr)">
-      ${inp('cName', '名称 <i>*</i>', d.name, 'placeholder="如 中通快递"')}${inp('cCode', '编码（选填）', d.code, 'placeholder="如 ZTO"')}
+      ${inp('cName', '名称 <i>*</i>', d.name, 'placeholder="如 中通快递"')}${inp('cCode', '快递鸟编码（面单 / 轨迹用）', d.code, 'placeholder="如 ZTO" list="kdnCodes"')}<datalist id="kdnCodes">${KDN_CODES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</datalist>
       <label class="field"><span>计费重量进位</span><select id="cStep">${opt([[0, '不进位'], [0.01, '0.01kg'], [0.1, '0.1kg'], [0.5, '0.5kg'], [1, '1kg（不足 1kg 按 1kg）']], d.step)}</select></label>
       <label class="field"><span>抛比（体积重 = 长×宽×高 ÷ 抛比）</span><select id="cVol">${opt([[0, '不计体积重'], [5000, '5000'], [6000, '6000'], [8000, '8000'], [12000, '12000']], d.volDiv)}</select></label>
       ${inp('cPack', '包材重量 kg（估重时加上）', d.pack, 'type="number" step="any" min="0"')}${inp('cIns', '保价费率 %', d.insureRate, 'type="number" step="any" min="0"')}
@@ -2612,6 +2640,13 @@ function carrierEdit(id) {
       <label class="field" style="grid-column:span 3"><span>备注</span><input id="cRemark" value="${esc(d.remark || '')}"></label>
       <div class="field"><span>状态</span><label class="chk" style="padding-top:8px"><input type="checkbox" id="cOn" ${d.enabled ? 'checked' : ''}>启用</label></div>
     </div>
+    <details style="margin-top:14px" ${d.eo && d.eo.customerName ? 'open' : ''}><summary style="cursor:pointer;font-weight:600">电子面单账号（快递鸟下单用，找发货网点开通）</summary>
+      <div class="form-grid" style="grid-template-columns:repeat(4,1fr);margin-top:10px">
+        ${inp('eoName', '客户号 CustomerName', (d.eo || {}).customerName)}${inp('eoPwd', '密码 CustomerPwd', '', `type="password" autocomplete="new-password" placeholder="${(d.eo || {}).pwdSet ? '已保存，不改请留空' : '网点给的密码'}"`)}
+        ${inp('eoMonth', '月结号 MonthCode', (d.eo || {}).monthCode)}${inp('eoSite', '网点编码 SendSite', (d.eo || {}).sendSite)}
+        <label class="field"><span>运费付款方式</span><select id="eoPay">${opt([[1, '寄方付（现付）'], [3, '月结'], [2, '到付'], [4, '第三方付（顺丰）']], (d.eo || {}).payType || 1)}</select></label>
+        ${inp('eoExp', '产品类型 ExpType', (d.eo || {}).expType || '1', 'placeholder="1 = 标准快件"')}${inp('eoSize', '模板尺寸（选填）', (d.eo || {}).templateSize, 'placeholder="默认 100×180"')}
+      </div><p class="sub-t">各家快递需要的字段不一样（中通、圆通等要客户号和密码，顺丰要月结号），以网点给的为准。</p></details>
     <div class="line-head"><b>分区报价</b>
       <span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="zTpl">${ic('download')}报价模板</button><button class="btn sm" id="zImp">${ic('upload')}从 Excel 导入</button><button class="btn sm" id="zAdd">${ic('plus')}添加分区</button></span></div>
     <p class="sub-t">一个省份只能在一个分区；不选省份的分区 = 其余省份。填了重量段就按重量段，超出最后一段按续重加价；没填重量段按首重 + 续重。</p>
@@ -2665,7 +2700,8 @@ function carrierEdit(id) {
   $('#cSave').onclick = () => {
     let zs; try { zs = zones(); } catch (e) { return toast(e.message, 'error'); }
     const body = {name:$('#cName').value.trim(), code:$('#cCode').value.trim(), step:+$('#cStep').value, volDiv:+$('#cVol').value, pack:$('#cPack').value, insureRate:$('#cIns').value, insureMin:$('#cInsMin').value,
-      tol:$('#cTol').value, remark:$('#cRemark').value.trim(), enabled:$('#cOn').checked, zones:zs.map(({bandsText, ...z}) => z)};
+      tol:$('#cTol').value, remark:$('#cRemark').value.trim(), enabled:$('#cOn').checked, zones:zs.map(({bandsText, ...z}) => z),
+      eo:{customerName:$('#eoName').value.trim(), customerPwd:$('#eoPwd').value.trim(), monthCode:$('#eoMonth').value.trim(), sendSite:$('#eoSite').value.trim(), payType:+$('#eoPay').value, expType:$('#eoExp').value.trim(), templateSize:$('#eoSize').value.trim()}};
     if (!body.name) return toast('请填写快递公司名称', 'error');
     mutate(c ? 'PUT' : 'POST', '/api/carriers' + (c ? '/' + c.id : ''), body, c ? '报价已保存' : '已添加快递公司');
   };
@@ -2859,6 +2895,42 @@ async function billView(id) {
   drawSum(); drawRows();
 }
 const shipOnFinance = () => (db.settings.modules || []).includes('finance') && can('ship.bill');
+
+/* ---------- 快递鸟：电子面单 / 物流轨迹 ---------- */
+const kdn = () => db.settings.kdn || {};
+const TRACK_COLOR = {'0':'gray', '1':'blue', '2':'blue', '3':'green', '4':'red', '5':'orange', '6':'orange'};
+const trackBadge = s => s.track ? badge(s.track.stateText, TRACK_COLOR[s.track.state] || 'gray') : '<span class="sub-t">-</span>';
+const KDN_CODES = [['ZTO', '中通'], ['YTO', '圆通'], ['YD', '韵达'], ['STO', '申通'], ['JTSD', '极兔'], ['SF', '顺丰'], ['EMS', 'EMS'], ['YZPY', '邮政快递包裹'], ['JD', '京东'], ['DBL', '德邦'], ['HTKY', '百世'], ['ZJS', '宅急送']];
+function kdnCard(k) {
+  const sd = k.sender || {}, inp = (id, label, v, extra = '') => `<label class="field"><span>${label}</span><input id="${id}" value="${esc(v || '')}" ${extra}></label>`;
+  return `<div class="card" style="margin-top:16px"><div class="card-head"><h3>快递鸟（电子面单 / 物流轨迹）</h3>${k.ready ? badge(k.sandbox ? '已配置 · 沙箱' : '已配置', k.sandbox ? 'orange' : 'green') : badge('未配置', 'gray')}</div><div class="card-body">
+    <p class="sub-t" style="margin-bottom:10px">在 kdniao.com 注册并实名后，在「我的服务」里看商户 ID 和 AppKey。电子面单还要在「快递报价」里给每家快递填快递鸟编码和网点给的电子面单账号。服务器需要能连外网；轨迹查询每天最多 500 次。</p>
+    <div class="form-grid" style="grid-template-columns:repeat(4,1fr)">
+      ${inp('kdEbid', '商户 ID（EBusinessID）', k.ebid)}${inp('kdKey', 'AppKey', '', `type="password" placeholder="${k.keySet ? '已保存，不改请留空' : '必填'}" autocomplete="new-password"`)}
+      <div class="field" style="grid-column:span 2"><span>选项</span><div style="display:flex;gap:14px;flex-wrap:wrap;padding-top:8px"><label class="chk"><input type="checkbox" id="kdSandbox" ${k.sandbox ? 'checked' : ''}>沙箱环境（测试用，不会真的下单）</label><label class="chk"><input type="checkbox" id="kdAuto" ${k.autoTrack ? 'checked' : ''}>白天每 4 小时自动刷新物流轨迹</label></div></div>
+      <b style="grid-column:1/-1;margin-top:4px">寄件人（打在面单上）</b>
+      ${inp('kdName', '寄件人', sd.name)}${inp('kdMobile', '手机', sd.mobile)}${inp('kdTel', '固定电话（选填）', sd.tel)}${inp('kdCompany', '公司（选填）', sd.company)}
+      ${inp('kdProv', '省', sd.province, 'placeholder="浙江省"')}${inp('kdCity', '市', sd.city, 'placeholder="杭州市"')}${inp('kdArea', '区县', sd.area, 'placeholder="余杭区"')}${inp('kdPost', '邮编（EMS / 邮政必填）', sd.postCode)}
+      <label class="field" style="grid-column:1/-1"><span>详细地址</span><input id="kdAddr" value="${esc(sd.address || '')}" placeholder="街道、门牌号"></label>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end"><button class="btn" data-act="kdnTest">测试连接</button><button class="btn primary" data-act="kdnSave">${ic('check')}保存快递鸟设置</button></div>
+  </div></div>`;
+}
+const kdnBody = () => ({ebid:$('#kdEbid').value.trim(), key:$('#kdKey').value.trim(), sandbox:$('#kdSandbox').checked, autoTrack:$('#kdAuto').checked,
+  sender:{name:$('#kdName').value.trim(), mobile:$('#kdMobile').value.trim(), tel:$('#kdTel').value.trim(), company:$('#kdCompany').value.trim(), province:$('#kdProv').value.trim(), city:$('#kdCity').value.trim(), area:$('#kdArea').value.trim(), postCode:$('#kdPost').value.trim(), address:$('#kdAddr').value.trim()}});
+// 打印电子面单：快递鸟返回的是 HTML，按热敏面单 100×180mm 打印
+async function printLabel(id) {
+  let r; try { r = await api('GET', `/api/shipments/${id}/label`); } catch (e) { return toast(e.message, 'error'); }
+  const html = /<html/i.test(r.html) ? r.html : `<!doctype html><html><head><meta charset="utf-8"><title>面单 ${esc(r.trackNo)}</title><style>@page{size:100mm 180mm;margin:0}body{margin:0}</style></head><body>${r.html}</body></html>`;
+  printHtml('面单 ' + r.trackNo, html);
+}
+async function shipTrack(id) {
+  try { await api('POST', `/api/shipments/${id}/track`, {}); await reload(); render(); shipView(id); } catch (e) { toast(e.message, 'error'); }
+}
+async function trackAllUi() {
+  try { const r = await api('POST', '/api/ship/track-all', {}); await reload(); render(); toast(r.total ? `已刷新 ${r.done} 单：签收 ${r.signed}，问题件 ${r.problem}${r.failed ? '，失败 ' + r.failed : ''}` : '最近 30 天没有需要刷新的运单', r.failed ? 'info' : 'success'); }
+  catch (e) { toast(e.message, 'error'); }
+}
 
 /* ================= 页面：客户 / 供应商 ================= */
 function pageParty(type) {
@@ -3072,6 +3144,7 @@ function pageSettings() {
         <div class="field"><span>选项</span><div style="display:flex;gap:14px;flex-wrap:wrap;padding-top:8px"><label class="chk"><input type="checkbox" id="nfOn" ${(st.notify || {}).enabled ? 'checked' : ''}>开启每日推送</label><label class="chk"><input type="checkbox" id="nfSkip" ${(st.notify || {}).skipEmpty ? 'checked' : ''}>没有预警时不推送</label></div></div></div>
       <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="btn" data-act="notifyPreview">预览内容</button><button class="btn" data-act="notifyTest">发送测试</button><button class="btn primary" data-act="notifySave">${ic('check')}保存推送设置</button></div>
     </div></div>
+    ${shipOn() ? kdnCard(st.kdn || {}) : ''}
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>出入库审核</h3></div><div class="card-body">
       <p class="sub-t" style="margin-bottom:10px">开启后，新开的单据先是「待审核」，由有「审核出入库单」权限的账号审核通过后才改库存；驳回的单据不影响库存，制单人可以修改后重新开单。已经开好的单据不受影响。</p>
       <div style="display:flex;flex-wrap:wrap;gap:6px 22px"><label class="chk"><input type="checkbox" id="apIn" ${(st.docApprove || {}).in ? 'checked' : ''}>入库单需要审核</label><label class="chk"><input type="checkbox" id="apOut" ${(st.docApprove || {}).out ? 'checked' : ''}>出库单需要审核</label></div>
@@ -3324,6 +3397,17 @@ const A = {
   shipEdit: id => { closeModal(); shipModal({edit:id}); },
   shipVoid: id => { const s = byId(db.shipments, id); confirmBox(`作废运单 ${esc(s.trackNo)}？作废后不参与对账和运费统计。`, () => mutate('POST', `/api/shipments/${id}/void`, {}, '运单已作废')); },
   shipResolve: id => { closeModal(); shipResolve(id); },
+  kdnSave: () => mutate('PUT', '/api/settings/kdn', kdnBody(), '快递鸟设置已保存'),
+  kdnTest: async () => {
+    if (!(await mutate('PUT', '/api/settings/kdn', kdnBody()))) return;  // 先保存，按保存后的配置测
+    busy(true);
+    // 测试用的是不存在的单号，快递鸟回「单号不匹配」之类的话说明签名已通过，不必显示
+    try { await api('POST', '/api/settings/kdn/test', {}); toast('连接正常，商户 ID 和 AppKey 验证通过'); } catch (e) { toast(e.message, 'error'); } finally { busy(false); }
+  },
+  labelPrint: id => printLabel(id),
+  shipTrack: id => { closeModal(); shipTrack(id); },
+  trackAll: () => trackAllUi(),
+  eorderCancel: id => { const s = byId(db.shipments, id); confirmBox(`取消电子面单 ${esc(s.trackNo)}？会通知快递鸟回收这个单号，运单标记为已作废。已经交给快递员的件不要取消。`, () => mutate('POST', `/api/shipments/${id}/cancel-eorder`, {}, '电子面单已取消')); },
   shipCalc, billImport: () => { closeModal(); billImport(); }, billView: id => { closeModal(); billView(id); },
   carrierEdit: id => carrierEdit(id),
   carrierDel: id => { const c = byId(db.carriers, id); confirmBox(`删除快递公司「${esc(c.name)}」和它的报价？已有运单的快递不能删除，可以改成停用。`, () => mutate('DELETE', '/api/carriers/' + id, undefined, '已删除')); },

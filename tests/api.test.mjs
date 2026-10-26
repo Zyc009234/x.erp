@@ -38,8 +38,33 @@ async function newUser(username, roleId) {
   return login(username, 'test123456');
 }
 
+// 模拟快递鸟：校验签名，按 RequestType 返回结果，收到的请求记在 kdnReqs 里
+const KDN_KEY = 'test-app-key', kdnReqs = [];
+let kdnMock;
+async function startKdnMock() {
+  const http = await import('node:http'), crypto = await import('node:crypto');
+  kdnMock = http.createServer((req, res) => {
+    let b = ''; req.on('data', c => { b += c; });
+    req.on('end', () => {
+      const p = new URLSearchParams(b), type = req.url.slice(1), data = JSON.parse(p.get('RequestData'));
+      const sign = Buffer.from(crypto.createHash('md5').update(p.get('RequestData') + KDN_KEY, 'utf8').digest('hex')).toString('base64');
+      kdnReqs.push({ type, data, ebid: p.get('EBusinessID'), signOk: sign === p.get('DataSign') });
+      const out = sign !== p.get('DataSign') ? { Success: false, Reason: '数据签名不正确' }
+        : type === '1007' ? (data.Receiver.Mobile === '00000000000' ? { Success: false, ResultCode: '105', Reason: '收件人手机号不正确' }
+          : { Success: true, ResultCode: '100', Order: { OrderCode: data.OrderCode, ShipperCode: data.ShipperCode, LogisticCode: 'KDN' + kdnReqs.length }, PrintTemplate: '<html><body>面单 ' + data.OrderCode + '</body></html>' })
+        : type === '1147' ? { Success: true, ResultCode: '100' }
+        : type === '1002' ? { Success: true, State: data.LogisticCode === '0000000000' ? '0' : '3', Traces: [{ AcceptTime: '2026-10-26 09:00:00', AcceptStation: '已揽收' }, { AcceptTime: '2026-10-27 15:00:00', AcceptStation: '已签收，签收人：本人' }] }
+        : { Success: false, Reason: '未知指令' };
+      res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(out));
+    });
+  });
+  await new Promise(r => kdnMock.listen(0, '127.0.0.1', r));
+  return `http://127.0.0.1:${kdnMock.address().port}`;
+}
+
 before(async () => {
-  srv = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js'), '--data', DATA, '--port', String(PORT)], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const kdnBase = await startKdnMock();
+  srv = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js'), '--data', DATA, '--port', String(PORT)], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, XERP_KDN_BASE: kdnBase } });
   let log = ''; srv.stdout.on('data', d => { log += d; }); srv.stderr.on('data', d => { log += d; });
   for (let i = 0; i < 100; i++) {
     try { if ((await fetch(BASE + '/api/ping')).ok) break; } catch (e) {}
@@ -49,7 +74,7 @@ before(async () => {
   admin = await login('admin', 'admin123');
   await ok(admin, 'POST', '/api/clear');  // 清掉演示数据，从空库开始
 });
-after(() => { srv && srv.kill(); try { fs.rmSync(DATA, { recursive: true, force: true }); } catch (e) {} });
+after(() => { srv && srv.kill(); kdnMock && kdnMock.close(); try { fs.rmSync(DATA, { recursive: true, force: true }); } catch (e) {} });
 
 test('登录：密码错误被拒绝，未登录不能访问数据', async () => {
   assert.equal((await call(null, 'POST', '/api/login', { username: 'admin', password: 'wrong' })).http, 401);
@@ -471,4 +496,90 @@ test('物流：权限按角色生效，出库员能登记运单但不能改报�
   assert.equal((await call(clerk, 'PUT', '/api/carriers/' + shipCarrier.id, { name: 'x', zones: ZONES })).http, 403);
   assert.equal((await call(clerk, 'POST', '/api/shipbills', { carrierId: shipCarrier.id, rows: [{ trackNo: 'P001', fee: 1 }] })).http, 403);
   assert.equal((await call(admin, 'DELETE', '/api/carriers/' + shipCarrier.id)).http, 400, '有运单的快递不能删');
+});
+
+/* ---------- 快递鸟：电子面单与物流轨迹（模拟服务） ---------- */
+const SENDER = { name: '王仓管', mobile: '13900000000', province: '浙江省', city: '杭州市', area: '余杭区', address: '仓前街道 1 号仓库' };
+let kdnCarrier;
+async function kdnSetup() {
+  await shipSetup();
+  if (kdnCarrier) return;
+  await ok(admin, 'PUT', '/api/settings/kdn', { ebid: 'E10001', key: KDN_KEY, sender: SENDER, autoTrack: false });
+  kdnCarrier = await ok(admin, 'POST', '/api/carriers', { name: '面单快递', code: 'ZTO', zones: ZONES, eo: { customerName: 'kh001', customerPwd: 'secret-pwd', monthCode: 'yj01', payType: 3 } });
+}
+
+test('快递鸟：没配置时提示先设置；AppKey 和面单密码不下发给前端', async () => {
+  await shipSetup();
+  const o = await shipOut(1, { address: '浙江省杭州市西湖区文三路 100 号' });
+  const r = await call(admin, 'POST', '/api/ship/eorder', { srcType: 'out', srcId: o.id, carrierId: shipCarrier.id, party: '张三', mobile: '13800000000' });
+  assert.equal(r.http, 400); assert.match(r.error, /没有填快递鸟编码|商户 ID|寄件人/);
+  await kdnSetup();
+  const d = await ok(admin, 'GET', '/api/data');
+  assert.equal(d.settings.kdn.keySet, true); assert.equal(d.settings.kdn.key, undefined); assert.equal(d.settings.kdn.eorder, true);
+  assert.ok(!JSON.stringify(d).includes(KDN_KEY), 'AppKey 不出现在 /api/data 里');
+  assert.ok(!JSON.stringify(d).includes('secret-pwd'), '面单密码不出现在 /api/data 里');
+  assert.equal(d.data.carriers.find(c => c.id === kdnCarrier.id).eo.pwdSet, true);
+  const clerk = await login('shipper1', 'test123456');
+  const dc = await ok(clerk, 'GET', '/api/data');
+  assert.deepEqual(Object.keys(dc.settings.kdn).sort(), ['autoTrack', 'eorder', 'ready', 'sandbox'], '普通账号只看到能不能用');
+  // 留空 AppKey 保存时保留原来的
+  await ok(admin, 'PUT', '/api/settings/kdn', { ebid: 'E10001', key: '', sender: SENDER });
+  await ok(admin, 'POST', '/api/settings/kdn/test');
+  assert.ok(kdnReqs.at(-1).signOk, '留空保存后仍用原 AppKey 签名');
+});
+
+test('快递鸟：电子面单下单——签名正确、地址拆成省市区、带面单账号，取号后登记运单并保存面单', async () => {
+  await kdnSetup();
+  const o = await shipOut(2, { address: '浙江省杭州市西湖区文三路 100 号' });
+  const s = await ok(admin, 'POST', '/api/ship/eorder', { srcType: 'out', srcId: o.id, carrierId: kdnCarrier.id, party: '张三', mobile: '13800000000' });
+  const req = kdnReqs.at(-1);
+  assert.equal(req.type, '1007'); assert.ok(req.signOk); assert.equal(req.ebid, 'E10001');
+  assert.deepEqual(req.data.Receiver, { Name: '张三', Mobile: '13800000000', ProvinceName: '浙江省', CityName: '杭州市', ExpAreaName: '西湖区', Address: '文三路100号' });
+  assert.equal(req.data.ShipperCode, 'ZTO'); assert.equal(req.data.CustomerName, 'kh001'); assert.equal(req.data.CustomerPwd, 'secret-pwd'); assert.equal(req.data.PayType, 3);
+  assert.equal(req.data.Commodity[0].GoodsName, '测试商品WL001'); assert.equal(req.data.Sender.Name, '王仓管');
+  assert.equal(s.trackNo, 'KDN' + kdnReqs.length, '快递单号用快递鸟返回的'); assert.equal(s.hasLabel, true);
+  assert.equal(s.eorder.orderCode, req.data.OrderCode); assert.equal(s.estFee, 4); assert.equal(s.mobile, '13800000000');
+  const label = await ok(admin, 'GET', `/api/shipments/${s.id}/label`);
+  assert.match(label.html, new RegExp(req.data.OrderCode));
+  // 直辖市地址
+  const o2 = await shipOut(1, { address: '北京市朝阳区建国路 1 号' });
+  await ok(admin, 'POST', '/api/ship/eorder', { srcType: 'out', srcId: o2.id, carrierId: kdnCarrier.id, party: '李四', mobile: '13800000001' });
+  assert.deepEqual([kdnReqs.at(-1).data.Receiver.ProvinceName, kdnReqs.at(-1).data.Receiver.CityName, kdnReqs.at(-1).data.Receiver.ExpAreaName], ['北京市', '北京市', '朝阳区']);
+  // 只写城市不写省
+  const o3 = await shipOut(1, { address: '广州天河区天河路 2 号' });
+  await ok(admin, 'POST', '/api/ship/eorder', { srcType: 'out', srcId: o3.id, carrierId: kdnCarrier.id, party: '王五', mobile: '13800000002' });
+  assert.deepEqual([kdnReqs.at(-1).data.Receiver.ProvinceName, kdnReqs.at(-1).data.Receiver.CityName, kdnReqs.at(-1).data.Receiver.ExpAreaName], ['广东省', '广州市', '天河区']);
+});
+
+test('快递鸟：下单失败时返回原因、不登记运单；地址不到区县直接拒绝', async () => {
+  await kdnSetup();
+  const before = (await data()).shipments.length;
+  const o = await shipOut(1, { address: '浙江省杭州市西湖区文三路 100 号' });
+  const r = await call(admin, 'POST', '/api/ship/eorder', { srcType: 'out', srcId: o.id, carrierId: kdnCarrier.id, party: '张三', mobile: '00000000000' });
+  assert.equal(r.http, 400); assert.match(r.error, /收件人手机号不正确/);
+  const n = kdnReqs.length;
+  const r2 = await call(admin, 'POST', '/api/ship/eorder', { carrierId: kdnCarrier.id, party: '张三', mobile: '13800000000', address: '浙江省', weight: 1 });
+  assert.equal(r2.http, 400); assert.match(r2.error, /写到区县/);
+  assert.equal(kdnReqs.length, n, '地址不全时不调快递鸟');
+  assert.equal((await data()).shipments.length, before);
+});
+
+test('快递鸟：查询轨迹、批量刷新、取消电子面单', async () => {
+  await kdnSetup();
+  const o = await shipOut(1, { address: '江苏省南京市鼓楼区中山路 1 号' });
+  const s = await ok(admin, 'POST', '/api/ship/eorder', { srcType: 'out', srcId: o.id, carrierId: kdnCarrier.id, party: '赵六', mobile: '13812345678' });
+  const t = await ok(admin, 'POST', `/api/shipments/${s.id}/track`);
+  const q = kdnReqs.at(-1);
+  assert.equal(q.type, '1002'); assert.equal(q.data.LogisticCode, s.trackNo); assert.equal(q.data.CustomerName, '5678', '中通 / 顺丰带收件人手机后四位');
+  assert.equal(t.track.state, '3'); assert.equal(t.track.stateText, '已签收'); assert.equal(t.track.traces.length, 2);
+  const all = await ok(admin, 'POST', '/api/ship/track-all');
+  assert.ok(all.done >= 1); assert.equal(all.failed, all.total - all.done);
+  // 取消：只能取消待对账的电子面单
+  const s2 = await ok(admin, 'POST', '/api/ship/eorder', { srcType: 'out', srcId: (await shipOut(1, { address: '江苏省南京市鼓楼区中山路 2 号' })).id, carrierId: kdnCarrier.id, party: '赵六', mobile: '13812345678' });
+  const c = await ok(admin, 'POST', `/api/shipments/${s2.id}/cancel-eorder`);
+  assert.equal(kdnReqs.at(-1).type, '1147'); assert.equal(kdnReqs.at(-1).data.ExpNo, s2.trackNo); assert.equal(kdnReqs.at(-1).data.OrderCode, s2.eorder.orderCode);
+  assert.equal(c.status, '已作废'); assert.equal(c.eorder.canceled, true);
+  assert.equal((await call(admin, 'POST', `/api/shipments/${s2.id}/cancel-eorder`)).http, 400, '已作废的不能再取消');
+  const manual = (await data()).shipments.find(x => !x.eorder && x.status === '待对账');
+  assert.equal((await call(admin, 'POST', `/api/shipments/${manual.id}/cancel-eorder`)).http, 400, '手工登记的运单没有电子面单可取消');
 });

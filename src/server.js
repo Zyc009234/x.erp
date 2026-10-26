@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.0.3';
+const VERSION = '2.0.4';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -94,7 +94,7 @@ const fail = (msg, status) => { throw new HttpError(msg, status); };
 function audit(ctx, action, detail = '') { S.audit.run(new Date().toISOString(), ctx.user ? ctx.user.name : '-', action, String(detail).slice(0, 300), ctx.ip || ''); }
 
 /* ================= 业务常量 ================= */
-const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials', 'carriers', 'shipments', 'shipBills'];
+const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials', 'carriers', 'shipments', 'shipBills', 'shipLabels'];
 const DATED = ['sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs', 'shipments', 'shipBills'];
 const CATS = ['电子产品', '办公用品', '家居用品', '食品饮料'];
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
@@ -1083,7 +1083,7 @@ function saveCarrier(ctx, id) {
     const old = id ? get('carriers', id) || fail('快递公司不存在', 404) : null;
     const c = { ...(old || { id: uid(), createdAt: today() }), name, code: str(b.code, 20), enabled: b.enabled !== false, remark: str(b.remark, 200),
       step: nn(b.step, '计费重量进位', 0.1, 10), volDiv: nn(b.volDiv, '抛比', 0, 100000), pack: nn(b.pack, '包材重量', 0, 100),
-      insureRate: nn(b.insureRate, '保价费率', 0, 100), insureMin: nn(b.insureMin, '最低保价费', 0, 10000), tol: nn(b.tol, '对账容差', 0.5, 1000), zones: cleanZones(b.zones) };
+      insureRate: nn(b.insureRate, '保价费率', 0, 100), insureMin: nn(b.insureMin, '最低保价费', 0, 10000), tol: nn(b.tol, '对账容差', 0.5, 1000), zones: cleanZones(b.zones), eo: cleanEo(b.eo, old && old.eo) };
     put('carriers', c); audit(ctx, (old ? '修改' : '新增') + '快递公司', `${name}（${c.zones.length} 个分区）`);
     return c;
   });
@@ -1137,7 +1137,7 @@ function shipQuote(ctx) {
   const quotes = list('carriers').filter(c => c.enabled).map(c => quoteCarrier(c, province, opt)).sort((x, y) => !!x.error - !!y.error || (x.fee || 0) - (y.fee || 0));
   return { province, city: pa.city, detected: pa.province, address, weight: est.weight, vol: est.vol, missing: est.missing, items: items.length, quotes };
 }
-function createShipments(ctx, b) {
+function createShipments(ctx, b, extra = {}) {
   const src = shipSource(str(b.srcType, 10), str(b.srcId, 64));
   const c = get('carriers', str(b.carrierId, 64)) || fail('请选择快递公司');
   if (!c.enabled) fail(`「${c.name}」已停用`);
@@ -1159,8 +1159,9 @@ function createShipments(ctx, b) {
       const q = quoteCarrier(c, province, w ? { weight: w, packed: true, vol, declared: first ? declared : 0 } : { weight: est.weight, vol, declared });
       if (q.error) fail(`${c.name}：${q.error}`);
       const s = { id: uid(), no: nextNo(SHIP), date, carrierId: c.id, trackNo, srcType: src ? src.type : '', srcId: src ? src.id : '', srcNo: src ? src.no : '',
-        party: str(b.party, 100) || (src ? src.party : ''), address, province, weight: q.weight, weighed: !!w, vol, volWeight: q.volWeight, chargeWeight: q.chargeWeight,
-        declared: first ? declared : 0, zone: q.zone, estFee: q.fee, status: '待对账', note: str(b.note, 200), creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString() };
+        party: str(b.party, 100) || (src ? src.party : ''), mobile: str(b.mobile, 30), address, province, weight: q.weight, weighed: !!w, vol, volWeight: q.volWeight, chargeWeight: q.chargeWeight,
+        declared: first ? declared : 0, zone: q.zone, estFee: q.fee, status: '待对账', note: str(b.note, 200), creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(),
+        ...(extra.eorder && first ? { eorder: extra.eorder } : {}) };
       put('shipments', s);
       return s;
     });
@@ -1185,7 +1186,7 @@ function editShipment(ctx, id) {
     const q = quoteCarrier(c, province, { weight: w, packed: true, vol: s.vol || 0, declared });
     if (q.error) fail(`${c.name}：${q.error}`);
     Object.assign(s, { carrierId: c.id, trackNo, address, province, weight: q.weight, weighed: s.weighed || w !== s.weight, volWeight: q.volWeight, chargeWeight: q.chargeWeight,
-      declared, zone: q.zone, estFee: q.fee, date: isDate(b.date) ? b.date : s.date, note: 'note' in b ? str(b.note, 200) : s.note });
+      declared, zone: q.zone, estFee: q.fee, date: isDate(b.date) ? b.date : s.date, note: 'note' in b ? str(b.note, 200) : s.note, mobile: 'mobile' in b ? str(b.mobile, 30) : s.mobile || '' });
     put('shipments', s); audit(ctx, '修改运单', `${s.trackNo} ¥${s.estFee}`);
     return s;
   });
@@ -1342,6 +1343,151 @@ function deleteBill(ctx, id) {
   });
 }
 
+/* ================= 快递鸟：电子面单（1007 下单 / 1147 取消）、物流轨迹（1002 即时查询）。需要服务器能连外网 ================= */
+const KDN_URL = { eorder: 'https://api.kdniao.com/api/EOrderService', track: 'https://api.kdniao.com/Ebusiness/EbusinessOrderHandle.aspx',
+  sandbox: 'http://sandboxapi.kdniao.com:8080/kdniaosandbox/gateway/exterfaceInvoke.json' };
+const KDN_TEST_BASE = process.env.XERP_KDN_BASE || '';  // 自动化测试用：指向本机模拟的快递鸟服务
+const KDN_STATE = { 0: '暂无轨迹', 1: '已揽收', 2: '在途中', 3: '已签收', 4: '问题件', 5: '转寄', 6: '清关' };
+const kdnConf = () => getMeta('settings', {}).kdn || {};
+const kdnSenderOk = k => { const s = k.sender || {}; return !!(s.name && (s.mobile || s.tel) && s.province && s.city && s.area && s.address); };
+function cleanEo(b, old) {
+  if (!b || typeof b !== 'object') return old;
+  const pay = Number(b.payType);
+  return { customerName: str(b.customerName, 60), customerPwd: str(b.customerPwd, 60) || (old && old.customerPwd) || '', monthCode: str(b.monthCode, 60), sendSite: str(b.sendSite, 60),
+    payType: [1, 2, 3, 4].includes(pay) ? pay : 1, expType: str(b.expType, 10) || '1', templateSize: str(b.templateSize, 20) };
+}
+async function kdnCall(type, data) {
+  const k = kdnConf();
+  if (!k.ebid || !k.key) fail('请先在 系统设置 → 快递鸟 里填写商户 ID 和 AppKey');
+  const json = JSON.stringify(data);
+  // 签名：(请求内容 + AppKey) 取 MD5（32 位小写）→ Base64；表单提交时再做一次 URL 编码
+  const sign = Buffer.from(crypto.createHash('md5').update(json + k.key, 'utf8').digest('hex')).toString('base64');
+  const url = KDN_TEST_BASE ? `${KDN_TEST_BASE}/${type}` : k.sandbox ? KDN_URL.sandbox : type === 1002 ? KDN_URL.track : KDN_URL.eorder;
+  let r;
+  try {
+    r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
+      body: new URLSearchParams({ RequestData: json, EBusinessID: k.ebid, RequestType: String(type), DataSign: sign, DataType: '2' }).toString(), signal: AbortSignal.timeout(15000) });
+  } catch (e) { fail('连不上快递鸟（' + (e.cause && e.cause.code || e.message) + '），请检查服务器能否上外网'); }
+  const t = await r.text();
+  let j; try { j = JSON.parse(t); } catch (e) { fail(`快递鸟返回了无法识别的内容（HTTP ${r.status}）：${t.slice(0, 120)}`); }
+  return j;
+}
+// 地址拆成快递鸟要的 省 / 市 / 区县 / 详细地址
+const PROV_FULL = p => ['北京', '天津', '上海', '重庆'].includes(p) ? p + '市' : { 内蒙古: '内蒙古自治区', 西藏: '西藏自治区', 广西: '广西壮族自治区', 宁夏: '宁夏回族自治区', 新疆: '新疆维吾尔自治区', 香港: '香港特别行政区', 澳门: '澳门特别行政区' }[p] || p + '省';
+function splitAddr(addr, prov) {
+  let s = String(addr || '').replace(/[\s,，]+/g, '').replace(/^(中华人民共和国|中国)/, '');
+  const p = prov || parseAddr(s).province;
+  if (!p) fail('识别不出收件省份');
+  if (s.startsWith(p)) s = s.slice(p.length).replace(/^(省|市|壮族自治区|回族自治区|维吾尔自治区|自治区|特别行政区)/, '');
+  let city = '';
+  if (['北京', '天津', '上海', '重庆'].includes(p)) city = PROV_FULL(p);
+  else {
+    const m = /^(.{2,}?(?:市|自治州|地区|盟))/.exec(s), c = cityAt(s, 0);
+    if (m && !(c && c.length >= m[1].length)) { city = m[1]; s = s.slice(city.length); }
+    else if (c) { city = /(自治州|盟|地区)$/.test(c) || c === '海南州' ? c : c + '市'; s = s.slice(c.length).replace(/^(市|地区)/, ''); }
+  }
+  const a = /^(.{1,}?(?:区|县|旗|市))/.exec(s), area = a ? a[1] : '';
+  if (area) s = s.slice(area.length);
+  if (!city || !area || !s) fail('收件地址要写到区县和详细地址，例如：浙江省杭州市西湖区文三路 100 号');
+  return { ProvinceName: PROV_FULL(p), CityName: city, ExpAreaName: area, Address: s };
+}
+// 电子面单下单：先调快递鸟取号，成功后在本地登记运单并保存面单 HTML
+async function eorderCreate(ctx) {
+  const b = ctx.body, k = kdnConf();
+  const src = shipSource(str(b.srcType, 10), str(b.srcId, 64));
+  const c = get('carriers', str(b.carrierId, 64)) || fail('请选择快递公司');
+  if (!c.enabled) fail(`「${c.name}」已停用`);
+  if (!c.code) fail(`「${c.name}」没有填快递鸟编码（如 ZTO、SF、YTO），请在快递报价里补上`);
+  if (!kdnSenderOk(k)) fail('请先在 系统设置 → 快递鸟 里填好寄件人姓名、电话和地址（写到区县）');
+  const name = str(b.party, 50) || (src ? src.party : '') || fail('请填写收件人');
+  const mobile = str(b.mobile, 30) || fail('电子面单需要收件人电话');
+  const address = str(b.address, 200) || (src ? src.address : ''), province = pickProv(b.province, address);
+  const recv = splitAddr(address, province);
+  const est = src ? itemsWeight(src.items) : { weight: 0, vol: 0 };
+  const w = optNum(b.weight, '包裹重量', 10000);
+  if (!w && !(est.weight > 0)) fail('请填写包裹重量（kg）');
+  const declared = optNum(b.declared, '保价金额') || 0;
+  const q = quoteCarrier(c, province, w ? { weight: w, packed: true, vol: est.vol, declared } : { weight: est.weight, vol: est.vol, declared });
+  if (q.error) fail(`${c.name}：${q.error}`);
+  const goods = str(b.goods, 100) || (src ? [...new Set(src.items.map(i => (get('products', i.productId) || {}).name).filter(Boolean))].join('、').slice(0, 100) : '') || '商品';
+  const s0 = k.sender, eo = c.eo || {}, orderCode = 'XE' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(2).toString('hex').toUpperCase();
+  const req = { OrderCode: orderCode, ShipperCode: c.code, PayType: eo.payType || 1, ExpType: eo.expType || '1', Quantity: 1, Weight: q.weight, IsReturnPrintTemplate: '1',
+    ...(eo.customerName ? { CustomerName: eo.customerName } : {}), ...(eo.customerPwd ? { CustomerPwd: eo.customerPwd } : {}), ...(eo.monthCode ? { MonthCode: eo.monthCode } : {}),
+    ...(eo.sendSite ? { SendSite: eo.sendSite } : {}), ...(eo.templateSize ? { TemplateSize: eo.templateSize } : {}),
+    Sender: { Company: s0.company || '', Name: s0.name, Mobile: s0.mobile || '', Tel: s0.tel || '', ProvinceName: s0.province, CityName: s0.city, ExpAreaName: s0.area, Address: s0.address, ...(s0.postCode ? { PostCode: s0.postCode } : {}) },
+    Receiver: { Name: name, Mobile: mobile, ...recv }, Commodity: [{ GoodsName: goods }], Remark: str(b.remark, 60) };
+  const r = await kdnCall(1007, req);
+  const trackNo = r && r.Success && r.Order && normTrack(r.Order.LogisticCode);
+  if (!trackNo) fail('快递鸟下单失败：' + ((r && (r.Reason || r.ResultCode)) || '没有返回快递单号'));
+  // 取号成功后本地登记失败（例如单号重复）也要把面单留下，不然快递那边已占了号却打不出来
+  const out = createShipments(ctx, { ...b, party: name, mobile, address, province, packages: [{ trackNo, weight: w || '' }] }, { eorder: { orderCode, at: new Date().toISOString() } });
+  tx(() => { put('shipLabels', { id: out[0].id, html: String(r.PrintTemplate || ''), at: new Date().toISOString() }); audit(ctx, '电子面单下单', `${c.name} ${trackNo}`); });
+  return { ...out[0], hasLabel: !!r.PrintTemplate };
+}
+async function eorderCancel(ctx, id) {
+  const s = get('shipments', id) || fail('运单不存在', 404);
+  if (!s.eorder) fail('这个运单不是电子面单下的单');
+  if (s.status !== '待对账') fail(`运单状态为「${s.status}」，不能取消`);
+  const c = get('carriers', s.carrierId) || fail('快递公司已删除'), eo = c.eo || {};
+  const r = await kdnCall(1147, { ShipperCode: c.code, OrderCode: s.eorder.orderCode, ExpNo: s.trackNo, ...(eo.customerName ? { CustomerName: eo.customerName } : {}), ...(eo.customerPwd ? { CustomerPwd: eo.customerPwd } : {}) });
+  if (!r || !r.Success) fail('快递鸟取消失败：' + ((r && (r.Reason || r.ResultCode)) || '未知原因'));
+  return tx(() => {
+    const x = get('shipments', id);
+    Object.assign(x, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString(), eorder: { ...x.eorder, canceled: true } });
+    put('shipments', x); audit(ctx, '取消电子面单', x.trackNo);
+    return x;
+  });
+}
+// 查一单的轨迹并保存到运单上：track = { state, stateText, traces: [{ time, station }], at }
+async function trackOne(id) {
+  const s = get('shipments', id) || fail('运单不存在', 404), c = get('carriers', s.carrierId) || {};
+  if (!c.code) fail(`「${c.name || '该快递'}」没有填快递鸟编码，查不了轨迹`);
+  const req = { ShipperCode: c.code, LogisticCode: s.trackNo, ...(s.eorder ? { OrderCode: s.eorder.orderCode } : {}),
+    ...(/^SF|^ZTO$/.test(c.code) && s.mobile ? { CustomerName: String(s.mobile).replace(/\D/g, '').slice(-4) } : {}) };  // 顺丰、中通要收件人手机后四位
+  const r = await kdnCall(1002, req);
+  if (!r || !r.Success) fail('查询失败：' + ((r && r.Reason) || '快递鸟没有返回结果'));
+  const traces = (Array.isArray(r.Traces) ? r.Traces : []).map(t => ({ time: str(t.AcceptTime, 30), station: str(t.AcceptStation, 300) })).slice(-100);
+  const state = String(r.State ?? '0');
+  return tx(() => {
+    const x = get('shipments', id);
+    x.track = { state, stateText: KDN_STATE[state] || '状态 ' + state, traces, reason: str(r.Reason, 200), at: new Date().toISOString() };
+    put('shipments', x);
+    return x;
+  });
+}
+// 批量刷新：最近 30 天、还没签收的运单，每次最多 50 单（即时查询每天限 500 次）
+let trackBusy = false;
+async function trackAll() {
+  if (trackBusy) fail('正在刷新，请稍后');
+  trackBusy = true;
+  const since = fmtDate(Date.now() - 30 * 864e5), res = { total: 0, done: 0, signed: 0, problem: 0, failed: 0 };
+  try {
+    const todo = list('shipments').filter(s => s.status !== '已作废' && s.date >= since && !(s.track && s.track.state === '3') && (get('carriers', s.carrierId) || {}).code)
+      .sort((a, b) => ((a.track && a.track.at) || '').localeCompare((b.track && b.track.at) || '')).slice(0, 50);
+    res.total = todo.length;
+    for (const s of todo) {
+      try { const x = await trackOne(s.id); res.done++; if (x.track.state === '3') res.signed++; if (x.track.state === '4') res.problem++; }
+      catch (e) { res.failed++; if (/商户 ID|连不上/.test(e.message)) throw e; }
+    }
+    setMeta('trackLast', new Date().toISOString());
+    return res;
+  } finally { trackBusy = false; }
+}
+// 自动跟踪：开启后白天每 4 小时刷新一次
+async function trackTick() {
+  const k = kdnConf(), h = new Date().getHours();
+  if (!k.autoTrack || !k.ebid || !k.key || !enabledModules().includes('shipping') || h < 8 || h > 21 || trackBusy) return;
+  if (Date.now() - new Date(getMeta('trackLast', 0)).getTime() < 4 * 3600e3) return;
+  try { const r = await trackAll(); log(`自动刷新物流轨迹：${r.done} 单，签收 ${r.signed}，问题件 ${r.problem}，失败 ${r.failed}`); }
+  catch (e) { setMeta('trackLast', new Date().toISOString()); log('自动刷新物流轨迹失败：' + e.message); }
+}
+function saveKdn(ctx) {
+  const b = ctx.body, s = getMeta('settings', {}), old = s.kdn || {}, sd = b.sender && typeof b.sender === 'object' ? b.sender : {};
+  const sender = Object.fromEntries(['name', 'mobile', 'tel', 'company', 'province', 'city', 'area', 'address', 'postCode'].map(k => [k, str(sd[k], k === 'address' ? 200 : 50)]));
+  s.kdn = { ebid: str(b.ebid, 40), key: str(b.key, 100) || old.key || '', sandbox: !!b.sandbox, autoTrack: !!b.autoTrack, sender };
+  setMeta('settings', s); audit(ctx, '修改设置', '快递鸟接口' + (s.kdn.sandbox ? '（沙箱）' : ''));
+}
+
 /* ---------- 导入商品与期初库存 ---------- */
 function importProducts(ctx) {
   const rows = Array.isArray(ctx.body.rows) ? ctx.body.rows : fail('没有可导入的数据');
@@ -1410,13 +1556,15 @@ function visibleData(ctx) {
     customers: any('sales', 'parties', 'dashboard', 'reports'), suppliers: any('purchase', 'parties'),
     finance: any('finance', 'sales', 'purchase', 'reports'), employees: P.has('hr'),
     warehouses: true, transferDocs: P.has('inv.view'), batches: any('inv.view', 'prod.view'), serials: P.has('inv.view'),
-    carriers: any('ship.view', 'ship.edit', 'ship.rate'), shipments: any('ship.view', 'ship.edit'), shipBills: P.has('ship.view')
+    carriers: any('ship.view', 'ship.edit', 'ship.rate'), shipments: any('ship.view', 'ship.edit'), shipBills: P.has('ship.view'), shipLabels: false
   };
   const byDate = (a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || ''));
   const data = {};
   COLS.forEach(c => { data[c] = want[c] ? list(c) : []; if (DATED.includes(c)) data[c].sort(byDate); });
   if (!seesPrice(P)) data.products = data.products.map(({ cost, price, ...p }) => p);
   data.shipBills = data.shipBills.map(({ rows, ...b }) => b);  // 账单明细可能上万行，打开账单时再单独取
+  // 电子面单密码不下发，只告诉前端有没有设置
+  data.carriers = data.carriers.map(c => c.eo ? { ...c, eo: { ...c.eo, customerPwd: '', pwdSet: !!c.eo.customerPwd } } : c);
   // 有审核权限的账号即使不能看他人单据，也能看到待审核的出入库单
   if (!P.has('inv.others')) for (const c of ['stockDocs', 'checkDocs', 'transferDocs']) data[c] = data[c].filter(o => o.creatorId === ctx.user.id || c === 'stockDocs' && o.status === '待审核' && P.has('inv.approve'));
   if (!P.has('inv.cost')) {
@@ -1496,7 +1644,12 @@ const route = (method, pattern, handler, opts = {}) =>
 route('GET', '/api/ping', () => ({ ok: true, app: 'XERP', version: VERSION, company: getMeta('settings', {}).company || '' }), { auth: false });
 route('POST', '/api/login', ctx => login(ctx, ctx.body), { auth: false });
 route('POST', '/api/logout', ctx => { db.prepare('DELETE FROM sessions WHERE token = ?').run(ctx.user.token); });
-const publicSettings = ctx => { const { notify, ...s } = getMeta('settings', {}); return ctx.user.role === 'admin' ? { ...s, notify } : s; };  // 推送地址带密钥，只给管理员看
+// 推送地址带密钥，只给管理员看；快递鸟 AppKey 谁都不下发，只告诉前端设没设、能不能下电子面单
+const publicSettings = ctx => {
+  const { notify, kdn, ...s } = getMeta('settings', {}), k = kdn || {}, ready = !!(k.ebid && k.key);
+  const pub = { ready, eorder: ready && kdnSenderOk(k), sandbox: !!k.sandbox, autoTrack: !!k.autoTrack };
+  return ctx.user.role === 'admin' ? { ...s, notify, kdn: { ...pub, ebid: k.ebid || '', keySet: !!k.key, sender: k.sender || {} } } : { ...s, kdn: pub };
+};
 route('GET', '/api/data', ctx => ({
   version: VERSION, settings: { ...publicSettings(ctx), modules: enabledModules() },
   user: { ...publicUser(ctx.user), perms: [...ctx.perms] }, data: visibleData(ctx),
@@ -1602,6 +1755,22 @@ route('POST', '/api/shipments', ctx => createShipments(ctx, ctx.body), { perm: '
 route('PUT', '/api/shipments/:id', ctx => editShipment(ctx, ctx.params.id), { perm: 'ship.edit' });
 route('POST', '/api/shipments/:id/void', ctx => voidShipment(ctx, ctx.params.id), { perm: 'ship.edit' });
 route('POST', '/api/shipments/:id/resolve', ctx => resolveShipment(ctx, ctx.params.id), { perm: 'ship.bill' });
+route('PUT', '/api/settings/kdn', ctx => saveKdn(ctx), { admin: true });
+route('POST', '/api/settings/kdn/test', async () => {
+  // 用一个不存在的单号查轨迹：签名或商户 ID 不对时快递鸟会直接报错，其余情况说明连通了
+  const r = await kdnCall(1002, { ShipperCode: 'ZTO', LogisticCode: '0000000000' });
+  if (r && r.Success === false && /签名|DataSign|EBusinessID|商户|用户|认证|授权|未开通/i.test(r.Reason || '')) fail('快递鸟拒绝了请求：' + r.Reason);
+  return { ok: true, reason: (r && r.Reason) || '' };
+}, { admin: true });
+route('POST', '/api/ship/eorder', ctx => eorderCreate(ctx), { perm: 'ship.edit' });
+route('POST', '/api/shipments/:id/cancel-eorder', ctx => eorderCancel(ctx, ctx.params.id), { perm: 'ship.edit' });
+route('GET', '/api/shipments/:id/label', ctx => {
+  const s = get('shipments', ctx.params.id) || fail('运单不存在', 404), l = get('shipLabels', s.id);
+  if (!l || !l.html) fail('这个运单没有电子面单');
+  return { html: l.html, trackNo: s.trackNo };
+}, { perm: ctx => ctx.perms.has('ship.edit') ? 'ship.edit' : 'ship.view' });
+route('POST', '/api/shipments/:id/track', ctx => trackOne(ctx.params.id), { perm: ctx => ctx.perms.has('ship.edit') ? 'ship.edit' : 'ship.view' });
+route('POST', '/api/ship/track-all', () => trackAll(), { perm: ctx => ctx.perms.has('ship.edit') ? 'ship.edit' : 'ship.view' });
 route('POST', '/api/shipbills', ctx => importBill(ctx), { perm: 'ship.bill' });
 route('GET', '/api/shipbills/:id', ctx => getBill(ctx, ctx.params.id), { perm: 'ship.view' });
 route('POST', '/api/shipbills/:id/confirm', ctx => confirmBill(ctx, ctx.params.id), { perm: 'ship.bill' });
@@ -1806,6 +1975,7 @@ server.listen(config.port, config.host, () => {
   setTimeout(autoBackup, 10e3);
   setInterval(autoBackup, 3600e3);
   setInterval(notifyTick, 60e3);
+  setInterval(trackTick, 5 * 60e3);
 });
 const shutdown = () => { log('服务端停止'); try { db.close(); } catch (e) {} process.exit(0); };
 process.on('SIGINT', shutdown);
