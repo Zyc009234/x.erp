@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.0.5';
+const VERSION = '2.0.6';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 

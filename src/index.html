@@ -214,7 +214,11 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .field input:disabled{background:var(--panel2);color:var(--muted)}
 .field .err{border-color:var(--red)}
 .span2{grid-column:span 2}
-.line-head{display:flex;justify-content:space-between;align-items:center;margin:20px 0 10px}
+.line-head{display:flex;justify-content:space-between;align-items:center;margin:20px 0 10px;gap:8px}
+.pk-wrap{display:flex;gap:16px;align-items:flex-start}.pk-cats{width:170px;flex:none;display:flex;flex-direction:column;gap:2px;max-height:56vh;overflow-y:auto}.pk-main{flex:1;min-width:0}
+.pk-cat{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border:0;border-radius:8px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}.pk-cat:hover{background:var(--primary-soft)}.pk-cat.on{background:var(--primary);color:#fff}.pk-cat small{opacity:.7}
+.pk-list{max-height:52vh;overflow-y:auto}.pk-row{cursor:pointer}.pk-row.on td{background:var(--primary-soft)}
+@media(max-width:768px){.pk-wrap{flex-direction:column}.pk-cats{width:100%;flex-direction:row;overflow-x:auto;max-height:none}.pk-cat{flex:none}}
 .o-total{text-align:right;margin-top:14px;color:var(--muted)}
 .o-total b{font-size:22px;color:var(--primary);margin-left:8px}
 .doc h2{text-align:center;font-size:20px;margin-bottom:4px}
@@ -313,7 +317,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.0.5 · 数据保存在服务器</div>
+    <div class="side-foot">v2.0.6 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -564,7 +568,7 @@ function toast(msg, type = 'success') {
   setTimeout(() => { el.style.transition = '.3s'; el.style.opacity = 0; setTimeout(() => el.remove(), 300); }, 2400);
 }
 function openModal(html, size = '') { const m = $('#modal'); m.className = 'modal ' + size; m.innerHTML = html; $('#mask').classList.add('show'); }
-function closeModal() { $('#mask').classList.remove('show'); $('#modal').innerHTML = ''; }
+function closeModal() { closePicker(); $('#mask').classList.remove('show'); $('#modal').innerHTML = ''; }
 function modalHead(title) { return `<div class="m-head"><h3>${title}</h3><button class="icon-btn sm" data-act="closeModal">${ic('x')}</button></div>`; }
 function confirmBox(msg, onOk, {title = '确认操作', danger = true, okText = '确定'} = {}) {
   openModal(`<div class="m-body" style="padding-top:26px"><div class="confirm-ic ${danger ? 'c-red' : 'c-primary'}">${ic(danger ? 'alert' : 'info')}</div><h3 style="margin-bottom:6px">${title}</h3><p style="color:var(--muted)">${msg}</p></div>
@@ -1017,6 +1021,70 @@ function findProduct(v) {
   v = String(v || '').trim(); if (!v) return null;
   return db.products.find(p => p.sku === v || p.barcode === v || prodLabel(p) === v) || db.products.find(p => unitByCode(p, v)) || db.products.find(p => p.sku.toLowerCase() === v.toLowerCase() || p.name === v) || null;
 }
+/* ---------- 选择商品：左边分类、上面搜索、可多选，一次加进开单明细；叠在开单弹窗上面，不关掉它 ---------- */
+const closePicker = () => { const m = $('#pickMask'); if (m) { m.remove(); return true; } return false; };
+function productPicker({wh, have = [], onPick}) {
+  closePicker();
+  const sel = [], inDoc = new Set(have.filter(Boolean)), LIMIT = 300;
+  const pr = db.products.some(p => p.price != null);
+  const qOf = p => wh ? whQty(p, wh) : p.stock;
+  const catList = [...new Set(db.products.map(p => p.category || '未分类'))].sort((a, b) => a.localeCompare(b, 'zh'));
+  let cat = '', kw = '';
+  const hay = p => [p.sku, p.barcode, p.name, p.spec, p.category, ...(p.units || []).map(u => u.barcode)].filter(Boolean).join(' ').toLowerCase();
+  const rows = () => { const ks = kw.toLowerCase().split(/\s+/).filter(Boolean); return db.products.filter(p => (!cat || (p.category || '未分类') === cat) && ks.every(k => hay(p).includes(k))); };
+  const m = document.createElement('div');
+  m.className = 'modal-mask show'; m.id = 'pickMask'; m.style.zIndex = 110;
+  m.innerHTML = `<div class="modal xl"><div class="m-head"><h3>选择商品</h3><button class="icon-btn sm" data-pclose>${ic('x')}</button></div>
+    <div class="m-body"><div class="pk-wrap"><div class="pk-cats" id="pkCats"></div>
+      <div class="pk-main"><input class="select" id="pkKw" placeholder="搜索编码 / 条码 / 名称 / 规格，空格分隔多个词" style="width:100%;margin-bottom:10px">
+      <div class="table-wrap pk-list"><table class="tbl compact"><thead><tr><th style="width:36px"><input type="checkbox" id="pkAll" title="全选当前列表"></th><th>商品</th><th>分类</th><th>单位</th><th class="num">${wh && multiWh() ? esc(whName(wh)) + '库存' : '库存'}</th>${pr ? '<th class="num">售价</th>' : ''}</tr></thead><tbody id="pkRows"></tbody></table></div>
+      <div class="sub-t" id="pkNote" style="margin-top:8px"></div></div></div></div>
+    <div class="m-foot"><span id="pkSel" style="margin-right:auto"></span><button class="btn" data-pclose>取消</button><button class="btn primary" id="pkOk">加入明细</button></div></div>`;
+  document.body.appendChild(m);
+  const drawSel = () => { $('#pkSel').innerHTML = sel.length ? `已选 <b>${sel.length}</b> 个商品 · <a class="link" id="pkClear">清空</a>` : '<span class="sub-t">点行勾选，可跨分类多选</span>'; $('#pkOk').disabled = !sel.length; };
+  const drawCats = () => {
+    const n = c => db.products.filter(p => (p.category || '未分类') === c).length;
+    $('#pkCats').innerHTML = [['', '全部商品', db.products.length], ...catList.map(c => [c, c, n(c)])].map(([v, l, k]) => `<button class="pk-cat ${v === cat ? 'on' : ''}" data-cat="${esc(v)}"><span>${esc(l)}</span><small>${k}</small></button>`).join('');
+  };
+  const drawRows = () => {
+    const all = rows(), list = all.slice(0, LIMIT);
+    $('#pkRows').innerHTML = list.map(p => { const on = sel.includes(p.id), q = qOf(p); return `<tr class="pk-row ${on ? 'on' : ''}" data-pid="${p.id}">
+      <td><input type="checkbox" ${on ? 'checked' : ''} tabindex="-1"></td>
+      <td><b>${esc(p.name)}</b>${inDoc.has(p.id) ? ' <span class="badge blue plain">已在单中</span>' : ''}<div class="sub-t">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''}${p.barcode ? ' · ' + esc(p.barcode) : ''}</div></td>
+      <td>${esc(p.category || '-')}</td><td>${esc(p.unit)}</td><td class="num ${q <= 0 ? 'neg' : ''}">${q}</td>${pr ? `<td class="num">${p.price != null ? money(p.price) : '-'}</td>` : ''}</tr>`; }).join('')
+      || `<tr><td colspan="${pr ? 6 : 5}" class="sub-t" style="text-align:center;padding:24px">没有符合条件的商品</td></tr>`;
+    $('#pkAll').checked = list.length > 0 && list.every(p => sel.includes(p.id));
+    $('#pkNote').textContent = all.length > LIMIT ? `共 ${all.length} 个，只显示前 ${LIMIT} 个，请搜索或选分类缩小范围` : `共 ${all.length} 个`;
+  };
+  const toggle = (id, on) => { const k = sel.indexOf(id); if (on === undefined) on = k < 0; if (on && k < 0) sel.push(id); if (!on && k >= 0) sel.splice(k, 1); };
+  const done = () => { if (!sel.length) return; const ids = [...sel]; closePicker(); onPick(ids); };
+  m.addEventListener('mousedown', e => { if (e.target === m) closePicker(); });
+  m.addEventListener('click', e => {
+    if (e.target.closest('[data-pclose]')) return closePicker();
+    if (e.target.id === 'pkClear') { sel.length = 0; drawRows(); drawSel(); return; }
+    const c = e.target.closest('[data-cat]'); if (c) { cat = c.dataset.cat; drawCats(); drawRows(); return; }
+    if (e.target.id === 'pkAll') { const on = e.target.checked; rows().slice(0, LIMIT).forEach(p => toggle(p.id, on)); drawRows(); drawSel(); return; }
+    const r = e.target.closest('[data-pid]'); if (r) { toggle(r.dataset.pid); drawRows(); drawSel(); }
+  });
+  m.addEventListener('dblclick', e => { const r = e.target.closest('[data-pid]'); if (r) { toggle(r.dataset.pid, true); done(); } });
+  $('#pkOk').onclick = done;
+  $('#pkKw').addEventListener('input', e => { kw = e.target.value.trim(); if (kw && cat) { cat = ''; drawCats(); } drawRows(); });  // 搜索时在全部商品里找
+  // 回车：只剩一个商品就勾上并清空搜索框，方便连续输入（扫码也行）
+  $('#pkKw').addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return; e.preventDefault();
+    const r = rows(); if (r.length !== 1) return toast(r.length ? `有 ${r.length} 个商品符合，请点选` : '没有符合的商品', 'info');
+    toggle(r[0].id, true); e.target.value = kw = ''; drawRows(); drawSel();
+  });
+  drawCats(); drawRows(); drawSel();
+  $('#pkKw').focus();
+}
+// 选好的商品逐个交给开单窗口自己的 pick 处理：默认单价、单位、重复商品数量 +1 都和手工输入一致
+function addPicked(draft, blank, pick, ids) {
+  const last = draft.items[draft.items.length - 1];
+  if (!last || last.productId) draft.items.push(blank());
+  ids.forEach(id => { const p = byId(db.products, id); if (p) pick(draft.items.length - 1, prodLabel(p), true); });
+  toast(`已加入 ${ids.length} 个商品`, 'success');
+}
 function docModal(dir, productId, type0, src) {
   const mo = canMoney(), types = META.docTypes[dir];
   const parties = [...new Set([...db.stockDocs.filter(o => o.dir === dir).map(o => o.party), ...(dir === 'in' ? db.suppliers : db.customers).map(x => x.name)].filter(Boolean))];
@@ -1043,7 +1111,7 @@ function docModal(dir, productId, type0, src) {
     ${multiWh() ? `<label class="field"><span>${dir === 'in' ? '入库' : '出库'}仓库 <i>*</i></span><select id="dWh">${whOpts(draft.wh)}</select></label>` : ''}
     ${dir === 'out' ? `<label class="field span2"><span>收货地址${estOn ? '（填了自动估算运费）' : ''}</span><input id="dAddr" value="${esc(src ? src.address || '' : '')}" placeholder="省 市 区 详细地址；选了客户会自动带出"></label>` : ''}
   </div>
-  <div class="line-head"><b>商品明细</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称搜索，支持扫码枪录入后回车</span><button class="btn sm" id="dAdd">${ic('plus')}添加一行</button></div>
+  <div class="line-head"><b>商品明细</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称搜索，支持扫码枪录入后回车</span><button class="btn sm" id="dPick">${ic('search')}选择商品</button><button class="btn sm" id="dAdd">${ic('plus')}添加一行</button></div>
   <datalist id="dProdList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
   <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:230px">商品</th><th style="width:60px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th>${mo ? `<th style="width:110px">${dir === 'in' ? '单价' : '成本单价'}</th><th class="num" style="width:110px">金额</th>` : ''}${batchCol ? `<th style="min-width:${dir === 'in' ? 300 : 180}px">${dir === 'in' ? '批号 / 生产日期 / 有效期至' : '出库批次（先到期先出）'}</th>` : ''}${snCol ? '<th style="min-width:170px">序列号</th>' : ''}<th style="width:140px">备注</th><th style="width:44px"></th></tr></thead><tbody id="dItems"></tbody></table></div>
   <label class="field" style="margin-top:16px"><span>单据备注</span><textarea id="dRemark" rows="2">${esc(src ? src.remark : '')}</textarea></label>
@@ -1106,12 +1174,12 @@ function docModal(dir, productId, type0, src) {
     updTotal();
     if (focusLast) { const ins = tb.querySelectorAll('[data-k=product]'); ins[ins.length - 1].focus(); }
   };
-  const pick = (i, v) => {
+  const pick = (i, v, quiet) => {
     const p = findProduct(v);
     if (!p) { if (v) toast('未找到商品：' + v, 'error'); draft.items[i].productId = ''; renderItems(); return false; }
     const unit = unitByCode(p, v) || p.unit;
     const dup = draft.items.findIndex((x, k) => k !== i && x.productId === p.id && (x.unit || p.unit) === unit);
-    if (dup >= 0) { draft.items[dup].qty = (+draft.items[dup].qty || 0) + (+draft.items[i].qty || 1); draft.items[i] = blank(); renderItems(true); toast(p.name + ' 已在明细中，数量 +1', 'info'); return true; }
+    if (dup >= 0) { draft.items[dup].qty = (+draft.items[dup].qty || 0) + (+draft.items[i].qty || 1); draft.items[i] = blank(); renderItems(true); if (!quiet) toast(p.name + ' 已在明细中，数量 +1', 'info'); return true; }
     Object.assign(draft.items[i], {productId:p.id, unit, price:p.cost != null ? +(p.cost * rateOf(p, unit)).toFixed(4) : ''});
     if (i === draft.items.length - 1) draft.items.push(blank());
     renderItems(true);
@@ -1153,6 +1221,7 @@ function docModal(dir, productId, type0, src) {
     const b = e.target.closest('[data-del]'); if (b) { draft.items.splice(+b.dataset.del, 1); if (!draft.items.length) draft.items.push(blank()); renderItems(); }
   });
   $('#dAdd').onclick = () => { draft.items.push(blank()); renderItems(true); };
+  $('#dPick').onclick = () => productPicker({wh:draft.wh, have:draft.items.map(i => i.productId), onPick:ids => addPicked(draft, blank, pick, ids)});
   const save = async andPrint => {
     const items = draft.items.filter(i => i.productId);
     if (!items.length) return toast('请至少添加一个商品', 'error');
@@ -1825,7 +1894,7 @@ function transferModal() {
     <label class="field"><span>调入仓库 <i>*</i></span><select id="tTo">${whOpts(draft.to)}</select></label>
     <label class="field"><span>单据日期${can('inv.backdate') ? '' : '（仅限当天）'}</span><input type="date" id="tDate" value="${today()}" max="${today()}" ${can('inv.backdate') ? '' : 'disabled'}></label>
     <label class="field"><span>经手人</span><input id="tHandler" value="${esc(ME.name)}"></label></div>
-    <div class="line-head"><b>调拨商品</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称，支持扫码枪；批次商品按先到期先出带过去</span><button class="btn sm" id="tAdd">${ic('plus')}添加一行</button></div>
+    <div class="line-head"><b>调拨商品</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称，支持扫码枪；批次商品按先到期先出带过去</span><button class="btn sm" id="tPick">${ic('search')}选择商品</button><button class="btn sm" id="tAdd">${ic('plus')}添加一行</button></div>
     <datalist id="tProdList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
     <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:230px">商品</th><th style="width:60px">单位</th><th class="num" style="width:90px">调出仓库存</th><th class="num" style="width:90px">调入仓库存</th><th style="width:100px">数量</th>${snCol ? '<th style="min-width:170px">序列号</th>' : ''}<th style="width:160px">备注</th><th style="width:44px"></th></tr></thead><tbody id="tItems"></tbody></table></div>
     <label class="field" style="margin-top:16px"><span>备注</span><textarea id="tRemark" rows="2"></textarea></label>
@@ -1841,18 +1910,18 @@ function transferModal() {
     $('#tQty').textContent = num(sum(draft.items.filter(i => i.productId), i => +i.qty || 0));
     if (focusLast) { const ins = tb.querySelectorAll('[data-k=product]'); ins[ins.length - 1].focus(); }
   };
-  const pick = (i, v) => {
+  const pick = (i, v, quiet) => {
     const p = findProduct(v);
     if (!p) { if (v) toast('未找到商品：' + v, 'error'); draft.items[i].productId = ''; renderRows(); return; }
     const unit = unitByCode(p, v) || p.unit;
     const dup = draft.items.findIndex((x, k) => k !== i && x.productId === p.id && (x.unit || p.unit) === unit);
-    if (dup >= 0) { draft.items[dup].qty = (+draft.items[dup].qty || 0) + 1; draft.items[i] = blank(); renderRows(true); return toast(p.name + ' 已在明细中，数量 +1', 'info'); }
+    if (dup >= 0) { draft.items[dup].qty = (+draft.items[dup].qty || 0) + 1; draft.items[i] = blank(); renderRows(true); if (!quiet) toast(p.name + ' 已在明细中，数量 +1', 'info'); return; }
     Object.assign(draft.items[i], {productId:p.id, unit});
     if (i === draft.items.length - 1) draft.items.push(blank());
     renderRows(true);
   };
-  tb.addEventListener('change', e => { const k = e.target.dataset.k, i = +e.target.dataset.i; if (k === 'product') pick(i, e.target.value); if (k === 'unit') { draft.items[i].unit = e.target.value; renderRows(); } });
-  tb.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.k === 'product') { e.preventDefault(); pick(+e.target.dataset.i, e.target.value); } });
+  tb.addEventListener('change', e => { const k = e.target.dataset.k, i = +e.target.dataset.i; if (k === 'product') pickOnce(e.target, pick); if (k === 'unit') { draft.items[i].unit = e.target.value; renderRows(); } });
+  tb.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset.k === 'product') { e.preventDefault(); pickOnce(e.target, pick); } });
   tb.addEventListener('input', e => { const k = e.target.dataset.k, i = +e.target.dataset.i;
     if (k === 'serials') { draft.items[i].serials = e.target.value; const c = e.target.parentNode.querySelector('.sn-c'), n = snList(e.target.value).length; c.firstChild.textContent = n + ' / ' + baseQ(draft.items[i]); c.classList.toggle('neg', n !== baseQ(draft.items[i])); return; }
     if (k === 'qty' || k === 'note') { draft.items[i][k] = k === 'qty' ? +e.target.value : e.target.value; if (k === 'qty') $('#tQty').textContent = num(sum(draft.items.filter(x => x.productId), x => +x.qty || 0)); } });
@@ -1867,6 +1936,7 @@ function transferModal() {
     const b = e.target.closest('[data-del]'); if (b) { draft.items.splice(+b.dataset.del, 1); if (!draft.items.length) draft.items.push(blank()); renderRows(); }
   });
   $('#tAdd').onclick = () => { draft.items.push(blank()); renderRows(true); };
+  $('#tPick').onclick = () => productPicker({wh:draft.from, have:draft.items.map(i => i.productId), onPick:ids => addPicked(draft, blank, pick, ids)});
   $('#tFrom').onchange = e => { draft.from = e.target.value; renderRows(); };
   $('#tTo').onchange = e => { draft.to = e.target.value; renderRows(); };
   const save = async andPrint => {
@@ -2243,7 +2313,7 @@ function orderModal(kind, id, srcId0) {
     <label class="field"><span>单据日期 <i>*</i></span><input type="date" id="oDate" value="${o ? o.date : today()}"></label>
     ${C.src ? `<label class="field span2"><span>关联原${S0.doc}（选了按原单带出商品，限退未退的数量）</span><select id="oSrc">${srcOpts(party0)}</select></label>` : ''}
   </div>
-  <div class="line-head"><b>${C.src ? '退货明细' : '商品明细'}</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称搜索，支持扫码枪录入后回车</span><button class="btn sm" id="oAdd">${ic('plus')}添加一行</button></div>
+  <div class="line-head"><b>${C.src ? '退货明细' : '商品明细'}</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称搜索，支持扫码枪录入后回车</span><button class="btn sm" id="oPick">${ic('search')}选择商品</button><button class="btn sm" id="oAdd">${ic('plus')}添加一行</button></div>
   <datalist id="oProdList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
   <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:240px">商品</th><th style="width:70px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th><th style="width:120px">${C.src ? '退货单价' : '单价'}</th><th class="num" style="width:120px">小计</th><th style="width:44px"></th></tr></thead><tbody id="oItems"></tbody></table></div>
   <label class="field" style="margin-top:16px"><span>备注</span><textarea id="oRemark" rows="2">${esc(o ? o.remark : '')}</textarea></label>
@@ -2267,12 +2337,12 @@ function orderModal(kind, id, srcId0) {
   };
   // 默认单价：关联了原单按原单价，否则按商品档案的售价 / 成本价
   const priceOf = (p, unit) => { const s = srcOf(), l = s && s.items.find(x => x.productId === p.id); return +((l ? l.price : p[C.priceKey] || 0) * rateOf(p, unit)).toFixed(4); };
-  const pick = (i, v) => {
+  const pick = (i, v, quiet) => {
     const p = findProduct(v);
     if (!p) { if (v) toast('未找到商品：' + v, 'error'); draft.items[i].productId = ''; renderItems(); return false; }
     const unit = unitByCode(p, v) || p.unit;
     const dup = draft.items.findIndex((x, k) => k !== i && x.productId === p.id && (x.unit || p.unit) === unit);
-    if (dup >= 0) { draft.items[dup].qty = (+draft.items[dup].qty || 0) + (+draft.items[i].qty || 1); draft.items[i] = blank(); renderItems(true); toast(p.name + ' 已在明细中，数量 +1', 'info'); return true; }
+    if (dup >= 0) { draft.items[dup].qty = (+draft.items[dup].qty || 0) + (+draft.items[i].qty || 1); draft.items[i] = blank(); renderItems(true); if (!quiet) toast(p.name + ' 已在明细中，数量 +1', 'info'); return true; }
     Object.assign(draft.items[i], {productId:p.id, unit, price:priceOf(p, unit)});
     if (i === draft.items.length - 1) draft.items.push(blank());
     renderItems(true);
@@ -2290,6 +2360,7 @@ function orderModal(kind, id, srcId0) {
   });
   tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { draft.items.splice(+b.dataset.del, 1); if (!draft.items.length) draft.items.push(blank()); renderItems(); } });
   $('#oAdd').onclick = () => { draft.items.push(blank()); renderItems(true); };
+  $('#oPick').onclick = () => productPicker({have:draft.items.map(i => i.productId), onPick:ids => addPicked(draft, blank, pick, ids)});
   if (C.src) {
     $('#oParty').onchange = e => { const s = srcOf(); if (s && s[S0.partyKey] !== e.target.value) draft.srcId = ''; $('#oSrc').innerHTML = srcOpts(e.target.value); renderItems(); };
     $('#oSrc').onchange = e => { draft.srcId = e.target.value; const s = srcOf(); if (s) { fillFromSrc(s); draft.items.push(blank()); } renderItems(); };
@@ -3577,7 +3648,7 @@ document.addEventListener('click', e => {
 document.addEventListener('input', e => { const k = e.target.dataset.search; if (k) { const st = getState(k); st.q = e.target.value; st.page = 1; renderList(k); } });
 document.addEventListener('change', e => { const f = e.target.dataset.filter; if (f) { const [k, fk] = split(f); getState(k).f[fk] = e.target.value; getState(k).page = 1; renderList(k); } });
 $('#mask').addEventListener('mousedown', e => { if (e.target.id === 'mask') closeModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !closePicker()) closeModal(); });
 $('#gsearch').addEventListener('keydown', e => { if (e.key === 'Enter') globalSearch(e.target.value); });
 $('#importFile').addEventListener('change', e => {
   const file = e.target.files[0]; if (!file) return;
@@ -3607,7 +3678,7 @@ if (NATIVE) {
     if (!ME) return toast('请先登录', 'error');
     const a = document.activeElement;
     if (a && a.matches(SCAN_INPUT)) lastInput = a;
-    else if ($('#mask').classList.contains('show') && lastInput && !lastInput.closest('#modal')) lastInput = null;  // 弹窗开着时不往背后的页面里填
+    else if ($('#mask').classList.contains('show') && lastInput && !lastInput.closest('#modal, #pickMask')) lastInput = null;  // 弹窗开着时不往背后的页面里填
     NATIVE.scan();
   });
   document.body.appendChild(fab);
@@ -3629,6 +3700,7 @@ if (NATIVE) {
   };
   // 返回键：先关弹窗、下拉、侧栏，处理了返回 true
   window.__xerpBack = () => {
+    if (closePicker()) return true;
     if ($('#mask').classList.contains('show')) { closeModal(); return true; }
     if ($('#bellDrop').classList.contains('show')) { $('#bellDrop').classList.remove('show'); return true; }
     if ($('#app').classList.contains('open')) { $('#app').classList.remove('open'); return true; }
