@@ -26,6 +26,7 @@ async function ok(token, method, url, body) {
   return r;
 }
 async function login(username, password) { return (await ok(null, 'POST', '/api/login', { username, password })).token; }
+const round4 = n => Math.round(n * 1e4) / 1e4;
 const data = async (token = admin) => (await ok(token, 'GET', '/api/data')).data;
 const prod = async (id, token = admin) => (await data(token)).products.find(p => p.id === id);
 const doc = async (id, token = admin) => (await data(token)).stockDocs.find(o => o.id === id);
@@ -582,4 +583,61 @@ test('快递鸟：查询轨迹、批量刷新、取消电子面单', async () =>
   assert.equal((await call(admin, 'POST', `/api/shipments/${s2.id}/cancel-eorder`)).http, 400, '已作废的不能再取消');
   const manual = (await data()).shipments.find(x => !x.eorder && x.status === '待对账');
   assert.equal((await call(admin, 'POST', `/api/shipments/${manual.id}/cancel-eorder`)).http, 400, '手工登记的运单没有电子面单可取消');
+});
+
+test('销售退货：关联原单限退数量，按发货成本入库，退款记支出，冲抵原单欠款', async () => {
+  await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'sales', 'purchase', 'parties', 'finance'] });
+  const p = await newProduct('RT01', { price: 20 });
+  await inDoc(admin, [{ productId: p.id, qty: 10, price: 8 }]);
+  const cu = await ok(admin, 'POST', '/api/customers', { name: '退货测试客户' });
+  const so = await ok(admin, 'POST', '/api/orders/sales', { partyId: cu.id, date: '2026-10-28', items: [{ productId: p.id, qty: 5, price: 20 }] });
+  assert.equal((await call(admin, 'POST', '/api/orders/salesReturn', { partyId: cu.id, date: '2026-10-28', srcId: so.id, items: [{ productId: p.id, qty: 1, price: 20 }] })).http, 400, '没发货不能退');
+  await ok(admin, 'POST', `/api/orders/sales/${so.id}/ship`, {});
+  await inDoc(admin, [{ productId: p.id, qty: 5, price: 14 }]);  // 成本变成 (5×8+5×14)/10 = 11
+  assert.equal((await call(admin, 'POST', '/api/orders/salesReturn', { partyId: cu.id, date: '2026-10-28', srcId: so.id, items: [{ productId: p.id, qty: 6, price: 20 }] })).http, 400, '超过原单数量');
+  const r1 = await ok(admin, 'POST', '/api/orders/salesReturn', { partyId: cu.id, date: '2026-10-28', srcId: so.id, items: [{ productId: p.id, qty: 3, price: 20 }] });
+  assert.equal(r1.status, '待入库'); assert.equal(r1.srcNo, so.no); assert.ok(r1.no.startsWith('XT'));
+  assert.equal((await call(admin, 'POST', '/api/orders/salesReturn', { partyId: cu.id, date: '2026-10-28', srcId: so.id, items: [{ productId: p.id, qty: 3, price: 20 }] })).http, 400, '已退 3，只剩 2 可退');
+  assert.equal((await prod(p.id)).stock, 10, '没入库前库存不变');
+  await ok(admin, 'POST', `/api/orders/salesReturn/${r1.id}/post`, {});
+  let q = await prod(p.id);
+  assert.equal(q.stock, 13);
+  assert.equal(q.cost, round4((10 * 11 + 3 * 8) / 13), '按原发货成本 8 入库');
+  const log = (await data()).stockLogs.find(l => l.ref === r1.no);
+  assert.equal(log.kind, '销售退货'); assert.equal(log.qty, 3);
+  // 原单欠 100，冲抵 40 后欠 60；退货单剩 20 退现金
+  await ok(admin, 'POST', `/api/orders/salesReturn/${r1.id}/offset`, { amount: 40 });
+  let d = await data();
+  assert.equal(d.sales.find(o => o.id === so.id).received, 40);
+  assert.equal(d.salesReturns.find(o => o.id === r1.id).refunded, 40);
+  assert.equal((await call(admin, 'POST', `/api/orders/salesReturn/${r1.id}/offset`, { amount: 30 })).http, 400, '冲抵不能超过退货单未退的 20');
+  await ok(admin, 'POST', `/api/orders/salesReturn/${r1.id}/pay`, { amount: 20, method: '现金' });
+  d = await data();
+  const f = d.finance.find(x => x.ref === r1.no);
+  assert.equal(f.type, 'expense'); assert.equal(f.category, '销售退款'); assert.equal(f.amount, 20);
+  assert.equal((await call(admin, 'POST', `/api/orders/salesReturn/${r1.id}/cancel`, {})).http, 400, '已入库的不能作废');
+  assert.equal((await call(admin, 'DELETE', `/api/customers/${cu.id}`)).http, 400, '被退货单引用的客户不能删');
+});
+
+test('采购退货：按原采购价冲减库存价值，库存不足不能出，供应商退款记收入', async () => {
+  const p = await newProduct('RT02');
+  const su = await ok(admin, 'POST', '/api/suppliers', { name: '退货测试供应商' });
+  const po = await ok(admin, 'POST', '/api/orders/purchase', { partyId: su.id, date: '2026-10-28', items: [{ productId: p.id, qty: 10, price: 6 }] });
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/approve`, {});
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/inbound`, {});
+  await inDoc(admin, [{ productId: p.id, qty: 10, price: 10 }]);  // 成本 8
+  const r = await ok(admin, 'POST', '/api/orders/purchaseReturn', { partyId: su.id, date: '2026-10-28', srcId: po.id, items: [{ productId: p.id, qty: 4, price: 6 }] });
+  assert.equal(r.status, '待出库'); assert.ok(r.no.startsWith('CT'));
+  await ok(admin, 'POST', `/api/orders/purchaseReturn/${r.id}/post`, {});
+  const q = await prod(p.id);
+  assert.equal(q.stock, 16);
+  assert.equal(q.cost, round4((20 * 8 - 4 * 6) / 16), '按原采购价 6 冲减');
+  assert.equal((await data()).purchaseReturns.find(o => o.id === r.id).status, '已出库');
+  // 不关联原单的退货：库存不足时不能出库
+  const r2 = await ok(admin, 'POST', '/api/orders/purchaseReturn', { partyId: su.id, date: '2026-10-28', items: [{ productId: p.id, qty: 99, price: 6 }] });
+  assert.equal((await call(admin, 'POST', `/api/orders/purchaseReturn/${r2.id}/post`, {})).http, 400);
+  await ok(admin, 'POST', `/api/orders/purchaseReturn/${r2.id}/cancel`, {});
+  await ok(admin, 'POST', `/api/orders/purchaseReturn/${r.id}/pay`, { amount: 24 });
+  const f = (await data()).finance.find(x => x.ref === r.no);
+  assert.equal(f.type, 'income'); assert.equal(f.category, '采购退款');
 });

@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.0.4';
+const VERSION = '2.0.5';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -94,15 +94,18 @@ const fail = (msg, status) => { throw new HttpError(msg, status); };
 function audit(ctx, action, detail = '') { S.audit.run(new Date().toISOString(), ctx.user ? ctx.user.name : '-', action, String(detail).slice(0, 300), ctx.ip || ''); }
 
 /* ================= 业务常量 ================= */
-const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials', 'carriers', 'shipments', 'shipBills', 'shipLabels'];
-const DATED = ['sales', 'purchases', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs', 'shipments', 'shipBills'];
+const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials', 'carriers', 'shipments', 'shipBills', 'shipLabels'];
+const DATED = ['sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs', 'shipments', 'shipBills'];
 const CATS = ['电子产品', '办公用品', '家居用品', '食品饮料'];
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
 const METHODS = ['银行转账', '现金', '支付宝', '微信', '承兑汇票'];
 const FIN_CATS = { income: ['其他收入', '投资收益', '退款'], expense: ['工资', '房租', '水电', '办公费', '差旅', '营销推广', '快递费', '其他支出'] };
 const ORD = {
-  sales: { col: 'sales', prefix: 'SO', title: '销售单', party: 'customers', partyKey: 'customerId', partyLabel: '客户', paidKey: 'received', payWord: '收款', statuses: ['待发货', '已发货', '已完成', '已作废'] },
-  purchase: { col: 'purchases', prefix: 'PO', title: '采购单', party: 'suppliers', partyKey: 'supplierId', partyLabel: '供应商', paidKey: 'paid', payWord: '付款', statuses: ['待审核', '已审核', '已入库', '已作废'] }
+  sales: { col: 'sales', prefix: 'SO', title: '销售单', party: 'customers', partyKey: 'customerId', partyLabel: '客户', paidKey: 'received', payWord: '收款', statuses: ['待发货', '已发货', '已完成', '已作废'], perm: 'sales', fin: ['income', '销售收款'] },
+  purchase: { col: 'purchases', prefix: 'PO', title: '采购单', party: 'suppliers', partyKey: 'supplierId', partyLabel: '供应商', paidKey: 'paid', payWord: '付款', statuses: ['待审核', '已审核', '已入库', '已作废'], perm: 'purchase', fin: ['expense', '采购付款'] },
+  // 退货单：可关联原单（限退原单数量减去已退的）；销售退货入库、采购退货出库；退款走现金，或冲抵原单没结清的款
+  salesReturn: { col: 'salesReturns', prefix: 'XT', title: '销售退货单', party: 'customers', partyKey: 'customerId', partyLabel: '客户', paidKey: 'refunded', payWord: '退款', statuses: ['待入库', '已入库', '已作废'], perm: 'sales', fin: ['expense', '销售退款'], src: 'sales', srcOk: ['已发货', '已完成'] },
+  purchaseReturn: { col: 'purchaseReturns', prefix: 'CT', title: '采购退货单', party: 'suppliers', partyKey: 'supplierId', partyLabel: '供应商', paidKey: 'refunded', payWord: '退款', statuses: ['待出库', '已出库', '已作废'], perm: 'purchase', fin: ['income', '采购退款'], src: 'purchase', srcOk: ['已入库'] }
 };
 const ENTITY = {
   products: { name: '商品', required: { sku: '商品编码', name: '商品名称' },
@@ -574,9 +577,9 @@ function deleteEntity(ctx, col, id) {
   const E = ENTITY[col] || fail('接口不存在', 404);
   return tx(() => {
     const rec = get(col, id) || fail(E.name + '不存在', 404);
-    const used = col === 'products' ? [...list('sales'), ...list('purchases'), ...list('stockDocs')].some(o => o.items.some(i => i.productId === id)) || list('checkDocs').some(o => o.lines.some(l => l.productId === id))
-      : col === 'customers' ? list('sales').some(o => o.customerId === id)
-      : col === 'suppliers' ? list('purchases').some(o => o.supplierId === id) : false;
+    const used = col === 'products' ? [...list('sales'), ...list('purchases'), ...list('salesReturns'), ...list('purchaseReturns'), ...list('stockDocs')].some(o => o.items.some(i => i.productId === id)) || list('checkDocs').some(o => o.lines.some(l => l.productId === id))
+      : col === 'customers' ? [...list('sales'), ...list('salesReturns')].some(o => o.customerId === id)
+      : col === 'suppliers' ? [...list('purchases'), ...list('purchaseReturns')].some(o => o.supplierId === id) : false;
     if (used || col === 'products' && list('transferDocs').some(o => o.items.some(i => i.productId === id))) fail(`该${E.name}已被单据引用，无法删除`);
     del(col, id);
     if (col === 'products') setBatchMode(rec, false);
@@ -589,18 +592,31 @@ function saveOrder(ctx, kind, id) {
     const party = str(b.partyId, 64);
     if (!get(C.party, party)) fail('请选择有效的' + C.partyLabel);
     if (!isDate(b.date)) fail('日期格式不正确');
+    const src = C.src && b.srcId ? returnSrc(C, str(b.srcId, 64), party) : null;
     const items = (Array.isArray(b.items) ? b.items : []).filter(i => i && i.productId).map(i => {
       const p = get('products', i.productId) || fail('商品不存在或已删除');
       const l = unitQty(p, i), price = Number(i.price);
       if (!Number.isFinite(price) || price < 0) fail('单价不正确');
-      return { productId: p.id, ...l, price: basePrice(round2(price), l), ...(l.rate ? { uprice: round2(price) } : {}), cost: p.cost };
+      // 退货的 cost：销售退货按原单发货成本入库，采购退货按原采购价冲减库存价值；没关联原单按当前成本
+      const sl = src && src.items.find(x => x.productId === p.id);
+      const cost = !C.src ? p.cost : C.src === 'sales' ? (sl && sl.cost != null ? sl.cost : p.cost) : sl ? sl.price : null;
+      return { productId: p.id, ...l, price: basePrice(round2(price), l), ...(l.rate ? { uprice: round2(price) } : {}), cost };
     });
     if (!items.length) fail('请至少添加一个商品');
-    const data = { [C.partyKey]: party, date: b.date, remark: str(b.remark, 500), items };
+    if (src) {
+      const left = returnable(src, id);
+      for (const [pid, q] of Object.entries(qtyByProduct(items))) {
+        const p = get('products', pid);
+        if (!(pid in left)) fail(`「${p.name}」不在原单 ${src.no} 里`);
+        if (q > left[pid]) fail(`「${p.name}」最多还能退 ${left[pid]}（原单 ${src.no}）`);
+      }
+    }
+    const data = { [C.partyKey]: party, date: b.date, remark: str(b.remark, 500), items, ...(C.src ? { srcId: src ? src.id : '', srcNo: src ? src.no : '' } : {}) };
     if (id) {
       const o = get(C.col, id) || fail('单据不存在', 404);
       if (o.status !== C.statuses[0]) fail(`单据状态为「${o.status}」，不能编辑`);
-      items.forEach(it => { const old = o.items.find(x => x.productId === it.productId); if (old && old.cost != null) it.cost = old.cost; });
+      if (!C.src) items.forEach(it => { const old = o.items.find(x => x.productId === it.productId); if (old && old.cost != null) it.cost = old.cost; });
+      if ((o.offset || 0) > 0 && o.srcId !== data.srcId) fail('已冲抵过原单的退货单不能改关联原单');
       if ((o[C.paidKey] || 0) > orderTotal({ items }) + 0.001) fail(`已${C.payWord} ${o[C.paidKey]} 元，修改后的合计不能少于这个数`);
       Object.assign(o, data);
       put(C.col, o); audit(ctx, '修改' + C.title, o.no);
@@ -610,6 +626,20 @@ function saveOrder(ctx, kind, id) {
     put(C.col, o); audit(ctx, '新建' + C.title, `${o.no} ${orderTotal(o)}`);
     return o;
   });
+}
+// 退货关联的原单：同一往来单位，已发货 / 已入库
+function returnSrc(C, srcId, party) {
+  const S0 = ORD[C.src], src = get(S0.col, srcId) || fail('原单不存在');
+  if (src[S0.partyKey] !== party) fail(`原单 ${src.no} 不是这个${C.partyLabel}的`);
+  if (!C.srcOk.includes(src.status)) fail(`原单 ${src.no} 状态为「${src.status}」，${C.src === 'sales' ? '发货' : '入库'}后才能退货`);
+  return src;
+}
+// 原单每个商品还能退多少（基本单位）= 原单数量 - 其他没作废的退货单已退的
+function returnable(src, exceptId) {
+  const left = qtyByProduct(src.items), col = src.supplierId ? 'purchaseReturns' : 'salesReturns';
+  list(col).filter(r => r.srcId === src.id && r.id !== exceptId && r.status !== '已作废').forEach(r => r.items.forEach(i => { if (i.productId in left) left[i.productId] -= i.qty; }));
+  for (const k in left) left[k] = Math.max(0, left[k]);
+  return left;
 }
 function orderAction(ctx, kind, id, action) {
   const C = ORD[kind] || fail('接口不存在', 404), b = ctx.body || {};
@@ -634,8 +664,30 @@ function orderAction(ctx, kind, id, action) {
         if (m.alloc) i.batches = m.alloc;
       });
       o.status = '已入库'; o.inDate = today(); o.wh = wh;
+    } else if (action === 'post' && C.src) {
+      need(C.statuses[0]);
+      const wh = pickWh(b.wh), bi = b.batches && typeof b.batches === 'object' ? b.batches : {}, pname = (get(C.party, o[C.partyKey]) || {}).name || '';
+      if (kind === 'purchaseReturn') { const lack = lackOf(o.items, wh); if (lack.length) fail(lackText(lack, wh)); }
+      o.items.forEach(i => {
+        const p = get('products', i.productId) || fail('商品不存在或已删除');
+        const m = kind === 'salesReturn'
+          ? moveStock(ctx, p, i.qty, '销售退货', o.no, pname, { price: i.cost != null ? i.cost : p.cost || 0, wh, batch: { no: o.no, ...(bi[p.id] || {}) } })
+          : moveStock(ctx, p, -i.qty, '采购退货', o.no, pname, { reversePrice: i.cost != null ? i.cost : undefined, wh });
+        i.cost = round4(m.unit);
+        if (m.alloc) i.batches = m.alloc;
+      });
+      o.status = C.statuses[1]; o.postDate = today(); o.wh = wh;
+    } else if (action === 'offset' && C.src) {
+      // 冲抵：对方原单还有没结清的款，退货款直接抵掉，不走现金
+      if (o.status === '已作废') fail('已作废单据不能冲抵');
+      const S0 = ORD[C.src], src = o.srcId && get(S0.col, o.srcId) || fail('这张退货单没有关联原单，不能冲抵');
+      const max = round2(Math.min(orderTotal(o) - (o.refunded || 0), orderTotal(src) - (src[S0.paidKey] || 0))), amount = round2(Number(b.amount));
+      if (!(amount > 0) || amount > max + 0.001) fail(`冲抵金额需在 0 ~ ${max} 之间`);
+      o.refunded = round2((o.refunded || 0) + amount); o.offset = round2((o.offset || 0) + amount);
+      src[S0.paidKey] = round2((src[S0.paidKey] || 0) + amount); src.offset = round2((src.offset || 0) + amount);
+      put(S0.col, src);
     } else if (action === 'cancel') {
-      const ok = kind === 'sales' ? ['待发货'] : ['待审核', '已审核'];
+      const ok = C.src ? [C.statuses[0]] : kind === 'sales' ? ['待发货'] : ['待审核', '已审核'];
       if (!ok.includes(o.status)) fail(`单据当前状态为「${o.status}」，不能作废`);
       if (o[C.paidKey] > 0) fail(`单据已有${C.payWord}记录，不能作废`);
       o.status = '已作废';
@@ -644,11 +696,11 @@ function orderAction(ctx, kind, id, action) {
       const unpaid = round2(orderTotal(o) - (o[C.paidKey] || 0)), amount = round2(Number(b.amount));
       if (!(amount > 0) || amount > unpaid + 0.001) fail(`${C.payWord}金额需在 0 ~ ${unpaid} 之间`);
       o[C.paidKey] = round2((o[C.paidKey] || 0) + amount);
-      put('finance', { id: uid(), date: isDate(b.date) ? b.date : today(), type: kind === 'sales' ? 'income' : 'expense', category: kind === 'sales' ? '销售收款' : '采购付款',
+      put('finance', { id: uid(), date: isDate(b.date) ? b.date : today(), type: C.fin[0], category: C.fin[1],
         amount, method: METHODS.includes(b.method) ? b.method : '银行转账', ref: o.no, note: str(b.note), operator: ctx.user.name });
     } else fail('不支持的操作', 404);
     put(C.col, o);
-    audit(ctx, { ship: '发货', complete: '完成订单', approve: '审核采购', inbound: '采购入库', cancel: '作废单据', pay: C.payWord }[action], o.no + (action === 'pay' ? ' ' + b.amount : ''));
+    audit(ctx, { ship: '发货', complete: '完成订单', approve: '审核采购', inbound: '采购入库', post: kind === 'salesReturn' ? '销售退货入库' : '采购退货出库', offset: '退货冲抵', cancel: '作废单据', pay: C.payWord }[action], o.no + (action === 'pay' || action === 'offset' ? ' ' + b.amount : ''));
     return o;
   });
 }
@@ -1553,6 +1605,7 @@ function visibleData(ctx) {
     products: any('inv.view', 'prod.view', 'sales', 'purchase', 'dashboard', 'reports'),
     stockLogs: any('inv.view', 'dashboard'), stockDocs: P.has('inv.view'), checkDocs: P.has('inv.view'),
     sales: any('sales', 'dashboard', 'reports', 'parties'), purchases: any('purchase', 'dashboard', 'reports', 'parties'),
+    salesReturns: any('sales', 'dashboard', 'reports', 'parties'), purchaseReturns: any('purchase', 'dashboard', 'reports', 'parties'),
     customers: any('sales', 'parties', 'dashboard', 'reports'), suppliers: any('purchase', 'parties'),
     finance: any('finance', 'sales', 'purchase', 'reports'), employees: P.has('hr'),
     warehouses: true, transferDocs: P.has('inv.view'), batches: any('inv.view', 'prod.view'), serials: P.has('inv.view'),
@@ -1693,7 +1746,7 @@ route('POST', '/api/settings/notify/test', async ctx => {
 route('GET', '/api/settings/notify/preview', () => notifyText(), { admin: true });
 
 // 打印模板：每种单据一份（标题、抬头、表头项目、明细列的显示 / 顺序 / 名称、签字栏、底部说明、字号），所有用户共用
-const PRINT_KINDS = { in: '入库单', out: '出库单', transfer: '调拨单', sales: '销售单', purchase: '采购单' };
+const PRINT_KINDS = { in: '入库单', out: '出库单', transfer: '调拨单', sales: '销售单', purchase: '采购单', salesReturn: '销售退货单', purchaseReturn: '采购退货单' };
 const PRINT_COLS = ['idx', 'sku', 'barcode', 'name', 'spec', 'unit', 'qty', 'price', 'amount', 'batch', 'note'];
 const PRINT_META = ['no', 'type', 'date', 'party', 'wh', 'handler', 'contact', 'address', 'express'];
 function cleanTpl(t) {
@@ -1723,7 +1776,7 @@ for (const col of Object.keys(ENTITY)) {
   route('PUT', `/api/${col}/:id`, ctx => saveEntity(ctx, col, ctx.params.id), { perm });
   route('DELETE', `/api/${col}/:id`, ctx => deleteEntity(ctx, col, ctx.params.id), { perm });
 }
-const orderPerm = { perm: ctx => ctx.params.kind === 'sales' ? 'sales' : 'purchase' };
+const orderPerm = { perm: ctx => (ORD[ctx.params.kind] || ORD.purchase).perm };
 route('POST', '/api/orders/:kind', ctx => saveOrder(ctx, ctx.params.kind, null), orderPerm);
 route('PUT', '/api/orders/:kind/:id', ctx => saveOrder(ctx, ctx.params.kind, ctx.params.id), orderPerm);
 route('DELETE', '/api/orders/:kind/:id', ctx => deleteOrder(ctx, ctx.params.kind, ctx.params.id), orderPerm);
