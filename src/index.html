@@ -317,7 +317,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.0.6 · 数据保存在服务器</div>
+    <div class="side-foot">v2.0.7 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -3303,7 +3303,12 @@ function pageSettings() {
       <p class="sub-t" style="margin-bottom:10px">开启后，新开的单据先是「待审核」，由有「审核出入库单」权限的账号审核通过后才改库存；驳回的单据不影响库存，制单人可以修改后重新开单。已经开好的单据不受影响。</p>
       <div style="display:flex;flex-wrap:wrap;gap:6px 22px"><label class="chk"><input type="checkbox" id="apIn" ${(st.docApprove || {}).in ? 'checked' : ''}>入库单需要审核</label><label class="chk"><input type="checkbox" id="apOut" ${(st.docApprove || {}).out ? 'checked' : ''}>出库单需要审核</label></div>
       <div style="margin-top:14px;text-align:right"><button class="btn primary" data-act="saveApprove">${ic('check')}保存审核设置</button></div>
+    </div></div>
+    <div class="card" style="margin-top:16px"><div class="card-head"><h3>匿名使用统计</h3></div><div class="card-body">
+      <p class="sub-t" style="margin-bottom:10px">每天向 x.erp 作者的服务器报一次：随机生成的安装编号、软件版本号、系统类型（Windows / Linux），用来了解有多少人在用、该维护哪些版本。不包含公司名、账号、商品、单据等任何业务数据，也不记录 IP。连不上外网时自动跳过，不影响使用。</p>
+      <label class="chk"><input type="checkbox" id="statsOn" ${st.stats !== false ? 'checked' : ''}>参与匿名使用统计</label>
     </div></div>` : ''}`;
+    if ($('#statsOn')) $('#statsOn').onchange = e => A.saveStats(e.target.checked);
   } else if (ui.setTab === 'users') {
     body.innerHTML = `<div class="card"><div class="toolbar"><div class="tb-left"><span class="sub-t">每个账号选一个角色；权限在「角色管理」里配置，改角色权限会同时作用到该角色的所有账号</span></div><div class="tb-right"><button class="btn primary" data-act="userEdit">${ic('plus')}新增用户</button></div></div><div id="userList"><div class="empty">加载中…</div></div></div>`;
     Promise.all([api('GET', '/api/users'), api('GET', '/api/roles')]).then(([users, roles]) => {
@@ -3607,6 +3612,7 @@ const A = {
   finDel: id => confirmBox('确定删除这条收支记录吗？', () => mutate('DELETE', '/api/finance/' + id, undefined, '已删除')),
   rptExport: () => exportCSV('月度经营报表', ['月份', '订单数', '销售额', '销售成本', '毛利', '毛利率%', '采购额', '运营费用', '净利润'], ui.rptStats.map(s => [s.mk, s.count, s.sales.toFixed(2), s.cost.toFixed(2), s.gp.toFixed(2), s.rate.toFixed(1), s.purchase.toFixed(2), s.exp.toFixed(2), s.net.toFixed(2)])),
   savePrefs: () => { db.settings.theme = $('#sTheme').value; db.settings.pageSize = +$('#sPs').value; savePrefs(); applyTheme(); toast('偏好已保存'); render(); },
+  saveStats: on => mutate('PUT', '/api/settings', {stats:on}, on ? '已开启匿名使用统计' : '已关闭匿名使用统计'),
   saveApprove: () => mutate('PUT', '/api/settings', {docApprove:{in:$('#apIn').checked, out:$('#apOut').checked}}, '审核设置已保存'),
   saveCompany: () => mutate('PUT', '/api/settings', {company:$('#sCompany').value.trim()}, '公司名称已保存'),
   changePwd: () => formModal({title:'修改密码', okText:'确认修改', fields:[

@@ -1,0 +1,24 @@
+[Unit]
+Description=x.erp 匿名使用统计
+After=network.target
+
+[Service]
+User=xerpstats
+Group=xerpstats
+StateDirectory=xerp-stats
+StateDirectoryMode=0700
+ExecStart=/usr/bin/python3 -I /opt/xerp-stats/stats.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

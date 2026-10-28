@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.0.6';
+const VERSION = '2.0.7';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -1725,6 +1725,7 @@ route('PUT', '/api/settings', ctx => {
     s.docApprove = { in: !!b.docApprove.in, out: !!b.docApprove.out };
     changes.push('出入库审核：入库单' + (s.docApprove.in ? '需审核' : '不审核') + '，出库单' + (s.docApprove.out ? '需审核' : '不审核'));
   }
+  if ('stats' in b) { s.stats = !!b.stats; changes.push('匿名使用统计：' + (s.stats ? '开启' : '关闭')); }
   setMeta('settings', s); audit(ctx, '修改设置', changes.join('；'));
 }, { admin: true });
 
@@ -1937,6 +1938,18 @@ async function sendNotify(url, text) {
   if (j && ((j.errcode && j.errcode !== 0) || (feishu && j.code && j.code !== 0))) fail('推送失败：' + (j.errmsg || j.msg || t.slice(0, 200)));
 }
 let notifyBusy = false;
+/* ---------- 匿名使用统计：每天报一次 安装 ID（首次启动随机生成）、版本号、系统类型，不含任何业务数据和个人信息 ----------
+ * 默认开启，系统设置里可关闭；连不上外网就静默跳过，不影响使用。环境变量 XERP_STATS_URL 可改地址，设为空字符串则完全不发 */
+const STATS_URL = process.env.XERP_STATS_URL ?? 'http://101.201.141.121/xerp/api/ping';
+async function statsTick() {
+  if (!STATS_URL || getMeta('settings', {}).stats === false || getMeta('statsLast', '') === today()) return;
+  let id = getMeta('installId', '');
+  if (!/^[0-9a-f]{32}$/.test(id)) { id = crypto.randomBytes(16).toString('hex'); setMeta('installId', id); }
+  try {
+    const r = await fetch(STATS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, v: VERSION, plat: process.platform }), signal: AbortSignal.timeout(10000) });
+    if (r.ok) setMeta('statsLast', today());
+  } catch (e) {}
+}
 async function notifyTick() {
   const n = getMeta('settings', {}).notify;
   if (notifyBusy || !n || !n.enabled || !n.url || hhmm() < (n.time || '08:30') || getMeta('notifyLast', '') === today()) return;
@@ -2029,6 +2042,8 @@ server.listen(config.port, config.host, () => {
   setInterval(autoBackup, 3600e3);
   setInterval(notifyTick, 60e3);
   setInterval(trackTick, 5 * 60e3);
+  setTimeout(statsTick, Number(process.env.XERP_STATS_DELAY) || 60e3);
+  setInterval(statsTick, 3600e3);
 });
 const shutdown = () => { log('服务端停止'); try { db.close(); } catch (e) {} process.exit(0); };
 process.on('SIGINT', shutdown);

@@ -40,13 +40,14 @@ async function newUser(username, roleId) {
 }
 
 // 模拟快递鸟：校验签名，按 RequestType 返回结果，收到的请求记在 kdnReqs 里
-const KDN_KEY = 'test-app-key', kdnReqs = [];
+const KDN_KEY = 'test-app-key', kdnReqs = [], statsReqs = [];
 let kdnMock;
 async function startKdnMock() {
   const http = await import('node:http'), crypto = await import('node:crypto');
   kdnMock = http.createServer((req, res) => {
     let b = ''; req.on('data', c => { b += c; });
     req.on('end', () => {
+      if (req.url === '/stats') { statsReqs.push(JSON.parse(b)); res.end('{"ok":true}'); return; }  // 匿名使用统计
       const p = new URLSearchParams(b), type = req.url.slice(1), data = JSON.parse(p.get('RequestData'));
       const sign = Buffer.from(crypto.createHash('md5').update(p.get('RequestData') + KDN_KEY, 'utf8').digest('hex')).toString('base64');
       kdnReqs.push({ type, data, ebid: p.get('EBusinessID'), signOk: sign === p.get('DataSign') });
@@ -65,7 +66,7 @@ async function startKdnMock() {
 
 before(async () => {
   const kdnBase = await startKdnMock();
-  srv = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js'), '--data', DATA, '--port', String(PORT)], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, XERP_KDN_BASE: kdnBase } });
+  srv = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js'), '--data', DATA, '--port', String(PORT)], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, XERP_KDN_BASE: kdnBase, XERP_STATS_URL: kdnBase + '/stats', XERP_STATS_DELAY: '200' } });
   let log = ''; srv.stdout.on('data', d => { log += d; }); srv.stderr.on('data', d => { log += d; });
   for (let i = 0; i < 100; i++) {
     try { if ((await fetch(BASE + '/api/ping')).ok) break; } catch (e) {}
@@ -640,4 +641,15 @@ test('采购退货：按原采购价冲减库存价值，库存不足不能出�
   await ok(admin, 'POST', `/api/orders/purchaseReturn/${r.id}/pay`, { amount: 24 });
   const f = (await data()).finance.find(x => x.ref === r.no);
   assert.equal(f.type, 'income'); assert.equal(f.category, '采购退款');
+});
+
+test('匿名使用统计：启动后报一次安装编号、版本、平台，不带业务数据；管理员可关闭', async () => {
+  for (let i = 0; i < 50 && !statsReqs.length; i++) await new Promise(r => setTimeout(r, 100));
+  assert.equal(statsReqs.length, 1, '同一天只报一次');
+  assert.deepEqual(Object.keys(statsReqs[0]).sort(), ['id', 'plat', 'v']);
+  assert.match(statsReqs[0].id, /^[0-9a-f]{32}$/);
+  assert.equal(statsReqs[0].v, (await ok(null, 'GET', '/api/ping')).version);
+  await ok(admin, 'PUT', '/api/settings', { stats: false });
+  assert.equal((await ok(admin, 'GET', '/api/data')).settings.stats, false);
+  await ok(admin, 'PUT', '/api/settings', { stats: true });
 });
