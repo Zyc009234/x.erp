@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.0.8';
+const VERSION = '2.0.9';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -1704,7 +1704,7 @@ const publicSettings = ctx => {
   return ctx.user.role === 'admin' ? { ...s, notify, kdn: { ...pub, ebid: k.ebid || '', keySet: !!k.key, sender: k.sender || {} } } : { ...s, kdn: pub };
 };
 route('GET', '/api/data', ctx => ({
-  version: VERSION, settings: { ...publicSettings(ctx), modules: enabledModules() },
+  version: VERSION, settings: { ...publicSettings(ctx), modules: enabledModules(), feedbackUnread: fbUnread() },
   user: { ...publicUser(ctx.user), perms: [...ctx.perms] }, data: visibleData(ctx),
   meta: { modules: MODULES, perms: PERMS, docTypes: DOC_TYPES, defaultWh: DEFAULT_WH, provinces: PROVINCES, regions: REGIONS }
 }));
@@ -1938,6 +1938,56 @@ async function sendNotify(url, text) {
   if (j && ((j.errcode && j.errcode !== 0) || (feishu && j.code && j.code !== 0))) fail('推送失败：' + (j.errmsg || j.msg || t.slice(0, 200)));
 }
 let notifyBusy = false;
+/* ---------- 问题反馈：用户留言发到作者官网，作者在官网后台回复，这里取回回复 ----------
+ * 本机首次留言时随机生成 fbToken（只用来取回本机自己的留言和回复），留言在本地也存一份。
+ * 留言带上版本号和系统类型；称呼、联系方式可不填，联系方式只有作者能看到。XERP_FEEDBACK_URL 可改地址，设为空字符串则关闭 */
+const FEEDBACK_URL = process.env.XERP_FEEDBACK_URL ?? 'https://www.zhaoyoucai.xyz/xerp/api/feedback';
+function fbToken() {
+  let t = getMeta('fbToken', '');
+  if (!/^[0-9a-f]{32}$/.test(t)) { t = crypto.randomBytes(16).toString('hex'); setMeta('fbToken', t); }
+  return t;
+}
+const fbList = () => getMeta('feedback', []);
+const fbUnread = () => fbList().filter(f => f.replied && f.replied !== f.seen).length;
+async function fbPost(path, body) {
+  if (!FEEDBACK_URL) fail('留言功能已关闭');
+  let r;
+  try { r = await fetch(FEEDBACK_URL + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) }); }
+  catch (e) { fail('连不上作者的服务器，请确认这台设备能上网后再试', 502); }
+  if (r.status === 429) fail('留言太频繁了，请过一会儿再试', 429);
+  if (!r.ok) fail(`留言服务暂时不可用（${r.status}）`, 502);
+  return r.json();
+}
+// 取回服务器上的回复、公开状态并入本地记录；作者删掉的留言本地也去掉
+async function fbSync() {
+  const remote = await fbPost('/mine', { token: fbToken() }), byFid = new Map(remote.map(x => [x.fid, x]));
+  const list = fbList().filter(f => byFid.has(f.fid)).map(f => { const x = byFid.get(f.fid); return { ...f, reply: x.reply, replied: x.replied, public: x.public }; });
+  setMeta('feedback', list); setMeta('fbSynced', Date.now());
+  return list;
+}
+// 有近 60 天的留言时，每 6 小时取一次回复，侧栏「问题反馈」上显示未读回复数
+async function fbTick() {
+  const list = fbList(), recent = fmtDate(new Date(Date.now() - 60 * 864e5));
+  if (!FEEDBACK_URL || !list.some(f => f.at >= recent) || Date.now() - getMeta('fbSynced', 0) < 6 * 3600e3) return;
+  try { await fbSync(); } catch (e) {}
+}
+route('GET', '/api/feedback', async () => {
+  let list = fbList(), error = '';
+  if (list.length) try { list = await fbSync(); } catch (e) { error = e.message; }
+  if (list.some(f => f.replied && f.replied !== f.seen)) { list = list.map(f => ({ ...f, seen: f.replied || f.seen })); setMeta('feedback', list); }  // 打开页面就算看过回复
+  return { list: [...list].reverse(), error };
+});
+route('POST', '/api/feedback', async ctx => {
+  const b = ctx.body, text = String(b.text ?? '').trim().slice(0, 2000), nick = str(b.nick, 30), contact = str(b.contact, 100), allowPublic = !!b.allowPublic;
+  if (!text) fail('请填写留言内容');
+  const r = await fbPost('', { token: fbToken(), v: VERSION, plat: process.platform, nick, contact, text, allowPublic });
+  const d = new Date(), list = fbList();
+  list.push({ fid: r.fid, at: today() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()), by: ctx.user.name, nick, contact, text, allowPublic, reply: '', replied: '', public: false, seen: '' });
+  setMeta('feedback', list.slice(-200));
+  audit(ctx, '问题反馈', text.slice(0, 60));
+  return { fid: r.fid };
+});
+
 /* ---------- 匿名使用统计：每天报一次 安装 ID（首次启动随机生成）、版本号、系统类型，不含任何业务数据和个人信息 ----------
  * 默认开启，系统设置里可关闭；连不上外网就静默跳过，不影响使用。环境变量 XERP_STATS_URL 可改地址，设为空字符串则完全不发 */
 const STATS_URL = process.env.XERP_STATS_URL ?? 'http://101.201.141.121/xerp/api/ping';
@@ -2044,6 +2094,8 @@ server.listen(config.port, config.host, () => {
   setInterval(trackTick, 5 * 60e3);
   setTimeout(statsTick, Number(process.env.XERP_STATS_DELAY) || 60e3);
   setInterval(statsTick, 3600e3);
+  setTimeout(fbTick, 90e3);
+  setInterval(fbTick, 3600e3);
 });
 const shutdown = () => { log('服务端停止'); try { db.close(); } catch (e) {} process.exit(0); };
 process.on('SIGINT', shutdown);

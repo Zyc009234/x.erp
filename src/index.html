@@ -88,6 +88,8 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .grid>*{min-width:0}
 .g4{grid-template-columns:repeat(4,1fr)}.g5{grid-template-columns:repeat(5,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:1fr 1fr}
 .g-2-1{grid-template-columns:2fr 1fr}
+.fb-item{padding:14px 0;border-bottom:1px solid var(--border)}.fb-item:first-child{padding-top:0}.fb-item:last-child{border-bottom:0}.fb-meta{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:12px;color:var(--muted)}
+.fb-text{white-space:pre-wrap;word-break:break-word;margin-top:6px}.fb-reply{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--primary-soft)}.fb-reply b{margin-right:8px}
 .mb{margin-bottom:16px}
 .kpi{padding:18px 20px;display:flex;gap:14px;align-items:flex-start}
 .kpi-ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;flex-shrink:0}
@@ -317,7 +319,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.0.8 · 数据保存在服务器</div>
+    <div class="side-foot">v2.0.9 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -378,6 +380,7 @@ const ICONS = {
   wallet:'<rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 3h12"/><circle cx="17" cy="15" r="1.2"/>',
   chart:'<path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/>',
   settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
+  message:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   download:'<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
@@ -3259,6 +3262,44 @@ function pageReports() {
 }
 
 /* ================= 页面：设置 ================= */
+/* ================= 页面：问题反馈（留言发给作者，作者在官网后台回复） ================= */
+function pageFeedback() {
+  $('#view').innerHTML = pageHead('问题反馈', '遇到问题或有建议，直接留言给作者；作者的回复会显示在这里') + `
+  <div class="grid g-2-1" style="align-items:start">
+    <div class="card"><div class="card-head"><h3>我的留言</h3><button class="btn sm" id="fbReload">${ic('refresh')}刷新回复</button></div><div class="card-body" id="fbList"><div class="empty">加载中…</div></div></div>
+    <div class="card"><div class="card-head"><h3>给作者留言</h3></div><div class="card-body">
+      <label class="field"><span>留言内容 <i>*</i></span><textarea id="fbText" rows="6" maxlength="2000" placeholder="遇到了什么问题？在哪个页面、做了什么操作？有截图里的报错文字也可以贴上来。也欢迎提功能建议。"></textarea></label>
+      <label class="field" style="margin-top:12px"><span>称呼（可选）</span><input id="fbNick" maxlength="30" placeholder="怎么称呼你，公开时显示这个名字"></label>
+      <label class="field" style="margin-top:12px"><span>联系方式（可选，只有作者能看到）</span><input id="fbContact" maxlength="100" placeholder="微信 / 手机 / 邮箱，方便作者联系你"></label>
+      <label class="chk" style="margin-top:12px"><input type="checkbox" id="fbPub">允许作者把这条留言和回复公开到官网（不含联系方式）</label>
+      <p class="sub-t" style="margin-top:10px">留言会附带软件版本号和系统类型，不含公司名、商品、单据等业务数据。需要这台设备能上网。</p>
+      <div style="margin-top:14px;text-align:right"><button class="btn primary" id="fbSend">${ic('check')}发送留言</button></div>
+    </div></div>
+  </div>`;
+  const draw = r => {
+    const box = $('#fbList'); if (!box) return;
+    box.innerHTML = (r.error ? `<p class="sub-t" style="margin-bottom:10px;color:var(--orange)">${esc(r.error)}，下面是本机保存的留言</p>` : '') + (r.list.length ? r.list.map(f => `<div class="fb-item">
+      <div class="fb-meta"><span>${esc(f.at)}</span><span>${esc(f.by || '')}</span>${badge(f.reply ? '已回复' : '待回复', f.reply ? 'green' : 'orange')}${f.public ? badge('已公开到官网', 'blue plain') : ''}</div>
+      <div class="fb-text">${esc(f.text)}</div>
+      ${f.reply ? `<div class="fb-reply"><b>作者回复</b><span class="sub-t">${esc(f.replied)}</span><div class="fb-text">${esc(f.reply)}</div></div>` : ''}</div>`).join('')
+      : `<div class="empty">${emptySvg}<p>还没有留言。遇到问题或有想要的功能，直接在右边写给作者。</p></div>`);
+    db.settings.feedbackUnread = 0;
+    const nb = document.querySelector('.nav-item[data-id=feedback] .nav-badge'); if (nb) nb.remove();
+  };
+  const load = () => api('GET', '/api/feedback').then(draw).catch(e => { if ($('#fbList')) $('#fbList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; });
+  $('#fbReload').onclick = load;
+  $('#fbSend').onclick = async () => {
+    const text = $('#fbText').value.trim();
+    if (!text) return toast('请填写留言内容', 'error');
+    const b = $('#fbSend'); b.disabled = true;
+    try {
+      await api('POST', '/api/feedback', {text, nick:$('#fbNick').value.trim(), contact:$('#fbContact').value.trim(), allowPublic:$('#fbPub').checked});
+      $('#fbText').value = ''; toast('留言已发送，作者回复后会显示在左边', 'success'); load();
+    } catch (e) { toast(e.message, 'error'); }
+    b.disabled = false;
+  };
+  load();
+}
 function pageSettings() {
   const items = [['general', '常规设置']];
   if (isAdmin()) items.push(['print', '打印模板'], ['users', '用户管理'], ['roles', '角色管理'], ['data', '数据管理'], ['audit', '操作日志']);
@@ -3459,6 +3500,7 @@ const NAV = [
   {id:'employees', label:'人事管理', icon:'id', fn:pageEmployees, perm:'hr'},
   {id:'reports', label:'统计报表', icon:'chart', fn:pageReports, perm:'reports'},
   {group:'系统'},
+  {id:'feedback', label:'问题反馈', icon:'message', fn:pageFeedback, badge:() => db.settings.feedbackUnread || 0},
   {id:'settings', label:'系统设置', icon:'settings', fn:pageSettings}
 ];
 const PAGES = Object.fromEntries(NAV.filter(n => n.id).map(n => [n.id, n]));

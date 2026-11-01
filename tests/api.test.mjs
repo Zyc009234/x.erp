@@ -40,7 +40,7 @@ async function newUser(username, roleId) {
 }
 
 // 模拟快递鸟：校验签名，按 RequestType 返回结果，收到的请求记在 kdnReqs 里
-const KDN_KEY = 'test-app-key', kdnReqs = [], statsReqs = [];
+const KDN_KEY = 'test-app-key', kdnReqs = [], statsReqs = [], fbStore = [];
 let kdnMock;
 async function startKdnMock() {
   const http = await import('node:http'), crypto = await import('node:crypto');
@@ -48,6 +48,9 @@ async function startKdnMock() {
     let b = ''; req.on('data', c => { b += c; });
     req.on('end', () => {
       if (req.url === '/stats') { statsReqs.push(JSON.parse(b)); res.end('{"ok":true}'); return; }  // 匿名使用统计
+      // 留言服务：/fb 收留言，/fb/mine 按 token 返回留言和回复（测试里直接改 fbStore 模拟作者回复）
+      if (req.url === '/fb') { const x = JSON.parse(b), fid = fbStore.length + 1; fbStore.push({ ...x, fid, reply: '', replied: '', public: false }); res.end(JSON.stringify({ fid })); return; }
+      if (req.url === '/fb/mine') { const t = JSON.parse(b).token; res.end(JSON.stringify(fbStore.filter(x => x.token === t).map(({ fid, text, reply, replied, public: pub }) => ({ fid, created: '', text, reply, replied, public: pub })))); return; }
       const p = new URLSearchParams(b), type = req.url.slice(1), data = JSON.parse(p.get('RequestData'));
       const sign = Buffer.from(crypto.createHash('md5').update(p.get('RequestData') + KDN_KEY, 'utf8').digest('hex')).toString('base64');
       kdnReqs.push({ type, data, ebid: p.get('EBusinessID'), signOk: sign === p.get('DataSign') });
@@ -66,7 +69,7 @@ async function startKdnMock() {
 
 before(async () => {
   const kdnBase = await startKdnMock();
-  srv = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js'), '--data', DATA, '--port', String(PORT)], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, XERP_KDN_BASE: kdnBase, XERP_STATS_URL: kdnBase + '/stats', XERP_STATS_DELAY: '200' } });
+  srv = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js'), '--data', DATA, '--port', String(PORT)], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, XERP_KDN_BASE: kdnBase, XERP_STATS_URL: kdnBase + '/stats', XERP_STATS_DELAY: '200', XERP_FEEDBACK_URL: kdnBase + '/fb' } });
   let log = ''; srv.stdout.on('data', d => { log += d; }); srv.stderr.on('data', d => { log += d; });
   for (let i = 0; i < 100; i++) {
     try { if ((await fetch(BASE + '/api/ping')).ok) break; } catch (e) {}
@@ -652,4 +655,28 @@ test('匿名使用统计：启动后报一次安装编号、版本、平台，�
   await ok(admin, 'PUT', '/api/settings', { stats: false });
   assert.equal((await ok(admin, 'GET', '/api/data')).settings.stats, false);
   await ok(admin, 'PUT', '/api/settings', { stats: true });
+});
+
+test('问题反馈：留言转发给作者服务器（带版本号、不带业务数据），取回作者回复', async () => {
+  assert.equal((await call(admin, 'POST', '/api/feedback', { text: '  ' })).http, 400, '内容不能为空');
+  await ok(admin, 'POST', '/api/feedback', { text: '导入时报错\n第二行', nick: '老王', contact: 'wx:abc', allowPublic: true });
+  assert.equal(fbStore.length, 1);
+  const sent = fbStore[0];
+  assert.match(sent.token, /^[0-9a-f]{32}$/);
+  assert.deepEqual(Object.keys(sent).filter(k => !['fid', 'reply', 'replied', 'public'].includes(k)).sort(), ['allowPublic', 'contact', 'nick', 'plat', 'text', 'token', 'v']);
+  assert.equal(sent.text, '导入时报错\n第二行', '保留换行');
+  let r = await ok(admin, 'GET', '/api/feedback');
+  assert.equal(r.list.length, 1); assert.equal(r.list[0].reply, ''); assert.equal(r.error, '');
+  // 作者回复后：未读 1，打开反馈页后清零
+  Object.assign(fbStore[0], { reply: '已修复', replied: '2026-11-01 10:00', public: true });
+  r = await ok(admin, 'GET', '/api/feedback');
+  assert.equal(r.list[0].reply, '已修复'); assert.equal(r.list[0].public, true);
+  assert.equal((await ok(admin, 'GET', '/api/data')).settings.feedbackUnread, 0, '看过就不算未读');
+  Object.assign(fbStore[0], { reply: '补充说明', replied: '2026-11-01 11:00' });
+  // 后台没同步前本地还是旧回复；打开页面同步后有新回复
+  r = await ok(admin, 'GET', '/api/feedback');
+  assert.equal(r.list[0].reply, '补充说明');
+  // 作者删掉的留言，本地也去掉
+  fbStore.length = 0;
+  assert.equal((await ok(admin, 'GET', '/api/feedback')).list.length, 0);
 });
