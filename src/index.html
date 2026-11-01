@@ -317,7 +317,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.0.7 · 数据保存在服务器</div>
+    <div class="side-foot">v2.0.8 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -3305,7 +3305,7 @@ function pageSettings() {
       <div style="margin-top:14px;text-align:right"><button class="btn primary" data-act="saveApprove">${ic('check')}保存审核设置</button></div>
     </div></div>
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>匿名使用统计</h3></div><div class="card-body">
-      <p class="sub-t" style="margin-bottom:10px">每天向 x.erp 作者的服务器报一次：随机生成的安装编号、软件版本号、系统类型（Windows / Linux），用来了解有多少人在用、该维护哪些版本。不包含公司名、账号、商品、单据等任何业务数据，也不记录 IP。连不上外网时自动跳过，不影响使用。</p>
+      <p class="sub-t" style="margin-bottom:10px">每天向 x.erp 作者的服务器报一次：随机生成的安装编号、软件版本号、系统类型（Windows / Linux），用来了解有多少人在用、该维护哪些版本。不包含公司名、账号、商品、单据等任何业务数据。统计服务不保存 IP 原文：只用它识别大致所在城市，并做不可逆加密后用来把同一网络下的多台设备合并计数。连不上外网时自动跳过，不影响使用。</p>
       <label class="chk"><input type="checkbox" id="statsOn" ${st.stats !== false ? 'checked' : ''}>参与匿名使用统计</label>
     </div></div>` : ''}`;
     if ($('#statsOn')) $('#statsOn').onchange = e => A.saveStats(e.target.checked);
