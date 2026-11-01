@@ -9,3 +9,4 @@ node_modules/
 windows/build/
 android/build/
 tools/stats-server/ip2region_v4.xdb
+__pycache__/
