@@ -25,7 +25,7 @@ jobs:
       - name: 冒烟测试：构建本机架构镜像并跑起来
         run: |
           docker build -t xerp:test .
-          docker run -d --name t -p 8686:8686 -e XERP_STATS_URL= -e XERP_FEEDBACK_URL= -e XERP_ADMIN_PASSWORD=ci-pass-123 xerp:test
+          docker run -d --name xerp-ci -p 8686:8686 -e XERP_STATS_URL= -e XERP_FEEDBACK_URL= -e XERP_ADMIN_PASSWORD=ci-pass-123 xerp:test
           for i in $(seq 30); do curl -sf http://127.0.0.1:8686/api/ping && break; sleep 1; done
           curl -sf http://127.0.0.1:8686/api/ping | grep -q '"app":"XERP"'
           curl -sf http://127.0.0.1:8686/ | grep -q '<title>'
@@ -33,10 +33,10 @@ jobs:
           curl -sf -X POST -H 'Content-Type: application/json' -d '{"username":"admin","password":"ci-pass-123"}' http://127.0.0.1:8686/api/login | grep -q token
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"username":"admin","password":"admin123"}' http://127.0.0.1:8686/api/login)" = 401
           # 数据写在 /data，时区是北京时间
-          docker exec t ls /data/erp.db /data/config.json
-          test "$(docker exec t node -e 'console.log(new Date().getTimezoneOffset())')" = -480
-          docker inspect --format '{{.State.Health.Status}}' t
-          docker rm -f t
+          docker exec xerp-ci ls /data/erp.db /data/config.json
+          test "$(docker exec xerp-ci node -e 'console.log(new Date().getTimezoneOffset())')" = -480
+          docker inspect --format '{{.State.Health.Status}}' xerp-ci
+          docker rm -f xerp-ci
 
       - name: 版本号
         if: startsWith(github.ref, 'refs/tags/v')
