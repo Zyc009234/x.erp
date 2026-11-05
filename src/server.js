@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.0.14';
+const VERSION = '2.0.15';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -53,6 +53,7 @@ db.exec(`
     salt TEXT, hash TEXT, created_at TEXT, last_login TEXT, disabled INTEGER NOT NULL DEFAULT 0);
   CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, time TEXT, username TEXT, action TEXT, detail TEXT, ip TEXT);
+  CREATE TABLE IF NOT EXISTS images (id TEXT PRIMARY KEY, mime TEXT NOT NULL, data BLOB NOT NULL, updated_at TEXT);
 `);
 try { db.exec('ALTER TABLE users ADD COLUMN perms TEXT'); } catch (e) {}  // 细化权限（JSON 数组），NULL 表示旧账号：拥有全部业务权限
 const S = {
@@ -321,6 +322,14 @@ function writeAll(data) {
   }
   ensureWh();
   ensureAccounts();
+  // 商品图片：备份里有就恢复，没有（演示数据、清空、旧版备份）就清掉
+  db.exec('DELETE FROM images');
+  const ins = db.prepare('INSERT OR REPLACE INTO images (id, mime, data, updated_at) VALUES (?, ?, ?, ?)');
+  for (const i of Array.isArray(data.images) ? data.images : []) {
+    if (!i || typeof i.id !== 'string' || !IMG_TYPES.includes(i.mime) || typeof i.data !== 'string') continue;
+    const buf = Buffer.from(i.data, 'base64');
+    if (buf.length && buf.length <= IMG_MAX && imgMime(buf) === i.mime) ins.run(i.id, i.mime, buf, new Date().toISOString());
+  }
 }
 // 保证有默认仓库，且每个商品都有分仓库存 p.wh（{仓库id: 数量}，合计等于 p.stock；旧数据全部归入默认仓库）
 function ensureWh() {
@@ -401,6 +410,39 @@ function deleteTransfer(ctx, id) {
     const t = get('acctTransfers', id) || fail('记录不存在', 404);
     del('acctTransfers', id); audit(ctx, '删除转账', `${t.amount}`);
   });
+}
+/* ---------- 商品图片：前端压缩后以 data URL 上传，校验文件头，商品上记一个版本号 p.img 供前端判断有没有图、刷新缓存 ---------- */
+const IMG_MAX = 800 * 1024, IMG_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+function imgMime(b) {
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+  if (b.length > 8 && b.readUInt32BE(0) === 0x89504e47 && b.readUInt32BE(4) === 0x0d0a1a0a) return 'image/png';
+  if (b.length > 12 && b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP') return 'image/webp';
+  return '';
+}
+function saveProductImage(ctx, id) {
+  const m = /^data:image\/[a-z+]+;base64,([A-Za-z0-9+/=]+)$/.exec(String(ctx.body.data || '')) || fail('图片格式不正确');
+  const buf = Buffer.from(m[1], 'base64');
+  if (buf.length > IMG_MAX) fail('图片太大（最大 800 KB），请换一张或压缩后再传');
+  const mime = imgMime(buf) || fail('只支持 JPG、PNG、WebP 图片');
+  return tx(() => {
+    const p = get('products', id) || fail('商品不存在', 404);
+    db.prepare('INSERT OR REPLACE INTO images (id, mime, data, updated_at) VALUES (?, ?, ?, ?)').run(id, mime, buf, new Date().toISOString());
+    p.img = Date.now().toString(36); put('products', p); audit(ctx, '上传商品图片', p.name);
+    return { img: p.img };
+  });
+}
+function deleteProductImage(ctx, id) {
+  return tx(() => {
+    const p = get('products', id) || fail('商品不存在', 404);
+    db.prepare('DELETE FROM images WHERE id = ?').run(id);
+    delete p.img; put('products', p); audit(ctx, '删除商品图片', p.name);
+  });
+}
+const RAW = Symbol('raw');  // 路由返回 { [RAW]: { type, body } } 时直接输出二进制
+function getProductImage(ctx, id) {
+  if (!['inv.view', 'prod.view', 'sales', 'purchase', 'dashboard', 'reports'].some(k => ctx.perms.has(k))) fail('没有权限查看商品', 403);
+  const r = db.prepare('SELECT mime, data FROM images WHERE id = ?').get(id) || fail('这个商品没有图片', 404);
+  return { [RAW]: { type: r.mime, body: Buffer.from(r.data) } };
 }
 const whName = id => (get('warehouses', id) || {}).name || '已删除仓库';
 const whQty = (p, w) => (p.wh && p.wh[w]) || 0;
@@ -1756,6 +1798,7 @@ function deleteFinance(ctx, id) {
 function backup() {
   const data = {};
   COLS.forEach(c => { data[c] = list(c); });
+  data.images = db.prepare('SELECT id, mime, data FROM images').all().map(r => ({ id: r.id, mime: r.mime, data: Buffer.from(r.data).toString('base64') }));
   return { app: 'XERP', version: VERSION, exportedAt: new Date().toISOString(), settings: getMeta('settings', {}), counters: getMeta('counters', {}), data };
 }
 function restore(ctx) {
@@ -1884,7 +1927,7 @@ for (const col of Object.keys(ENTITY)) {
   const perm = ctx => typeof ENTITY_PERM[col] === 'string' ? ENTITY_PERM[col] : ENTITY_PERM[col][ctx.method];
   route('POST', `/api/${col}`, ctx => saveEntity(ctx, col, null), { perm });
   route('PUT', `/api/${col}/:id`, ctx => saveEntity(ctx, col, ctx.params.id), { perm });
-  route('DELETE', `/api/${col}/:id`, ctx => deleteEntity(ctx, col, ctx.params.id), { perm });
+  route('DELETE', `/api/${col}/:id`, ctx => { const r = deleteEntity(ctx, col, ctx.params.id); if (col === 'products') db.prepare('DELETE FROM images WHERE id = ?').run(ctx.params.id); return r; }, { perm });
 }
 const orderPerm = { perm: ctx => (ORD[ctx.params.kind] || ORD.purchase).perm };
 route('POST', '/api/orders/:kind', ctx => saveOrder(ctx, ctx.params.kind, null), orderPerm);
@@ -1897,6 +1940,9 @@ route('PUT', '/api/checkdocs/:id', ctx => saveCheck(ctx, ctx.params.id), { perm:
 route('POST', '/api/checkdocs/:id/post', ctx => postCheck(ctx, ctx.params.id), { perm: 'inv.checkpost' });
 route('POST', '/api/checkdocs/:id/void', ctx => voidCheck(ctx, ctx.params.id), { perm: 'inv.check' });
 route('POST', '/api/products/import', ctx => importProducts(ctx), { perm: 'prod.edit' });
+route('GET', '/api/products/:id/image', ctx => getProductImage(ctx, ctx.params.id));
+route('PUT', '/api/products/:id/image', ctx => saveProductImage(ctx, ctx.params.id), { perm: 'prod.edit' });
+route('DELETE', '/api/products/:id/image', ctx => deleteProductImage(ctx, ctx.params.id), { perm: 'prod.edit' });
 route('POST', '/api/stockdocs', ctx => saveStockDoc(ctx), { perm: ctx => ctx.body.dir === 'out' ? 'inv.out' : 'inv.in' });
 route('POST', '/api/stockdocs/:id/void', ctx => voidStockDoc(ctx, ctx.params.id), { perm: 'inv.view' });  // 具体权限在函数里按单据状态判断
 route('POST', '/api/stockdocs/:id/approve', ctx => approveStockDoc(ctx, ctx.params.id, true), { perm: 'inv.approve' });
@@ -2128,10 +2174,11 @@ async function notifyTick() {
 }
 
 /* ================= HTTP 服务 ================= */
-// 在线演示（XERP_DEMO=1）：公开给所有人试用。屏蔽改密码 / 账号 / 角色、推送、快递鸟、导入备份 / 清空、问题反馈
+// 在线演示（XERP_DEMO=1）：公开给所有人试用。屏蔽改密码 / 账号 / 角色、推送、快递鸟、导入备份 / 清空、问题反馈、上传商品图片
 // ——这些会把别人锁在门外、往外发请求或打扰作者。数据重置靠部署侧（每小时重启并清空数据目录）。
 const DEMO_BLOCK = [/^POST \/api\/password$/, /^(POST|PUT|DELETE) \/api\/(users|roles)(\/|$)/, /^(PUT|POST) \/api\/settings\/(notify|kdn)(\/|$)/,
-  /^POST \/api\/ship\/(eorder|track-all)$/, /^POST \/api\/shipments\/[^/]+\/(track|cancel-eorder)$/, /^POST \/api\/(restore|clear)$/, /^POST \/api\/feedback$/];
+  /^POST \/api\/ship\/(eorder|track-all)$/, /^POST \/api\/shipments\/[^/]+\/(track|cancel-eorder)$/, /^POST \/api\/(restore|clear)$/, /^POST \/api\/feedback$/,
+  /^(PUT|DELETE) \/api\/products\/[^/]+\/image$/];  // 商品图片：公开演示里不让传图，免得有人传不合适的图片给别的访客看
 // 在线演示跑在本机 Caddy 后面：只有来自本机的连接才信任 X-Forwarded-For，否则所有访客都是 127.0.0.1，一人输错密码会锁住所有人
 function clientIp(req) {
   const peer = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
@@ -2190,7 +2237,7 @@ const server = http.createServer(async (req, res) => {
   const ctx = { ip: clientIp(req), method: req.method, query: url.searchParams, body: {}, user: null, params: {}, perms: new Set() };
   try {
     const r = routes.find(x => x.method === req.method && x.re.test(url.pathname)) || fail('接口不存在', 404);
-    if (demoBlocked(req.method, url.pathname)) fail('在线演示版不能使用这个功能（改密码、账号、推送、导入备份、留言等），下载安装后就能用', 403);
+    if (demoBlocked(req.method, url.pathname)) fail('在线演示版不能使用这个功能（改密码、账号、推送、导入备份、留言、上传图片等），下载安装后就能用', 403);
     ctx.params = Object.fromEntries(Object.entries(url.pathname.match(r.re).groups || {}).map(([k, v]) => [k, decodeURIComponent(v)]));
     if (r.auth) {
       ctx.user = authUser(req) || fail('登录已过期，请重新登录', 401);
@@ -2201,6 +2248,7 @@ const server = http.createServer(async (req, res) => {
     const need = typeof r.perm === 'function' ? r.perm(ctx) : r.perm;
     if (need && !ctx.perms.has(need)) fail(`没有权限：${PERM_LABEL[need] || need}${enabledModules().includes(PERM_MOD[need]) ? '' : '（该模块未启用）'}`, 403);
     const out = await r.handler(ctx);
+    if (out && out[RAW]) { res.writeHead(200, { 'Content-Type': out[RAW].type, 'Cache-Control': 'private, max-age=31536000' }); return res.end(out[RAW].body); }
     send(res, 200, out === undefined ? { ok: true } : out);
   } catch (e) {
     const status = e.status || 500;

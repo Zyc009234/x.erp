@@ -85,6 +85,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .demo-bar{background:var(--primary-soft);color:var(--primary);font-size:13px;text-align:center;padding:7px 12px}.demo-bar a{color:inherit;font-weight:600}
 .tip-card{margin-top:16px}.tip-card .card-body{display:flex;gap:16px;align-items:center}.tip-card img{flex:none;border-radius:10px;border:1px solid var(--border);background:#fff}.tip-card p{margin:0 0 6px;line-height:1.6}
 @media (max-width:520px){.tip-card .card-body{flex-direction:column;text-align:center}}
+.pcell{display:flex;align-items:center;gap:10px}.pimg{width:36px;height:36px;flex:none;object-fit:cover;border-radius:8px;border:1px solid var(--border);background:var(--panel2);cursor:zoom-in}.pimg.broken{visibility:hidden}.pk-row .pimg{cursor:inherit}.pimg-big{max-width:100%;max-height:60vh;border-radius:12px;border:1px solid var(--border);background:#fff}
 .card-head .more{color:var(--muted);font-size:13px;cursor:pointer}
 .card-head .more:hover{color:var(--primary)}
 .card-body{padding:16px 20px 20px}
@@ -327,7 +328,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.0.14 · 数据保存在服务器</div>
+    <div class="side-foot">v2.0.15 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -418,6 +419,10 @@ const emptySvg = '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" str
 
 /* ================= 常量 ================= */
 const CATS = ['电子产品', '办公用品', '家居用品', '食品饮料'];
+// 供应商类目、客户等级可以自己填：候选 = 已经用过的 + 内置的几个
+const uniq = a => [...new Set(a.filter(Boolean))];
+const supCats = () => uniq([...db.suppliers.map(r => r.category), ...db.products.map(r => r.category), '综合']);
+const custLevels = () => uniq([...LEVELS, ...db.customers.map(r => r.level)]);
 const UNITS = ['个', '台', '箱', '盒', '把', '张', '袋', '瓶', '件', '套'];
 const cats = () => [...new Set([...CATS, ...db.products.map(p => p.category).filter(Boolean)])];
 const units = () => [...new Set([...UNITS, ...db.products.map(p => p.unit).filter(Boolean)])];
@@ -789,10 +794,10 @@ const ENT = {
     {n:'remark', l:'备注', type:'textarea', span:1}]},
   customers: {title:'客户', fields:[
     {n:'name', l:'客户名称', req:1, span:1}, {n:'contact', l:'联系人', req:1}, {n:'phone', l:'联系电话', req:1}, {n:'email', l:'邮箱'},
-    {n:'level', l:'客户等级', type:'select', opts:() => LEVELS}, {n:'address', l:'地址', span:1}, {n:'remark', l:'备注', type:'textarea', span:1}]},
+    {n:'level', l:'客户等级（可选择或直接输入）', type:'combo', opts:() => custLevels(), ph:'如：VIP、批发、零售'}, {n:'address', l:'地址', span:1}, {n:'remark', l:'备注', type:'textarea', span:1}]},
   suppliers: {title:'供应商', fields:[
     {n:'name', l:'供应商名称', req:1, span:1}, {n:'contact', l:'联系人', req:1}, {n:'phone', l:'联系电话', req:1}, {n:'email', l:'邮箱'},
-    {n:'category', l:'主营类目', type:'select', opts:() => [...CATS, '综合']}, {n:'address', l:'地址', span:1}, {n:'remark', l:'备注', type:'textarea', span:1}]},
+    {n:'category', l:'主营类目（可选择或直接输入）', type:'combo', opts:() => supCats(), ph:'如：钢材、五金、包装材料'}, {n:'address', l:'地址', span:1}, {n:'remark', l:'备注', type:'textarea', span:1}]},
   employees: {title:'员工', fields:[
     {n:'no', l:'工号', ph:'留空自动生成'}, {n:'name', l:'姓名', req:1}, {n:'gender', l:'性别', type:'select', opts:['男', '女']},
     {n:'dept', l:'部门', type:'select', opts:() => DEPTS}, {n:'position', l:'职位', req:1}, {n:'phone', l:'手机号'},
@@ -837,7 +842,7 @@ function pageProducts() {
   <div class="card">${toolbar('products', {placeholder:'搜索编码 / 名称 / 规格', filters, buttons:btns})}<div id="list-products"></div></div>`;
   mountList('products', {rows:() => db.products, search:p => p.sku + (p.barcode || '') + p.name + (p.spec || '') + p.category, filters, columns:[
     {t:'商品编码', r:p => `<span class="sub-t">${esc(p.sku)}</span>${p.barcode ? `<div class="sub-t">${ic('barcode')} ${esc(p.barcode)}</div>` : ''}`, s:p => p.sku},
-    {t:'商品名称', r:p => `<b>${esc(p.name)}</b>${p.batch ? ' <span class="badge blue plain">批次</span>' : ''}${p.spec ? `<div class="sub-t">${esc(p.spec)}</div>` : ''}`, s:p => p.name},
+    {t:'商品名称', r:p => `<div class="pcell">${pimg(p)}<div><b>${esc(p.name)}</b>${p.batch ? ' <span class="badge blue plain">批次</span>' : ''}${p.spec ? `<div class="sub-t">${esc(p.spec)}</div>` : ''}</div></div>`, s:p => p.name},
     {t:'分类', r:p => badge(p.category, 'primary plain')},
     {t:'单位', r:p => esc(p.unit) + ((p.units || []).length ? `<div class="sub-t">${p.units.map(u => '1' + esc(u.name) + '=' + u.rate + esc(p.unit)).join(' ')}</div>` : '')},
     ...(pr ? [
@@ -846,7 +851,7 @@ function pageProducts() {
       {t:'毛利率', cls:'num', r:p => p.price ? ((p.price - p.cost) / p.price * 100).toFixed(1) + '%' : '-', s:p => p.price ? (p.price - p.cost) / p.price : 0}] : []),
     {t:'库存', cls:'num', r:p => `<b>${num(p.stock)}</b>${stockText(p, p.stock) ? `<div class="sub-t">${esc(stockText(p, p.stock))}</div>` : ''}`, s:p => p.stock},
     {t:'状态', r:p => badge(...stockStatus(p))},
-    {t:'操作', r:p => `<div class="ops">${can('prod.edit') ? tbtn('编辑', 'edit', 'products|' + p.id) : ''}${can('inv.in') ? tbtn('入库', 'stock', 'in|' + p.id) : ''}${can('prod.delete') ? tbtn('删除', 'del', 'products|' + p.id, 'danger-text') : ''}</div>`}
+    {t:'操作', r:p => `<div class="ops">${can('prod.edit') ? tbtn('编辑', 'edit', 'products|' + p.id) + tbtn('图片', 'imgView', p.id) : ''}${can('inv.in') ? tbtn('入库', 'stock', 'in|' + p.id) : ''}${can('prod.delete') ? tbtn('删除', 'del', 'products|' + p.id, 'danger-text') : ''}</div>`}
   ], exp:{name:'商品列表', cols:[['商品编码', p => p.sku], ['商品名称', p => p.name], ['规格型号', p => p.spec], ['分类', p => p.category], ['单位', p => p.unit], ...(pr ? [['成本价', p => p.cost], ['销售价', p => p.price]] : []), ['库存', p => p.stock], ['安全库存', p => p.safety]]}});
 }
 
@@ -958,7 +963,7 @@ function pageInventory() {
     if ($('#invWh')) $('#invWh').onchange = e => { ui.invWh = e.target.value; render(); };
     const whSplit = p => multiWh() && !W ? `<div class="sub-t">${db.warehouses.filter(w => whQty(p, w.id)).map(w => esc(w.name) + ' ' + whQty(p, w.id)).join(' · ') || '各仓均无库存'}</div>` : '';
     mountList('inv', {rows:() => db.products, search:p => p.sku + (p.barcode || '') + p.name + (p.spec || ''), filters, columns:[
-      {t:'商品', r:p => `<b>${esc(p.name)}</b>${p.batch ? ' <span class="badge blue plain">批次</span>' : ''}<div class="sub-t">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''} · ${esc(p.category)}</div>`, s:p => p.name},
+      {t:'商品', r:p => `<div class="pcell">${pimg(p)}<div><b>${esc(p.name)}</b>${p.batch ? ' <span class="badge blue plain">批次</span>' : ''}<div class="sub-t">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''} · ${esc(p.category)}</div></div></div>`, s:p => p.name},
       {t:W ? whName(W) + '库存' : '当前库存', cls:'num', r:p => `<b>${num(q(p))}</b> ${esc(p.unit)}${stockText(p, q(p)) ? `<div class="sub-t">${esc(stockText(p, q(p)))}</div>` : ''}${whSplit(p)}`, s:q},
       {t:'安全库存', cls:'num', r:p => num(p.safety)},
       {t:'库存水位', r:p => { const pct = Math.min(100, q(p) / ((p.safety || 1) * 3) * 100); const c = st(p)[1]; return `<div class="prog"><div class="bar"><i style="width:${pct}%;background:var(--${c})"></i></div></div>`; }},
@@ -1052,6 +1057,52 @@ function findProduct(v) {
 }
 /* ---------- 选择商品：左边分类、上面搜索、可多选，一次加进开单明细；叠在开单弹窗上面，不关掉它 ---------- */
 const closePicker = () => { const m = $('#pickMask'); if (m) { m.remove(); return true; } return false; };
+/* ---------- 商品图片：<img data-pimg> 由下面的观察器带着登录凭证去取，缓存成 blob 地址；p.img 是版本号，换图后自动刷新 ---------- */
+const PIMG = new Map();
+const pimg = (p, size = 36, view = true) => p && p.img ? `<img class="pimg" data-pimg="${p.id}" data-v="${esc(p.img)}" width="${size}" height="${size}" alt=""${view ? ` data-act="imgView" data-id="${p.id}" title="查看图片"` : ''}>` : '';
+async function loadPimg(el) {
+  const key = el.dataset.pimg + ':' + el.dataset.v; el.dataset.loading = '1';
+  if (!PIMG.has(key)) PIMG.set(key, (async () => {
+    const t = LS.get('token'), r = await fetch('/api/products/' + encodeURIComponent(el.dataset.pimg) + '/image', {headers:t ? {Authorization:'Bearer ' + t} : {}});
+    if (!r.ok) throw new Error(r.status);
+    return URL.createObjectURL(await r.blob());
+  })());
+  try { el.src = await PIMG.get(key); } catch (e) { PIMG.delete(key); el.classList.add('broken'); }
+}
+new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) (n.matches('img[data-pimg]') ? [n] : n.querySelectorAll('img[data-pimg]')).forEach(el => { if (!el.dataset.loading) loadPimg(el); }); })
+  .observe(document.body, {childList:true, subtree:true});
+// 上传前在浏览器里压缩：长边 800 像素以内、转成 JPG，几十 KB；手机拍的大照片也不会拖慢
+function shrinkImage(file, max = 800) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), im = new Image();
+    im.onload = () => {
+      URL.revokeObjectURL(url);
+      const k = Math.min(1, max / Math.max(im.width, im.height)), c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k));
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+      let q = 0.85, d = c.toDataURL('image/jpeg', q);
+      while (d.length > 900000 && q > 0.4) { q -= 0.15; d = c.toDataURL('image/jpeg', q); }
+      resolve(d);
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('无法读取这张图片，请换一张 JPG 或 PNG')); };
+    im.src = url;
+  });
+}
+function imgView(id) {
+  const p = byId(db.products, id); if (!p) return;
+  const edit = can('prod.edit');
+  openModal(`${modalHead('商品图片 · ' + esc(p.name))}<div class="m-body" style="text-align:center">
+    ${p.img ? `<img class="pimg-big" data-pimg="${p.id}" data-v="${esc(p.img)}" alt="${esc(p.name)}">` : `<div class="empty">${emptySvg}<p>这个商品还没有图片</p></div>`}
+    ${edit ? '<p class="sub-t" style="margin-top:10px">支持 JPG、PNG 等常见格式，手机上可以直接拍照；上传前会自动压缩。</p>' : ''}</div>
+  <div class="m-foot">${edit && p.img ? '<button class="btn danger-text" id="imgDel" style="margin-right:auto">删除图片</button>' : ''}<button class="btn" data-act="closeModal">关闭</button>${edit ? `<label class="btn primary">${ic('upload')}${p.img ? '更换图片' : '上传图片'}<input type="file" accept="image/*" id="imgFile" hidden></label>` : ''}</div>`);
+  if (!edit) return;
+  $('#imgFile').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try { const data = await shrinkImage(f); if (await mutate('PUT', '/api/products/' + id + '/image', {data}, '图片已保存')) imgView(id); }
+    catch (err) { toast(err.message || '无法读取这张图片', 'error'); }
+  };
+  if ($('#imgDel')) $('#imgDel').onclick = () => confirmBox(`删除「${esc(p.name)}」的图片吗？`, async () => { if (await mutate('DELETE', '/api/products/' + id + '/image', undefined, '图片已删除')) imgView(id); });
+}
 function productPicker({wh, have = [], onPick}) {
   closePicker();
   const sel = [], inDoc = new Set(have.filter(Boolean)), LIMIT = 300;
@@ -1079,7 +1130,7 @@ function productPicker({wh, have = [], onPick}) {
     const all = rows(), list = all.slice(0, LIMIT);
     $('#pkRows').innerHTML = list.map(p => { const on = sel.includes(p.id), q = qOf(p); return `<tr class="pk-row ${on ? 'on' : ''}" data-pid="${p.id}">
       <td><input type="checkbox" ${on ? 'checked' : ''} tabindex="-1"></td>
-      <td><b>${esc(p.name)}</b>${inDoc.has(p.id) ? ' <span class="badge blue plain">已在单中</span>' : ''}<div class="sub-t">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''}${p.barcode ? ' · ' + esc(p.barcode) : ''}</div></td>
+      <td><div class="pcell">${pimg(p, 32, false)}<div><b>${esc(p.name)}</b>${inDoc.has(p.id) ? ' <span class="badge blue plain">已在单中</span>' : ''}<div class="sub-t">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''}${p.barcode ? ' · ' + esc(p.barcode) : ''}</div></div></div></td>
       <td>${esc(p.category || '-')}</td><td>${esc(p.unit)}</td><td class="num ${q <= 0 ? 'neg' : ''}">${q}</td>${pr ? `<td class="num">${p.price != null ? money(p.price) : '-'}</td>` : ''}</tr>`; }).join('')
       || `<tr><td colspan="${pr ? 6 : 5}" class="sub-t" style="text-align:center;padding:24px">没有符合条件的商品</td></tr>`;
     $('#pkAll').checked = list.length > 0 && list.every(p => sel.includes(p.id));
@@ -3163,7 +3214,7 @@ async function trackAllUi() {
 function pageParty(type) {
   const isC = type === 'customers', kind = isC ? 'sales' : 'purchase', C = ORD[kind];
   const orders = pid => db[C.db].filter(o => o[C.partyKey] === pid && o.status !== '已作废');
-  const filters = isC ? [{key:'lv', label:'全部等级', options:LEVELS, test:(r, v) => r.level === v}] : [{key:'cat', label:'全部类目', options:[...CATS, '综合'], test:(r, v) => r.category === v}];
+  const filters = isC ? [{key:'lv', label:'全部等级', options:uniq(db.customers.map(r => r.level)), test:(r, v) => r.level === v}] : [{key:'cat', label:'全部类目', options:uniq(db.suppliers.map(r => r.category)), test:(r, v) => r.category === v}];
   const active = db[type].filter(p => orders(p.id).some(o => daysBetween(o.date, today()) <= 90)).length;
   $('#view').innerHTML = pageHead(isC ? '客户管理' : '供应商管理', isC ? '客户档案、交易统计与应收情况' : '供应商档案、采购统计与应付情况') + `
   <div class="grid g4 mb">
@@ -3693,6 +3744,7 @@ function globalSearch(q) {
 /* ================= 事件分发 ================= */
 const split = v => String(v).split('|');
 const A = {
+  imgView: id => imgView(id),
   closeModal, go,
   toggleSide: () => { const app = $('#app'); if (innerWidth <= 768) app.classList.toggle('open'); else app.classList.toggle('collapsed'); },
   toggleTheme: () => { db.settings.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; savePrefs(); applyTheme(); render(); },

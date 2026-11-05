@@ -61,3 +61,9 @@ test('经本机代理时按 X-Forwarded-For 区分访客：一个人输错密码
   assert.equal(await login('203.0.113.9', 'admin123'), 429, '乱试的人被锁');
   assert.equal(await login('198.51.100.7', 'admin123'), 200, '别的访客照常登录');
 });
+
+test('演示版不能上传商品图片', async () => {
+  const d = await call('GET', '/api/data');
+  const r = await call('PUT', `/api/products/${d.data.products[0].id}/image`, { data: 'data:image/jpeg;base64,/9j/' });
+  assert.equal(r.http, 403);
+});

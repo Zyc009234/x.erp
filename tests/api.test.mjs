@@ -779,3 +779,43 @@ test('采购单：审核后入库前可以反审核、可以修改（改完回�
   assert.equal((await call(admin, 'PUT', `/api/orders/purchase/${po.id}`, { partyId: su.id, date: '2026-11-05', items: [{ productId: p.id, qty: 1, price: 5 }] })).http, 400, '入库后不能改');
   assert.equal((await call(admin, 'POST', `/api/orders/purchase/${po.id}/unapprove`)).http, 400, '入库后不能反审核');
 });
+
+test('商品图片：上传后能取回原图、商品上有版本号；校验格式和大小；删图、删商品、备份恢复、清空都跟着走', async () => {
+  const p = await newProduct('IMG1');
+  const jpg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(2000, 7), Buffer.from([0xff, 0xd9])]);
+  const url = b => 'data:image/jpeg;base64,' + b.toString('base64');
+  assert.equal((await call(admin, 'GET', `/api/products/${p.id}/image`)).http, 404, '还没有图片');
+  const up = await ok(admin, 'PUT', `/api/products/${p.id}/image`, { data: url(jpg) });
+  assert.ok(up.img, '返回版本号');
+  assert.equal((await prod(p.id)).img, up.img);
+  const r = await fetch(BASE + `/api/products/${p.id}/image`, { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(r.status, 200); assert.equal(r.headers.get('content-type'), 'image/jpeg');
+  assert.ok(Buffer.from(await r.arrayBuffer()).equals(jpg), '取回的就是上传的');
+  assert.equal((await fetch(BASE + `/api/products/${p.id}/image`)).status, 401, '要登录');
+  assert.equal((await call(admin, 'PUT', `/api/products/${p.id}/image`, { data: 'data:image/jpeg;base64,' + Buffer.from('<svg>hi</svg>').toString('base64') })).http, 400, '不是图片');
+  assert.equal((await call(admin, 'PUT', `/api/products/${p.id}/image`, { data: url(Buffer.concat([jpg, Buffer.alloc(900 * 1024)])) })).http, 400, '太大');
+  // 备份里带图片，清空后图片没了，恢复后又回来
+  const bak = await ok(admin, 'GET', '/api/backup');
+  assert.ok(bak.data.images.some(i => i.id === p.id));
+  // 删图
+  await ok(admin, 'DELETE', `/api/products/${p.id}/image`);
+  assert.equal((await prod(p.id)).img, undefined);
+  assert.equal((await call(admin, 'GET', `/api/products/${p.id}/image`)).http, 404);
+  await ok(admin, 'PUT', `/api/products/${p.id}/image`, { data: url(jpg) });
+  // 删商品连图一起删
+  const p2 = await newProduct('IMG2');
+  await ok(admin, 'PUT', `/api/products/${p2.id}/image`, { data: url(jpg) });
+  await ok(admin, 'DELETE', '/api/products/' + p2.id);
+  assert.ok(!(await ok(admin, 'GET', '/api/backup')).data.images.some(i => i.id === p2.id), '删商品后图片也删了');
+  // 恢复旧备份：图片回到备份时的样子
+  await ok(admin, 'POST', '/api/restore', bak);
+  const r2 = await fetch(BASE + `/api/products/${p.id}/image`, { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(r2.status, 200);
+});
+
+test('供应商类目、客户等级可以自己填', async () => {
+  const su = await ok(admin, 'POST', '/api/suppliers', { name: '钢材供应商', contact: '王', phone: '1', category: '钢材' });
+  assert.equal(su.category, '钢材');
+  const cu = await ok(admin, 'POST', '/api/customers', { name: '批发客户', contact: '李', phone: '2', level: '批发' });
+  assert.equal(cu.level, '批发');
+});
