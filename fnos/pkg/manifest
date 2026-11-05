@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 2.0.11
+version               = 2.0.12
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 新增资金账户：可以建微信、支付宝、银行卡、现金等账户并填期初余额，订单收付款和记一笔都选账户，自动算出每个账户的当前余额；支持账户互转（取现、提现到银行卡，不算收支）；收支流水可以按账户筛选；老数据按原来的收付方式自动归到对应账户。
+changelog             = 采购单审核后、入库前可以「反审核」或直接「编辑」，改完退回待审核重新审核；新建采购退货单时提示只有已入库的采购单能关联退货。（2.0.11 新增资金账户：微信、支付宝、银行卡、现金账户和余额，账户互转。）

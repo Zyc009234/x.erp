@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.0.11';
+const VERSION = '2.0.12';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -688,7 +688,10 @@ function saveOrder(ctx, kind, id) {
     const data = { [C.partyKey]: party, date: b.date, remark: str(b.remark, 500), items, ...(C.src ? { srcId: src ? src.id : '', srcNo: src ? src.no : '' } : { discount }) };
     if (id) {
       const o = get(C.col, id) || fail('单据不存在', 404);
-      if (o.status !== C.statuses[0]) fail(`单据状态为「${o.status}」，不能编辑`);
+      // 采购单审核后、入库前也能改，改完回到待审核重新审核
+      const reApprove = kind === 'purchase' && o.status === '已审核';
+      if (o.status !== C.statuses[0] && !reApprove) fail(`单据状态为「${o.status}」，不能编辑${kind === 'purchase' ? '，已入库的请用采购退货单' : ''}`);
+      if (reApprove) { data.status = '待审核'; data.approver = ''; }
       if (!C.src) items.forEach(it => { const old = o.items.find(x => x.productId === it.productId); if (old && old.cost != null) it.cost = old.cost; });
       if ((o.offset || 0) > 0 && o.srcId !== data.srcId) fail('已冲抵过原单的退货单不能改关联原单');
       if ((o[C.paidKey] || 0) > orderTotal({ items, discount }) + 0.001) fail(`已${C.payWord} ${o[C.paidKey]} 元，修改后的合计不能少于这个数`);
@@ -734,6 +737,7 @@ function orderAction(ctx, kind, id, action) {
       o.status = '已发货'; o.shipDate = today(); o.wh = wh;
     } else if (action === 'complete' && kind === 'sales') { need('已发货'); o.status = '已完成'; }
     else if (action === 'approve' && kind === 'purchase') { need('待审核'); o.status = '已审核'; o.approver = ctx.user.name; }
+    else if (action === 'unapprove' && kind === 'purchase') { need('已审核'); o.status = '待审核'; o.approver = ''; }
     else if (action === 'inbound' && kind === 'purchase') {
       need('已审核');
       const wh = pickWh(b.wh), bi = b.batches && typeof b.batches === 'object' ? b.batches : {};
@@ -784,7 +788,7 @@ function orderAction(ctx, kind, id, action) {
         amount, account: acct.id, method: acct.kind, ref: o.no, note: str(b.note), operator: ctx.user.name });
     } else fail('不支持的操作', 404);
     put(C.col, o);
-    audit(ctx, { ship: '发货', complete: '完成订单', approve: '审核采购', inbound: '采购入库', post: kind === 'salesReturn' ? '销售退货入库' : '采购退货出库', offset: '退货冲抵', cancel: '作废单据', pay: C.payWord }[action], o.no + (action === 'pay' || action === 'offset' ? ' ' + b.amount : ''));
+    audit(ctx, { ship: '发货', complete: '完成订单', approve: '审核采购', unapprove: '反审核采购', inbound: '采购入库', post: kind === 'salesReturn' ? '销售退货入库' : '采购退货出库', offset: '退货冲抵', cancel: '作废单据', pay: C.payWord }[action], o.no + (action === 'pay' || action === 'offset' ? ' ' + b.amount : ''));
     return o;
   });
 }

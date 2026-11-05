@@ -761,3 +761,21 @@ test('资金账户：老流水按方式归账户，收付款记入所选账户�
   const empty = await ok(admin, 'POST', '/api/accounts', { name: '空账户', kind: '现金' });
   await ok(admin, 'DELETE', '/api/accounts/' + empty.id);
 });
+
+test('采购单：审核后入库前可以反审核、可以修改（改完回到待审核），入库后不能改', async () => {
+  const p = await newProduct('PU12', { cost: 5 });
+  const su = await ok(admin, 'POST', '/api/suppliers', { name: '反审核供应商' });
+  const po = await ok(admin, 'POST', '/api/orders/purchase', { partyId: su.id, date: '2026-11-05', items: [{ productId: p.id, qty: 2, price: 5 }] });
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/approve`);
+  const e = await ok(admin, 'PUT', `/api/orders/purchase/${po.id}`, { partyId: su.id, date: '2026-11-05', items: [{ productId: p.id, qty: 3, price: 5 }] });
+  assert.equal(e.status, '待审核', '已审核的改完退回待审核');
+  assert.equal(e.items[0].qty, 3);
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/approve`);
+  const u = await ok(admin, 'POST', `/api/orders/purchase/${po.id}/unapprove`);
+  assert.equal(u.status, '待审核');
+  assert.equal((await call(admin, 'POST', `/api/orders/purchase/${po.id}/unapprove`)).http, 400, '待审核不能再反审核');
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/approve`);
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/inbound`, {});
+  assert.equal((await call(admin, 'PUT', `/api/orders/purchase/${po.id}`, { partyId: su.id, date: '2026-11-05', items: [{ productId: p.id, qty: 1, price: 5 }] })).http, 400, '入库后不能改');
+  assert.equal((await call(admin, 'POST', `/api/orders/purchase/${po.id}/unapprove`)).http, 400, '入库后不能反审核');
+});

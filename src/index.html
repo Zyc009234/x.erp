@@ -324,7 +324,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.0.11 · 数据保存在服务器</div>
+    <div class="side-foot">v2.0.12 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -2302,7 +2302,7 @@ function orderOps(kind, o) {
     if (o.status === '已发货') b.push(tbtn('完成', 'complete', id, 'primary'));
   } else {
     if (o.status === '待审核') b.push(tbtn('审核', 'approve', id, 'primary'), tbtn('编辑', 'orderEdit', id));
-    if (o.status === '已审核') b.push(tbtn('入库', 'inbound', id, 'primary'));
+    if (o.status === '已审核') b.push(tbtn('入库', 'inbound', id, 'primary'), tbtn('编辑', 'orderEdit', id), tbtn('反审核', 'unapprove', id));
   }
   if (o.status !== '已作废' && unpaidOf(kind, o) > 0.001) b.push(tbtn(C.payWord, 'pay', id));
   if (ORD[kind + 'Return'] && ORD[kind + 'Return'].srcOk.includes(o.status) && can(kind)) b.push(tbtn('退货', 'orderReturn', id));
@@ -2330,10 +2330,10 @@ function orderModal(kind, id, srcId0) {
   const srcOpts = pid => `<option value="">不关联（直接退货）</option>` + (pid ? db[S0.db].filter(s => s[S0.partyKey] === pid && C.srcOk.includes(s.status)) : [])
     .map(s => `<option value="${s.id}" ${s.id === draft.srcId ? 'selected' : ''}>${s.no} · ${s.date} · ${money(orderTotal(s))}</option>`).join('');
   openModal(`${modalHead((o ? '编辑' : '新建') + C.title + (o ? ' · ' + o.no : ''))}
-  <div class="m-body"><div class="form-grid">
+  <div class="m-body">${o && o.status === '已审核' ? '<div class="sub-t" style="margin-bottom:10px">这张采购单已审核，保存修改后会退回「待审核」，需要重新审核才能入库。</div>' : ''}<div class="form-grid">
     <label class="field"><span>${C.partyLabel} <i>*</i></span><select id="oParty"><option value="">请选择${C.partyLabel}</option>${db[C.party].map(p => `<option value="${p.id}" ${p.id === party0 ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
     <label class="field"><span>单据日期 <i>*</i></span><input type="date" id="oDate" value="${o ? o.date : today()}"></label>
-    ${C.src ? `<label class="field span2"><span>关联原${S0.doc}（选了按原单带出商品，限退未退的数量）</span><select id="oSrc">${srcOpts(party0)}</select></label>` : ''}
+    ${C.src ? `<label class="field span2"><span>关联原${S0.doc}（只列出${C.srcOk.join(' / ')}的单子；选了按原单带出商品，限退未退的数量）</span><select id="oSrc">${srcOpts(party0)}</select></label>` : ''}
   </div>
   <div class="line-head"><b>${C.src ? '退货明细' : '商品明细'}</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称搜索，支持扫码枪录入后回车</span><button class="btn sm" id="oPick">${ic('search')}选择商品</button><button class="btn sm" id="oAdd">${ic('plus')}添加一行</button></div>
   <datalist id="oProdList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
@@ -2507,6 +2507,7 @@ function orderAct(action, kind, id) {
     orderStockModal({title:'发货 · ' + o.no, okText:'确认发货', desc:'确认后按订单明细扣减库存。', o, dir:'out', wh0:(best || whs()[0]).id, check,
       onOk:(wh, x) => run('ship', (multiWh() ? '已从' + whName(wh) + '发货' : '已发货') + '，库存已扣减', {wh, serials:x.serials}).then(then)});
   } else if (action === 'complete') run('complete', '订单已完成');
+  else if (action === 'unapprove') confirmBox(`把采购单 ${o.no} 退回待审核？退回后可以修改，改完要重新审核才能入库。`, () => run('unapprove', '已退回待审核'), {danger:false, okText:'反审核'});
   else if (action === 'approve') confirmBox(`审核通过采购单 ${o.no}？`, () => run('approve', '审核通过'), {danger:false, okText:'审核通过'});
   else if (action === 'inbound') {
     if (!needsStockModal(o, 'in')) return confirmBox(`确认采购单 ${o.no} 全部到货入库？`, () => run('inbound', '已入库，库存已增加'), {danger:false, okText:'确认入库'});
@@ -3795,7 +3796,7 @@ const A = {
   reset: () => confirmBox('将用演示数据覆盖服务器上的全部业务数据，所有用户都会受影响，确定继续？', () => mutate('POST', '/api/reset-demo', {}, '已重置为演示数据')),
   clearAll: () => confirmBox('将删除服务器上的所有业务数据（保留用户账号和系统设置），此操作不可撤销！', () => mutate('POST', '/api/clear', {}, '数据已清空'), {title:'危险操作', okText:'确认清空'})
 };
-['ship', 'complete', 'approve', 'inbound', 'post', 'offset', 'cancel', 'orderDel', 'pay'].forEach(a => { A[a] = v => { const [k, id] = split(v); orderAct(a, k, id); }; });
+['ship', 'complete', 'approve', 'unapprove', 'inbound', 'post', 'offset', 'cancel', 'orderDel', 'pay'].forEach(a => { A[a] = v => { const [k, id] = split(v); orderAct(a, k, id); }; });
 
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
