@@ -82,6 +82,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .card-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 0}
 .card-head h3{font-size:15px;font-weight:600}
 .acct-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;padding:16px 20px 0}.acct{border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:4px}.acct.off{opacity:.55}.acct-h{display:flex;justify-content:space-between;align-items:center;gap:8px}.acct-v{font-size:20px;font-weight:700;margin:4px 0}.acct .ops{margin-top:6px}.acct-sum{padding:12px 20px 0;text-align:right}
+.demo-bar{background:var(--primary-soft);color:var(--primary);font-size:13px;text-align:center;padding:7px 12px}.demo-bar a{color:inherit;font-weight:600}
 .card-head .more{color:var(--muted);font-size:13px;cursor:pointer}
 .card-head .more:hover{color:var(--primary)}
 .card-body{padding:16px 20px 20px}
@@ -510,7 +511,7 @@ async function mutate(method, path, body, msg) {
 /* ---------- 登录 ---------- */
 function showLogin(msg) {
   $('#login').classList.add('show');
-  $('#lPass').value = '';
+  $('#lPass').value = window.XERP_DEMO ? 'admin123' : '';
   if (msg) toast(msg, 'error');
   setTimeout(() => (CLIENT_MODE && !$('#lServer').value ? $('#lServer') : $('#lPass')).focus(), 50);
 }
@@ -552,6 +553,11 @@ async function enterApp() {
 }
 async function boot() {
   applyTheme();
+  if (window.XERP_DEMO) {
+    // 在线演示：登录页给出演示账号，顶部常驻提示条
+    $('#login p[style*="font-size:12px"]').innerHTML = '在线演示：账号 <b>admin</b>，密码 <b>admin123</b>，直接点登录即可。<br>所有人共用这个演示环境，数据每小时自动重置，请勿填写真实信息。';
+    $('.main').insertAdjacentHTML('afterbegin', '<div class="demo-bar">在线演示 · 数据每小时自动重置，请勿填写真实信息 · <a href="https://www.zhaoyoucai.xyz/xerp/#download" target="_blank" rel="noopener">免费下载安装 →</a></div>');
+  }
   try { const r = await fetch('/local/config'); if (r.ok) { CLIENT_MODE = true; SERVER_ADDR = (await r.json()).server || ''; } } catch (e) {}
   if (CLIENT_MODE) {
     $('#lServer').value = SERVER_ADDR;

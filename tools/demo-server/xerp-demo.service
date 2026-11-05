@@ -1,0 +1,27 @@
+# x.erp 在线演示：https://demo.zhaoyoucai.xyz
+# 每小时自动重启一次，启动前清空数据目录 → 首次启动写入演示数据，账号 admin / admin123
+# 部署：src/server.js、index.html、vendor/ 放到 /opt/xerp-demo/，本文件放到 /etc/systemd/system/，
+#       systemctl daemon-reload && systemctl enable --now xerp-demo；Caddy 反代 127.0.0.1:8693
+[Unit]
+Description=x.erp online demo (resets hourly)
+After=network.target
+
+[Service]
+DynamicUser=yes
+StateDirectory=xerp-demo
+Environment=XERP_DEMO=1
+Environment=XERP_STATS_URL=
+Environment=XERP_FEEDBACK_URL=
+ExecStartPre=/bin/rm -rf /var/lib/xerp-demo/data
+ExecStart=/usr/local/bin/node /opt/xerp-demo/server.js --data /var/lib/xerp-demo/data --port 8693
+RuntimeMaxSec=3600
+Restart=always
+RestartSec=2
+MemoryMax=300M
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

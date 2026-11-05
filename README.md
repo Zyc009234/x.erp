@@ -1,6 +1,16 @@
 # x.erp
 
-轻量级企业资源计划（ERP）系统，面向中小企业，可部署在 **飞牛 fnOS NAS** 或任意装有 Node.js 22+ 的机器上，通过浏览器多人同时使用。
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/Zyc009234/x.erp)](https://github.com/Zyc009234/x.erp/releases/latest)
+
+轻量级企业资源计划（ERP）系统，面向中小企业，可部署在 **飞牛 fnOS NAS** 或任意装有 Node.js 22+ 的机器上，通过浏览器多人同时使用。进销存、财务、人事一站搞定，全部免费，完全离线可用，数据留在你自己手里。
+
+- **在线演示**：<https://demo.zhaoyoucai.xyz>（账号 `admin`，密码 `admin123`；所有人共用，数据每小时重置）
+- **官网与下载**：<https://www.zhaoyoucai.xyz/xerp/>（飞牛 fpk / Windows 安装包 / 安卓客户端）
+
+| 工作台 | 库存 | 销售 |
+|---|---|---|
+| ![工作台](docs/screenshots/dashboard.png) | ![库存](docs/screenshots/inventory.png) | ![销售](docs/screenshots/sales.png) |
 
 ## 功能
 
@@ -59,6 +69,12 @@ node src/server.js --data ./data --port 8686
 ```bash
 node --test tests/api.test.mjs
 ```
+
+在线演示模式另有测试：`node --test tests/demo.test.mjs`。
+
+## 在线演示模式
+
+设置环境变量 `XERP_DEMO=1` 启动即为公开演示版：默认打开全部模块，登录页给出演示账号，顶部常驻提示条；屏蔽改密码、账号和角色管理、推送、快递鸟、导入备份 / 清空、问题反馈。部署在本机反向代理后面时按 `X-Forwarded-For` 区分访客。数据重置交给部署侧，见 `tools/demo-server/xerp-demo.service`（每小时重启并清空数据目录）。
 
 ## Windows 安装版
 

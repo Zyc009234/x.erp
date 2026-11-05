@@ -126,7 +126,9 @@ const DEFAULT_WH = 'w1';
 
 /* ================= 模块 / 权限 ================= */
 const MODULES = { inventory: '库存管理', products: '商品管理', dashboard: '工作台', sales: '销售管理', purchase: '采购管理', parties: '客户 / 供应商', finance: '财务管理', hr: '人事管理', reports: '统计报表', shipping: '物流运费' };
-const DEFAULT_MODULES = ['inventory', 'products'];
+const DEMO = process.env.XERP_DEMO === '1';  // 在线演示，见 HTTP 服务部分的 DEMO_BLOCK
+// 默认只开库存和商品；在线演示默认全开，方便别人看全部功能
+const DEFAULT_MODULES = DEMO ? Object.keys(MODULES) : ['inventory', 'products'];
 // [权限键, 名称, 所属模块]
 const PERMS = [
   ['inv.view', '查看库存、出入库单与流水', 'inventory'], ['inv.in', '开入库单', 'inventory'], ['inv.out', '开出库单', 'inventory'],
@@ -2124,6 +2126,17 @@ async function notifyTick() {
 }
 
 /* ================= HTTP 服务 ================= */
+// 在线演示（XERP_DEMO=1）：公开给所有人试用。屏蔽改密码 / 账号 / 角色、推送、快递鸟、导入备份 / 清空、问题反馈
+// ——这些会把别人锁在门外、往外发请求或打扰作者。数据重置靠部署侧（每小时重启并清空数据目录）。
+const DEMO_BLOCK = [/^POST \/api\/password$/, /^(POST|PUT|DELETE) \/api\/(users|roles)(\/|$)/, /^(PUT|POST) \/api\/settings\/(notify|kdn)(\/|$)/,
+  /^POST \/api\/ship\/(eorder|track-all)$/, /^POST \/api\/shipments\/[^/]+\/(track|cancel-eorder)$/, /^POST \/api\/(restore|clear)$/, /^POST \/api\/feedback$/];
+// 在线演示跑在本机 Caddy 后面：只有来自本机的连接才信任 X-Forwarded-For，否则所有访客都是 127.0.0.1，一人输错密码会锁住所有人
+function clientIp(req) {
+  const peer = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+  const fwd = DEMO && (peer === '127.0.0.1' || peer === '::1') && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return fwd || peer;
+}
+const demoBlocked = (method, p) => DEMO && DEMO_BLOCK.some(re => re.test(method + ' ' + p));
 let INDEX_HTML = null;
 function indexHtml() {
   if (INDEX_HTML) return INDEX_HTML;
@@ -2166,15 +2179,16 @@ const server = http.createServer(async (req, res) => {
   if (!url.pathname.startsWith('/api/')) {
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
-      return res.end(indexHtml());
+      return res.end(DEMO ? indexHtml().replace('</head>', '<script>window.XERP_DEMO = 1;</script></head>') : indexHtml());
     }
     const v = req.method === 'GET' && vendorFile(url.pathname);
     if (v) { res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=604800' }); return res.end(v); }
     res.writeHead(404); return res.end();
   }
-  const ctx = { ip: String(req.socket.remoteAddress || '').replace(/^::ffff:/, ''), method: req.method, query: url.searchParams, body: {}, user: null, params: {}, perms: new Set() };
+  const ctx = { ip: clientIp(req), method: req.method, query: url.searchParams, body: {}, user: null, params: {}, perms: new Set() };
   try {
     const r = routes.find(x => x.method === req.method && x.re.test(url.pathname)) || fail('接口不存在', 404);
+    if (demoBlocked(req.method, url.pathname)) fail('在线演示版不能使用这个功能（改密码、账号、推送、导入备份、留言等），下载安装后就能用', 403);
     ctx.params = Object.fromEntries(Object.entries(url.pathname.match(r.re).groups || {}).map(([k, v]) => [k, decodeURIComponent(v)]));
     if (r.auth) {
       ctx.user = authUser(req) || fail('登录已过期，请重新登录', 401);
