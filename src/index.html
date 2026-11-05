@@ -131,9 +131,12 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .tbl tbody tr:hover{background:var(--panel2)}
 .tbl .num{text-align:right;font-variant-numeric:tabular-nums}
 .tbl.compact td{padding:10px 16px}
+.o-disc{display:flex;justify-content:flex-end;align-items:center;gap:8px 14px;flex-wrap:wrap;margin-top:14px;font-size:13px;color:var(--muted)}.o-disc b{color:var(--text)}.o-disc input{width:110px;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:var(--panel);margin-left:6px}
 .tbl.items td{padding:8px 10px}.tbl.items th{padding:9px 10px}
 .tbl.items input,.tbl.items select{width:100%;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:var(--panel);outline:none}
 .tbl.items input:focus,.tbl.items select:focus{border-color:var(--primary)}
+/* 手机上表格很窄时，数量 / 单价等输入框保持最小宽度，表格改为左右滑动，不被挤成一两位数 */
+.tbl.items input{min-width:72px}.tbl.items input[type=checkbox]{min-width:0;width:auto}.tbl.items [data-k=price],.tbl.items [data-k=note]{min-width:100px}.tbl.items [data-k=product]{min-width:180px}
 .sub-t{color:var(--muted);font-size:12px}
 .pager{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;color:var(--muted);font-size:13px}
 .pager>div{display:flex;gap:4px}
@@ -290,6 +293,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   .user div:last-child,.crumb small{display:none}
   .form-grid,.doc-info{grid-template-columns:1fr}.span2{grid-column:auto}
   .search{width:100%}.tb-left{width:100%}
+  .line-head{flex-wrap:wrap;justify-content:flex-start}.line-head>b{margin-right:auto}.line-head>.sub-t{order:3;flex-basis:100%;margin:2px 0 0!important}
 }
 @media print{
   body *{visibility:hidden}
@@ -319,7 +323,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.0.9 · 数据保存在服务器</div>
+    <div class="side-foot">v2.0.10 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -357,7 +361,10 @@ const today = () => fmtDate(new Date());
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const byId = (arr, id) => arr.find(x => x.id === id);
 const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
-const orderTotal = o => sum(o.items, i => i.qty * i.price);
+const itemsTotal = o => sum(o.items, i => i.qty * i.price);
+const orderTotal = o => itemsTotal(o) - (o.discount || 0);  // 优惠（抹零、整单优惠）从合计里减掉
+// 基本单位数量换算成所选单位显示（库存、可退数量随单位切换）
+const inUnit = (q, p, unit) => { const r = rateOf(p, unit); return r > 1 ? +(q / r).toFixed(2) : q; };
 const orderCost = o => sum(o.items, i => i.qty * (i.cost || 0));
 const monthKey = d => String(d).slice(0, 7);
 const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
@@ -558,6 +565,9 @@ const stockStatus = p => p.stock <= 0 ? ['缺货', 'red'] : p.stock < p.safety ?
 const lowStock = () => db.products.filter(p => p.stock < p.safety);
 const partyName = (kind, o) => { const C = ORD[kind]; return (byId(db[C.party], o[C.partyKey]) || {}).name || '-'; };
 const unpaidOf = (kind, o) => +(orderTotal(o) - (o[ORD[kind].paidKey] || 0)).toFixed(2);
+// 往来单位的应收（销售）/ 应付（采购）= 订单未结 - 退货单还没退的款（冲抵、退款都会让它变小）
+const retUnpaid = (kind, pid) => { const R = ORD[kind + 'Return']; return sum(db[R.db].filter(r => r.status !== '已作废' && (!pid || r[R.partyKey] === pid)), r => unpaidOf(kind + 'Return', r)); };
+const partyDue = (kind, pid) => { const C = ORD[kind]; return +(sum(db[C.db].filter(o => o.status !== '已作废' && (!pid || o[C.partyKey] === pid)), o => unpaidOf(kind, o)) - retUnpaid(kind, pid)).toFixed(2); };
 const badge = (t, c) => `<span class="badge ${c || STATUS_COLOR[t] || 'gray'}">${esc(t)}</span>`;
 
 /* ================= UI 基础 ================= */
@@ -1167,7 +1177,7 @@ function docModal(dir, productId, type0, src) {
     tb.innerHTML = draft.items.map((it, i) => { const p = it.productId ? byId(db.products, it.productId) : null, have = p ? whQty(p, draft.wh) : 0; return `<tr>
       <td><input class="item-in" list="dProdList" data-i="${i}" data-k="product" value="${p ? esc(prodLabel(p)) : ''}" placeholder="编码 / 条码 / 名称"></td>
       <td>${unitSel(p, it.unit, i)}</td>
-      <td class="num scell ${p && dir === 'out' && have < baseQ(it) ? 'neg' : ''}" title="${p ? esc(stockText(p, have)) : ''}">${p ? have : ''}</td>
+      <td class="num scell ${p && dir === 'out' && have < baseQ(it) ? 'neg' : ''}" title="${p ? esc(stockText(p, have)) : ''}">${p ? inUnit(have, p, it.unit) : ''}</td>
       <td><input type="number" min="1" step="1" data-i="${i}" data-k="qty" value="${it.qty}"></td>
       ${mo ? (dir === 'in' ? `<td><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"></td>` : `<td class="num sub-t" title="出库按移动加权成本计价">${p ? money(p.cost * rateOf(p, it.unit)) : ''}</td>`) + `<td class="num sub">${money((+it.qty || 0) * (+it.price || 0))}</td>` : ''}
       ${batchCell(p, it, i)}
@@ -1306,7 +1316,7 @@ function slipData(kind, o) {
   if (ORD[kind]) {
     const C = ORD[kind], party = byId(db[C.party], o[C.partyKey]) || {};
     return {meta:{no:o.no, date:o.date, party:[K.party, party.name || ''], contact:[party.contact, party.phone].filter(Boolean).join(' '), address:party.address || '', wh:o.wh && multiWh() ? whName(o.wh) : '', express:kind === 'sales' ? shipText('sales', o.id) : ''},
-      items:o.items.map(i => row(i, linePrice(i))), creator:o.creator, handler:'', remark:o.remark, voided:o.status === '已作废' ? '作废：' : '', stamp:o.status === '已作废' ? '作废' : ''};
+      items:o.items.map(i => row(i, linePrice(i))), creator:o.creator, handler:'', remark:o.remark, voided:o.status === '已作废' ? '作废：' : '', stamp:o.status === '已作废' ? '作废' : '', discount:o.discount || 0};
   }
   return {meta:{no:o.no, type:o.type, date:o.date, party:[K.party, o.party || ''], wh:multiWh() || (o.wh && o.wh !== META.defaultWh) ? whName(o.wh) : '', handler:o.handler,
     address:o.address || '', express:o.dir === 'out' && o.id ? shipText('out', o.id) : ''},
@@ -1336,7 +1346,8 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
   <table><thead><tr>${cols.map(c => `<th>${esc(colLabel(K, c))}</th>`).join('')}</tr></thead>
   <tbody>${rows.join('')}
   ${total}
-  ${showMoney && tpl.upper && cols.some(c => c.k === 'amount') ? `<tr><td colspan="${cols.length}">金额大写：${rmbUpper(amt)}</td></tr>` : ''}
+  ${showMoney && d.discount && cols.some(c => c.k === 'amount') ? `<tr><td colspan="${cols.length}" class="r">优惠 -${d.discount.toFixed(2)}　实际合计 <b>${(amt - d.discount).toFixed(2)}</b></td></tr>` : ''}
+  ${showMoney && tpl.upper && cols.some(c => c.k === 'amount') ? `<tr><td colspan="${cols.length}">金额大写：${rmbUpper(amt - (d.discount || 0))}</td></tr>` : ''}
   ${d.remark ? `<tr><td colspan="${cols.length}">备注：${esc(d.remark)}</td></tr>` : ''}</tbody></table>
   ${signs.length ? `<div class="s-sign">${signs.map(x => `<span>${esc(x)}：${esc(auto[x] || '')}</span>`).join('')}</div>` : ''}
   ${tpl.footer ? `<div class="s-foot">${lines(tpl.footer)}</div>` : ''}
@@ -2320,17 +2331,28 @@ function orderModal(kind, id, srcId0) {
   <datalist id="oProdList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
   <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:240px">商品</th><th style="width:70px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th><th style="width:120px">${C.src ? '退货单价' : '单价'}</th><th class="num" style="width:120px">小计</th><th style="width:44px"></th></tr></thead><tbody id="oItems"></tbody></table></div>
   <label class="field" style="margin-top:16px"><span>备注</span><textarea id="oRemark" rows="2">${esc(o ? o.remark : '')}</textarea></label>
-  <div class="o-total">合计数量<b id="oQty">0</b>&nbsp;&nbsp;合计金额<b id="oTotal">¥0.00</b></div></div>
+  ${C.src ? '' : `<div class="o-disc"><span>明细合计 <b id="oSub">¥0.00</b></span><label>优惠 / 抹零 <input type="number" id="oDisc" min="0" step="0.01" value="${o && o.discount ? o.discount : ''}" placeholder="0"></label><button class="btn sm" id="oRound" title="先抹掉角分；没有角分就抹掉 10 元以下的零头">抹零</button></div>`}
+  <div class="o-total">合计数量<b id="oQty">0</b>&nbsp;&nbsp;${C.src ? '合计金额' : '应' + C.payWord}<b id="oTotal">¥0.00</b></div></div>
   <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="oSave">保存${C.src ? '' : '订单'}</button></div>`, 'lg');
   const tb = $('#oItems');
   const sub = it => (+it.qty || 0) * (+it.price || 0);
-  const updTotal = () => { $('#oQty').textContent = num(sum(draft.items.filter(i => i.productId), i => +i.qty || 0)); $('#oTotal').textContent = money(sum(draft.items, sub)); };
+  const disc = () => $('#oDisc') ? +$('#oDisc').value || 0 : 0;
+  const updTotal = () => {
+    const t = sum(draft.items, sub);
+    $('#oQty').textContent = num(sum(draft.items.filter(i => i.productId), i => +i.qty || 0));
+    if ($('#oSub')) $('#oSub').textContent = money(t);
+    $('#oTotal').textContent = money(t - disc());
+  };
+  if ($('#oDisc')) {
+    $('#oDisc').oninput = updTotal;
+    $('#oRound').onclick = () => { const t = Math.round(sum(draft.items, sub) * 100), c = t % 100; $('#oDisc').value = ((c || t % 1000) / 100).toFixed(2); updTotal(); };
+  }
   const renderItems = focusLast => {
     const s = srcOf(), left = s && leftOf(s);
     tb.innerHTML = draft.items.map((it, i) => { const p = it.productId ? byId(db.products, it.productId) : null; return `<tr>
       <td><input class="item-in" list="oProdList" data-i="${i}" data-k="product" value="${p ? esc(prodLabel(p)) : ''}" placeholder="编码 / 条码 / 名称"></td>
       <td>${unitSel(p, it.unit, i)}</td>
-      <td class="num" title="${p ? esc(stockText(p, p.stock)) : ''}">${p ? p.stock : ''}${p && left ? `<div class="sub-t">可退 ${left[p.id] || 0}</div>` : ''}</td>
+      <td class="num" title="${p ? esc(stockText(p, p.stock)) : ''}">${p ? inUnit(p.stock, p, it.unit) : ''}${p && left ? `<div class="sub-t">可退 ${inUnit(left[p.id] || 0, p, it.unit)}</div>` : ''}</td>
       <td><input type="number" min="1" step="1" data-i="${i}" data-k="qty" value="${it.qty}"></td>
       <td><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"></td>
       <td class="num sub">${money(sub(it))}</td>
@@ -2376,7 +2398,8 @@ function orderModal(kind, id, srcId0) {
     if (!items.length) return toast('请至少添加一个商品', 'error');
     if (items.some(i => !Number.isInteger(+i.qty) || +i.qty <= 0)) return toast('数量必须为正整数', 'error');
     if (items.some(i => +i.price < 0)) return toast('单价不能为负', 'error');
-    const body = {partyId:party, date, remark, ...(C.src ? {srcId:draft.srcId} : {}), items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:+i.price || 0}))};
+    if (disc() < 0 || disc() > sum(items, sub) + 0.001) return toast('优惠金额要在 0 到明细合计之间', 'error');
+    const body = {partyId:party, date, remark, ...(C.src ? {srcId:draft.srcId} : {discount:disc()}), items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:+i.price || 0}))};
     const b = $('#oSave'); b.disabled = true;
     mutate(o ? 'PUT' : 'POST', '/api/orders/' + kind + (o ? '/' + o.id : ''), body, r => (o ? '已更新：' : '已创建：') + r.no)
       .finally(() => { b.disabled = false; });
@@ -2401,7 +2424,7 @@ function orderView(kind, id) {
     <table class="tbl compact"><thead><tr><th>#</th><th>商品</th><th>单位</th><th class="num">数量</th><th class="num">单价</th><th class="num">金额</th></tr></thead><tbody>
     ${o.items.map((i, n) => { const p = byId(db.products, i.productId) || {name:'已删除商品', unit:''}; return `<tr><td>${n + 1}</td><td>${esc(p.name)}</td><td>${esc(lineUnit(i, p))}</td><td class="num">${lineQty(i)}</td><td class="num">${money(linePrice(i))}</td><td class="num">${money(i.qty * i.price)}</td></tr>`; }).join('')}
     </tbody></table>
-    <div class="doc-sum"><div>合计：<b>${money(total)}</b></div><div>已${C.payWord}：<b class="pos">${money(paid)}</b></div><div>未${C.payWord}：<b class="neg">${money(total - paid)}</b></div></div>
+    <div class="doc-sum">${o.discount ? `<div>明细合计：<b>${money(itemsTotal(o))}</b></div><div>优惠：<b>-${money(o.discount)}</b></div>` : ''}<div>合计：<b>${money(total)}</b></div><div>已${C.payWord}：<b class="pos">${money(paid)}</b></div><div>未${C.payWord}：<b class="neg">${money(total - paid)}</b></div></div>
     ${o.remark ? `<p style="margin-top:12px;color:var(--muted)">备注：${esc(o.remark)}</p>` : ''}
     ${pays.length || o.offset ? `<h4 style="margin:18px 0 8px">${C.payWord}记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(f.method || '')}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td></tr>`).join('')}
       ${o.offset ? `<tr><td>-</td><td>退货冲抵</td><td class="num">${money(o.offset)}</td><td class="sub-t">${C.src ? '抵扣原单 ' + esc(o.srcNo) + ' 的欠款' : '由退货单抵扣'}</td></tr>` : ''}</tbody></table>` : ''}
@@ -2414,6 +2437,50 @@ function orderPrint(kind, id) {
   const o = byId(db[ORD[kind].db], id), paper = prefs.paper || 'a4'; if (!o) return;
   printFrame(o.no, `<div class="page">${slipRender(kind, o, {showMoney:true, minRows:PAPERS[paper][2]})}${printFoot(kind)}</div>`, paper);
 }
+// 订单发货 / 采购入库 / 退货出入库的确认窗口：多仓库时选仓库；序列号商品逐行登记（出库可自动选）；入库的批次商品可填批号和日期
+function orderStockModal({title, okText, desc, o, dir, wh0, check, onOk}) {
+  const sLines = o.items.map((i, k) => ({i, k, p:byId(db.products, i.productId)})).filter(x => x.p && x.p.serial);
+  const bProds = dir === 'in' ? [...new Set(o.items.map(i => i.productId))].map(pid => byId(db.products, pid)).filter(p => p && p.batch) : [];
+  const sn = {}, whOf = () => $('#osWh') ? $('#osWh').value : wh0 || META.defaultWh;
+  openModal(`${modalHead(title)}<div class="m-body">
+    ${multiWh() ? `<label class="field"><span>${dir === 'in' ? '入库' : '出库'}仓库 <i>*</i></span><select id="osWh">${whOpts(wh0)}</select></label>` : ''}
+    ${sLines.length ? `<div class="line-head"><b>序列号</b><span class="sub-t" style="margin-left:10px;margin-right:auto">每件登记一个号，可扫码录入${dir === 'out' ? '；「自动选」按库存里的号依次填' : ''}</span></div>
+    <div class="table-wrap"><table class="tbl items"><thead><tr><th>商品</th><th class="num">数量</th><th style="min-width:200px">序列号</th></tr></thead><tbody id="osSn">
+    ${sLines.map(x => `<tr><td><b>${esc(x.p.name)}</b></td><td class="num">${x.i.qty}</td><td data-cell="${x.k}"></td></tr>`).join('')}</tbody></table></div>` : ''}
+    ${bProds.length ? `<div class="line-head"><b>批次信息</b><span class="sub-t" style="margin-left:10px;margin-right:auto">批号留空则用单号</span></div>
+    <div class="table-wrap"><table class="tbl items"><thead><tr><th>商品</th><th>批号</th><th>生产日期</th><th>有效期至</th></tr></thead><tbody>
+    ${bProds.map(p => `<tr data-pid="${p.id}"><td><b>${esc(p.name)}</b>${p.shelfDays ? `<div class="sub-t">保质期 ${p.shelfDays} 天</div>` : ''}</td>
+      <td><input data-k="no" placeholder="${esc(o.no)}"></td><td><input type="date" data-k="prodDate"></td><td><input type="date" data-k="expDate"></td></tr>`).join('')}</tbody></table></div>` : ''}
+    <p class="sub-t" style="margin-top:10px">${desc}</p></div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="osOk">${okText}</button></div>`, sLines.length || bProds.length ? 'lg' : '');
+  const cell = x => { $(`#osSn [data-cell="${x.k}"]`).innerHTML = snCell(x.p, {serials:sn[x.k] || ''}, x.k, dir, whOf(), x.i.qty); };
+  sLines.forEach(cell);
+  if ($('#osSn')) {
+    $('#osSn').addEventListener('input', e => {
+      const t = e.target; if (t.dataset.k !== 'serials') return;
+      const x = sLines.find(y => y.k === +t.dataset.i), n = snList(t.value).length, c = t.parentNode.querySelector('.sn-c');
+      sn[x.k] = t.value; c.firstChild.textContent = n + ' / ' + x.i.qty + (dir === 'out' ? ' · ' : ''); c.classList.toggle('neg', n !== x.i.qty);
+    });
+    $('#osSn').addEventListener('click', e => {
+      const a = e.target.closest('[data-snauto]'); if (!a) return;
+      const x = sLines.find(y => y.k === +a.dataset.snauto), used = new Set(sLines.filter(y => y.k !== x.k).flatMap(y => snList(sn[y.k])));
+      const got = snAutoPick(x.p, whOf(), x.i.qty, used);
+      if (got.length < x.i.qty) toast(`${whName(whOf())}只有 ${got.length} 个可用序列号`, 'error');
+      sn[x.k] = got.join('\n'); cell(x);
+    });
+  }
+  $('#osOk').onclick = () => {
+    const wh = whOf(); if (check && !check(wh)) return;
+    const bad = sLines.find(x => snList(sn[x.k]).length !== x.i.qty);
+    if (bad) return toast(`「${bad.p.name}」需要登记 ${bad.i.qty} 个序列号`, 'error');
+    const batches = {};
+    document.querySelectorAll('#modal tr[data-pid]').forEach(tr => { const g = k => tr.querySelector(`[data-k=${k}]`).value.trim(); batches[tr.dataset.pid] = {no:g('no'), prodDate:g('prodDate'), expDate:g('expDate')}; });
+    const badB = Object.entries(batches).find(([, b]) => b.prodDate && b.expDate && b.expDate < b.prodDate);
+    if (badB) return toast(`「${byId(db.products, badB[0]).name}」有效期早于生产日期`, 'error');
+    onOk(wh, {serials:Object.fromEntries(sLines.map(x => [x.k, snList(sn[x.k])])), batches});
+  };
+}
+const needsStockModal = (o, dir) => multiWh() || o.items.some(i => { const p = byId(db.products, i.productId) || {}; return p.serial || dir === 'in' && p.batch; });
 function orderAct(action, kind, id) {
   const C = ORD[kind], o = byId(db[C.db], id), url = `/api/orders/${kind}/${id}`;
   const run = (act, msg, body) => mutate(act === 'delete' ? 'DELETE' : 'POST', act === 'delete' ? url : url + '/' + act, body || {}, msg);
@@ -2423,45 +2490,31 @@ function orderAct(action, kind, id) {
     const lackMsg = (w, l) => (multiWh() ? whName(w) : '') + '库存不足：' + l.map(x => (x.p ? x.p.name + '（缺 ' + (x.q - whQty(x.p, w)) + '）' : '商品已删除')).join('、');
     // 发货成功后接着登记快递单号（启用了物流运费模块时）
     const then = r => { if (r && shipOn() && can('ship.edit')) shipModal({srcType:'sales', srcId:id}); return r; };
-    if (!multiWh()) {
-      const lack = lackIn(META.defaultWh);
-      if (lack.length) return toast(lackMsg(META.defaultWh, lack), 'error');
+    const check = w => { const l = lackIn(w); if (l.length) toast(lackMsg(w, l), 'error'); return !l.length; };
+    if (!needsStockModal(o, 'out')) {
+      if (!check(META.defaultWh)) return;
       return confirmBox(`确认发货 ${o.no}？将扣减对应商品库存。`, () => run('ship', '已发货，库存已扣减').then(then), {danger:false, okText:'确认发货'});
     }
     const best = whs().find(w => !lackIn(w.id).length);
-    formModal({title:'发货 · ' + o.no, okText:'确认发货', data:{wh:(best || whs()[0]).id}, fields:[{n:'wh', l:'从哪个仓库发货', type:'select', opts:whs().map(w => [w.id, w.name + (lackIn(w.id).length ? '（库存不足）' : '')]), span:1}],
-      onSubmit:v => { const l = lackIn(v.wh); if (l.length) return toast(lackMsg(v.wh, l), 'error'); return run('ship', '已从' + whName(v.wh) + '发货，库存已扣减', {wh:v.wh}).then(then); }});
+    orderStockModal({title:'发货 · ' + o.no, okText:'确认发货', desc:'确认后按订单明细扣减库存。', o, dir:'out', wh0:(best || whs()[0]).id, check,
+      onOk:(wh, x) => run('ship', (multiWh() ? '已从' + whName(wh) + '发货' : '已发货') + '，库存已扣减', {wh, serials:x.serials}).then(then)});
   } else if (action === 'complete') run('complete', '订单已完成');
   else if (action === 'approve') confirmBox(`审核通过采购单 ${o.no}？`, () => run('approve', '审核通过'), {danger:false, okText:'审核通过'});
   else if (action === 'inbound') {
-    const bItems = o.items.filter(i => (byId(db.products, i.productId) || {}).batch);
-    if (!multiWh() && !bItems.length) return confirmBox(`确认采购单 ${o.no} 全部到货入库？`, () => run('inbound', '已入库，库存已增加'), {danger:false, okText:'确认入库'});
-    openModal(`${modalHead('采购入库 · ' + o.no)}<div class="m-body">
-      ${multiWh() ? `<label class="field"><span>入库仓库 <i>*</i></span><select id="ibWh">${whOpts(META.defaultWh)}</select></label>` : ''}
-      ${bItems.length ? `<div class="line-head"><b>批次信息</b><span class="sub-t" style="margin-left:10px">批号留空则用采购单号</span></div>
-      <div class="table-wrap"><table class="tbl items"><thead><tr><th>商品</th><th class="num">数量</th><th>批号</th><th>生产日期</th><th>有效期至</th></tr></thead><tbody>
-      ${bItems.map(i => { const p = byId(db.products, i.productId); return `<tr data-pid="${p.id}"><td><b>${esc(p.name)}</b>${p.shelfDays ? `<div class="sub-t">保质期 ${p.shelfDays} 天</div>` : ''}</td><td class="num">${i.qty}</td>
-        <td><input data-k="no" placeholder="${esc(o.no)}"></td><td><input type="date" data-k="prodDate"></td><td><input type="date" data-k="expDate"></td></tr>`; }).join('')}</tbody></table></div>` : ''}
-      <p class="sub-t" style="margin-top:10px">确认后采购单全部数量入库。</p></div>
-      <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="ibOk">确认入库</button></div>`, bItems.length ? 'lg' : '');
-    $('#ibOk').onclick = () => {
-      const batches = {};
-      document.querySelectorAll('#modal tr[data-pid]').forEach(tr => { const g = k => tr.querySelector(`[data-k=${k}]`).value.trim(); batches[tr.dataset.pid] = {no:g('no'), prodDate:g('prodDate'), expDate:g('expDate')}; });
-      const bad = Object.entries(batches).find(([, b]) => b.prodDate && b.expDate && b.expDate < b.prodDate);
-      if (bad) return toast(`「${byId(db.products, bad[0]).name}」有效期早于生产日期`, 'error');
-      const wh = $('#ibWh') ? $('#ibWh').value : META.defaultWh;
-      run('inbound', '已入库' + (multiWh() ? '到' + whName(wh) : '') + '，库存已增加', {wh, batches});
-    };
+    if (!needsStockModal(o, 'in')) return confirmBox(`确认采购单 ${o.no} 全部到货入库？`, () => run('inbound', '已入库，库存已增加'), {danger:false, okText:'确认入库'});
+    orderStockModal({title:'采购入库 · ' + o.no, okText:'确认入库', desc:'确认后采购单全部数量入库。', o, dir:'in', wh0:META.defaultWh,
+      onOk:(wh, x) => run('inbound', '已入库' + (multiWh() ? '到' + whName(wh) : '') + '，库存已增加', {wh, ...x})});
   }
   else if (action === 'post') {
     // 销售退货：货回到仓库；采购退货：货从仓库退给供应商，先查库存
     const isIn = kind === 'salesReturn', word = isIn ? '退货入库' : '退货出库';
     const lackIn = w => { const need = {}; o.items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + i.qty; }); return isIn ? [] : Object.entries(need).map(([pid, q]) => ({p:byId(db.products, pid), q})).filter(x => !x.p || whQty(x.p, w) < x.q); };
     const lackMsg = (w, l) => (multiWh() ? whName(w) : '') + '库存不足：' + l.map(x => (x.p ? x.p.name + '（缺 ' + (x.q - whQty(x.p, w)) + '）' : '商品已删除')).join('、');
-    const go = w => { const l = lackIn(w); if (l.length) return toast(lackMsg(w, l), 'error'); return run('post', (multiWh() ? whName(w) : '') + word + '完成，库存已' + (isIn ? '增加' : '扣减'), {wh:w}); };
-    if (!multiWh()) return confirmBox(`确认${C.title} ${o.no} ${word}？将${isIn ? '增加' : '扣减'}对应商品库存。`, () => go(META.defaultWh), {danger:false, okText:'确认' + word});
+    const check = w => { const l = lackIn(w); if (l.length) toast(lackMsg(w, l), 'error'); return !l.length; };
+    const go = (w, x) => run('post', (multiWh() ? whName(w) : '') + word + '完成，库存已' + (isIn ? '增加' : '扣减'), {wh:w, ...(x || {})});
+    if (!needsStockModal(o, isIn ? 'in' : 'out')) return check(META.defaultWh) && confirmBox(`确认${C.title} ${o.no} ${word}？将${isIn ? '增加' : '扣减'}对应商品库存。`, () => go(META.defaultWh), {danger:false, okText:'确认' + word});
     const src = o.srcId && byId(db[ORD[C.src].db], o.srcId), w0 = src && src.wh || (isIn ? META.defaultWh : (whs().find(w => !lackIn(w.id).length) || whs()[0]).id);
-    formModal({title:word + ' · ' + o.no, okText:'确认' + word, data:{wh:w0}, fields:[{n:'wh', l:isIn ? '退回到哪个仓库' : '从哪个仓库退出', type:'select', opts:whs().map(w => [w.id, w.name + (lackIn(w.id).length ? '（库存不足）' : '')]), span:1}], onSubmit:v => go(v.wh)});
+    orderStockModal({title:word + ' · ' + o.no, okText:'确认' + word, desc:`确认后${isIn ? '退回的货入库' : '从库存扣减退给供应商的货'}。`, o, dir:isIn ? 'in' : 'out', wh0:w0, check, onOk:go});
   }
   else if (action === 'offset') {
     const S0 = ORD[C.src], src = byId(db[S0.db], o.srcId), max = +Math.min(unpaidOf(kind, o), unpaidOf(C.src, src)).toFixed(2);
@@ -3100,7 +3153,7 @@ function pageParty(type) {
     ${kpi(isC ? '客户总数' : '供应商总数', db[type].length, isC ? 'users' : 'truck', 'primary')}
     ${kpi('近 90 天活跃', active, 'sales', 'green')}
     ${kpi(isC ? '累计销售额' : '累计采购额', moneyK(sum(db[C.db].filter(o => o.status !== '已作废'), orderTotal)), 'coin', 'blue')}
-    ${kpi(isC ? '应收合计' : '应付合计', moneyK(sum(db[C.db].filter(o => o.status !== '已作废'), o => unpaidOf(kind, o))), 'wallet', 'orange')}
+    ${kpi(isC ? '应收合计' : '应付合计', moneyK(partyDue(kind)), 'wallet', 'orange')}
   </div>
   <div class="card">${toolbar(type, {placeholder:'搜索名称 / 联系人 / 电话', filters, buttons:`<button class="btn" data-act="export" data-id="${type}">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="${type}">${ic('plus')}新增${ENT[type].title}</button>`})}<div id="list-${type}"></div></div>`;
   mountList(type, {rows:() => db[type], search:r => r.name + r.contact + r.phone, filters, columns:[
@@ -3109,7 +3162,7 @@ function pageParty(type) {
     isC ? {t:'等级', r:r => badge(r.level, r.level === 'VIP' ? 'purple plain' : 'primary plain'), s:r => LEVELS.indexOf(r.level)} : {t:'主营类目', r:r => badge(r.category || '-', 'primary plain')},
     {t:'订单数', cls:'num', r:r => orders(r.id).length, s:r => orders(r.id).length},
     {t:isC ? '累计消费' : '累计采购', cls:'num', r:r => money(sum(orders(r.id), orderTotal)), s:r => sum(orders(r.id), orderTotal)},
-    {t:isC ? '应收' : '应付', cls:'num', r:r => { const u = sum(orders(r.id), o => unpaidOf(kind, o)); return u > 0 ? `<span class="neg">${money(u)}</span>` : money(0); }, s:r => sum(orders(r.id), o => unpaidOf(kind, o))},
+    {t:isC ? '应收' : '应付', cls:'num', r:r => { const u = partyDue(kind, r.id); return u > 0 ? `<span class="neg">${money(u)}</span>` : money(u); }, s:r => partyDue(kind, r.id)},
     {t:'最近交易', r:r => orders(r.id)[0]?.date || '-'},
     {t:'操作', r:r => `<div class="ops">${tbtn('订单', 'partyOrders', type + '|' + r.id)}${tbtn('编辑', 'edit', type + '|' + r.id)}${tbtn('删除', 'del', type + '|' + r.id, 'danger-text')}</div>`}
   ], exp:{name:ENT[type].title + '列表', cols:[['名称', r => r.name], ['联系人', r => r.contact], ['电话', r => r.phone], ['邮箱', r => r.email], [isC ? '等级' : '类目', r => isC ? r.level : r.category], ['地址', r => r.address], ['订单数', r => orders(r.id).length], ['累计金额', r => sum(orders(r.id), orderTotal).toFixed(2)]]}});
@@ -3120,7 +3173,7 @@ function pageFinance() {
   if (!ui.finTab) ui.finTab = 'flow';
   const m = monthKey(today()), mf = db.finance.filter(f => monthKey(f.date) === m);
   const inc = sum(mf.filter(f => f.type === 'income'), f => f.amount), exp = sum(mf.filter(f => f.type === 'expense'), f => f.amount);
-  const recv = sum(validSales(), o => unpaidOf('sales', o)), pay = sum(db.purchases.filter(o => o.status !== '已作废'), o => unpaidOf('purchase', o));
+  const recv = partyDue('sales'), pay = partyDue('purchase');
   $('#view').innerHTML = pageHead('财务管理', '收支流水、应收应付与资金概览', `<button class="btn primary" data-act="finAdd">${ic('plus')}记一笔</button>`) + `
   <div class="grid g5 mb">
     ${kpi('本月收入', moneyK(inc), 'download', 'green')}
@@ -3134,7 +3187,7 @@ function pageFinance() {
   const card = $('#finCard');
   if (ui.finTab === 'flow') {
     const filters = [{key:'type', label:'收支类型', options:[['income', '收入'], ['expense', '支出']], test:(f, v) => f.type === v},
-      {key:'cat', label:'全部科目', options:[...FIN_CATS.income, ...FIN_CATS.expense], test:(f, v) => f.category === v},
+      {key:'cat', label:'全部科目', options:[...new Set([...FIN_CATS.income, ...FIN_CATS.expense, ...db.finance.map(f => f.category)])], test:(f, v) => f.category === v},
       {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(f, v) => monthKey(f.date) === v}];
     card.innerHTML = toolbar('fin', {placeholder:'搜索单号 / 备注', filters, buttons:`<button class="btn" data-act="export" data-id="fin">${ic('download')}导出</button>`}) + '<div id="list-fin"></div>';
     mountList('fin', {rows:() => db.finance, search:f => f.ref + f.note + f.category, filters, columns:[
@@ -3145,20 +3198,23 @@ function pageFinance() {
       {t:'方式', r:f => esc(f.method || '-')},
       {t:'关联单据', r:f => f.ref ? `<span class="sub-t">${esc(f.ref)}</span>` : '-'},
       {t:'备注', r:f => esc(f.note || '-')},
-      {t:'操作', r:f => f.ref ? '<span class="sub-t">单据生成</span>' : `<div class="ops">${tbtn('删除', 'finDel', f.id, 'danger-text')}</div>`}
+      {t:'操作', r:f => f.ref ? '<span class="sub-t">单据生成</span>' : `<div class="ops">${tbtn('编辑', 'finEdit', f.id)}${tbtn('删除', 'finDel', f.id, 'danger-text')}</div>`}
     ], exp:{name:'收支流水', cols:[['日期', f => f.date], ['类型', f => f.type === 'income' ? '收入' : '支出'], ['科目', f => f.category], ['金额', f => f.amount], ['方式', f => f.method], ['单据', f => f.ref], ['备注', f => f.note]]}});
   } else if (ui.finTab === 'recv' || ui.finTab === 'pay') {
     const kind = ui.finTab === 'recv' ? 'sales' : 'purchase', C = ORD[kind], key = 'fin_' + kind;
     card.innerHTML = toolbar(key, {placeholder:'搜索单号 / ' + C.partyLabel}) + `<div id="list-${key}"></div>`;
-    mountList(key, {rows:() => db[C.db].filter(o => o.status !== '已作废' && unpaidOf(kind, o) > 0.001), search:o => o.no + partyName(kind, o), empty:'全部结清 🎉', columns:[
-      {t:'单号', r:o => `<a class="link" data-act="orderView" data-id="${kind}|${o.id}">${o.no}</a>`},
-      {t:C.partyLabel, r:o => esc(partyName(kind, o))},
-      {t:'单据日期', r:o => o.date, s:o => o.date},
-      {t:'订单金额', cls:'num', r:o => money(orderTotal(o))},
-      {t:'已' + C.payWord, cls:'num', r:o => money(o[C.paidKey] || 0)},
-      {t:'未' + C.payWord, cls:'num', r:o => `<b class="neg">${money(unpaidOf(kind, o))}</b>`, s:o => unpaidOf(kind, o)},
-      {t:'账龄', r:o => { const d = daysBetween(o.date, today()); return badge(d + ' 天', d > 60 ? 'red' : d > 30 ? 'orange' : 'green'); }, s:o => o.date},
-      {t:'操作', r:o => tbtn(C.payWord, 'pay', kind + '|' + o.id, 'primary')}
+    // 订单未结 + 退货单待退款（负数），合起来就是应收 / 应付
+    const rk = kind + 'Return', R = ORD[rk];
+    mountList(key, {rows:() => [...db[C.db].filter(o => o.status !== '已作废' && unpaidOf(kind, o) > 0.001).map(o => ({o, k:kind})), ...db[R.db].filter(o => o.status !== '已作废' && unpaidOf(rk, o) > 0.001).map(o => ({o, k:rk}))],
+      search:r => r.o.no + partyName(r.k, r.o), empty:'全部结清 🎉', columns:[
+      {t:'单号', r:r => `<a class="link" data-act="orderView" data-id="${r.k}|${r.o.id}">${r.o.no}</a>${r.k === rk ? ' ' + badge('退货', 'orange plain') : ''}`},
+      {t:C.partyLabel, r:r => esc(partyName(r.k, r.o))},
+      {t:'单据日期', r:r => r.o.date, s:r => r.o.date},
+      {t:'单据金额', cls:'num', r:r => money(orderTotal(r.o))},
+      {t:'已结', cls:'num', r:r => money(r.o[ORD[r.k].paidKey] || 0)},
+      {t:'未' + C.payWord, cls:'num', r:r => r.k === rk ? `<b class="pos">-${money(unpaidOf(rk, r.o))}</b>` : `<b class="neg">${money(unpaidOf(kind, r.o))}</b>`, s:r => (r.k === rk ? -1 : 1) * unpaidOf(r.k, r.o)},
+      {t:'账龄', r:r => { const d = daysBetween(r.o.date, today()); return badge(d + ' 天', d > 60 ? 'red' : d > 30 ? 'orange' : 'green'); }, s:r => r.o.date},
+      {t:'操作', r:r => `<div class="ops">${tbtn(ORD[r.k].payWord, 'pay', r.k + '|' + r.o.id, 'primary')}${r.k === rk && r.o.srcId && byId(db[C.db], r.o.srcId) && unpaidOf(kind, byId(db[C.db], r.o.srcId)) > 0.001 ? tbtn('冲抵', 'offset', r.k + '|' + r.o.id) : ''}</div>`}
     ]});
   } else {
     card.innerHTML = `<div class="card-body grid g2"><div><h3 style="margin-bottom:12px">月度收支（近 6 个月）</h3><div class="chart-box"><canvas id="f1"></canvas></div></div><div><h3 style="margin-bottom:12px">支出结构（近 6 个月）</h3><div class="chart-box"><canvas id="f2"></canvas></div></div></div>`;
@@ -3168,18 +3224,23 @@ function pageFinance() {
     chart('f2', {type:'doughnut', data:{labels:Object.keys(ec), datasets:[{data:Object.values(ec), backgroundColor:PALETTE, borderWidth:0}]}, options:{cutout:'62%', plugins:{legend:{position:'right'}}}});
   }
 }
-function finAdd() {
-  formModal({title:'记一笔', fields:[
+// 科目候选：内置科目 + 以前手工用过的科目；也可以直接输入新的（单据自动生成的科目除外）
+const finCats = type => [...new Set([...FIN_CATS[type], ...db.finance.filter(f => f.type === type && !f.ref).map(f => f.category)])].filter(c => !AUTO_CATS.includes(c));
+function finAdd(id) {
+  const f = typeof id === 'string' ? byId(db.finance, id) : null;
+  formModal({title:f ? '修改记账' : '记一笔', fields:[
     {n:'type', l:'收支类型', type:'select', opts:[['expense', '支出'], ['income', '收入']]},
-    {n:'category', l:'科目', type:'select', opts:FIN_CATS.expense.filter(c => !AUTO_CATS.includes(c))},
+    {n:'category', l:'科目（可选择或直接输入新科目）', type:'combo', opts:() => finCats(f ? f.type : 'expense'), ph:'如：房租、物流费'},
     {n:'amount', l:'金额（元）', type:'number', req:1}, {n:'date', l:'日期', type:'date', req:1},
     {n:'method', l:'方式', type:'select', opts:METHODS}, {n:'note', l:'备注'}],
-    data:{date:today(), method:'银行转账'}, onSubmit:v => {
+    data:f ? {...f} : {date:today(), method:'银行转账'}, onSubmit:v => {
+      if (!String(v.category || '').trim()) return toast('请填写科目', 'error');
+      if (AUTO_CATS.includes(v.category.trim())) return toast(`「${v.category}」由单据自动生成，请到对应单据里登记`, 'error');
       if (v.amount <= 0) return toast('金额必须大于 0', 'error');
-      return mutate('POST', '/api/finance', v, '已记账');
+      return mutate(f ? 'PUT' : 'POST', '/api/finance' + (f ? '/' + f.id : ''), v, f ? '已修改' : '已记账');
     }});
-  const typeSel = $('#mform [name=type]'), catSel = $('#mform [name=category]');
-  typeSel.onchange = () => { catSel.innerHTML = FIN_CATS[typeSel.value].filter(c => !AUTO_CATS.includes(c)).map(c => `<option>${c}</option>`).join(''); };
+  const typeSel = $('#mform [name=type]');
+  typeSel.onchange = () => { $('#dl-category').innerHTML = finCats(typeSel.value).map(c => `<option value="${esc(c)}">`).join(''); };
 }
 
 /* ================= 页面：人事 ================= */
@@ -3651,6 +3712,7 @@ const A = {
   orderView: v => orderView(...split(v)),
   orderPrint: v => orderPrint(...split(v)),
   finAdd,
+  finEdit: id => finAdd(id),
   finDel: id => confirmBox('确定删除这条收支记录吗？', () => mutate('DELETE', '/api/finance/' + id, undefined, '已删除')),
   rptExport: () => exportCSV('月度经营报表', ['月份', '订单数', '销售额', '销售成本', '毛利', '毛利率%', '采购额', '运营费用', '净利润'], ui.rptStats.map(s => [s.mk, s.count, s.sales.toFixed(2), s.cost.toFixed(2), s.gp.toFixed(2), s.rate.toFixed(1), s.purchase.toFixed(2), s.exp.toFixed(2), s.net.toFixed(2)])),
   savePrefs: () => { db.settings.theme = $('#sTheme').value; db.settings.pageSize = +$('#sPs').value; savePrefs(); applyTheme(); toast('偏好已保存'); render(); },

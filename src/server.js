@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.0.9';
+const VERSION = '2.0.10';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -86,7 +86,8 @@ const sum = (a, f) => a.reduce((s, x) => s + (f(x) || 0), 0);
 const round2 = n => Math.round(n * 100) / 100;
 const round3 = n => Math.round(n * 1e3) / 1e3;
 const round4 = n => Math.round(n * 1e4) / 1e4;
-const orderTotal = o => round2(sum(o.items, i => i.qty * i.price));
+const itemsTotal = o => round2(sum(o.items, i => i.qty * i.price));
+const orderTotal = o => round2(itemsTotal(o) - (o.discount || 0));  // 优惠（抹零、整单优惠）从合计里减掉
 const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
 const str = (v, max = 200) => String(v ?? '').trim().slice(0, max);
 class HttpError extends Error { constructor(msg, status = 400) { super(msg); this.status = status; } }
@@ -611,13 +612,15 @@ function saveOrder(ctx, kind, id) {
         if (q > left[pid]) fail(`「${p.name}」最多还能退 ${left[pid]}（原单 ${src.no}）`);
       }
     }
-    const data = { [C.partyKey]: party, date: b.date, remark: str(b.remark, 500), items, ...(C.src ? { srcId: src ? src.id : '', srcNo: src ? src.no : '' } : {}) };
+    const discount = C.src ? 0 : round2(Number(b.discount) || 0);
+    if (discount < 0 || discount > itemsTotal({ items }) + 0.001) fail('优惠金额要在 0 到明细合计之间');
+    const data = { [C.partyKey]: party, date: b.date, remark: str(b.remark, 500), items, ...(C.src ? { srcId: src ? src.id : '', srcNo: src ? src.no : '' } : { discount }) };
     if (id) {
       const o = get(C.col, id) || fail('单据不存在', 404);
       if (o.status !== C.statuses[0]) fail(`单据状态为「${o.status}」，不能编辑`);
       if (!C.src) items.forEach(it => { const old = o.items.find(x => x.productId === it.productId); if (old && old.cost != null) it.cost = old.cost; });
       if ((o.offset || 0) > 0 && o.srcId !== data.srcId) fail('已冲抵过原单的退货单不能改关联原单');
-      if ((o[C.paidKey] || 0) > orderTotal({ items }) + 0.001) fail(`已${C.payWord} ${o[C.paidKey]} 元，修改后的合计不能少于这个数`);
+      if ((o[C.paidKey] || 0) > orderTotal({ items, discount }) + 0.001) fail(`已${C.payWord} ${o[C.paidKey]} 元，修改后的合计不能少于这个数`);
       Object.assign(o, data);
       put(C.col, o); audit(ctx, '修改' + C.title, o.no);
       return o;
@@ -641,6 +644,11 @@ function returnable(src, exceptId) {
   for (const k in left) left[k] = Math.max(0, left[k]);
   return left;
 }
+// 订单明细第 k 行的序列号：启用序列号的商品必须登记，数量要和这一行一致
+function lineSerials(b, p, i, k) {
+  if (!p.serial) return undefined;
+  return cleanSerials(p, ((b.serials && typeof b.serials === 'object') ? b.serials : {})[k], i.qty);
+}
 function orderAction(ctx, kind, id, action) {
   const C = ORD[kind] || fail('接口不存在', 404), b = ctx.body || {};
   return tx(() => {
@@ -651,30 +659,34 @@ function orderAction(ctx, kind, id, action) {
       const wh = pickWh(b.wh), qty = qtyByProduct(o.items);
       const lack = Object.entries(qty).map(([pid, q]) => ({ p: get('products', pid), q })).filter(x => !x.p || whQty(x.p, wh) < x.q);
       if (lack.length) fail(`${whName(wh)}库存不足：` + lack.map(x => x.p ? `${x.p.name}（需 ${x.q}，现有 ${whQty(x.p, wh)}）` : '商品已删除').join('、'));
-      o.items.forEach(i => { const m = moveStock(ctx, get('products', i.productId), -i.qty, '销售出库', o.no, '', { wh }); i.cost = m.unit; if (m.alloc) i.batches = m.alloc; });
+      o.items.forEach((i, k) => { const p = get('products', i.productId), sn = lineSerials(b, p, i, k), m = moveStock(ctx, p, -i.qty, '销售出库', o.no, '', { wh, serials: sn }); i.cost = m.unit; if (m.alloc) i.batches = m.alloc; if (sn) i.serials = sn; });
       o.status = '已发货'; o.shipDate = today(); o.wh = wh;
     } else if (action === 'complete' && kind === 'sales') { need('已发货'); o.status = '已完成'; }
     else if (action === 'approve' && kind === 'purchase') { need('待审核'); o.status = '已审核'; o.approver = ctx.user.name; }
     else if (action === 'inbound' && kind === 'purchase') {
       need('已审核');
       const wh = pickWh(b.wh), bi = b.batches && typeof b.batches === 'object' ? b.batches : {};
-      o.items.forEach(i => {
+      o.items.forEach((i, k) => {
         const p = get('products', i.productId); if (!p) return;
-        const m = moveStock(ctx, p, i.qty, '采购入库', o.no, '', { price: i.price, wh, batch: { no: o.no, ...(bi[p.id] || {}) } });
+        const sn = lineSerials(b, p, i, k);
+        const m = moveStock(ctx, p, i.qty, '采购入库', o.no, '', { price: i.price, wh, batch: { no: o.no, ...(bi[p.id] || {}) }, serials: sn });
         if (m.alloc) i.batches = m.alloc;
+        if (sn) i.serials = sn;
       });
       o.status = '已入库'; o.inDate = today(); o.wh = wh;
     } else if (action === 'post' && C.src) {
       need(C.statuses[0]);
       const wh = pickWh(b.wh), bi = b.batches && typeof b.batches === 'object' ? b.batches : {}, pname = (get(C.party, o[C.partyKey]) || {}).name || '';
       if (kind === 'purchaseReturn') { const lack = lackOf(o.items, wh); if (lack.length) fail(lackText(lack, wh)); }
-      o.items.forEach(i => {
+      o.items.forEach((i, k) => {
         const p = get('products', i.productId) || fail('商品不存在或已删除');
+        const sn = lineSerials(b, p, i, k);
         const m = kind === 'salesReturn'
-          ? moveStock(ctx, p, i.qty, '销售退货', o.no, pname, { price: i.cost != null ? i.cost : p.cost || 0, wh, batch: { no: o.no, ...(bi[p.id] || {}) } })
-          : moveStock(ctx, p, -i.qty, '采购退货', o.no, pname, { reversePrice: i.cost != null ? i.cost : undefined, wh });
+          ? moveStock(ctx, p, i.qty, '销售退货', o.no, pname, { price: i.cost != null ? i.cost : p.cost || 0, wh, batch: { no: o.no, ...(bi[p.id] || {}) }, serials: sn })
+          : moveStock(ctx, p, -i.qty, '采购退货', o.no, pname, { reversePrice: i.cost != null ? i.cost : undefined, wh, serials: sn });
         i.cost = round4(m.unit);
         if (m.alloc) i.batches = m.alloc;
+        if (sn) i.serials = sn;
       });
       o.status = C.statuses[1]; o.postDate = today(); o.wh = wh;
     } else if (action === 'offset' && C.src) {
@@ -1629,15 +1641,29 @@ function visibleData(ctx) {
   return data;
 }
 
-function addFinance(ctx) {
-  const b = ctx.body, type = b.type === 'income' ? 'income' : b.type === 'expense' ? 'expense' : fail('收支类型不正确');
-  if (!FIN_CATS[type].includes(b.category)) fail('科目不正确');
+const AUTO_CATS = Object.values(ORD).map(C => C.fin[1]);  // 单据自动生成的科目（销售收款、采购付款、销售退款、采购退款），手工不能记
+function cleanFinance(b) {
+  const type = b.type === 'income' ? 'income' : b.type === 'expense' ? 'expense' : fail('收支类型不正确');
+  const category = str(b.category, 20) || fail('请填写科目');
+  if (AUTO_CATS.includes(category)) fail(`「${category}」由单据自动生成，请到对应单据里登记`);
   const amount = round2(Number(b.amount));
   if (!(amount > 0)) fail('金额必须大于 0');
   if (!isDate(b.date)) fail('日期格式不正确');
-  const r = { id: uid(), date: b.date, type, category: b.category, amount, method: METHODS.includes(b.method) ? b.method : '银行转账', ref: '', note: str(b.note), operator: ctx.user.name };
-  tx(() => { put('finance', r); audit(ctx, '记账', `${type === 'income' ? '收入' : '支出'} ${r.category} ${amount}`); });
+  return { date: b.date, type, category, amount, method: METHODS.includes(b.method) ? b.method : '银行转账', note: str(b.note) };
+}
+function addFinance(ctx) {
+  const r = { id: uid(), ...cleanFinance(ctx.body), ref: '', operator: ctx.user.name };
+  tx(() => { put('finance', r); audit(ctx, '记账', `${r.type === 'income' ? '收入' : '支出'} ${r.category} ${r.amount}`); });
   return r;
+}
+function editFinance(ctx, id) {
+  return tx(() => {
+    const f = get('finance', id) || fail('记录不存在', 404);
+    if (f.ref) fail('单据生成的收付款不能在这里修改，请到对应单据里处理');
+    Object.assign(f, cleanFinance(ctx.body), { editor: ctx.user.name });
+    put('finance', f); audit(ctx, '修改记账', `${f.type === 'income' ? '收入' : '支出'} ${f.category} ${f.amount}`);
+    return f;
+  });
 }
 function deleteFinance(ctx, id) {
   return tx(() => {
@@ -1834,6 +1860,7 @@ route('POST', '/api/warehouses', ctx => saveWarehouse(ctx, null), { admin: true 
 route('PUT', '/api/warehouses/:id', ctx => saveWarehouse(ctx, ctx.params.id), { admin: true });
 route('DELETE', '/api/warehouses/:id', ctx => deleteWarehouse(ctx, ctx.params.id), { admin: true });
 route('POST', '/api/finance', ctx => addFinance(ctx), { perm: 'finance' });
+route('PUT', '/api/finance/:id', ctx => editFinance(ctx, ctx.params.id), { perm: 'finance' });
 route('DELETE', '/api/finance/:id', ctx => deleteFinance(ctx, ctx.params.id), { perm: 'finance' });
 
 route('POST', '/api/password', ctx => {

@@ -680,3 +680,48 @@ test('问题反馈：留言转发给作者服务器（带版本号、不带业�
   fbStore.length = 0;
   assert.equal((await ok(admin, 'GET', '/api/feedback')).list.length, 0);
 });
+
+test('序列号商品：采购入库、销售发货、销售退货都能逐件登记序列号', async () => {
+  await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'sales', 'purchase', 'parties', 'finance'] });
+  const p = await newProduct('SNO1', { serial: true }), q = await newProduct('SNO2');
+  const su = await ok(admin, 'POST', '/api/suppliers', { name: '序列号供应商' }), cu = await ok(admin, 'POST', '/api/customers', { name: '序列号客户' });
+  const po = await ok(admin, 'POST', '/api/orders/purchase', { partyId: su.id, date: '2026-11-05', items: [{ productId: q.id, qty: 5, price: 3 }, { productId: p.id, qty: 2, price: 100 }] });
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/approve`, {});
+  let r = await call(admin, 'POST', `/api/orders/purchase/${po.id}/inbound`, {});
+  assert.equal(r.http, 400); assert.match(r.error, /需要登记 2 个序列号/);
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/inbound`, { serials: { 1: ['A1', 'A2'] } });
+  assert.deepEqual((await serials(p.id)).map(x => x.sn + x.status).sort(), ['A1在库', 'A2在库']);
+  const so = await ok(admin, 'POST', '/api/orders/sales', { partyId: cu.id, date: '2026-11-05', items: [{ productId: p.id, qty: 1, price: 150 }] });
+  r = await call(admin, 'POST', `/api/orders/sales/${so.id}/ship`, { serials: { 0: ['ZZ'] } });
+  assert.equal(r.http, 400); assert.match(r.error, /ZZ 不存在/);
+  await ok(admin, 'POST', `/api/orders/sales/${so.id}/ship`, { serials: { 0: ['A2'] } });
+  assert.equal((await serials(p.id)).find(x => x.sn === 'A2').status, '已出库');
+  assert.deepEqual((await data()).sales.find(o => o.id === so.id).items[0].serials, ['A2']);
+  const rt = await ok(admin, 'POST', '/api/orders/salesReturn', { partyId: cu.id, date: '2026-11-05', srcId: so.id, items: [{ productId: p.id, qty: 1, price: 150 }] });
+  await ok(admin, 'POST', `/api/orders/salesReturn/${rt.id}/post`, { serials: { 0: ['A2'] } });
+  assert.equal((await serials(p.id)).find(x => x.sn === 'A2').status, '在库');
+  assert.equal((await prod(p.id)).stock, 2);
+});
+
+test('订单优惠：合计减去优惠，收款以优惠后为准，优惠不能超过明细合计', async () => {
+  const p = await newProduct('DIS1', { price: 33.3 });
+  await inDoc(admin, [{ productId: p.id, qty: 10, price: 10 }]);
+  const cu = await ok(admin, 'POST', '/api/customers', { name: '优惠客户' });
+  assert.equal((await call(admin, 'POST', '/api/orders/sales', { partyId: cu.id, date: '2026-11-05', discount: 999, items: [{ productId: p.id, qty: 3, price: 33.3 }] })).http, 400);
+  const so = await ok(admin, 'POST', '/api/orders/sales', { partyId: cu.id, date: '2026-11-05', discount: 9.9, items: [{ productId: p.id, qty: 3, price: 33.3 }] });
+  assert.equal(so.discount, 9.9);
+  assert.equal((await call(admin, 'POST', `/api/orders/sales/${so.id}/pay`, { amount: 99.9 })).http, 400, '最多收 90');
+  await ok(admin, 'POST', `/api/orders/sales/${so.id}/pay`, { amount: 90 });
+  assert.equal((await data()).sales.find(o => o.id === so.id).received, 90);
+  assert.equal((await call(admin, 'PUT', `/api/orders/sales/${so.id}`, { partyId: cu.id, date: '2026-11-05', discount: 20, items: [{ productId: p.id, qty: 3, price: 33.3 }] })).http, 400, '已收 90，改优惠后合计不能低于已收');
+});
+
+test('记一笔：科目可以自己填，手工记录可以修改，单据生成的不能改', async () => {
+  const f = await ok(admin, 'POST', '/api/finance', { type: 'expense', category: '物业费', amount: 200, date: '2026-11-05', method: '微信' });
+  assert.equal(f.category, '物业费');
+  assert.equal((await call(admin, 'POST', '/api/finance', { type: 'income', category: '销售收款', amount: 1, date: '2026-11-05' })).http, 400, '自动科目不能手工记');
+  const e = await ok(admin, 'PUT', '/api/finance/' + f.id, { type: 'expense', category: '物业管理费', amount: 260, date: '2026-11-04', method: '现金', note: '10 月' });
+  assert.equal(e.category, '物业管理费'); assert.equal(e.amount, 260); assert.equal(e.method, '现金');
+  const auto = (await data()).finance.find(x => x.ref);
+  assert.equal((await call(admin, 'PUT', '/api/finance/' + auto.id, { type: 'income', category: '其他收入', amount: 1, date: '2026-11-05' })).http, 400);
+});
