@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 2.0.12
+version               = 2.0.13
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 采购单审核后、入库前可以「反审核」或直接「编辑」，改完退回待审核重新审核；新建采购退货单时提示只有已入库的采购单能关联退货。（2.0.11 新增资金账户：微信、支付宝、银行卡、现金账户和余额，账户互转。）
+changelog             = 新增 Docker 版（群晖、威联通、Unraid 等任意 NAS 都能装，镜像 ghcr.io/zyc009234/xerp，另附离线镜像包），官网新增在线体验 demo.zhaoyoucai.xyz；软件改为 AGPL-3.0 开源。（2.0.12：采购单审核后可反审核、修改；2.0.11：资金账户。）
