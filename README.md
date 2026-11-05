@@ -30,7 +30,7 @@
 - 盘点可按「2箱3」录入，开启「扫码累加」后每扫一次 +1（安卓客户端连续扫码）
 - 数据存于本地 SQLite，每日自动备份（保留 30 天），支持 JSON 备份导出 / 导入
 
-全部功能免费使用，源码公开。
+全部功能免费使用，基于 [AGPL-3.0](LICENSE) 协议开源。
 
 ## 目录
 
@@ -107,3 +107,15 @@ powershell -ExecutionPolicy Bypass -File fnos\build-fnos.ps1
 ### 上架飞牛应用中心
 
 参见 [官方上架文档](https://developer.fnnas.com/docs/quick-started/publish-application/)：目前通过飞牛官网的微信群联系社区主理人，加入“应用中心开发者先锋交流群”后提交 `.fpk`、图标、真实界面截图与测试材料。
+
+## 许可证
+
+Copyright (C) 2026 Zyc009234
+
+x.erp 以 [GNU Affero General Public License v3.0](LICENSE)（AGPL-3.0）发布：
+
+- 个人、企业都可以免费使用，包括商用，可以自由修改
+- 如果分发修改后的版本，或者把修改后的版本做成在线服务给别人用，必须以同样的 AGPL-3.0 协议公开修改后的完整源码，并保留原作者的版权声明
+- 软件按“现状”提供，不附带任何担保
+
+如需不受 AGPL 约束的商业授权，请通过 [官网留言](https://www.zhaoyoucai.xyz/xerp/) 联系作者。
