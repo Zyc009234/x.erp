@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.0.10';
+const VERSION = '2.0.11';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -95,8 +95,8 @@ const fail = (msg, status) => { throw new HttpError(msg, status); };
 function audit(ctx, action, detail = '') { S.audit.run(new Date().toISOString(), ctx.user ? ctx.user.name : '-', action, String(detail).slice(0, 300), ctx.ip || ''); }
 
 /* ================= 业务常量 ================= */
-const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials', 'carriers', 'shipments', 'shipBills', 'shipLabels'];
-const DATED = ['sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs', 'shipments', 'shipBills'];
+const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials', 'carriers', 'shipments', 'shipBills', 'shipLabels', 'accounts', 'acctTransfers'];
+const DATED = ['sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs', 'shipments', 'shipBills', 'acctTransfers'];
 const CATS = ['电子产品', '办公用品', '家居用品', '食品饮料'];
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
 const METHODS = ['银行转账', '现金', '支付宝', '微信', '承兑汇票'];
@@ -318,6 +318,7 @@ function writeAll(data) {
     }
   }
   ensureWh();
+  ensureAccounts();
 }
 // 保证有默认仓库，且每个商品都有分仓库存 p.wh（{仓库id: 数量}，合计等于 p.stock；旧数据全部归入默认仓库）
 function ensureWh() {
@@ -328,6 +329,76 @@ function ensureWh() {
     p.wh = w ? { ...w, [DEFAULT_WH]: (w[DEFAULT_WH] || 0) + (p.stock || 0) - total } : { [DEFAULT_WH]: p.stock || 0 };
     put('products', p);
   }
+}
+/* ---------- 资金账户：{ id, name, kind(方式), no, opening(期初余额), remark, off }；余额 = 期初 + 收入 - 支出 + 转入 - 转出 ---------- */
+const ACCT_NAME = { 银行转账: '银行账户' };
+function ensureAccounts() {
+  const accts = list('accounts');
+  const add = kind => { const a = { id: 'a' + uid(), name: ACCT_NAME[kind] || kind, kind, no: '', opening: 0, remark: '', createdAt: today() }; put('accounts', a); accts.push(a); return a; };
+  if (!accts.length) ['银行转账', '现金', '微信', '支付宝'].forEach(add);
+  for (const f of list('finance')) {
+    if (f.account && accts.some(a => a.id === f.account)) continue;
+    const kind = METHODS.includes(f.method) ? f.method : '银行转账';
+    f.account = (accts.find(a => a.kind === kind) || add(kind)).id; f.method = kind;
+    put('finance', f);
+  }
+}
+// 收付款选账户：指定了账户就用它（停用的不行，除非是修改时原来的账户）；没指定按方式找第一个同类账户
+function pickAccount(b, keep) {
+  const accts = list('accounts'), id = str(b.account, 64);
+  let a = id ? accts.find(x => x.id === id) || fail('资金账户不存在') : null;
+  if (a && a.off && a.id !== keep) fail(`账户「${a.name}」已停用`);
+  if (!a) a = accts.find(x => !x.off && x.kind === b.method) || accts.find(x => !x.off) || fail('请先在财务管理里添加资金账户');
+  return a;
+}
+const acctBalance = id => {
+  const a = get('accounts', id); if (!a) return 0;
+  return round2((a.opening || 0) + sum(list('finance').filter(f => f.account === id), f => f.type === 'income' ? f.amount : -f.amount)
+    + sum(list('acctTransfers').filter(t => t.to === id), t => t.amount) - sum(list('acctTransfers').filter(t => t.from === id), t => t.amount));
+};
+function saveAccount(ctx, id) {
+  const b = ctx.body, name = str(b.name, 30) || fail('请填写账户名称');
+  const kind = METHODS.includes(b.kind) ? b.kind : fail('账户类型不正确');
+  const opening = round2(Number(b.opening) || 0);
+  return tx(() => {
+    const all = list('accounts');
+    if (all.some(a => a.name === name && a.id !== id)) fail('账户名称已存在');
+    let a;
+    if (id) {
+      a = get('accounts', id) || fail('账户不存在', 404);
+      if (b.off && !a.off && !all.some(x => x.id !== id && !x.off)) fail('至少要留一个启用的账户');
+      Object.assign(a, { name, kind, no: str(b.no, 40), opening, remark: str(b.remark, 200), off: !!b.off });
+    } else a = { id: 'a' + uid(), name, kind, no: str(b.no, 40), opening, remark: str(b.remark, 200), off: false, createdAt: today() };
+    put('accounts', a); audit(ctx, (id ? '修改' : '新增') + '资金账户', name);
+    return a;
+  });
+}
+function deleteAccount(ctx, id) {
+  return tx(() => {
+    const a = get('accounts', id) || fail('账户不存在', 404);
+    if (list('finance').some(f => f.account === id) || list('acctTransfers').some(t => t.from === id || t.to === id)) fail('该账户已有收支或转账记录，不能删除，可以停用');
+    if (!list('accounts').some(x => x.id !== id && !x.off)) fail('至少要留一个启用的账户');
+    del('accounts', id); audit(ctx, '删除资金账户', a.name);
+  });
+}
+// 账户互转（取现、存现、提现到银行卡）：不算收入支出，只影响两个账户的余额
+function addTransfer(ctx) {
+  const b = ctx.body, amount = round2(Number(b.amount));
+  if (!(amount > 0)) fail('金额必须大于 0');
+  if (!isDate(b.date)) fail('日期格式不正确');
+  return tx(() => {
+    const from = pickAccount({ account: b.from || '-' }), to = pickAccount({ account: b.to || '-' });
+    if (from.id === to.id) fail('转出和转入账户不能相同');
+    const t = { id: uid(), date: b.date, from: from.id, to: to.id, amount, note: str(b.note), operator: ctx.user.name };
+    put('acctTransfers', t); audit(ctx, '账户转账', `${from.name} → ${to.name} ${amount}`);
+    return t;
+  });
+}
+function deleteTransfer(ctx, id) {
+  return tx(() => {
+    const t = get('acctTransfers', id) || fail('记录不存在', 404);
+    del('acctTransfers', id); audit(ctx, '删除转账', `${t.amount}`);
+  });
 }
 const whName = id => (get('warehouses', id) || {}).name || '已删除仓库';
 const whQty = (p, w) => (p.wh && p.wh[w]) || 0;
@@ -708,8 +779,9 @@ function orderAction(ctx, kind, id, action) {
       const unpaid = round2(orderTotal(o) - (o[C.paidKey] || 0)), amount = round2(Number(b.amount));
       if (!(amount > 0) || amount > unpaid + 0.001) fail(`${C.payWord}金额需在 0 ~ ${unpaid} 之间`);
       o[C.paidKey] = round2((o[C.paidKey] || 0) + amount);
+      const acct = pickAccount(b);
       put('finance', { id: uid(), date: isDate(b.date) ? b.date : today(), type: C.fin[0], category: C.fin[1],
-        amount, method: METHODS.includes(b.method) ? b.method : '银行转账', ref: o.no, note: str(b.note), operator: ctx.user.name });
+        amount, account: acct.id, method: acct.kind, ref: o.no, note: str(b.note), operator: ctx.user.name });
     } else fail('不支持的操作', 404);
     put(C.col, o);
     audit(ctx, { ship: '发货', complete: '完成订单', approve: '审核采购', inbound: '采购入库', post: kind === 'salesReturn' ? '销售退货入库' : '采购退货出库', offset: '退货冲抵', cancel: '作废单据', pay: C.payWord }[action], o.no + (action === 'pay' || action === 'offset' ? ' ' + b.amount : ''));
@@ -1269,7 +1341,7 @@ function voidShipmentsOf(type, id) {
   for (const s of list('shipments')) if (s.srcType === type && s.srcId === id && s.status === '待对账') { s.status = '已作废'; s.voidAt = new Date().toISOString(); put('shipments', s); }
 }
 const shipFinanceOn = () => enabledModules().includes('finance');
-const shipExpense = (ctx, amount, ref, note) => put('finance', { id: uid(), date: today(), type: 'expense', category: '快递费', amount: round2(amount), method: '银行转账', ref, note, operator: ctx.user.name });
+const shipExpense = (ctx, amount, ref, note) => { const a = pickAccount({ method: '银行转账' }); put('finance', { id: uid(), date: today(), type: 'expense', category: '快递费', amount: round2(amount), account: a.id, method: a.kind, ref, note, operator: ctx.user.name }); };
 // 申诉处理完：按最终金额结算
 function resolveShipment(ctx, id) {
   const fee = optNum(ctx.body.fee, '最终运费');
@@ -1621,7 +1693,8 @@ function visibleData(ctx) {
     customers: any('sales', 'parties', 'dashboard', 'reports'), suppliers: any('purchase', 'parties'),
     finance: any('finance', 'sales', 'purchase', 'reports'), employees: P.has('hr'),
     warehouses: true, transferDocs: P.has('inv.view'), batches: any('inv.view', 'prod.view'), serials: P.has('inv.view'),
-    carriers: any('ship.view', 'ship.edit', 'ship.rate'), shipments: any('ship.view', 'ship.edit'), shipBills: P.has('ship.view'), shipLabels: false
+    carriers: any('ship.view', 'ship.edit', 'ship.rate'), shipments: any('ship.view', 'ship.edit'), shipBills: P.has('ship.view'), shipLabels: false,
+    accounts: any('finance', 'sales', 'purchase', 'ship.bill'), acctTransfers: P.has('finance')
   };
   const byDate = (a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || ''));
   const data = {};
@@ -1642,25 +1715,27 @@ function visibleData(ctx) {
 }
 
 const AUTO_CATS = Object.values(ORD).map(C => C.fin[1]);  // 单据自动生成的科目（销售收款、采购付款、销售退款、采购退款），手工不能记
-function cleanFinance(b) {
+function cleanFinance(b, keep) {
   const type = b.type === 'income' ? 'income' : b.type === 'expense' ? 'expense' : fail('收支类型不正确');
   const category = str(b.category, 20) || fail('请填写科目');
   if (AUTO_CATS.includes(category)) fail(`「${category}」由单据自动生成，请到对应单据里登记`);
   const amount = round2(Number(b.amount));
   if (!(amount > 0)) fail('金额必须大于 0');
   if (!isDate(b.date)) fail('日期格式不正确');
-  return { date: b.date, type, category, amount, method: METHODS.includes(b.method) ? b.method : '银行转账', note: str(b.note) };
+  const a = pickAccount(b, keep);
+  return { date: b.date, type, category, amount, account: a.id, method: a.kind, note: str(b.note) };
 }
 function addFinance(ctx) {
-  const r = { id: uid(), ...cleanFinance(ctx.body), ref: '', operator: ctx.user.name };
-  tx(() => { put('finance', r); audit(ctx, '记账', `${r.type === 'income' ? '收入' : '支出'} ${r.category} ${r.amount}`); });
-  return r;
+  return tx(() => {
+    const r = { id: uid(), ...cleanFinance(ctx.body), ref: '', operator: ctx.user.name }; put('finance', r); audit(ctx, '记账', `${r.type === 'income' ? '收入' : '支出'} ${r.category} ${r.amount}`);
+    return r;
+  });
 }
 function editFinance(ctx, id) {
   return tx(() => {
     const f = get('finance', id) || fail('记录不存在', 404);
     if (f.ref) fail('单据生成的收付款不能在这里修改，请到对应单据里处理');
-    Object.assign(f, cleanFinance(ctx.body), { editor: ctx.user.name });
+    Object.assign(f, cleanFinance(ctx.body, f.account), { editor: ctx.user.name });
     put('finance', f); audit(ctx, '修改记账', `${f.type === 'income' ? '收入' : '支出'} ${f.category} ${f.amount}`);
     return f;
   });
@@ -1704,6 +1779,7 @@ if (!getMeta('initialized', false)) {
   log('首次启动：已写入演示数据');
 }
 tx(ensureWh);  // v1.0.3 升级：补默认仓库与分仓库存
+tx(ensureAccounts);  // v2.0.11 升级：补资金账户，旧流水按收付方式归到对应账户
 if (!db.prepare('SELECT COUNT(*) AS n FROM users').get().n) {
   // --admin-password-file：首次启动时从文件读取管理员初始密码（NAS 安装向导填写），读取后删除
   let pwd = '';
@@ -1860,6 +1936,12 @@ route('POST', '/api/warehouses', ctx => saveWarehouse(ctx, null), { admin: true 
 route('PUT', '/api/warehouses/:id', ctx => saveWarehouse(ctx, ctx.params.id), { admin: true });
 route('DELETE', '/api/warehouses/:id', ctx => deleteWarehouse(ctx, ctx.params.id), { admin: true });
 route('POST', '/api/finance', ctx => addFinance(ctx), { perm: 'finance' });
+route('POST', '/api/accounts', ctx => saveAccount(ctx, null), { perm: 'finance' });
+route('PUT', '/api/accounts/:id', ctx => saveAccount(ctx, ctx.params.id), { perm: 'finance' });
+route('DELETE', '/api/accounts/:id', ctx => deleteAccount(ctx, ctx.params.id), { perm: 'finance' });
+route('GET', '/api/accounts/balances', () => Object.fromEntries(list('accounts').map(a => [a.id, acctBalance(a.id)])), { perm: 'finance' });
+route('POST', '/api/acct-transfers', ctx => addTransfer(ctx), { perm: 'finance' });
+route('DELETE', '/api/acct-transfers/:id', ctx => deleteTransfer(ctx, ctx.params.id), { perm: 'finance' });
 route('PUT', '/api/finance/:id', ctx => editFinance(ctx, ctx.params.id), { perm: 'finance' });
 route('DELETE', '/api/finance/:id', ctx => deleteFinance(ctx, ctx.params.id), { perm: 'finance' });
 

@@ -81,6 +81,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
 .card-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 0}
 .card-head h3{font-size:15px;font-weight:600}
+.acct-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;padding:16px 20px 0}.acct{border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:4px}.acct.off{opacity:.55}.acct-h{display:flex;justify-content:space-between;align-items:center;gap:8px}.acct-v{font-size:20px;font-weight:700;margin:4px 0}.acct .ops{margin-top:6px}.acct-sum{padding:12px 20px 0;text-align:right}
 .card-head .more{color:var(--muted);font-size:13px;cursor:pointer}
 .card-head .more:hover{color:var(--primary)}
 .card-body{padding:16px 20px 20px}
@@ -323,7 +324,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.0.10 · 数据保存在服务器</div>
+    <div class="side-foot">v2.0.11 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -443,6 +444,13 @@ let ME = null, META = {modules:{}, perms:[], templates:{}, docTypes:{in:[], out:
 const whs = () => db.warehouses.length ? [...db.warehouses].sort((a, b) => (b.id === META.defaultWh) - (a.id === META.defaultWh) || String(a.code || '').localeCompare(String(b.code || ''))) : [{id:META.defaultWh, name:'主仓库'}];
 const multiWh = () => db.warehouses.length > 1;
 const whName = id => (byId(db.warehouses, id || META.defaultWh) || {}).name || '已删除仓库';
+/* 资金账户：余额 = 期初 + 收入 - 支出 + 转入 - 转出 */
+const accts = (all = false) => (db.accounts || []).filter(a => all || !a.off);
+const acctName = f => { const a = f && byId(db.accounts || [], f.account); return a ? a.name : (f && f.method) || '-'; };
+const acctBal = id => { const a = byId(db.accounts, id); if (!a) return 0; const T = db.acctTransfers || [];
+  return +((a.opening || 0) + sum(db.finance.filter(f => f.account === id), f => f.type === 'income' ? f.amount : -f.amount) + sum(T.filter(t => t.to === id), t => t.amount) - sum(T.filter(t => t.from === id), t => t.amount)).toFixed(2); };
+const acctOpts = keep => accts(true).filter(a => !a.off || a.id === keep).map(a => [a.id, a.name + (a.off ? '（已停用）' : '')]);
+const acctDefault = () => (accts().find(a => a.kind === '银行转账') || accts()[0] || {}).id || '';
 const whQty = (p, w) => !w ? p.stock : ((p.wh || {})[w] || 0);
 const whOpts = (sel, all) => (all ? `<option value="">全部仓库</option>` : '') + whs().map(w => `<option value="${w.id}" ${w.id === sel ? 'selected' : ''}>${esc(w.name)}</option>`).join('');
 const batchesOf = (pid, wh) => db.batches.filter(b => b.productId === pid && (!wh || b.wh === wh) && b.qty > 0);
@@ -1767,9 +1775,9 @@ function statementData(name, from, to, priceBy) {
     const open = sum(orders.filter(o => o.date < from), orderTotal) - sum(pays.filter(f => f.date < from), f => f.amount) - sum(rets.filter(o => o.date < from), orderTotal) + sum(refunds.filter(f => f.date < from), f => f.amount);
     const inP = x => x.date >= from && x.date <= to;
     const ev = [...orders.filter(inP).map(o => ({date:o.date, no:o.no, text:C.doc, add:orderTotal(o), sub:0})),
-      ...pays.filter(inP).map(f => ({date:f.date, no:f.ref, text:C.payWord + (f.method ? '（' + f.method + '）' : ''), add:0, sub:f.amount})),
+      ...pays.filter(inP).map(f => ({date:f.date, no:f.ref, text:C.payWord + '（' + acctName(f) + '）', add:0, sub:f.amount})),
       ...rets.filter(inP).map(o => ({date:o.date, no:o.no, text:R.doc, add:0, sub:orderTotal(o)})),
-      ...refunds.filter(inP).map(f => ({date:f.date, no:f.ref, text:'退款' + (f.method ? '（' + f.method + '）' : ''), add:f.amount, sub:0}))].sort((a, b) => a.date.localeCompare(b.date));
+      ...refunds.filter(inP).map(f => ({date:f.date, no:f.ref, text:'退款（' + acctName(f) + '）', add:f.amount, sub:0}))].sort((a, b) => a.date.localeCompare(b.date));
     let bal = open; ev.forEach(e => { bal += e.add - e.sub; e.bal = bal; });
     acc.push({title:kind === 'sales' ? '应收账款' : '应付账款', open, ev, close:bal});
   }
@@ -2426,7 +2434,7 @@ function orderView(kind, id) {
     </tbody></table>
     <div class="doc-sum">${o.discount ? `<div>明细合计：<b>${money(itemsTotal(o))}</b></div><div>优惠：<b>-${money(o.discount)}</b></div>` : ''}<div>合计：<b>${money(total)}</b></div><div>已${C.payWord}：<b class="pos">${money(paid)}</b></div><div>未${C.payWord}：<b class="neg">${money(total - paid)}</b></div></div>
     ${o.remark ? `<p style="margin-top:12px;color:var(--muted)">备注：${esc(o.remark)}</p>` : ''}
-    ${pays.length || o.offset ? `<h4 style="margin:18px 0 8px">${C.payWord}记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(f.method || '')}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td></tr>`).join('')}
+    ${pays.length || o.offset ? `<h4 style="margin:18px 0 8px">${C.payWord}记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(acctName(f))}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td></tr>`).join('')}
       ${o.offset ? `<tr><td>-</td><td>退货冲抵</td><td class="num">${money(o.offset)}</td><td class="sub-t">${C.src ? '抵扣原单 ' + esc(o.srcNo) + ' 的欠款' : '由退货单抵扣'}</td></tr>` : ''}</tbody></table>` : ''}
     ${(() => { const R = ORD[kind + 'Return'], rs = R ? db[R.db].filter(r => r.srcId === o.id) : []; return rs.length ? `<h4 style="margin:18px 0 8px">退货记录</h4><table class="tbl compact"><tbody>${rs.map(r => `<tr><td><a class="link" data-act="orderView" data-id="${kind}Return|${r.id}">${r.no}</a></td><td>${r.date}</td><td>${badge(r.status)}</td><td class="num">${money(orderTotal(r))}</td></tr>`).join('')}</tbody></table>` : ''; })()}
     ${kind === 'sales' && o.status !== '待发货' ? shipBlock('sales', o, o.status !== '已作废') : ''}
@@ -2530,8 +2538,8 @@ function orderAct(action, kind, id) {
     const unpaid = unpaidOf(kind, o);
     formModal({title:'登记' + C.payWord + ' · ' + o.no, okText:'确认' + C.payWord, fields:[
       {n:'amount', l:`${C.payWord}金额（未结 ${money(unpaid)}）`, type:'number', req:1}, {n:'date', l:'日期', type:'date', req:1},
-      {n:'method', l:'方式', type:'select', opts:METHODS}, {n:'note', l:'备注'}],
-      data:{amount:unpaid, date:today(), method:'银行转账'}, onSubmit:v => {
+      {n:'account', l:'资金账户', type:'select', opts:acctOpts()}, {n:'note', l:'备注'}],
+      data:{amount:unpaid, date:today(), account:acctDefault()}, onSubmit:v => {
         if (v.amount <= 0 || v.amount > unpaid + 0.001) return toast('金额需在 0 ~ ' + money(unpaid) + ' 之间', 'error');
         return run('pay', C.payWord + '已登记：' + money(v.amount), v);
       }});
@@ -3178,28 +3186,46 @@ function pageFinance() {
   <div class="grid g5 mb">
     ${kpi('本月收入', moneyK(inc), 'download', 'green')}
     ${kpi('本月支出', moneyK(exp), 'upload', 'red')}
-    ${kpi('本月净现金流', `<span class="${inc - exp >= 0 ? 'pos' : 'neg'}">${moneyK(inc - exp)}</span>`, 'coin', 'primary')}
+    ${kpi('资金余额', moneyK(sum(accts(true), a => acctBal(a.id))), 'coin', 'primary', `<div class="trend"><span>本月净流入 <b class="${inc - exp >= 0 ? 'pos' : 'neg'}">${moneyK(inc - exp)}</b></span></div>`)}
     ${kpi('应收账款', moneyK(recv), 'wallet', 'orange')}
     ${kpi('应付账款', moneyK(pay), 'wallet', 'purple')}
   </div>
-  ${tabs('finTab', [['flow', '收支流水'], ['recv', '应收账款'], ['pay', '应付账款'], ['chart', '收支分析']])}
+  ${tabs('finTab', [['flow', '收支流水'], ['acct', '资金账户'], ['recv', '应收账款'], ['pay', '应付账款'], ['chart', '收支分析']])}
   <div class="card" id="finCard"></div>`;
   const card = $('#finCard');
   if (ui.finTab === 'flow') {
     const filters = [{key:'type', label:'收支类型', options:[['income', '收入'], ['expense', '支出']], test:(f, v) => f.type === v},
       {key:'cat', label:'全部科目', options:[...new Set([...FIN_CATS.income, ...FIN_CATS.expense, ...db.finance.map(f => f.category)])], test:(f, v) => f.category === v},
-      {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(f, v) => monthKey(f.date) === v}];
+      {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(f, v) => monthKey(f.date) === v},
+      {key:'acct', label:'全部账户', options:accts(true).map(a => [a.id, a.name]), test:(f, v) => f.account === v}];
     card.innerHTML = toolbar('fin', {placeholder:'搜索单号 / 备注', filters, buttons:`<button class="btn" data-act="export" data-id="fin">${ic('download')}导出</button>`}) + '<div id="list-fin"></div>';
     mountList('fin', {rows:() => db.finance, search:f => f.ref + f.note + f.category, filters, columns:[
       {t:'日期', r:f => f.date, s:f => f.date},
       {t:'类型', r:f => badge(f.type === 'income' ? '收入' : '支出', f.type === 'income' ? 'green' : 'red')},
       {t:'科目', r:f => esc(f.category)},
       {t:'金额', cls:'num', r:f => `<span class="${f.type === 'income' ? 'pos' : 'neg'}">${f.type === 'income' ? '+' : '-'}${money(f.amount)}</span>`, s:f => f.amount},
-      {t:'方式', r:f => esc(f.method || '-')},
+      {t:'账户', r:f => esc(acctName(f))},
       {t:'关联单据', r:f => f.ref ? `<span class="sub-t">${esc(f.ref)}</span>` : '-'},
       {t:'备注', r:f => esc(f.note || '-')},
       {t:'操作', r:f => f.ref ? '<span class="sub-t">单据生成</span>' : `<div class="ops">${tbtn('编辑', 'finEdit', f.id)}${tbtn('删除', 'finDel', f.id, 'danger-text')}</div>`}
-    ], exp:{name:'收支流水', cols:[['日期', f => f.date], ['类型', f => f.type === 'income' ? '收入' : '支出'], ['科目', f => f.category], ['金额', f => f.amount], ['方式', f => f.method], ['单据', f => f.ref], ['备注', f => f.note]]}});
+    ], exp:{name:'收支流水', cols:[['日期', f => f.date], ['类型', f => f.type === 'income' ? '收入' : '支出'], ['科目', f => f.category], ['金额', f => f.amount], ['账户', f => acctName(f)], ['单据', f => f.ref], ['备注', f => f.note]]}});
+  } else if (ui.finTab === 'acct') {
+    const T = db.acctTransfers || [];
+    card.innerHTML = `<div class="card-head"><h3>资金账户</h3><div class="ops"><button class="btn" data-act="acctTransfer">${ic('swap')}账户转账</button><button class="btn primary" data-act="acctEdit">${ic('plus')}新增账户</button></div></div>
+    <div class="acct-grid">${accts(true).map(a => { const fs = db.finance.filter(f => f.account === a.id), bal = acctBal(a.id);
+      return `<div class="acct${a.off ? ' off' : ''}"><div class="acct-h"><b>${esc(a.name)}</b>${badge(a.off ? '已停用' : a.kind === '银行转账' ? '银行' : a.kind, a.off ? 'gray' : 'blue plain')}</div>
+      <div class="sub-t">${esc(a.no || a.remark || ' ')}</div><div class="acct-v ${bal < 0 ? 'neg' : ''}">${money(bal)}</div>
+      <div class="sub-t">期初 ${money(a.opening || 0)} · 收 <span class="pos">${money(sum(fs.filter(f => f.type === 'income'), f => f.amount))}</span> · 支 <span class="neg">${money(sum(fs.filter(f => f.type === 'expense'), f => f.amount))}</span></div>
+      <div class="ops">${tbtn('明细', 'acctFlow', a.id)}${tbtn('编辑', 'acctEdit', a.id)}${tbtn('删除', 'acctDel', a.id, 'danger-text')}</div></div>`; }).join('')}</div>
+    <div class="acct-sum">合计余额 <b>${money(sum(accts(true), a => acctBal(a.id)))}</b></div>
+    <p class="sub-t" style="padding:10px 16px 0">期初余额填开始用本软件那天账户里的钱；以后的收付款、记一笔都会自动计入所选账户。取现、存现、提现到银行卡用「账户转账」，不算收入支出。</p>
+    <div class="card-head" style="margin-top:8px"><h3>转账记录</h3></div><div id="list-acctTr"></div>`;
+    mountList('acctTr', {rows:() => T, search:t => t.note || '', empty:'还没有转账记录', compact:1, columns:[
+      {t:'日期', r:t => t.date, s:t => t.date},
+      {t:'转出', r:t => esc(acctName({account:t.from}))}, {t:'转入', r:t => esc(acctName({account:t.to}))},
+      {t:'金额', cls:'num', r:t => money(t.amount), s:t => t.amount},
+      {t:'备注', r:t => esc(t.note || '-')}, {t:'经办', r:t => esc(t.operator || '-')},
+      {t:'操作', r:t => `<div class="ops">${tbtn('删除', 'acctTrDel', t.id, 'danger-text')}</div>`}]});
   } else if (ui.finTab === 'recv' || ui.finTab === 'pay') {
     const kind = ui.finTab === 'recv' ? 'sales' : 'purchase', C = ORD[kind], key = 'fin_' + kind;
     card.innerHTML = toolbar(key, {placeholder:'搜索单号 / ' + C.partyLabel}) + `<div id="list-${key}"></div>`;
@@ -3226,14 +3252,33 @@ function pageFinance() {
 }
 // 科目候选：内置科目 + 以前手工用过的科目；也可以直接输入新的（单据自动生成的科目除外）
 const finCats = type => [...new Set([...FIN_CATS[type], ...db.finance.filter(f => f.type === type && !f.ref).map(f => f.category)])].filter(c => !AUTO_CATS.includes(c));
+function acctEdit(id) {
+  const a = typeof id === 'string' ? byId(db.accounts, id) : null;
+  formModal({title:a ? '编辑资金账户' : '新增资金账户', data:a ? {...a, off:a.off ? '1' : ''} : {kind:'银行转账', opening:0},
+    fields:[{n:'name', l:'账户名称', req:1, ph:'如：工商银行对公户、老板微信'}, {n:'kind', l:'类型', type:'select', opts:METHODS.map(m => [m, m === '银行转账' ? '银行账户' : m])},
+      {n:'no', l:'账号 / 卡号', ph:'选填'}, {n:'opening', l:'期初余额（元）', type:'number'},
+      ...(a ? [{n:'off', l:'状态', type:'select', opts:[['', '启用'], ['1', '停用']]}] : []), {n:'remark', l:'备注', span:1}],
+    onSubmit:v => mutate(a ? 'PUT' : 'POST', '/api/accounts' + (a ? '/' + a.id : ''), v, a ? '账户已更新' : '账户已新增：' + v.name)});
+}
+function acctTransfer() {
+  const opts = acctOpts();
+  if (opts.length < 2) return toast('转账需要至少两个启用的账户', 'error');
+  formModal({title:'账户转账', okText:'确认转账', data:{from:opts[0][0], to:opts[1][0], date:today()},
+    fields:[{n:'from', l:'转出账户', type:'select', opts}, {n:'to', l:'转入账户', type:'select', opts}, {n:'amount', l:'金额（元）', type:'number', req:1}, {n:'date', l:'日期', type:'date', req:1}, {n:'note', l:'备注', span:1, ph:'如：取现、微信提现到银行卡'}],
+    onSubmit:v => {
+      if (v.from === v.to) return toast('转出和转入账户不能相同', 'error');
+      if (v.amount <= 0) return toast('金额必须大于 0', 'error');
+      return mutate('POST', '/api/acct-transfers', v, '已转账 ' + money(v.amount));
+    }});
+}
 function finAdd(id) {
   const f = typeof id === 'string' ? byId(db.finance, id) : null;
   formModal({title:f ? '修改记账' : '记一笔', fields:[
     {n:'type', l:'收支类型', type:'select', opts:[['expense', '支出'], ['income', '收入']]},
     {n:'category', l:'科目（可选择或直接输入新科目）', type:'combo', opts:() => finCats(f ? f.type : 'expense'), ph:'如：房租、物流费'},
     {n:'amount', l:'金额（元）', type:'number', req:1}, {n:'date', l:'日期', type:'date', req:1},
-    {n:'method', l:'方式', type:'select', opts:METHODS}, {n:'note', l:'备注'}],
-    data:f ? {...f} : {date:today(), method:'银行转账'}, onSubmit:v => {
+    {n:'account', l:'资金账户', type:'select', opts:acctOpts(f && f.account)}, {n:'note', l:'备注'}],
+    data:f ? {...f} : {date:today(), account:acctDefault()}, onSubmit:v => {
       if (!String(v.category || '').trim()) return toast('请填写科目', 'error');
       if (AUTO_CATS.includes(v.category.trim())) return toast(`「${v.category}」由单据自动生成，请到对应单据里登记`, 'error');
       if (v.amount <= 0) return toast('金额必须大于 0', 'error');
@@ -3713,6 +3758,10 @@ const A = {
   orderPrint: v => orderPrint(...split(v)),
   finAdd,
   finEdit: id => finAdd(id),
+  acctEdit, acctTransfer,
+  acctDel: id => confirmBox(`确定删除账户「${esc(acctName({account:id}))}」吗？没有收支和转账记录时才能删除，有记录的可以编辑改为停用。`, () => mutate('DELETE', '/api/accounts/' + id, undefined, '账户已删除')),
+  acctTrDel: id => confirmBox('确定删除这条转账记录吗？两个账户的余额会恢复。', () => mutate('DELETE', '/api/acct-transfers/' + id, undefined, '已删除')),
+  acctFlow: id => { ui.finTab = 'flow'; const st = getState('fin'); st.f = {acct:id}; st.page = 1; render(); },
   finDel: id => confirmBox('确定删除这条收支记录吗？', () => mutate('DELETE', '/api/finance/' + id, undefined, '已删除')),
   rptExport: () => exportCSV('月度经营报表', ['月份', '订单数', '销售额', '销售成本', '毛利', '毛利率%', '采购额', '运营费用', '净利润'], ui.rptStats.map(s => [s.mk, s.count, s.sales.toFixed(2), s.cost.toFixed(2), s.gp.toFixed(2), s.rate.toFixed(1), s.purchase.toFixed(2), s.exp.toFixed(2), s.net.toFixed(2)])),
   savePrefs: () => { db.settings.theme = $('#sTheme').value; db.settings.pageSize = +$('#sPs').value; savePrefs(); applyTheme(); toast('偏好已保存'); render(); },

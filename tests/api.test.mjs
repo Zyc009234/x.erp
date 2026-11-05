@@ -725,3 +725,39 @@ test('记一笔：科目可以自己填，手工记录可以修改，单据生�
   const auto = (await data()).finance.find(x => x.ref);
   assert.equal((await call(admin, 'PUT', '/api/finance/' + auto.id, { type: 'income', category: '其他收入', amount: 1, date: '2026-11-05' })).http, 400);
 });
+
+test('资金账户：老流水按方式归账户，收付款记入所选账户，余额 = 期初 + 收支 + 转账，有记录的账户只能停用', async () => {
+  let d = await data();
+  assert.ok(d.accounts.length >= 4, '自动建好默认账户');
+  assert.ok(d.finance.every(f => d.accounts.some(a => a.id === f.account)), '每条流水都归到账户');
+  const bank = await ok(admin, 'POST', '/api/accounts', { name: '工行对公户', kind: '银行转账', no: '6222', opening: 1000 });
+  const wx = await ok(admin, 'POST', '/api/accounts', { name: '老板微信', kind: '微信', opening: 50 });
+  assert.equal((await call(admin, 'POST', '/api/accounts', { name: '老板微信', kind: '微信' })).http, 400, '名称不能重复');
+  const bal = async id => (await ok(admin, 'GET', '/api/accounts/balances'))[id];
+  await ok(admin, 'POST', '/api/finance', { type: 'income', category: '其他收入', amount: 300, date: '2026-11-05', account: bank.id });
+  await ok(admin, 'POST', '/api/finance', { type: 'expense', category: '房租', amount: 120.5, date: '2026-11-05', account: bank.id });
+  // 销售收款进微信
+  const p = await newProduct('ACC1', { price: 80 });
+  const c = await ok(admin, 'POST', '/api/customers', { name: '账户测试客户' });
+  const so = await ok(admin, 'POST', '/api/orders/sales', { partyId: c.id, date: '2026-11-05', items: [{ productId: p.id, qty: 1, price: 80 }] });
+  await ok(admin, 'POST', `/api/orders/sales/${so.id}/pay`, { amount: 80, account: wx.id });
+  d = await data();
+  const pay = d.finance.find(f => f.ref === so.no);
+  assert.equal(pay.account, wx.id); assert.equal(pay.method, '微信');
+  assert.equal(await bal(bank.id), 1179.5);
+  assert.equal(await bal(wx.id), 130);
+  // 转账：微信提现到银行卡，不算收支
+  const nf = d.finance.length;
+  const t = await ok(admin, 'POST', '/api/acct-transfers', { from: wx.id, to: bank.id, amount: 100, date: '2026-11-05', note: '提现' });
+  assert.equal(await bal(wx.id), 30); assert.equal(await bal(bank.id), 1279.5);
+  assert.equal((await data()).finance.length, nf, '转账不产生收支流水');
+  assert.equal((await call(admin, 'POST', '/api/acct-transfers', { from: wx.id, to: wx.id, amount: 1, date: '2026-11-05' })).http, 400);
+  await ok(admin, 'DELETE', '/api/acct-transfers/' + t.id);
+  assert.equal(await bal(wx.id), 130);
+  // 有记录不能删，停用后不能再选
+  assert.equal((await call(admin, 'DELETE', '/api/accounts/' + wx.id)).http, 400);
+  await ok(admin, 'PUT', '/api/accounts/' + wx.id, { name: '老板微信', kind: '微信', opening: 50, off: true });
+  assert.equal((await call(admin, 'POST', '/api/finance', { type: 'expense', category: '房租', amount: 1, date: '2026-11-05', account: wx.id })).http, 400);
+  const empty = await ok(admin, 'POST', '/api/accounts', { name: '空账户', kind: '现金' });
+  await ok(admin, 'DELETE', '/api/accounts/' + empty.id);
+});
