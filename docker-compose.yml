@@ -1,0 +1,14 @@
+# x.erp：docker compose up -d，然后浏览器打开 http://NAS地址:8686
+# 首次登录账号 admin，密码见 XERP_ADMIN_PASSWORD（不设置则为 admin123，登录后请及时修改）
+services:
+  xerp:
+    image: ghcr.io/zyc009234/xerp:latest
+    container_name: xerp
+    restart: unless-stopped
+    ports:
+      - "8686:8686"
+    volumes:
+      - ./xerp-data:/data          # 数据库、每日自动备份、日志都在这里，升级不丢
+    environment:
+      - XERP_ADMIN_PASSWORD=       # 首次启动时的管理员密码（至少 6 位），之后改这里不再生效
+      # - XERP_STATS_URL=          # 取消注释即关闭匿名使用统计（也可在 系统设置 里关）

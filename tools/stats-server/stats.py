@@ -26,7 +26,7 @@ STATE = os.environ.get('STATE_DIRECTORY') or os.environ.get('XERP_STATS_DIR') or
 PORT = int(os.environ.get('XERP_STATS_PORT', '8092'))
 XDB = os.environ.get('XERP_STATS_XDB') or os.path.join(HERE, 'ip2region_v4.xdb')
 DB_FILE, PW_FILE, KEY_FILE = (os.path.join(STATE, f) for f in ('stats.db', 'admin.pw', 'ip.key'))
-PLATS = {'win32': 'Windows', 'linux': '飞牛 / Linux', 'darwin': 'macOS'}
+PLATS = {'win32': 'Windows', 'linux': '飞牛 / Linux', 'darwin': 'macOS', 'docker': 'Docker'}
 lock = threading.Lock()
 
 

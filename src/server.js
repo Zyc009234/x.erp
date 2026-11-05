@@ -1790,6 +1790,7 @@ if (!db.prepare('SELECT COUNT(*) AS n FROM users').get().n) {
   // --admin-password-file：首次启动时从文件读取管理员初始密码（NAS 安装向导填写），读取后删除
   let pwd = '';
   try { if (arg('admin-password-file')) pwd = fs.readFileSync(arg('admin-password-file'), 'utf8').trim(); } catch (e) {}
+  if (pwd.length < 6) pwd = String(process.env.XERP_ADMIN_PASSWORD || '').trim();  // Docker：环境变量设初始密码
   if (pwd.length < 6) pwd = 'admin123';
   createUser({ username: 'admin', name: '管理员', roleId: 'admin', password: pwd });
   log(pwd === 'admin123' ? '已创建默认管理员账号 admin / admin123' : '已创建管理员账号 admin（密码为安装时设置的密码）');
@@ -2056,6 +2057,7 @@ let notifyBusy = false;
 /* ---------- 问题反馈：用户留言发到作者官网，作者在官网后台回复，这里取回回复 ----------
  * 本机首次留言时随机生成 fbToken（只用来取回本机自己的留言和回复），留言在本地也存一份。
  * 留言带上版本号和系统类型；称呼、联系方式可不填，联系方式只有作者能看到。XERP_FEEDBACK_URL 可改地址，设为空字符串则关闭 */
+const PLAT = process.env.XERP_PLAT || process.platform;  // Docker 镜像里是 docker，统计和留言里能区分安装方式
 const FEEDBACK_URL = process.env.XERP_FEEDBACK_URL ?? 'https://www.zhaoyoucai.xyz/xerp/api/feedback';
 function fbToken() {
   let t = getMeta('fbToken', '');
@@ -2095,7 +2097,7 @@ route('GET', '/api/feedback', async () => {
 route('POST', '/api/feedback', async ctx => {
   const b = ctx.body, text = String(b.text ?? '').trim().slice(0, 2000), nick = str(b.nick, 30), contact = str(b.contact, 100), allowPublic = !!b.allowPublic;
   if (!text) fail('请填写留言内容');
-  const r = await fbPost('', { token: fbToken(), v: VERSION, plat: process.platform, nick, contact, text, allowPublic });
+  const r = await fbPost('', { token: fbToken(), v: VERSION, plat: PLAT, nick, contact, text, allowPublic });
   const d = new Date(), list = fbList();
   list.push({ fid: r.fid, at: today() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()), by: ctx.user.name, nick, contact, text, allowPublic, reply: '', replied: '', public: false, seen: '' });
   setMeta('feedback', list.slice(-200));
@@ -2111,7 +2113,7 @@ async function statsTick() {
   let id = getMeta('installId', '');
   if (!/^[0-9a-f]{32}$/.test(id)) { id = crypto.randomBytes(16).toString('hex'); setMeta('installId', id); }
   try {
-    const r = await fetch(STATS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, v: VERSION, plat: process.platform }), signal: AbortSignal.timeout(10000) });
+    const r = await fetch(STATS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, v: VERSION, plat: PLAT }), signal: AbortSignal.timeout(10000) });
     if (r.ok) setMeta('statsLast', today());
   } catch (e) {}
 }
