@@ -3,7 +3,7 @@
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/Zyc009234/x.erp)](https://github.com/Zyc009234/x.erp/releases/latest)
 
-轻量级企业资源计划（ERP）系统，面向中小企业，可部署在 **飞牛 fnOS NAS** 或任意装有 Node.js 22+ 的机器上，通过浏览器多人同时使用。进销存、财务、人事一站搞定，全部免费，完全离线可用，数据留在你自己手里。
+轻量级企业资源计划（ERP）系统，面向中小企业，可部署在 **飞牛 fnOS NAS**、**Docker**（群晖、威联通等任意 NAS）或任意装有 Node.js 22+ 的机器上，通过浏览器多人同时使用。进销存、财务、人事一站搞定，全部免费，完全离线可用，数据留在你自己手里。
 
 - **在线演示**：<https://demo.zhaoyoucai.xyz>（账号 `admin`，密码 `admin123`；所有人共用，数据每小时重置）
 - **官网与下载**：<https://www.zhaoyoucai.xyz/xerp/>（飞牛 fpk / Windows 安装包 / 安卓客户端）
@@ -51,6 +51,7 @@
 | `src/client.js` | Windows 桌面客户端外壳（基于系统 Edge 内核的独立窗口） |
 | `tests/` | 后端接口测试（`node --test tests/api.test.mjs`） |
 | `fnos/` | 飞牛 fnOS 应用打包（manifest、生命周期脚本、安装向导） |
+| `Dockerfile`、`docker-compose.yml` | Docker 镜像（见下方「Docker 部署」） |
 
 ## 直接运行
 
@@ -61,6 +62,24 @@ node src/server.js --data ./data --port 8686
 ```
 
 浏览器打开 `http://127.0.0.1:8686`，默认账号 `admin` / `admin123`，首次登录后请立即修改。
+
+## Docker 部署（群晖 / 威联通 / Unraid / 绿联 / 极空间等）
+
+镜像 `ghcr.io/zyc009234/xerp`，支持 amd64 和 arm64。数据全部在容器的 `/data` 目录（数据库、每日自动备份、日志），挂载出来后升级镜像不丢数据。
+
+```bash
+docker run -d --name xerp --restart unless-stopped \
+  -p 8686:8686 -v ./xerp-data:/data \
+  -e XERP_ADMIN_PASSWORD=你的初始密码 \
+  ghcr.io/zyc009234/xerp:latest
+```
+
+或者用仓库里的 [`docker-compose.yml`](docker-compose.yml)：`docker compose up -d`。浏览器打开 `http://NAS地址:8686`，账号 `admin`，密码是 `XERP_ADMIN_PASSWORD`（不设置则为 `admin123`，登录后请及时修改；这个变量只在第一次启动时生效）。
+
+- **升级**：`docker pull ghcr.io/zyc009234/xerp:latest` 后重建容器（compose：`docker compose pull && docker compose up -d`）
+- **国内拉不动 ghcr.io**：到 [Releases](https://github.com/Zyc009234/x.erp/releases/latest) 或官网下载离线镜像包 `xerp-<版本>-docker-amd64.tar.gz`（ARM 设备用 `arm64`），执行 `docker load -i xerp-<版本>-docker-amd64.tar.gz` 导入，之后同上
+- **环境变量**：`XERP_ADMIN_PASSWORD` 首次启动的管理员密码；`XERP_STATS_URL=`（留空）关闭匿名使用统计，也可以在 系统设置 里关；`TZ` 默认 `Asia/Shanghai`
+- 镜像由 [GitHub Actions](.github/workflows/docker.yml) 在每次发版时自动构建
 
 ## 测试
 
