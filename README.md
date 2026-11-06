@@ -79,6 +79,8 @@ docker run -d --name xerp --restart unless-stopped \
 - **升级**：`docker pull ghcr.io/zyc009234/xerp:latest` 后重建容器（compose：`docker compose pull && docker compose up -d`）
 - **国内拉不动 ghcr.io**：到 [Releases](https://github.com/Zyc009234/x.erp/releases/latest) 或官网下载离线镜像包 `xerp-<版本>-docker-amd64.tar.gz`（ARM 设备用 `arm64`），执行 `docker load -i xerp-<版本>-docker-amd64.tar.gz` 导入，之后同上
 - **环境变量**：`XERP_ADMIN_PASSWORD` 首次启动的管理员密码；`XERP_STATS_URL=`（留空）关闭匿名使用统计，也可以在 系统设置 里关；`TZ` 默认 `Asia/Shanghai`
+- **Unraid**：Docker 页面底部的 Template Repositories 里加上 `https://github.com/Zyc009234/x.erp` 并保存，然后 Add Container → Template 选 x.erp；模板见 [`unraid/xerp.xml`](unraid/xerp.xml)
+- **CasaOS / ZimaOS**：已提交到官方应用商店，上架后在应用商店搜索 x.erp 即可安装
 - 镜像由 [GitHub Actions](.github/workflows/docker.yml) 在每次发版时自动构建
 
 ## 测试

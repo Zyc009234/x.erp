@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>x.erp</Name>
+  <Repository>ghcr.io/zyc009234/xerp:latest</Repository>
+  <Registry>https://github.com/Zyc009234/x.erp/pkgs/container/xerp</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/Zyc009234/x.erp/issues</Support>
+  <Project>https://github.com/Zyc009234/x.erp</Project>
+  <Overview>x.erp is a lightweight, free and open-source (AGPL-3.0) inventory and ERP system for small shops and small businesses: products with barcodes and multiple units, purchase and sales orders, returns, payments, multi-warehouse stock with transfers and stock taking, low-stock alerts, finance records, reports and staff accounts with permissions. Works in desktop and mobile browsers; all data stays in one SQLite database on your server. The user interface is in Simplified Chinese.[br][br]免费开源的进销存系统：商品、采购、销售、退货、收付款、多仓库库存、财务报表、员工权限。[br][br]First login: admin / admin123 (or the password set in XERP_ADMIN_PASSWORD on first start). Change it after logging in.</Overview>
+  <Category>Productivity: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8686]/</WebUI>
+  <Icon>https://raw.githubusercontent.com/Zyc009234/x.erp/main/docs/icon.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="8686" Default="8686" Mode="tcp" Description="Web interface port" Type="Port" Display="always" Required="true" Mask="false">8686</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/xerp" Mode="rw" Description="Database, daily automatic backups and logs" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/xerp</Config>
+  <Config Name="Initial admin password" Target="XERP_ADMIN_PASSWORD" Default="" Mode="" Description="Password of the admin account on the first start (at least 6 characters). Leave empty for admin123. Ignored after the first start." Type="Variable" Display="always" Required="false" Mask="true"></Config>
+  <Config Name="Time zone" Target="TZ" Default="Asia/Shanghai" Mode="" Description="Time zone for document dates and the daily backup" Type="Variable" Display="advanced" Required="false" Mask="false">Asia/Shanghai</Config>
+</Container>
