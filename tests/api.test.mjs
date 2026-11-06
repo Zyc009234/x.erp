@@ -819,3 +819,21 @@ test('供应商类目、客户等级可以自己填', async () => {
   const cu = await ok(admin, 'POST', '/api/customers', { name: '批发客户', contact: '李', phone: '2', level: '批发' });
   assert.equal(cu.level, '批发');
 });
+
+test('同时监听 IPv4 和 IPv6：用 [::1] 也能访问', async t => {
+  if (!Object.values(os.networkInterfaces()).flat().some(i => i && i.address === '::1')) return t.skip('本机没有 IPv6 回环地址');
+  const r = await fetch(`http://[::1]:${PORT}/api/data`);
+  assert.equal(r.status, 401);  // 未登录，但连得上
+});
+
+test('采购单里新建的商品能直接开单，收付款记录能按单号对上往来单位', async () => {
+  const su = await ok(admin, 'POST', '/api/suppliers', { name: '新品供应商', contact: '赵', phone: '3' });
+  const p = await ok(admin, 'POST', '/api/products', { sku: 'QN-001', name: '临时新品', unit: '个', cost: 5, price: 9, stock: 0, safety: 0 });
+  assert.equal(p.stock, 0);
+  const po = await ok(admin, 'POST', '/api/orders/purchase', { partyId: su.id, date: '2026-11-06', items: [{ productId: p.id, qty: 3, price: 5 }] });
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/pay`, { amount: 10, date: '2026-11-06', note: '定金' });
+  const d = await data();
+  const f = d.finance.find(x => x.ref === po.no && x.category === '采购付款');
+  assert.equal(f.amount, 10); assert.equal(f.note, '定金');
+  assert.equal(d.purchases.find(o => o.no === f.ref).supplierId, su.id);
+});

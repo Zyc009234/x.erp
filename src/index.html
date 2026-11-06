@@ -85,6 +85,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .demo-bar{background:var(--primary-soft);color:var(--primary);font-size:13px;text-align:center;padding:7px 12px}.demo-bar a{color:inherit;font-weight:600}
 .tip-card{margin-top:16px}.tip-card .card-body{display:flex;gap:16px;align-items:center}.tip-card img{flex:none;border-radius:10px;border:1px solid var(--border);background:#fff}.tip-card p{margin:0 0 6px;line-height:1.6}
 @media (max-width:520px){.tip-card .card-body{flex-direction:column;text-align:center}}
+[hidden]{display:none!important}.pk-new{padding-top:14px}
 .pcell{display:flex;align-items:center;gap:10px}.pimg{width:36px;height:36px;flex:none;object-fit:cover;border-radius:8px;border:1px solid var(--border);background:var(--panel2);cursor:zoom-in}.pimg.broken{visibility:hidden}.pk-row .pimg{cursor:inherit}.pimg-big{max-width:100%;max-height:60vh;border-radius:12px;border:1px solid var(--border);background:#fff}
 .card-head .more{color:var(--muted);font-size:13px;cursor:pointer}
 .card-head .more:hover{color:var(--primary)}
@@ -328,7 +329,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.0.15 · 数据保存在服务器</div>
+    <div class="side-foot">v2.0.16 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -1119,7 +1120,9 @@ function productPicker({wh, have = [], onPick}) {
       <div class="pk-main"><input class="select" id="pkKw" placeholder="搜索编码 / 条码 / 名称 / 规格，空格分隔多个词" style="width:100%;margin-bottom:10px">
       <div class="table-wrap pk-list"><table class="tbl compact"><thead><tr><th style="width:36px"><input type="checkbox" id="pkAll" title="全选当前列表"></th><th>商品</th><th>分类</th><th>单位</th><th class="num">${wh && multiWh() ? esc(whName(wh)) + '库存' : '库存'}</th>${pr ? '<th class="num">售价</th>' : ''}</tr></thead><tbody id="pkRows"></tbody></table></div>
       <div class="sub-t" id="pkNote" style="margin-top:8px"></div></div></div></div>
-    <div class="m-foot"><span id="pkSel" style="margin-right:auto"></span><button class="btn" data-pclose>取消</button><button class="btn primary" id="pkOk">加入明细</button></div></div>`;
+    <div class="m-body pk-new" id="pkNew" hidden></div>
+    <div class="m-foot" id="pkNewFoot" hidden><span style="margin-right:auto"></span><button class="btn" id="qnBack">返回选择</button><button class="btn primary" id="qnOk">新建并加入明细</button></div>
+    <div class="m-foot"><span id="pkSel" style="margin-right:auto"></span>${can('prod.edit') ? `<button class="btn" id="pkNewBtn">${ic('plus')}新建商品</button>` : ''}<button class="btn" data-pclose>取消</button><button class="btn primary" id="pkOk">加入明细</button></div></div>`;
   document.body.appendChild(m);
   const drawSel = () => { $('#pkSel').innerHTML = sel.length ? `已选 <b>${sel.length}</b> 个商品 · <a class="link" id="pkClear">清空</a>` : '<span class="sub-t">点行勾选，可跨分类多选</span>'; $('#pkOk').disabled = !sel.length; };
   const drawCats = () => {
@@ -1132,7 +1135,7 @@ function productPicker({wh, have = [], onPick}) {
       <td><input type="checkbox" ${on ? 'checked' : ''} tabindex="-1"></td>
       <td><div class="pcell">${pimg(p, 32, false)}<div><b>${esc(p.name)}</b>${inDoc.has(p.id) ? ' <span class="badge blue plain">已在单中</span>' : ''}<div class="sub-t">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''}${p.barcode ? ' · ' + esc(p.barcode) : ''}</div></div></div></td>
       <td>${esc(p.category || '-')}</td><td>${esc(p.unit)}</td><td class="num ${q <= 0 ? 'neg' : ''}">${q}</td>${pr ? `<td class="num">${p.price != null ? money(p.price) : '-'}</td>` : ''}</tr>`; }).join('')
-      || `<tr><td colspan="${pr ? 6 : 5}" class="sub-t" style="text-align:center;padding:24px">没有符合条件的商品</td></tr>`;
+      || `<tr><td colspan="${pr ? 6 : 5}" class="sub-t" style="text-align:center;padding:24px">没有符合条件的商品${can('prod.edit') ? `，<a class="link" id="pkNewLink">新建「${esc(kw || '新商品')}」</a>` : ''}</td></tr>`;
     $('#pkAll').checked = list.length > 0 && list.every(p => sel.includes(p.id));
     $('#pkNote').textContent = all.length > LIMIT ? `共 ${all.length} 个，只显示前 ${LIMIT} 个，请搜索或选分类缩小范围` : `共 ${all.length} 个`;
   };
@@ -1142,6 +1145,8 @@ function productPicker({wh, have = [], onPick}) {
   m.addEventListener('click', e => {
     if (e.target.closest('[data-pclose]')) return closePicker();
     if (e.target.id === 'pkClear') { sel.length = 0; drawRows(); drawSel(); return; }
+    if (e.target.closest('#pkNewBtn') || e.target.id === 'pkNewLink') return quickNew();
+    if (e.target.closest('#pkNew')) return;
     const c = e.target.closest('[data-cat]'); if (c) { cat = c.dataset.cat; drawCats(); drawRows(); return; }
     if (e.target.id === 'pkAll') { const on = e.target.checked; rows().slice(0, LIMIT).forEach(p => toggle(p.id, on)); drawRows(); drawSel(); return; }
     const r = e.target.closest('[data-pid]'); if (r) { toggle(r.dataset.pid); drawRows(); drawSel(); }
@@ -1155,8 +1160,50 @@ function productPicker({wh, have = [], onPick}) {
     const r = rows(); if (r.length !== 1) return toast(r.length ? `有 ${r.length} 个商品符合，请点选` : '没有符合的商品', 'info');
     toggle(r[0].id, true); e.target.value = kw = ''; drawRows(); drawSel();
   });
+  // 开单时遇到新商品：不用退出去建，在这里填几项就建好，并直接加入明细（连同已勾选的）
+  function quickNew() {
+    const box = $('#pkNew'), main = m.querySelector('.pk-wrap').parentNode, sp = seesPrice();
+    const code = /^[0-9A-Za-z-]{4,}$/.test(kw) && !/^\d{8,14}$/.test(kw) && !db.products.some(p => p.sku === kw) ? kw : '';
+    box.innerHTML = `<div class="form-grid">
+      <label class="field"><span>商品编码 <i>*</i></span><input id="qnSku" value="${esc(code ? '' : nextSku())}"></label>
+      <label class="field"><span>条码</span><input id="qnBar" value="${esc(/^\d{8,14}$/.test(kw) ? kw : '')}" placeholder="留空则用商品编码，可扫码"></label>
+      <label class="field span2"><span>商品名称 <i>*</i></span><input id="qnName" value="${esc(code || /^\d{8,14}$/.test(kw) ? '' : kw)}"></label>
+      <label class="field"><span>规格型号</span><input id="qnSpec"></label>
+      <label class="field"><span>商品分类</span><input id="qnCat" list="qnCats" value="${esc(cat)}" placeholder="可选择或直接输入"><datalist id="qnCats">${cats().map(c => `<option value="${esc(c)}">`).join('')}</datalist></label>
+      <label class="field"><span>基本单位</span><input id="qnUnit" list="qnUnits" value="个"><datalist id="qnUnits">${units().map(c => `<option value="${esc(c)}">`).join('')}</datalist></label>
+      ${sp ? '<label class="field"><span>成本价（元）</span><input id="qnCost" type="number" step="0.01" min="0" placeholder="采购单入库后按进价自动更新"></label><label class="field"><span>销售价（元）</span><input id="qnPrice" type="number" step="0.01" min="0"></label>' : ''}
+    </div><p class="sub-t">其他信息（辅助单位、批次、图片等）以后可以在「商品管理」里补充。新建的商品库存为 0，随这张单据入库。</p>`;
+    if (code) $('#qnSku').value = code;
+    main.hidden = true; box.hidden = false;
+    m.querySelector('.m-head h3').textContent = '新建商品';
+    const foot = m.querySelector('.m-foot:not(#pkNewFoot)'), nf = $('#pkNewFoot');
+    foot.hidden = true; nf.hidden = false; $('#qnOk').disabled = false;
+    $('#qnName').value ? $('#qnSku').focus() : $('#qnName').focus();
+    $('#qnBack').onclick = () => { main.hidden = false; box.hidden = true; foot.hidden = false; nf.hidden = true; m.querySelector('.m-head h3').textContent = '选择商品'; $('#pkKw').focus(); };
+    $('#qnOk').onclick = async () => {
+      const v = {sku:$('#qnSku').value.trim(), barcode:$('#qnBar').value.trim(), name:$('#qnName').value.trim(), spec:$('#qnSpec').value.trim(), category:$('#qnCat').value.trim(), unit:$('#qnUnit').value.trim() || '个', stock:0, safety:0};
+      if (sp) { v.cost = +$('#qnCost').value || 0; v.price = +$('#qnPrice').value || 0; }
+      if (!v.sku) return toast('请填写商品编码', 'error'), $('#qnSku').focus();
+      if (!v.name) return toast('请填写商品名称', 'error'), $('#qnName').focus();
+      const b = $('#qnOk'); b.disabled = true;
+      try {
+        const r = await api('POST', '/api/products', v); await reload();
+        const ids = [...sel.filter(id => id !== r.id), r.id]; closePicker(); onPick(ids);
+        toast('已新建商品「' + v.name + '」');
+      } catch (e) { toast(e.message, 'error'); b.disabled = false; }
+    };
+  }
   drawCats(); drawRows(); drawSel();
   $('#pkKw').focus();
+}
+// 新商品编码建议：取最近建的一个商品编码，末尾数字 +1，跳过已用的
+function nextSku() {
+  const used = new Set(db.products.map(p => p.sku)), last = [...db.products].reverse().find(p => /d+$/.test(p.sku || ''));
+  if (!last) { let n = db.products.length + 1; while (used.has('P' + String(n).padStart(4, '0'))) n++; return 'P' + String(n).padStart(4, '0'); }
+  const [, pre, num] = /^(.*?)(d+)$/.exec(last.sku);
+  let n = +num + 1; const w = num.length;
+  while (used.has(pre + String(n).padStart(w, '0'))) n++;
+  return pre + String(n).padStart(w, '0');
 }
 // 选好的商品逐个交给开单窗口自己的 pick 处理：默认单价、单位、重复商品数量 +1 都和手工输入一致
 function addPicked(draft, blank, pick, ids) {
@@ -2319,8 +2366,10 @@ function importPreview(rows, update, fileName) {
 
 /* ================= 页面：销售 / 采购 ================= */
 function pageOrders(base) {
-  const rk = base + 'Return', tk = 'ordTab_' + base;
-  if (ui[tk] !== rk) ui[tk] = base;
+  const rk = base + 'Return', tk = 'ordTab_' + base, pk = base + 'Pay';
+  if (ui[tk] !== rk && ui[tk] !== pk) ui[tk] = base;
+  const tabBar = tabs(tk, [[base, ORD[base].title], [rk, ORD[rk].title], [pk, ORD[base].payWord + '记录']]);
+  if (ui[tk] === pk) return pagePays(base, tabBar);
   const kind = ui[tk], ret = kind === rk;
   const C = ORD[kind], list = db[C.db], m = monthKey(today());
   const valid = list.filter(o => o.status !== '已作废'), monthO = valid.filter(o => monthKey(o.date) === m);
@@ -2337,7 +2386,7 @@ function pageOrders(base) {
     ${kpi(C.statuses[0], list.filter(o => o.status === C.statuses[0]).length, 'clock', 'orange')}
     ${kpi(ret ? '待退款' : base === 'sales' ? '待收款' : '待付款', moneyK(unpaid), 'wallet', 'red')}
   </div>
-  ${tabs(tk, [[base, ORD[base].title], [rk, ORD[rk].title]])}
+  ${tabBar}
   <div class="card">${toolbar(kind, {placeholder:'搜索单号 / ' + C.partyLabel, filters, buttons:`<button class="btn" data-act="export" data-id="${kind}">${ic('download')}导出</button><button class="btn primary" data-act="orderNew" data-id="${kind}">${ic('plus')}新建${C.title}</button>`})}<div id="list-${kind}"></div></div>`;
   mountList(kind, {rows:() => db[C.db], search:o => o.no + partyName(kind, o) + o.remark, filters, columns:[
     {t:'单号', r:o => `<a class="link" data-act="orderView" data-id="${kind}|${o.id}">${o.no}</a>`, s:o => o.no},
@@ -2349,6 +2398,78 @@ function pageOrders(base) {
     {t:'状态', r:o => badge(o.status)},
     {t:'操作', r:o => `<div class="ops">${orderOps(kind, o)}</div>`}
   ], exp:{name:C.title, cols:[['单号', o => o.no], [C.partyLabel, o => partyName(kind, o)], ['日期', o => o.date], ['金额', o => orderTotal(o).toFixed(2)], ['已' + C.payWord, o => o[C.paidKey] || 0], ['状态', o => o.status], ['备注', o => o.remark]]}});
+}
+/* ---------- 收款 / 付款记录：单据上登记的每一笔收付款（含退货单退款），按往来单位、账户、月份查询，可导出、打印收付款单 ---------- */
+const PAY_CATS = {sales:[['销售收款', '收款'], ['销售退款', '退款']], purchase:[['采购付款', '付款'], ['采购退款', '退款']]};
+function payRows(base) {
+  const cats = PAY_CATS[base], byNo = new Map();
+  [base, base + 'Return'].forEach(k => db[ORD[k].db].forEach(o => byNo.set(o.no, {k, o})));
+  return db.finance.filter(f => cats.some(c => c[0] === f.category)).map(f => {
+    const x = byNo.get(f.ref), C = x && ORD[x.k];
+    return {f, base, word:cats.find(c => c[0] === f.category)[1], sign:f.category === cats[0][0] ? 1 : -1, k:x ? x.k : '', o:x ? x.o : null,
+      partyId:x ? x.o[C.partyKey] : '', party:x ? partyName(x.k, x.o) : '-'};
+  }).sort((a, b) => a.f.date < b.f.date ? 1 : a.f.date > b.f.date ? -1 : 0);
+}
+function pagePays(base, tabBar) {
+  const C = ORD[base], key = base + 'Pay', all = payRows(base), m = monthKey(today());
+  const mon = all.filter(r => monthKey(r.f.date) === m), net = rs => sum(rs, r => r.sign * r.f.amount);
+  const filters = [
+    {key:'party', label:'全部' + C.partyLabel, options:db[C.party].map(x => [x.id, x.name]), test:(r, v) => r.partyId === v},
+    {key:'acct', label:'全部账户', options:(db.accounts || []).map(a => [a.id, a.name]), test:(r, v) => r.f.account === v},
+    {key:'month', label:'全部月份', options:[...new Set(all.map(r => monthKey(r.f.date)))].sort().reverse(), test:(r, v) => monthKey(r.f.date) === v},
+    {key:'type', label:C.payWord + '和退款', options:PAY_CATS[base].map(c => [c[0], c[1]]), test:(r, v) => r.f.category === v}
+  ];
+  $('#view').innerHTML = pageHead(base === 'sales' ? '销售管理' : '采购管理', base === 'sales' ? '销售订单、发货、收款与退货' : '采购订单、审核、入库、付款与退货') + `
+  <div class="grid g4 mb">
+    ${kpi('本月' + C.payWord, moneyK(sum(mon.filter(r => r.sign > 0), r => r.f.amount)), 'wallet', 'green')}
+    ${kpi('本月退款', moneyK(sum(mon.filter(r => r.sign < 0), r => r.f.amount)), 'wallet', 'orange')}
+    ${kpi('本月净' + C.payWord, moneyK(net(mon)), 'sales', 'primary')}
+    ${kpi('本月笔数', mon.length, 'cart', 'blue')}
+  </div>
+  ${tabBar}
+  <div class="card">${toolbar(key, {placeholder:'搜索单号 / ' + C.partyLabel + ' / 备注', filters, buttons:`<button class="btn" data-act="export" data-id="${key}">${ic('download')}导出</button><button class="btn" data-act="payListPrint" data-id="${base}">${ic('printer')}打印列表</button>`})}
+  <p class="sub-t" style="padding:0 16px 8px">在销售单 / 采购单上点「${C.payWord}」登记的每一笔都在这里，退货单的退款记为负数。点「打印」出单张${C.payWord}单，「打印列表」按当前筛选打印明细。</p><div id="list-${key}"></div></div>`;
+  mountList(key, {rows:() => payRows(base), search:r => r.f.ref + r.party + (r.f.note || ''), filters, empty:'还没有' + C.payWord + '记录', columns:[
+    {t:'日期', r:r => r.f.date, s:r => r.f.date},
+    {t:'关联单号', r:r => r.o ? `<a class="link" data-act="orderView" data-id="${r.k}|${r.o.id}">${esc(r.f.ref)}</a>` : esc(r.f.ref || '-'), s:r => r.f.ref},
+    {t:C.partyLabel, r:r => esc(r.party), s:r => r.party},
+    {t:'类型', r:r => badge(r.word, r.sign > 0 ? 'green' : 'orange')},
+    {t:'账户', r:r => esc(acctName(r.f))},
+    {t:'金额', cls:'num', r:r => `<b class="${r.sign < 0 ? 'neg' : ''}">${money(r.sign * r.f.amount)}</b>`, s:r => r.sign * r.f.amount},
+    {t:'经办人', r:r => esc(r.f.operator || '-')},
+    {t:'备注', r:r => `<span class="sub-t">${esc(r.f.note || '')}</span>`},
+    {t:'操作', r:r => `<div class="ops">${tbtn('打印', 'payPrint', base + '|' + r.f.id)}</div>`}
+  ], exp:{name:C.payWord + '记录', cols:[['日期', r => r.f.date], ['关联单号', r => r.f.ref], [C.partyLabel, r => r.party], ['类型', r => r.word], ['账户', r => acctName(r.f)], ['金额', r => (r.sign * r.f.amount).toFixed(2)], ['经办人', r => r.f.operator || ''], ['备注', r => r.f.note || '']]}});
+}
+// 单张收付款单：沿用单据打印的纸张设置
+function payPrint(base, fid) {
+  const r = payRows(base).find(x => x.f.id === fid); if (!r) return;
+  const C = ORD[base], title = r.sign > 0 ? C.payWord + '单' : '退款单', paper = prefs.paper || 'a4';
+  const other = (base === 'sales') === (r.sign > 0) ? '付款方' : '收款方';
+  const R = r.o && ORD[r.k], paid = r.o ? r.o[R.paidKey] || 0 : 0;
+  const body = `<div class="page"><div class="s-title"><h1>${esc(db.settings.company)}</h1><h2>${title}</h2></div>
+  <div class="s-meta"><span>${C.partyLabel}：<b>${esc(r.party)}</b></span><span>日期：${r.f.date}</span><span>关联单号：${esc(r.f.ref || '-')}</span></div>
+  <table><thead><tr><th>${r.sign > 0 ? C.payWord : '退款'}账户</th><th>金额</th><th>金额大写</th><th>备注</th></tr></thead>
+  <tbody><tr><td class="c">${esc(acctName(r.f))}</td><td class="r">${r.f.amount.toFixed(2)}</td><td>${rmbUpper(r.f.amount)}</td><td>${esc(r.f.note || '')}</td></tr></tbody></table>
+  ${r.o ? `<div class="s-foot">单据金额 ${orderTotal(r.o).toFixed(2)}，累计已${R.payWord} ${paid.toFixed(2)}，未${R.payWord} ${Math.max(0, orderTotal(r.o) - paid).toFixed(2)}</div>` : ''}
+  <div class="s-sign" style="margin-top:20px"><span>经办人：${esc(r.f.operator || '')}</span><span>${other}签字：</span><span>单位盖章：</span></div>
+  <div class="foot">打印时间：${fmtTime(new Date())}</div></div>`;
+  printFrame(title + ' ' + (r.f.ref || ''), body, paper);
+}
+// 打印当前筛选出来的列表，用 A4，带合计
+function payListPrint(base) {
+  const C = ORD[base], cfg = lists[base + 'Pay'], rs = (cfg && cfg.last) || payRows(base), st = getState(base + 'Pay');
+  if (!rs.length) return toast('列表里没有记录', 'error');
+  const tot = sum(rs, r => r.sign * r.f.amount);
+  const cond = [st.f.party && (byId(db[C.party], st.f.party) || {}).name, st.f.acct && (byId(db.accounts || [], st.f.acct) || {}).name, st.f.month, st.f.type, st.q && '搜索：' + st.q].filter(Boolean).join('　');
+  const body = `<div class="s-title"><h1>${esc(db.settings.company)}</h1><h2>${C.payWord}明细</h2></div>
+  <div class="s-meta"><span>${esc(cond || '全部记录')}</span><span>共 ${rs.length} 笔</span></div>
+  <table><thead><tr><th>日期</th><th>关联单号</th><th>${C.partyLabel}</th><th>类型</th><th>账户</th><th>金额</th><th>备注</th></tr></thead><tbody>
+  ${rs.map(r => `<tr><td class="c">${r.f.date}</td><td>${esc(r.f.ref || '')}</td><td>${esc(r.party)}</td><td class="c">${r.word}</td><td>${esc(acctName(r.f))}</td><td class="r">${(r.sign * r.f.amount).toFixed(2)}</td><td>${esc(r.f.note || '')}</td></tr>`).join('')}
+  <tr><td colspan="5"><b>合计</b>（大写：${rmbUpper(Math.abs(tot))}${tot < 0 ? '，净退款' : ''}）</td><td class="r"><b>${tot.toFixed(2)}</b></td><td></td></tr></tbody></table>
+  <div class="s-sign" style="margin-top:20px"><span>制表人：${esc(ME.name)}</span><span>审核：</span></div>
+  <div class="foot">打印时间：${fmtTime(new Date())}</div>`;
+  printFrame(C.payWord + '明细', body, 'a4');
 }
 function orderOps(kind, o) {
   const C = ORD[kind], id = kind + '|' + o.id, b = [tbtn('查看', 'orderView', id)];
@@ -2493,7 +2614,7 @@ function orderView(kind, id) {
     </tbody></table>
     <div class="doc-sum">${o.discount ? `<div>明细合计：<b>${money(itemsTotal(o))}</b></div><div>优惠：<b>-${money(o.discount)}</b></div>` : ''}<div>合计：<b>${money(total)}</b></div><div>已${C.payWord}：<b class="pos">${money(paid)}</b></div><div>未${C.payWord}：<b class="neg">${money(total - paid)}</b></div></div>
     ${o.remark ? `<p style="margin-top:12px;color:var(--muted)">备注：${esc(o.remark)}</p>` : ''}
-    ${pays.length || o.offset ? `<h4 style="margin:18px 0 8px">${C.payWord}记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(acctName(f))}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td></tr>`).join('')}
+    ${pays.length || o.offset ? `<h4 style="margin:18px 0 8px">${C.payWord}记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(acctName(f))}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td><td style="width:1%">${tbtn('打印', 'payPrint', kind.replace('Return', '') + '|' + f.id)}</td></tr>`).join('')}
       ${o.offset ? `<tr><td>-</td><td>退货冲抵</td><td class="num">${money(o.offset)}</td><td class="sub-t">${C.src ? '抵扣原单 ' + esc(o.srcNo) + ' 的欠款' : '由退货单抵扣'}</td></tr>` : ''}</tbody></table>` : ''}
     ${(() => { const R = ORD[kind + 'Return'], rs = R ? db[R.db].filter(r => r.srcId === o.id) : []; return rs.length ? `<h4 style="margin:18px 0 8px">退货记录</h4><table class="tbl compact"><tbody>${rs.map(r => `<tr><td><a class="link" data-act="orderView" data-id="${kind}Return|${r.id}">${r.no}</a></td><td>${r.date}</td><td>${badge(r.status)}</td><td class="num">${money(orderTotal(r))}</td></tr>`).join('')}</tbody></table>` : ''; })()}
     ${kind === 'sales' && o.status !== '待发货' ? shipBlock('sales', o, o.status !== '已作废') : ''}
@@ -3824,6 +3945,8 @@ const A = {
   orderReturn: v => { const [k, id] = split(v); closeModal(); orderModal(k + 'Return', null, id); },
   orderView: v => orderView(...split(v)),
   orderPrint: v => orderPrint(...split(v)),
+  payPrint: v => payPrint(...split(v)),
+  payListPrint: v => payListPrint(v),
   finAdd,
   finEdit: id => finAdd(id),
   acctEdit, acctTransfer,

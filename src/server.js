@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.0.15';
+const VERSION = '2.0.16';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -2256,12 +2256,21 @@ const server = http.createServer(async (req, res) => {
     send(res, status, { error: status === 500 ? '服务器内部错误：' + e.message : e.message });
   }
 });
+// 默认 0.0.0.0（老版本写进 config.json 的也是它）改成监听 ::，IPv4 和 IPv6 都能连；系统关了 IPv6 时退回只听 IPv4
+const DUAL = !config.host || config.host === '0.0.0.0';
+let listenHost = DUAL ? '::' : config.host;
 server.on('error', e => {
+  if (DUAL && listenHost === '::' && ['EAFNOSUPPORT', 'EADDRNOTAVAIL', 'EINVAL'].includes(e.code)) {
+    log('本机没有启用 IPv6，改为只监听 IPv4'); listenHost = '0.0.0.0'; return server.listen(config.port, listenHost);
+  }
   log(e.code === 'EADDRINUSE' ? `启动失败：端口 ${config.port} 已被占用，请修改 ${CONFIG_FILE} 中的 port` : '启动失败：' + e.message);
   process.exit(1);
 });
-server.listen(config.port, config.host, () => {
-  const ips = Object.values(os.networkInterfaces()).flat().filter(i => i && i.family === 'IPv4' && !i.internal).map(i => i.address);
+server.listen(config.port, listenHost, () => {
+  const nics = Object.values(os.networkInterfaces()).flat().filter(i => i && !i.internal);
+  const ips = nics.filter(i => i.family === 'IPv4' || i.family === 4).map(i => i.address);
+  // IPv6 只列公网 / 唯一本地地址，fe80 链路本地地址浏览器里要带网卡号，列出来也用不了
+  if (listenHost === '::') ips.push(...nics.filter(i => (i.family === 'IPv6' || i.family === 6) && !/^fe80/i.test(i.address)).slice(0, 2).map(i => '[' + i.address + ']'));
   log(`x.erp 服务端 v${VERSION} 已启动`);
   log('数据目录：' + DATA_DIR);
   log('访问地址：' + ['127.0.0.1', ...ips].map(ip => `http://${ip}:${config.port}`).join('  '));

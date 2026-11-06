@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 2.0.15
+version               = 2.0.16
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 根据用户留言改进：1）商品可以上传图片（手机可直接拍照，自动压缩），商品列表、库存、选择商品时显示缩略图，点开看大图；2）供应商「主营类目」、客户「客户等级」可以自己填写，不再只能选固定选项。
+changelog             = 根据用户留言改进：1）销售管理、采购管理新增「收款记录 / 付款记录」页，可按客户 / 供应商、账户、月份查询，可导出、打印收付款单和明细；2）开单「选择商品」时可以直接新建商品并加入明细，不用退出去建；3）支持 IPv6 访问（同时监听 IPv4 和 IPv6）。
