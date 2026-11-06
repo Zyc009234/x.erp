@@ -8,9 +8,15 @@
 - **在线演示**：<https://demo.zhaoyoucai.xyz>（账号 `admin`，密码 `admin123`；所有人共用，数据每小时重置）
 - **官网与下载**：<https://www.zhaoyoucai.xyz/xerp/>（飞牛 fpk / Windows 安装包 / 安卓客户端）
 
-| 工作台 | 库存 | 销售 |
-|---|---|---|
-| ![工作台](docs/screenshots/dashboard.png) | ![库存](docs/screenshots/inventory.png) | ![销售](docs/screenshots/sales.png) |
+> **English**: x.erp is a free, open-source (AGPL-3.0) self-hosted inventory / ERP for small businesses — products, purchase & sales orders, returns, payments, multi-warehouse stock, finance and reports. Runs on fnOS, Docker (Synology, QNAP, Unraid, CasaOS / ZimaOS) or any machine with Node.js 22+. The UI is in Simplified Chinese.
+
+| 工作台 | 库存 |
+|---|---|
+| ![工作台](docs/screenshots/dashboard.png) | ![库存](docs/screenshots/inventory.png) |
+| **销售** | **收款记录** |
+| ![销售](docs/screenshots/sales.png) | ![收款记录](docs/screenshots/payments.png) |
+
+<p align="center"><img src="docs/screenshots/mobile.png" width="260" alt="手机端"></p>
 
 ## 功能
 
