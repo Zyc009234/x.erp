@@ -6,7 +6,7 @@
   <Network>bridge</Network>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
-  <Support>https://github.com/Zyc009234/x.erp/issues</Support>
+  <Support>https://forums.unraid.net/topic/201195-support-xerp-free-open-source-inventory-erp-for-small-businesses/</Support>
   <Project>https://github.com/Zyc009234/x.erp</Project>
   <Overview>x.erp is a lightweight, free and open-source (AGPL-3.0) inventory and ERP system for small shops and small businesses: products with barcodes and multiple units, purchase and sales orders, returns, payments, multi-warehouse stock with transfers and stock taking, low-stock alerts, finance records, reports and staff accounts with permissions. Works in desktop and mobile browsers; all data stays in one SQLite database on your server. The user interface is in Simplified Chinese.[br][br]免费开源的进销存系统：商品、采购、销售、退货、收付款、多仓库库存、财务报表、员工权限。[br][br]First login: admin / admin123 (or the password set in XERP_ADMIN_PASSWORD on first start). Change it after logging in.</Overview>
   <Category>Productivity: Tools:</Category>
