@@ -65,7 +65,7 @@ node src/server.js --data ./data --port 8686
 
 ## Docker 部署（群晖 / 威联通 / Unraid / 绿联 / 极空间等）
 
-镜像 `ghcr.io/zyc009234/xerp`，支持 amd64 和 arm64。数据全部在容器的 `/data` 目录（数据库、每日自动备份、日志），挂载出来后升级镜像不丢数据。
+镜像 `ghcr.io/zyc009234/xerp`，Docker Hub 上同步一份 `zyc009234xerp/xerp`（群晖 Container Manager、威联通 Container Station、绿联、极空间的镜像仓库里搜 `xerp` 就能找到），支持 amd64 和 arm64。数据全部在容器的 `/data` 目录（数据库、每日自动备份、日志），挂载出来后升级镜像不丢数据。
 
 ```bash
 docker run -d --name xerp --restart unless-stopped \
