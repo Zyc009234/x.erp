@@ -329,7 +329,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.0.16 · 数据保存在服务器</div>
+    <div class="side-foot">v2.1.1 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -425,7 +425,11 @@ const uniq = a => [...new Set(a.filter(Boolean))];
 const supCats = () => uniq([...db.suppliers.map(r => r.category), ...db.products.map(r => r.category), '综合']);
 const custLevels = () => uniq([...LEVELS, ...db.customers.map(r => r.level)]);
 const UNITS = ['个', '台', '箱', '盒', '把', '张', '袋', '瓶', '件', '套'];
-const cats = () => [...new Set([...CATS, ...db.products.map(p => p.category).filter(Boolean)])];
+// 分类：管理过就用保存的列表（没有商品的分类也保留），没管理过用默认的几个；再补上商品里实际用到的
+// 出入库单里用过的项目，按最近使用排序
+const projects = () => [...new Set([...(db.stockDocs || [])].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)).map(o => o.project).filter(Boolean))];
+const catBase = () => Array.isArray(db.settings.categories) ? db.settings.categories : CATS;
+const cats = () => [...new Set([...catBase(), ...db.products.map(p => p.category).filter(Boolean)])];
 const units = () => [...new Set([...UNITS, ...db.products.map(p => p.unit).filter(Boolean)])];
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
 const DEPTS = ['销售部', '采购部', '仓储部', '财务部', '行政部', '技术部'];
@@ -787,7 +791,7 @@ const ENT = {
     {n:'sku', l:'商品编码', req:1}, {n:'barcode', l:'条码', ph:'留空则用商品编码'}, {n:'name', l:'商品名称', req:1, span:1}, {n:'spec', l:'规格型号', span:1},
     {n:'category', l:'商品分类', type:'combo', opts:cats, ph:'可选择或直接输入'}, {n:'unit', l:'基本单位（库存按它记）', type:'combo', opts:units, def:'个'},
     {n:'unitsText', l:'辅助单位（选填）', ph:'例如 箱=12；盒=6，可按箱开单。箱有自己的条码写成 箱=12/6901234567890', span:1},
-    {n:'cost', l:'成本价（元）', type:'number', req:1, money:1}, {n:'price', l:'销售价（元）', type:'number', req:1, money:1},
+    {n:'cost', l:'成本价（元）', type:'number', money:1, ph:'选填，不填按 0'}, {n:'price', l:'销售价（元）', type:'number', money:1, ph:'选填，不填按 0'},
     {n:'stock', l:'期初库存', type:'number', def:0, lockOnEdit:1}, {n:'safety', l:'安全库存', type:'number', def:10},
     {n:'batch', l:'批次 / 保质期管理', type:'select', opts:[['', '不启用'], ['1', '启用（入库记批次，出库先到期先出）']]}, {n:'shelfDays', l:'保质期（天，选填）', type:'number', ph:'填了可按生产日期自动算有效期'},
     {n:'serial', l:'序列号管理', type:'select', opts:[['', '不启用'], ['1', '启用（一件一个号，出入库逐件登记）']]},
@@ -832,7 +836,7 @@ function pageProducts() {
   const pr = seesPrice();
   const btns = `<button class="btn" data-act="labelOpen">${ic('tag')}打印标签</button>`
     + (can('inv.export') || isAdmin() ? `<button class="btn" data-act="export" data-id="products">${ic('download')}导出</button>` : '')
-    + (can('prod.edit') ? `<button class="btn" data-act="importOpen">${ic('upload')}导入</button><button class="btn primary" data-act="add" data-id="products">${ic('plus')}新增商品</button>` : '');
+    + (can('prod.edit') ? `<button class="btn" data-act="catManage">${ic('box')}分类</button><button class="btn" data-act="importOpen">${ic('upload')}导入</button><button class="btn primary" data-act="add" data-id="products">${ic('plus')}新增商品</button>` : '');
   $('#view').innerHTML = pageHead('商品管理', '维护商品档案、规格与安全库存') + `
   <div class="grid g4 mb">
     ${kpi('商品总数', db.products.length, 'box', 'primary')}
@@ -956,7 +960,7 @@ function pageInventory() {
     const q = p => whQty(p, W), st = p => stockStatus({...p, stock:q(p)});
     const filters = [{key:'cat', label:'全部分类', options:cats(), test:(p, v) => p.category === v}, {key:'st', label:'库存状态', options:['正常', '预警', '缺货'], test:(p, v) => st(p)[0] === v}];
     const btns = (multiWh() ? `<select class="select" id="invWh">${whOpts(W, true)}</select>` : '')
-      + (isAdmin() ? `<button class="btn" data-act="whManage">${ic('warehouse')}仓库</button>` : '')
+      + (isAdmin() ? `<button class="btn" data-act="whManage">${ic('warehouse')}仓库管理</button>` : '')
       + (can('prod.edit') ? `<button class="btn" data-act="importOpen">${ic('upload')}导入商品 / 期初</button>` : '')
       + (can('inv.print') ? `<button class="btn" data-act="printCheck">${ic('printer')}打印盘点表</button>` : '')
       + (can('inv.export') ? `<button class="btn" data-act="export" data-id="inv">${ic('download')}导出库存</button>` : '');
@@ -980,20 +984,29 @@ function pageInventory() {
       {key:'type', label:'全部类型', options:[...META.docTypes.in, ...META.docTypes.out], test:(o, v) => o.type === v},
       {key:'st', label:'全部状态', options:['待审核', '正常', '已驳回', '已作废'], test:(o, v) => o.status === v},
       {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(o, v) => monthKey(o.date) === v},
-      ...(multiWh() ? [{key:'wh', label:'全部仓库', options:whs().map(w => [w.id, w.name]), test:(o, v) => (o.wh || META.defaultWh) === v}] : [])];
-    $('#invCard').innerHTML = toolbar('docs', {placeholder:'搜索单号 / 单位 / 商品', filters, buttons:can('inv.export') ? `<button class="btn" data-act="export" data-id="docs">${ic('download')}导出</button>` : ''}) + '<div id="list-docs"></div>';
-    mountList('docs', {rows:() => db.stockDocs, search:o => o.no + o.party + o.handler + o.remark + o.creator + o.items.map(i => prodOf(i.productId).name).join(''), filters, empty:'暂无出入库单', columns:[
+      ...(multiWh() ? [{key:'wh', label:'全部仓库', options:whs().map(w => [w.id, w.name]), test:(o, v) => (o.wh || META.defaultWh) === v}] : []),
+      ...(projects().length ? [{key:'proj', label:'全部项目', options:projects(), test:(o, v) => o.project === v}] : [])];
+    $('#invCard').innerHTML = toolbar('docs', {placeholder:'搜索单号 / 单位 / 项目 / 商品', filters, buttons:can('inv.export') ? `<button class="btn" data-act="export" data-id="docs">${ic('download')}导出</button>` : ''}) + '<div id="docsSum"></div><div id="list-docs"></div>';
+    mountList('docs', {rows:() => db.stockDocs, search:o => o.no + o.party + (o.project || '') + o.handler + o.remark + o.creator + o.items.map(i => prodOf(i.productId).name).join(''), filters, empty:'暂无出入库单', columns:[
       {t:'单号', r:o => `<a class="link" data-act="docView" data-id="${o.id}">${o.no}</a>`, s:o => o.no},
       {t:'类型', r:o => badge(o.type, o.dir === 'in' ? 'green' : 'orange') + (multiWh() ? `<div class="sub-t">${esc(whName(o.wh))}</div>` : '')},
       {t:'日期', r:o => `${o.date} <span class="sub-t">${o.time || ''}</span>`, s:o => o.date + o.time},
-      {t:'往来单位', r:o => esc(o.party || '-')},
+      {t:'往来单位', r:o => esc(o.party || '-') + (o.project ? `<div class="sub-t">项目：${esc(o.project)}</div>` : '')},
       {t:'商品', r:o => esc(prodOf(o.items[0]?.productId).name) + (o.items.length > 1 ? `<span class="sub-t"> 等${o.items.length}项</span>` : '')},
       {t:'数量', cls:'num', r:o => num(docQty(o)), s:docQty},
       ...(mo ? [{t:'金额', cls:'num', r:o => money(docAmount(o)), s:docAmount}] : []),
       {t:'制单人', r:o => esc(o.creator)},
       {t:'状态', r:o => docBadge(o)},
       {t:'操作', r:o => `<div class="ops">${canDocApprove(o) ? tbtn('审核', 'docView', o.id) : tbtn('查看', 'docView', o.id)}${can('inv.print') ? tbtn('打印', 'docPrint', o.id) : ''}${canDocRedo(o) ? tbtn('重开', 'docRedo', o.id) : ''}${canDocVoid(o) ? tbtn('作废', 'docVoid', o.id, 'danger-text') : ''}</div>`}
-    ], exp:{name:'出入库单', cols:[['单号', o => o.no], ['类型', o => o.type], ['日期', o => o.date], ['单位', o => o.party], ['经手人', o => o.handler], ['商品数', o => o.items.length], ['数量', docQty], ...(mo ? [['金额', o => docAmount(o).toFixed(2)]] : []), ['制单人', o => o.creator], ['状态', o => o.status], ['备注', o => o.remark]]}});
+    ], exp:{name:'出入库单', cols:[['单号', o => o.no], ['类型', o => o.type], ['日期', o => o.date], ['单位', o => o.party], ['项目', o => o.project || ''], ['经手人', o => o.handler], ['商品数', o => o.items.length], ['数量', docQty], ...(mo ? [['金额', o => docAmount(o).toFixed(2)]] : []), ['制单人', o => o.creator], ['状态', o => o.status], ['备注', o => o.remark]]}, after:projSum});
+    // 筛选了某个项目时，显示这个项目的入库 / 出库合计（只算已生效的单据）
+    function projSum() {
+      const v = getState('docs').f.proj, el = $('#docsSum'); if (!el) return;
+      if (!v) { el.innerHTML = ''; return; }
+      const ok = db.stockDocs.filter(o => o.project === v && o.status === '正常'), tot = dir => { const a = ok.filter(o => o.dir === dir); return {n:a.length, q:sum(a, docQty), m:sum(a, docAmount)}; };
+      const a = tot('in'), b = tot('out');
+      el.innerHTML = `<div class="sub-t" style="padding:10px 16px;background:var(--primary-soft);border-radius:10px;margin:0 0 12px">项目「<b>${esc(v)}</b>」：入库 ${a.n} 单 ${num(a.q)} 件${mo ? '，' + money(a.m) : ''}；出库 ${b.n} 单 ${num(b.q)} 件${mo ? '，' + money(b.m) : ''}（待审核、已作废的不算）</div>`;
+    }
   } else if (ui.invTab === 'check') pageCheckDocs();
   else if (ui.invTab === 'summary') pageSummary();
   else if (ui.invTab === 'transfer') pageTransfers();
@@ -1235,6 +1248,7 @@ function docModal(dir, productId, type0, src) {
     <label class="field"><span>单据日期${can('inv.backdate') ? '' : '（仅限当天）'}</span><input type="date" id="dDate" value="${today()}" max="${today()}" ${can('inv.backdate') ? '' : 'disabled'}></label>
     <label class="field"><span>${docPartyLabel(dir)}</span><input id="dParty" list="dPartyList" placeholder="可直接输入" value="${esc(src ? src.party : '')}"><datalist id="dPartyList">${parties.map(x => `<option value="${esc(x)}">`).join('')}</datalist></label>
     <label class="field"><span>经手人</span><input id="dHandler" value="${esc(src ? src.handler : ME.name)}"></label>
+    <label class="field"><span>项目（选填）</span><input id="dProject" list="dProjList" maxlength="60" placeholder="例如：XX 小区装修、3 号工地，可按项目统计" value="${esc(src ? src.project || '' : '')}"><datalist id="dProjList">${projects().map(x => `<option value="${esc(x)}">`).join('')}</datalist></label>
     ${multiWh() ? `<label class="field"><span>${dir === 'in' ? '入库' : '出库'}仓库 <i>*</i></span><select id="dWh">${whOpts(draft.wh)}</select></label>` : ''}
     ${dir === 'out' ? `<label class="field span2"><span>收货地址${estOn ? '（填了自动估算运费）' : ''}</span><input id="dAddr" value="${esc(src ? src.address || '' : '')}" placeholder="省 市 区 详细地址；选了客户会自动带出"></label>` : ''}
   </div>
@@ -1364,7 +1378,7 @@ function docModal(dir, productId, type0, src) {
     const badDate = items.find(i => i.prodDate && i.expDate && i.expDate < i.prodDate);
     if (badDate) return toast(`「${byId(db.products, badDate.productId).name}」有效期早于生产日期`, 'error');
     const shipNext = $('#dShipNext') && $('#dShipNext').checked, carrierId = draft.carrierId;
-    const body = {dir, type:$('#dType').value, wh:draft.wh, date:$('#dDate').value, party:$('#dParty').value.trim(), handler:$('#dHandler').value.trim(), remark:$('#dRemark').value.trim(),
+    const body = {dir, type:$('#dType').value, wh:draft.wh, date:$('#dDate').value, party:$('#dParty').value.trim(), handler:$('#dHandler').value.trim(), project:$('#dProject').value.trim(), remark:$('#dRemark').value.trim(),
       address:$('#dAddr') ? $('#dAddr').value.trim() : '', items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:mo ? i.price : undefined, note:i.note, batchNo:i.batchNo, prodDate:i.prodDate, expDate:i.expDate, ...(byId(db.products, i.productId).serial ? {serials:snList(i.serials)} : {})}))};
     $('#dSave').disabled = true; if ($('#dSavePrint')) $('#dSavePrint').disabled = true;
     const r = await mutate('POST', '/api/stockdocs', body, r => docTitle(dir) + (r.status === '待审核' ? '已提交审核：' : '已保存：') + r.no);
@@ -1399,10 +1413,10 @@ const PAPERS = {a4:['A4 纵向', 'A4 portrait', 12], half:['二等分 241×140�
 const PRINT_ONLY = {a4l:['A4 横向', 'A4 landscape', 0]};
 /* ---------- 单据打印：入库 / 出库 / 调拨 / 销售 / 采购单共用一套排版，样式在 系统设置 → 打印模板 里调整 ---------- */
 const SLIP_COLS = {idx:'序号', sku:'商品编码', barcode:'条码', name:'商品名称', spec:'规格型号', unit:'单位', qty:'数量', price:'单价', amount:'金额', batch:'批次', note:'备注'};
-const SLIP_META = {no:'单号', type:'类型', date:'日期', party:'往来单位', contact:'联系人', address:'地址', wh:'仓库', handler:'经手人', express:'快递'};
+const SLIP_META = {no:'单号', type:'类型', date:'日期', party:'往来单位', contact:'联系人', address:'地址', wh:'仓库', handler:'经手人', express:'快递', project:'项目'};
 const SLIP_KINDS = {
-  in:{name:'入库单', meta:['no', 'type', 'date', 'party', 'wh', 'handler'], party:'供货单位', signs:'制单，经手，仓管，送货人'},
-  out:{name:'出库单', meta:['no', 'type', 'date', 'party', 'address', 'express', 'wh', 'handler'], party:'领用 / 收货单位', signs:'制单，经手，仓管，领用 / 收货人'},
+  in:{name:'入库单', meta:['no', 'type', 'date', 'party', 'project', 'wh', 'handler'], party:'供货单位', signs:'制单，经手，仓管，送货人'},
+  out:{name:'出库单', meta:['no', 'type', 'date', 'party', 'project', 'address', 'express', 'wh', 'handler'], party:'领用 / 收货单位', signs:'制单，经手，仓管，领用 / 收货人'},
   transfer:{name:'调拨单', meta:['no', 'date', 'wh', 'handler'], signs:'制单，调出仓管，调入仓管，经手', price:'成本单价', amount:'成本金额'},
   sales:{name:'销售单', meta:['no', 'date', 'party', 'contact', 'address', 'wh', 'express'], party:'客户', signs:'制单，审核，发货，客户签收'},
   purchase:{name:'采购单', meta:['no', 'date', 'party', 'contact', 'wh'], party:'供应商', signs:'制单，审核，收货'},
@@ -1432,7 +1446,7 @@ function slipData(kind, o) {
     return {meta:{no:o.no, date:o.date, party:[K.party, party.name || ''], contact:[party.contact, party.phone].filter(Boolean).join(' '), address:party.address || '', wh:o.wh && multiWh() ? whName(o.wh) : '', express:kind === 'sales' ? shipText('sales', o.id) : ''},
       items:o.items.map(i => row(i, linePrice(i))), creator:o.creator, handler:'', remark:o.remark, voided:o.status === '已作废' ? '作废：' : '', stamp:o.status === '已作废' ? '作废' : '', discount:o.discount || 0};
   }
-  return {meta:{no:o.no, type:o.type, date:o.date, party:[K.party, o.party || ''], wh:multiWh() || (o.wh && o.wh !== META.defaultWh) ? whName(o.wh) : '', handler:o.handler,
+  return {meta:{no:o.no, type:o.type, date:o.date, party:[K.party, o.party || ''], project:o.project || '', wh:multiWh() || (o.wh && o.wh !== META.defaultWh) ? whName(o.wh) : '', handler:o.handler,
     address:o.address || '', express:o.dir === 'out' && o.id ? shipText('out', o.id) : ''},
     items:o.items.map(i => estItem(o, i)).map(i => row(i, linePrice(i))), creator:o.creator, handler:o.handler, remark:o.remark, voided, stamp, approver:o.status === '正常' ? o.approver || '' : ''};
 }
@@ -1964,6 +1978,57 @@ function snView(id) {
     <p style="margin-bottom:10px"><b>${esc(prodOf(r.productId).name)}</b> <span class="sub-t">${esc(prodOf(r.productId).sku)}</span>${r.status === '在库' ? ` · 在 ${esc(whName(r.wh))}` : ''}</p>
     <table class="tbl compact"><thead><tr><th>日期</th><th>变动</th><th>单据</th><th>仓库</th><th>往来单位 / 备注</th></tr></thead><tbody>
     ${[...r.hist].reverse().map(h => `<tr><td>${h.date}</td><td>${badge(h.kind, h.status === '在库' ? 'green' : 'orange')}</td><td>${refLink(h.ref)}</td><td>${esc(whName(h.wh))}</td><td>${esc(h.party || '')}</td></tr>`).join('')}</tbody></table></div>`, 'lg');
+}
+
+/* ---------- 清空业务数据：要输入当前账号的登录密码 ---------- */
+function clearAll() {
+  openModal(`${modalHead('清空业务数据')}
+  <div class="m-body"><p style="color:var(--red);font-weight:600">将删除服务器上的所有商品、单据、往来单位、财务记录等业务数据（保留用户账号和系统设置），此操作不可撤销！</p>
+  <p class="sub-t" style="margin:8px 0 14px">建议先在上面「导出备份」保存一份。确认要清空，请输入当前账号（${esc(ME.name)}）的登录密码。</p>
+  <label class="field"><span>登录密码</span><input type="password" id="clrPwd" autocomplete="current-password"></label></div>
+  <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn danger" id="clrOk">${ic('trash')}确认清空</button></div>`);
+  const go = async () => {
+    const pwd = $('#clrPwd').value;
+    if (!pwd) return toast('请输入登录密码', 'error'), $('#clrPwd').focus();
+    $('#clrOk').disabled = true;
+    if (!await mutate('POST', '/api/clear', {password:pwd}, '数据已清空')) { $('#clrOk').disabled = false; $('#clrPwd').select(); }
+  };
+  $('#clrOk').onclick = go; $('#clrPwd').onkeydown = e => { if (e.key === 'Enter') go(); }; $('#clrPwd').focus();
+}
+
+/* ---------- 商品分类管理 ---------- */
+function catManage() {
+  if (!can('prod.edit')) return toast('没有编辑商品的权限', 'error');
+  const n = c => db.products.filter(p => p.category === c).length, none = db.products.filter(p => !p.category).length;
+  const rows = cats().map((c, i) => `<tr><td><input class="select" style="width:100%" id="catN${i}" value="${esc(c)}" data-old="${esc(c)}"></td>
+    <td class="num">${n(c)}</td><td><div class="ops">${tbtn('改名', 'catRename', i)}${tbtn('删除', 'catDel', i, 'danger-text')}</div></td></tr>`).join('');
+  openModal(`${modalHead('商品分类')}
+  <div class="m-body"><p class="sub-t" style="margin-bottom:10px">改名会把该分类下的商品一起改过去；删除分类后，原来的商品变成「未分类」，不会删除商品。${none ? `目前有 ${none} 个商品未分类。` : ''}</p>
+  <div style="display:flex;gap:8px;margin-bottom:12px"><input class="select" style="flex:1" id="catNew" placeholder="新分类名称，例如：日用百货" maxlength="40"><button class="btn primary" data-act="catAdd">${ic('plus')}新增分类</button></div>
+  <div class="table-wrap"><table class="tbl"><thead><tr><th>分类名称（可直接修改后点改名）</th><th class="num" style="width:80px">商品数</th><th style="width:120px">操作</th></tr></thead><tbody>${rows || '<tr><td colspan="3" class="sub-t" style="text-align:center;padding:20px">还没有分类</td></tr>'}</tbody></table></div></div>
+  <div class="m-foot"><button class="btn" data-act="closeModal">关闭</button></div>`);
+  $('#catNew').onkeydown = e => { if (e.key === 'Enter') catAdd(); };
+}
+async function catSave(body, msg) {
+  try { const r = await api('PUT', '/api/categories', {list:cats(), ...body}); await reload(); render(); toast(typeof msg === 'function' ? msg(r) : msg); catManage(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+function catAdd() {
+  const v = $('#catNew').value.trim();
+  if (!v) return toast('请填写分类名称', 'error'), $('#catNew').focus();
+  if (cats().includes(v)) return toast('分类「' + v + '」已经有了', 'error');
+  catSave({list:[...cats(), v]}, '已新增分类：' + v);
+}
+function catRename(i) {
+  const el = $('#catN' + i), from = el.dataset.old, to = el.value.trim();
+  if (!to) return toast('请填写分类名称', 'error'), el.focus();
+  if (to === from) return toast('名称没有变化，直接在输入框里改好再点「改名」', 'info'), el.focus();
+  const go = () => catSave({rename:{from, to}}, r => `已改名为「${to}」` + (r.changed ? `，${r.changed} 个商品已同步` : ''));
+  cats().includes(to) ? confirmBox(`「${esc(to)}」已经存在，确定把「${esc(from)}」合并进去吗？`, go, {title:'合并分类', danger:false, okText:'合并'}) : go();
+}
+function catDel(i) {
+  const name = $('#catN' + i).dataset.old, cnt = db.products.filter(p => p.category === name).length;
+  confirmBox(`确定删除分类「${esc(name)}」吗？${cnt ? `该分类下的 ${cnt} 个商品会变成「未分类」，商品本身不会删除。` : ''}`, () => catSave({remove:name}, `已删除分类「${name}」`), {title:'删除分类', okText:'删除'});
 }
 
 /* ---------- 仓库管理 ---------- */
@@ -3625,6 +3690,10 @@ function pageSettings() {
       <div style="display:flex;flex-wrap:wrap;gap:6px 22px">${Object.entries(META.modules).map(([k, l]) => `<label class="chk"><input type="checkbox" name="mod" value="${k}" ${(st.modules || []).includes(k) ? 'checked' : ''}>${esc(l)}</label>`).join('')}</div>
       <div style="margin-top:14px;text-align:right"><button class="btn primary" data-act="saveModules">${ic('check')}保存模块设置</button></div>
     </div></div>
+    <div class="card" style="margin-top:16px"><div class="card-head"><h3>基础资料</h3></div><div class="card-body">
+      <div class="setting-row"><div class="sr-group"><b>仓库</b><small>新增、编辑、删除仓库；有两个以上仓库就能调拨、按仓库看库存（库存管理页的「仓库」按钮也能进）</small></div><button class="btn" data-act="whManage">${ic('warehouse')}管理仓库</button></div>
+      <div class="setting-row"><div class="sr-group"><b>商品分类</b><small>新增、改名、删除商品分类；改名会同步修改该分类下的商品（商品管理页的「分类」按钮也能进）</small></div><button class="btn" data-act="catManage">${ic('box')}管理分类</button></div>
+    </div></div>
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>库存提醒推送</h3></div><div class="card-body">
       <p class="sub-t" style="margin-bottom:10px">每天定时把库存不足、临期 / 过期批次和待审核单据发到群里。支持企业微信、钉钉、飞书群机器人的 Webhook 地址，也可以填任意接收 JSON 的地址（如 Home Assistant 的 Webhook）。钉钉机器人如果设了「自定义关键词」，请加上「库存」。需要服务器能连外网。</p>
       <div class="form-grid">
@@ -3925,6 +3994,7 @@ const A = {
   ssPrint, ledger:id => { closeModal(); ledger(id); },
   nativeServer: () => NATIVE && NATIVE.changeServer(),
   goBatches: () => { $('#bellDrop').classList.remove('show'); ui.invTab = 'batch'; const st = getState('batches'); st.f = {}; go('inventory'); },
+  catManage, catAdd: () => catAdd(), catRename: i => catRename(i), catDel: i => catDel(i),
   whManage, whEdit: id => { closeModal(); whEdit(id); }, whDel: id => { closeModal(); whDel(id); },
   transferNew: () => transferModal(), transferView: id => { closeModal(); transferView(id); }, transferPrint: id => transferPrint(id), transferVoid: id => { closeModal(); transferVoid(id); },
   expirySave: () => mutate('PUT', '/api/settings/expiry', {days:+$('#expDays').value}, '临期提醒天数已保存'),
@@ -3984,7 +4054,7 @@ const A = {
   },
   restore: () => $('#importFile').click(),
   reset: () => confirmBox('将用演示数据覆盖服务器上的全部业务数据，所有用户都会受影响，确定继续？', () => mutate('POST', '/api/reset-demo', {}, '已重置为演示数据')),
-  clearAll: () => confirmBox('将删除服务器上的所有业务数据（保留用户账号和系统设置），此操作不可撤销！', () => mutate('POST', '/api/clear', {}, '数据已清空'), {title:'危险操作', okText:'确认清空'})
+  clearAll: () => clearAll()
 };
 ['ship', 'complete', 'approve', 'unapprove', 'inbound', 'post', 'offset', 'cancel', 'orderDel', 'pay'].forEach(a => { A[a] = v => { const [k, id] = split(v); orderAct(a, k, id); }; });
 

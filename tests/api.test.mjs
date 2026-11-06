@@ -77,7 +77,7 @@ before(async () => {
     await new Promise(r => setTimeout(r, 100));
   }
   admin = await login('admin', 'admin123');
-  await ok(admin, 'POST', '/api/clear');  // 清掉演示数据，从空库开始
+  await ok(admin, 'POST', '/api/clear', { password: 'admin123' });  // 清掉演示数据，从空库开始
 });
 after(() => { srv && srv.kill(); kdnMock && kdnMock.close(); try { fs.rmSync(DATA, { recursive: true, force: true }); } catch (e) {} });
 
@@ -836,4 +836,54 @@ test('采购单里新建的商品能直接开单，收付款记录能按单号�
   const f = d.finance.find(x => x.ref === po.no && x.category === '采购付款');
   assert.equal(f.amount, 10); assert.equal(f.note, '定金');
   assert.equal(d.purchases.find(o => o.no === f.ref).supplierId, su.id);
+});
+
+test('清空业务数据要输入正确的登录密码', async () => {
+  const p = await newProduct('CLR-1');
+  assert.equal((await call(admin, 'POST', '/api/clear', {})).http, 400);
+  const r = await call(admin, 'POST', '/api/clear', { password: 'wrong-pass' });
+  assert.equal(r.http, 400); assert.match(r.error, /密码不正确/);
+  assert.ok((await data()).products.some(x => x.id === p.id), '密码错了不能清空');
+});
+
+test('商品成本价、销售价可以不填，按 0 记', async () => {
+  const p = await ok(admin, 'POST', '/api/products', { sku: 'NOPRICE-1', name: '只记数量的商品', unit: '个', cost: '', price: '' });
+  assert.equal(p.cost, 0); assert.equal(p.price, 0);
+  const q = await ok(admin, 'POST', '/api/products', { sku: 'NOPRICE-2', name: '没传价格的商品', unit: '个' });
+  assert.ok(!q.cost && !q.price);
+});
+
+test('商品分类：新增、改名同步商品、删除后商品变未分类', async () => {
+  const a = await newProduct('CAT-1', { category: '五金' }), b = await newProduct('CAT-2', { category: '五金' }), c = await newProduct('CAT-3', { category: '油漆' });
+  let r = await ok(admin, 'PUT', '/api/categories', { list: ['五金', '油漆', '空分类'] });
+  assert.deepEqual(r.categories, ['五金', '油漆', '空分类']);
+  assert.deepEqual((await ok(admin, 'GET', '/api/data')).settings.categories, ['五金', '油漆', '空分类']);
+  r = await ok(admin, 'PUT', '/api/categories', { list: ['五金', '油漆', '空分类'], rename: { from: '五金', to: '五金配件' } });
+  assert.equal(r.changed, 2); assert.deepEqual(r.categories, ['五金配件', '油漆', '空分类']);
+  let d = await data();
+  assert.equal(d.products.find(x => x.id === a.id).category, '五金配件');
+  assert.equal(d.products.find(x => x.id === b.id).category, '五金配件');
+  // 改成已有的名字 = 合并
+  r = await ok(admin, 'PUT', '/api/categories', { list: r.categories, rename: { from: '油漆', to: '五金配件' } });
+  assert.deepEqual(r.categories, ['五金配件', '空分类']);
+  r = await ok(admin, 'PUT', '/api/categories', { list: r.categories, remove: '五金配件' });
+  assert.equal(r.changed, 3); assert.deepEqual(r.categories, ['空分类']);
+  d = await data();
+  for (const x of [a, b, c]) assert.equal(d.products.find(y => y.id === x.id).category, '', '删除分类后商品变未分类，商品本身还在');
+  // 没有编辑商品权限的账号不能改
+  const t = await newUser('cat_viewer', 'r_read');
+  assert.equal((await call(t, 'PUT', '/api/categories', { list: ['x'] })).http, 403);
+});
+
+test('出入库单可以填项目，打印模板能勾选项目', async () => {
+  const p = await newProduct('PRJ-1');
+  const d1 = await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', project: '  3号工地  ', items: [{ productId: p.id, qty: 5, price: 1 }] });
+  assert.equal(d1.project, '3号工地');
+  const d2 = await ok(admin, 'POST', '/api/stockdocs', { dir: 'out', type: '领料出库', project: '3号工地', items: [{ productId: p.id, qty: 2 }] });
+  assert.equal(d2.project, '3号工地');
+  const d3 = await ok(admin, 'POST', '/api/stockdocs', { dir: 'out', type: '领料出库', items: [{ productId: p.id, qty: 1 }] });
+  assert.ok(!('project' in d3), '不填项目就不存这个字段');
+  const all = await ok(admin, 'PUT', '/api/settings/print', { kind: 'out', tpl: { meta: { project: false, no: true } } });
+  assert.equal(all.out.meta.project, false);
+  await ok(admin, 'PUT', '/api/settings/print', { kind: 'out', tpl: null });
 });

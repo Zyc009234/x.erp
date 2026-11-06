@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.0.16';
+const VERSION = '2.1.1';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -940,6 +940,7 @@ function saveStockDoc(ctx) {
     items.forEach(i => { if (i.serials) checkSerials(get('products', i.productId), i.serials, dir === 'in' ? 1 : -1, wh); });
     const pending = needApprove(dir);
     const o = { id: uid(), no: nextNo(D), dir, type: b.type, wh, date, time: hhmm(), party: str(b.party, 100), handler: str(b.handler, 32), remark: str(b.remark, 500),
+      ...(str(b.project, 60) ? { project: str(b.project, 60) } : {}),
       ...(dir === 'out' && str(b.address, 200) ? { address: str(b.address, 200) } : {}), items, status: pending ? '待审核' : '正常', creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), printCount: 0 };
     if (!pending) postStockDoc(ctx, o);
     put('stockDocs', o);
@@ -1901,7 +1902,7 @@ route('GET', '/api/settings/notify/preview', () => notifyText(), { admin: true }
 // 打印模板：每种单据一份（标题、抬头、表头项目、明细列的显示 / 顺序 / 名称、签字栏、底部说明、字号），所有用户共用
 const PRINT_KINDS = { in: '入库单', out: '出库单', transfer: '调拨单', sales: '销售单', purchase: '采购单', salesReturn: '销售退货单', purchaseReturn: '采购退货单' };
 const PRINT_COLS = ['idx', 'sku', 'barcode', 'name', 'spec', 'unit', 'qty', 'price', 'amount', 'batch', 'note'];
-const PRINT_META = ['no', 'type', 'date', 'party', 'wh', 'handler', 'contact', 'address', 'express'];
+const PRINT_META = ['no', 'type', 'date', 'party', 'wh', 'handler', 'contact', 'address', 'express', 'project'];
 function cleanTpl(t) {
   if (!t || typeof t !== 'object') return null;
   const cols = (Array.isArray(t.cols) ? t.cols : []).filter((c, i, a) => c && PRINT_COLS.includes(c.k) && a.findIndex(x => x && x.k === c.k) === i)
@@ -1912,6 +1913,36 @@ function cleanTpl(t) {
   return { title: str(t.title, 20), header: str(t.header, 300), footer: str(t.footer, 300), signs: str(t.signs, 100),
     fontSize: Math.min(16, Math.max(10, size)), upper: t.upper !== false, printer: t.printer !== false, cols, meta };
 }
+// 商品分类：列表存在设置里（没有商品的分类也能保留）；改名 / 删除同时改掉该分类下的商品
+route('PUT', '/api/categories', ctx => {
+  const b = ctx.body, s = getMeta('settings', {});
+  const clean = x => str(x, 40);
+  let names = [...new Set((Array.isArray(b.list) ? b.list : []).map(clean).filter(Boolean))];
+  if (names.length > 200) fail('分类最多 200 个');
+  let changed = 0, note = '';
+  tx(() => {
+    if (b.rename) {
+      const from = clean(b.rename.from), to = clean(b.rename.to);
+      if (!from || !to) fail('请填写分类名称');
+      if (from !== to) {
+        for (const p of list('products')) if (p.category === from) { put('products', { ...p, category: to }); changed++; }
+        names = [...new Set(names.map(n => n === from ? to : n))];
+        if (!names.includes(to)) names.push(to);
+        note = `改名「${from}」→「${to}」，${changed} 个商品`;
+      }
+    }
+    if (b.remove) {
+      const name = clean(b.remove);
+      for (const p of list('products')) if (p.category === name) { put('products', { ...p, category: '' }); changed++; }
+      names = names.filter(n => n !== name);
+      note = `删除「${name}」，${changed} 个商品改为未分类`;
+    }
+    s.categories = names; setMeta('settings', s);
+  });
+  audit(ctx, '修改商品分类', note || '分类：' + names.join('、'));
+  return { categories: names, changed };
+}, { perm: 'prod.edit' });
+
 route('PUT', '/api/settings/print', ctx => {
   const kind = ctx.body.kind;
   if (!PRINT_KINDS[kind]) fail('单据类型不正确');
@@ -2066,7 +2097,11 @@ route('GET', '/api/audit', ctx => db.prepare('SELECT * FROM audit ORDER BY id DE
 route('GET', '/api/backup', ctx => { audit(ctx, '导出备份'); return backup(); }, { admin: true });
 route('POST', '/api/restore', ctx => restore(ctx), { admin: true });
 route('POST', '/api/reset-demo', ctx => tx(() => { writeAll(seed()); setMeta('counters', {}); audit(ctx, '重置演示数据'); }), { admin: true });
-route('POST', '/api/clear', ctx => tx(() => { writeAll({}); setMeta('counters', {}); audit(ctx, '清空业务数据'); }), { admin: true });
+// 清空前要再输一次当前账号的登录密码，防止误点或别人用你没锁的电脑清掉数据
+route('POST', '/api/clear', ctx => {
+  if (!checkPwd(ctx.user, ctx.body.password)) fail('密码不正确，数据没有清空');
+  tx(() => { writeAll({}); setMeta('counters', {}); audit(ctx, '清空业务数据'); });
+}, { admin: true });
 
 /* ================= 消息推送：每天定时把库存预警发到企业微信 / 钉钉 / 飞书群机器人或任意 Webhook ================= */
 function notifyText() {
