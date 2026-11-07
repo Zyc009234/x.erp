@@ -329,7 +329,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.1.1 · 数据保存在服务器</div>
+    <div class="side-foot">v2.1.2 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -433,6 +433,8 @@ const cats = () => [...new Set([...catBase(), ...db.products.map(p => p.category
 const units = () => [...new Set([...UNITS, ...db.products.map(p => p.unit).filter(Boolean)])];
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
 const DEPTS = ['销售部', '采购部', '仓储部', '财务部', '行政部', '技术部'];
+const deptBase = () => Array.isArray(db.settings.departments) ? db.settings.departments : DEPTS;
+const depts = () => [...new Set([...deptBase(), ...db.employees.map(e => e.dept).filter(Boolean)])];
 const METHODS = ['银行转账', '现金', '支付宝', '微信', '承兑汇票'];
 const FIN_CATS = {income: ['销售收款', '采购退款', '其他收入', '投资收益', '退款'], expense: ['采购付款', '销售退款', '工资', '房租', '水电', '办公费', '差旅', '营销推广', '快递费', '其他支出']};
 const AUTO_CATS = ['销售收款', '采购付款', '销售退款', '采购退款'];  // 单据自动生成的科目，手工记账不能选
@@ -805,7 +807,7 @@ const ENT = {
     {n:'category', l:'主营类目（可选择或直接输入）', type:'combo', opts:() => supCats(), ph:'如：钢材、五金、包装材料'}, {n:'address', l:'地址', span:1}, {n:'remark', l:'备注', type:'textarea', span:1}]},
   employees: {title:'员工', fields:[
     {n:'no', l:'工号', ph:'留空自动生成'}, {n:'name', l:'姓名', req:1}, {n:'gender', l:'性别', type:'select', opts:['男', '女']},
-    {n:'dept', l:'部门', type:'select', opts:() => DEPTS}, {n:'position', l:'职位', req:1}, {n:'phone', l:'手机号'},
+    {n:'dept', l:'部门（可选择或直接输入）', type:'combo', opts:() => depts(), ph:'如：生产部、售后部'}, {n:'position', l:'职位', req:1}, {n:'phone', l:'手机号'},
     {n:'salary', l:'月薪（元）', type:'number'}, {n:'joinDate', l:'入职日期', type:'date', def:today()},
     {n:'status', l:'状态', type:'select', opts:['在职', '试用期', '离职']}]}
 };
@@ -1996,39 +1998,46 @@ function clearAll() {
   $('#clrOk').onclick = go; $('#clrPwd').onkeydown = e => { if (e.key === 'Enter') go(); }; $('#clrPwd').focus();
 }
 
-/* ---------- 商品分类管理 ---------- */
-function catManage() {
-  if (!can('prod.edit')) return toast('没有编辑商品的权限', 'error');
-  const n = c => db.products.filter(p => p.category === c).length, none = db.products.filter(p => !p.category).length;
-  const rows = cats().map((c, i) => `<tr><td><input class="select" style="width:100%" id="catN${i}" value="${esc(c)}" data-old="${esc(c)}"></td>
-    <td class="num">${n(c)}</td><td><div class="ops">${tbtn('改名', 'catRename', i)}${tbtn('删除', 'catDel', i, 'danger-text')}</div></td></tr>`).join('');
-  openModal(`${modalHead('商品分类')}
-  <div class="m-body"><p class="sub-t" style="margin-bottom:10px">改名会把该分类下的商品一起改过去；删除分类后，原来的商品变成「未分类」，不会删除商品。${none ? `目前有 ${none} 个商品未分类。` : ''}</p>
-  <div style="display:flex;gap:8px;margin-bottom:12px"><input class="select" style="flex:1" id="catNew" placeholder="新分类名称，例如：日用百货" maxlength="40"><button class="btn primary" data-act="catAdd">${ic('plus')}新增分类</button></div>
-  <div class="table-wrap"><table class="tbl"><thead><tr><th>分类名称（可直接修改后点改名）</th><th class="num" style="width:80px">商品数</th><th style="width:120px">操作</th></tr></thead><tbody>${rows || '<tr><td colspan="3" class="sub-t" style="text-align:center;padding:20px">还没有分类</td></tr>'}</tbody></table></div></div>
+/* ---------- 商品分类 / 部门管理（同一套弹窗） ---------- */
+const NL = {
+  cat: {title:'商品分类', what:'分类', url:'/api/categories', perm:'prod.edit', noPerm:'没有编辑商品的权限', list:() => cats(), rows:() => db.products, field:'category',
+    unit:'个商品', thing:'商品', none:'未分类', ph:'新分类名称，例如：日用百货', cnt:'商品数'},
+  dept: {title:'部门', what:'部门', url:'/api/departments', perm:'hr', noPerm:'没有人事管理的权限', list:() => depts(), rows:() => db.employees, field:'dept',
+    unit:'名员工', thing:'员工', none:'未分配部门', ph:'新部门名称，例如：生产部', cnt:'员工数'}
+};
+function nlManage(k) {
+  const c = NL[k];
+  if (!can(c.perm)) return toast(c.noPerm, 'error');
+  const n = v => c.rows().filter(r => r[c.field] === v).length, none = c.rows().filter(r => !r[c.field]).length;
+  const rows = c.list().map((v, i) => `<tr><td><input class="select" style="width:100%" id="nlN${i}" value="${esc(v)}" data-old="${esc(v)}"></td>
+    <td class="num">${n(v)}</td><td><div class="ops">${tbtn('改名', 'nlRename', k + '|' + i)}${tbtn('删除', 'nlDel', k + '|' + i, 'danger-text')}</div></td></tr>`).join('');
+  openModal(`${modalHead(c.title)}
+  <div class="m-body"><p class="sub-t" style="margin-bottom:10px">改名会把该${c.what}下的${c.thing}一起改过去；删除${c.what}后，原来的${c.thing}变成「${c.none}」，${c.thing}本身不会删除。${none ? `目前有 ${none} ${c.unit}${c.none}。` : ''}</p>
+  <div style="display:flex;gap:8px;margin-bottom:12px"><input class="select" style="flex:1" id="nlNew" placeholder="${c.ph}" maxlength="40"><button class="btn primary" data-act="nlAdd" data-id="${k}">${ic('plus')}新增${c.what}</button></div>
+  <div class="table-wrap"><table class="tbl"><thead><tr><th>${c.what}名称（可直接修改后点改名）</th><th class="num" style="width:80px">${c.cnt}</th><th style="width:120px">操作</th></tr></thead><tbody>${rows || `<tr><td colspan="3" class="sub-t" style="text-align:center;padding:20px">还没有${c.what}</td></tr>`}</tbody></table></div></div>
   <div class="m-foot"><button class="btn" data-act="closeModal">关闭</button></div>`);
-  $('#catNew').onkeydown = e => { if (e.key === 'Enter') catAdd(); };
+  $('#nlNew').onkeydown = e => { if (e.key === 'Enter') nlAdd(k); };
 }
-async function catSave(body, msg) {
-  try { const r = await api('PUT', '/api/categories', {list:cats(), ...body}); await reload(); render(); toast(typeof msg === 'function' ? msg(r) : msg); catManage(); }
+async function nlSave(k, body, msg) {
+  try { const r = await api('PUT', NL[k].url, {list:NL[k].list(), ...body}); await reload(); render(); toast(typeof msg === 'function' ? msg(r) : msg); nlManage(k); }
   catch (e) { toast(e.message, 'error'); }
 }
-function catAdd() {
-  const v = $('#catNew').value.trim();
-  if (!v) return toast('请填写分类名称', 'error'), $('#catNew').focus();
-  if (cats().includes(v)) return toast('分类「' + v + '」已经有了', 'error');
-  catSave({list:[...cats(), v]}, '已新增分类：' + v);
+function nlAdd(k) {
+  const c = NL[k], v = $('#nlNew').value.trim();
+  if (!v) return toast('请填写' + c.what + '名称', 'error'), $('#nlNew').focus();
+  if (c.list().includes(v)) return toast(c.what + '「' + v + '」已经有了', 'error');
+  nlSave(k, {list:[...c.list(), v]}, '已新增' + c.what + '：' + v);
 }
-function catRename(i) {
-  const el = $('#catN' + i), from = el.dataset.old, to = el.value.trim();
-  if (!to) return toast('请填写分类名称', 'error'), el.focus();
+function nlRename(k, i) {
+  const c = NL[k], el = $('#nlN' + i), from = el.dataset.old, to = el.value.trim();
+  if (!to) return toast('请填写' + c.what + '名称', 'error'), el.focus();
   if (to === from) return toast('名称没有变化，直接在输入框里改好再点「改名」', 'info'), el.focus();
-  const go = () => catSave({rename:{from, to}}, r => `已改名为「${to}」` + (r.changed ? `，${r.changed} 个商品已同步` : ''));
-  cats().includes(to) ? confirmBox(`「${esc(to)}」已经存在，确定把「${esc(from)}」合并进去吗？`, go, {title:'合并分类', danger:false, okText:'合并'}) : go();
+  const go = () => nlSave(k, {rename:{from, to}}, r => `已改名为「${to}」` + (r.changed ? `，${r.changed} ${c.unit}已同步` : ''));
+  c.list().includes(to) ? confirmBox(`「${esc(to)}」已经存在，确定把「${esc(from)}」合并进去吗？`, go, {title:'合并' + c.what, danger:false, okText:'合并'}) : go();
 }
-function catDel(i) {
-  const name = $('#catN' + i).dataset.old, cnt = db.products.filter(p => p.category === name).length;
-  confirmBox(`确定删除分类「${esc(name)}」吗？${cnt ? `该分类下的 ${cnt} 个商品会变成「未分类」，商品本身不会删除。` : ''}`, () => catSave({remove:name}, `已删除分类「${name}」`), {title:'删除分类', okText:'删除'});
+function nlDel(k, i) {
+  const c = NL[k], name = $('#nlN' + i).dataset.old, cnt = c.rows().filter(r => r[c.field] === name).length;
+  confirmBox(`确定删除${c.what}「${esc(name)}」吗？${cnt ? `该${c.what}下的 ${cnt} ${c.unit}会变成「${c.none}」，${c.thing}本身不会删除。` : ''}`, () => nlSave(k, {remove:name}, `已删除${c.what}「${name}」`), {title:'删除' + c.what, okText:'删除'});
 }
 
 /* ---------- 仓库管理 ---------- */
@@ -3537,7 +3546,7 @@ function finAdd(id) {
 /* ================= 页面：人事 ================= */
 function pageEmployees() {
   const on = db.employees.filter(e => e.status !== '离职');
-  const filters = [{key:'dept', label:'全部部门', options:DEPTS, test:(e, v) => e.dept === v}, {key:'st', label:'全部状态', options:['在职', '试用期', '离职'], test:(e, v) => e.status === v}];
+  const filters = [{key:'dept', label:'全部部门', options:[...depts(), ...(db.employees.some(e => !e.dept) ? ['未分配部门'] : [])], test:(e, v) => (e.dept || '未分配部门') === v}, {key:'st', label:'全部状态', options:['在职', '试用期', '离职'], test:(e, v) => e.status === v}];
   $('#view').innerHTML = pageHead('人事管理', '员工档案、部门与薪资') + `
   <div class="grid g4 mb">
     ${kpi('在职人数', on.length, 'users', 'primary')}
@@ -3546,12 +3555,12 @@ function pageEmployees() {
     ${kpi('平均月薪', money(on.length ? sum(on, e => e.salary) / on.length : 0), 'chart', 'blue')}
   </div>
   <div class="grid g-2-1">
-    <div class="card">${toolbar('employees', {placeholder:'搜索姓名 / 工号 / 职位', filters, buttons:`<button class="btn" data-act="export" data-id="employees">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="employees">${ic('plus')}新增员工</button>`})}<div id="list-employees"></div></div>
+    <div class="card">${toolbar('employees', {placeholder:'搜索姓名 / 工号 / 职位', filters, buttons:`<button class="btn" data-act="deptManage">${ic('dashboard')}部门</button><button class="btn" data-act="export" data-id="employees">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="employees">${ic('plus')}新增员工</button>`})}<div id="list-employees"></div></div>
     <div class="card"><div class="card-head"><h3>部门人数分布</h3></div><div class="card-body"><div class="chart-box"><canvas id="e1"></canvas></div></div></div>
   </div>`;
   mountList('employees', {rows:() => db.employees, search:e => e.no + e.name + e.position + e.phone, filters, columns:[
     {t:'员工', r:e => `<div style="display:flex;gap:10px;align-items:center"><div class="avatar" style="width:32px;height:32px;font-size:13px;background:${e.gender === '女' ? 'linear-gradient(135deg,#f472b6,#fb7185)' : 'linear-gradient(135deg,#60a5fa,#6366f1)'}">${esc(e.name.slice(-1))}</div><div><b>${esc(e.name)}</b><div class="sub-t">${esc(e.no)}</div></div></div>`, s:e => e.no},
-    {t:'部门', r:e => esc(e.dept), s:e => e.dept},
+    {t:'部门', r:e => e.dept ? esc(e.dept) : '<span class="sub-t">未分配</span>', s:e => e.dept},
     {t:'职位', r:e => esc(e.position)},
     {t:'手机', r:e => esc(e.phone || '-')},
     {t:'月薪', cls:'num', r:e => money(e.salary), s:e => e.salary},
@@ -3559,8 +3568,9 @@ function pageEmployees() {
     {t:'状态', r:e => badge(e.status)},
     {t:'操作', r:e => `<div class="ops">${tbtn('编辑', 'edit', 'employees|' + e.id)}${tbtn('删除', 'del', 'employees|' + e.id, 'danger-text')}</div>`}
   ], exp:{name:'员工名单', cols:[['工号', e => e.no], ['姓名', e => e.name], ['性别', e => e.gender], ['部门', e => e.dept], ['职位', e => e.position], ['手机', e => e.phone], ['月薪', e => e.salary], ['入职日期', e => e.joinDate], ['状态', e => e.status]]}});
-  const dc = DEPTS.map(d => on.filter(e => e.dept === d).length);
-  chart('e1', {type:'doughnut', data:{labels:DEPTS, datasets:[{data:dc, backgroundColor:PALETTE, borderWidth:0}]}, options:{cutout:'62%'}});
+  const dl = [...depts(), '未分配部门'].filter(d => on.some(e => (e.dept || '未分配部门') === d));
+  const dc = dl.map(d => on.filter(e => (e.dept || '未分配部门') === d).length);
+  chart('e1', {type:'doughnut', data:{labels:dl, datasets:[{data:dc, backgroundColor:dl.map((_, i) => PALETTE[i % PALETTE.length]), borderWidth:0}]}, options:{cutout:'62%'}});
 }
 
 /* ================= 页面：报表 ================= */
@@ -3693,6 +3703,7 @@ function pageSettings() {
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>基础资料</h3></div><div class="card-body">
       <div class="setting-row"><div class="sr-group"><b>仓库</b><small>新增、编辑、删除仓库；有两个以上仓库就能调拨、按仓库看库存（库存管理页的「仓库」按钮也能进）</small></div><button class="btn" data-act="whManage">${ic('warehouse')}管理仓库</button></div>
       <div class="setting-row"><div class="sr-group"><b>商品分类</b><small>新增、改名、删除商品分类；改名会同步修改该分类下的商品（商品管理页的「分类」按钮也能进）</small></div><button class="btn" data-act="catManage">${ic('box')}管理分类</button></div>
+      ${(st.modules || []).includes('hr') ? `<div class="setting-row"><div class="sr-group"><b>部门</b><small>新增、改名、删除员工部门；改名会同步修改该部门下的员工（人事管理页的「部门」按钮也能进）</small></div><button class="btn" data-act="deptManage">${ic('dashboard')}管理部门</button></div>` : ''}
     </div></div>
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>库存提醒推送</h3></div><div class="card-body">
       <p class="sub-t" style="margin-bottom:10px">每天定时把库存不足、临期 / 过期批次和待审核单据发到群里。支持企业微信、钉钉、飞书群机器人的 Webhook 地址，也可以填任意接收 JSON 的地址（如 Home Assistant 的 Webhook）。钉钉机器人如果设了「自定义关键词」，请加上「库存」。需要服务器能连外网。</p>
@@ -3994,7 +4005,7 @@ const A = {
   ssPrint, ledger:id => { closeModal(); ledger(id); },
   nativeServer: () => NATIVE && NATIVE.changeServer(),
   goBatches: () => { $('#bellDrop').classList.remove('show'); ui.invTab = 'batch'; const st = getState('batches'); st.f = {}; go('inventory'); },
-  catManage, catAdd: () => catAdd(), catRename: i => catRename(i), catDel: i => catDel(i),
+  catManage: () => nlManage('cat'), deptManage: () => nlManage('dept'), nlAdd: k => nlAdd(k), nlRename: v => nlRename(...split(v)), nlDel: v => nlDel(...split(v)),
   whManage, whEdit: id => { closeModal(); whEdit(id); }, whDel: id => { closeModal(); whDel(id); },
   transferNew: () => transferModal(), transferView: id => { closeModal(); transferView(id); }, transferPrint: id => transferPrint(id), transferVoid: id => { closeModal(); transferVoid(id); },
   expirySave: () => mutate('PUT', '/api/settings/expiry', {days:+$('#expDays').value}, '临期提醒天数已保存'),

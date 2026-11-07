@@ -875,6 +875,25 @@ test('商品分类：新增、改名同步商品、删除后商品变未分类',
   assert.equal((await call(t, 'PUT', '/api/categories', { list: ['x'] })).http, 403);
 });
 
+test('部门：自定义新增、改名同步员工、删除后员工变未分配', async () => {
+  await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'hr'] });
+  const a = await ok(admin, 'POST', '/api/employees', { name: '张三', dept: '生产部', position: '工人' });
+  const b = await ok(admin, 'POST', '/api/employees', { name: '李四', dept: '生产部', position: '组长' });
+  let r = await ok(admin, 'PUT', '/api/departments', { list: ['生产部', '售后部', '  售后部 ', ''] });
+  assert.deepEqual(r.departments, ['生产部', '售后部']);
+  assert.deepEqual((await ok(admin, 'GET', '/api/data')).settings.departments, ['生产部', '售后部']);
+  r = await ok(admin, 'PUT', '/api/departments', { list: r.departments, rename: { from: '生产部', to: '一车间' } });
+  assert.equal(r.changed, 2); assert.deepEqual(r.departments, ['一车间', '售后部']);
+  let d = await data();
+  assert.equal(d.employees.find(x => x.id === a.id).dept, '一车间');
+  r = await ok(admin, 'PUT', '/api/departments', { list: r.departments, remove: '一车间' });
+  assert.equal(r.changed, 2); assert.deepEqual(r.departments, ['售后部']);
+  d = await data();
+  for (const x of [a, b]) assert.equal(d.employees.find(y => y.id === x.id).dept, '', '删除部门后员工还在，部门变空');
+  const t = await newUser('dept_viewer', 'r_read');
+  assert.equal((await call(t, 'PUT', '/api/departments', { list: ['x'] })).http, 403);
+});
+
 test('出入库单可以填项目，打印模板能勾选项目', async () => {
   const p = await newProduct('PRJ-1');
   const d1 = await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', project: '  3号工地  ', items: [{ productId: p.id, qty: 5, price: 1 }] });

@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.1.1';
+const VERSION = '2.1.2';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -1913,35 +1913,37 @@ function cleanTpl(t) {
   return { title: str(t.title, 20), header: str(t.header, 300), footer: str(t.footer, 300), signs: str(t.signs, 100),
     fontSize: Math.min(16, Math.max(10, size)), upper: t.upper !== false, printer: t.printer !== false, cols, meta };
 }
-// 商品分类：列表存在设置里（没有商品的分类也能保留）；改名 / 删除同时改掉该分类下的商品
-route('PUT', '/api/categories', ctx => {
+// 商品分类 / 员工部门：列表存在设置里（没被用到的也能保留）；改名 / 删除同时改掉用到它的记录
+function namedList(ctx, { key, col, field, label, unit, empty }) {
   const b = ctx.body, s = getMeta('settings', {});
   const clean = x => str(x, 40);
   let names = [...new Set((Array.isArray(b.list) ? b.list : []).map(clean).filter(Boolean))];
-  if (names.length > 200) fail('分类最多 200 个');
+  if (names.length > 200) fail(label + '最多 200 个');
   let changed = 0, note = '';
   tx(() => {
     if (b.rename) {
       const from = clean(b.rename.from), to = clean(b.rename.to);
-      if (!from || !to) fail('请填写分类名称');
+      if (!from || !to) fail('请填写' + label + '名称');
       if (from !== to) {
-        for (const p of list('products')) if (p.category === from) { put('products', { ...p, category: to }); changed++; }
+        for (const r of list(col)) if (r[field] === from) { put(col, { ...r, [field]: to }); changed++; }
         names = [...new Set(names.map(n => n === from ? to : n))];
         if (!names.includes(to)) names.push(to);
-        note = `改名「${from}」→「${to}」，${changed} 个商品`;
+        note = `改名「${from}」→「${to}」，${changed} ${unit}`;
       }
     }
     if (b.remove) {
       const name = clean(b.remove);
-      for (const p of list('products')) if (p.category === name) { put('products', { ...p, category: '' }); changed++; }
+      for (const r of list(col)) if (r[field] === name) { put(col, { ...r, [field]: '' }); changed++; }
       names = names.filter(n => n !== name);
-      note = `删除「${name}」，${changed} 个商品改为未分类`;
+      note = `删除「${name}」，${changed} ${unit}改为${empty}`;
     }
-    s.categories = names; setMeta('settings', s);
+    s[key] = names; setMeta('settings', s);
   });
-  audit(ctx, '修改商品分类', note || '分类：' + names.join('、'));
-  return { categories: names, changed };
-}, { perm: 'prod.edit' });
+  audit(ctx, '修改' + label, note || label + '：' + names.join('、'));
+  return { [key]: names, changed };
+}
+route('PUT', '/api/categories', ctx => namedList(ctx, { key: 'categories', col: 'products', field: 'category', label: '商品分类', unit: '个商品', empty: '未分类' }), { perm: 'prod.edit' });
+route('PUT', '/api/departments', ctx => namedList(ctx, { key: 'departments', col: 'employees', field: 'dept', label: '部门', unit: '名员工', empty: '未分配部门' }), { perm: 'hr' });
 
 route('PUT', '/api/settings/print', ctx => {
   const kind = ctx.body.kind;
