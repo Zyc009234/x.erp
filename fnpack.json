@@ -1,0 +1,51 @@
+{
+  "schema_version": "2",
+  "source_info": {
+    "name": "x.erp 官方源",
+    "author": "Zyc009234",
+    "homepage": "https://www.zhaoyoucai.xyz/xerp/",
+    "description": "x.erp 免费开源进销存的官方发布源，每次发版自动更新。"
+  },
+  "apps": {
+    "xerp": {
+      "display_name": "x.erp",
+      "desc": "免费开源（AGPL-3.0）的进销存系统，面向小店和中小企业：商品与条码、采购单、销售单、退货、收款付款、多仓库库存与调拨盘点、缺货预警、财务流水、统计报表、员工账号与权限。电脑和手机浏览器都能用，数据全部保存在 NAS 本地，每天自动备份。安装后浏览器打开 http://NAS地址:8686 ，首次登录账号 admin，密码为安装时设置的密码。",
+      "platform": [
+        "all"
+      ],
+      "categories": [
+        "生活服务",
+        "系统工具"
+      ],
+      "icon_url": "https://raw.githubusercontent.com/Zyc009234/x.erp/main/docs/icon.png",
+      "preview_urls": [
+        "https://raw.githubusercontent.com/Zyc009234/x.erp/main/docs/screenshots/dashboard.png",
+        "https://raw.githubusercontent.com/Zyc009234/x.erp/main/docs/screenshots/sales.png",
+        "https://raw.githubusercontent.com/Zyc009234/x.erp/main/docs/screenshots/inventory.png",
+        "https://raw.githubusercontent.com/Zyc009234/x.erp/main/docs/screenshots/payments.png",
+        "https://raw.githubusercontent.com/Zyc009234/x.erp/main/docs/screenshots/mobile.png"
+      ],
+      "readme_url": "https://raw.githubusercontent.com/Zyc009234/x.erp/main/README.md",
+      "bug_report_url": "https://www.zhaoyoucai.xyz/xerp/",
+      "maintainer": "Zyc009234",
+      "maintainer_url": "https://github.com/Zyc009234/x.erp",
+      "run_as": "package",
+      "install_type": "",
+      "is_docker": false,
+      "service_port": "8686",
+      "releases": {
+        "2.1.1": {
+          "changelog": "根据用户留言改进：1）商品分类可以单独管理（新增、改名、删除），改名会同步该分类下的商品，商品管理页和系统设置里都能进；2）出入库单可以填「项目」，按项目筛选并显示入库 / 出库合计，打印单据也能带上项目；3）商品的成本价、销售价改为选填，不填按 0，只记数量也方便；4）清空业务数据前要输入登录密码，防止误操作；5）系统设置新增「基础资料」，仓库管理入口更好找。",
+          "updated_at": "2026-11-07T11:24:01+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.1.1.fpk",
+              "sha256": "929926d387d90a6f0e97430039242a53c7a573dc4e2b9f1f15b535125b803aef",
+              "size": 629038
+            }
+          }
+        }
+      }
+    }
+  }
+}

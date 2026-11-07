@@ -7,6 +7,7 @@
 
 - **在线演示**：<https://demo.zhaoyoucai.xyz>（账号 `admin`，密码 `admin123`；所有人共用，数据每小时重置）
 - **官网与下载**：<https://www.zhaoyoucai.xyz/xerp/>（飞牛 fpk / Windows 安装包 / 安卓客户端）
+- **飞牛一键安装 / 自动更新**：装好 [FnDepot](https://github.com/EWEDLCM/FnDepot) 后添加应用源 `https://github.com/Zyc009234/x.erp`（连不上 GitHub 就填 `https://www.zhaoyoucai.xyz/xerp/fnpack.json`），搜索 x.erp 安装，有新版本会提示更新
 
 > **English**: x.erp is a free, open-source (AGPL-3.0) self-hosted inventory / ERP for small businesses — products, purchase & sales orders, returns, payments, multi-warehouse stock, finance and reports. Runs on fnOS, Docker (Synology, QNAP, Unraid, CasaOS / ZimaOS) or any machine with Node.js 22+. The UI is in Simplified Chinese.
 
