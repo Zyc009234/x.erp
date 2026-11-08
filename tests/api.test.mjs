@@ -999,3 +999,76 @@ test('客户 / 供应商专属价：设置、表格导入、没权限不能改',
   const t = await newUser('sp_reader', 'r_read');
   assert.equal((await call(t, 'PUT', `/api/prices/customers/${cu.id}`, { prices: {} })).http, 403);
 });
+
+test('出库单价（选填）：记在单据上，库存成本照旧按加权成本，看不到金额的账号拿不到', async () => {
+  const p = await newProduct('SP27', { units: [{ name: '箱', rate: 10 }] });
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', items: [{ productId: p.id, qty: 50, price: 4 }] });
+  const o = await ok(admin, 'POST', '/api/stockdocs', { dir: 'out', type: '销售出库', items: [{ productId: p.id, qty: 2, unit: '箱', sale: 75 }, { productId: p.id, qty: 3 }] });
+  const d = await doc(o.id);
+  assert.equal(d.items[0].price, 4, '成本单价不变');
+  assert.equal(d.items[0].sale, 7.5); assert.equal(d.items[0].usale, 75);
+  assert.equal(d.items[1].sale, undefined, '没填的不记');
+  const q = await prod(p.id);
+  assert.equal(q.stock, 27); assert.equal(q.cost, 4);
+  assert.equal((await outDoc(admin, [{ productId: p.id, qty: 1, sale: -1 }])).http, 400);
+  const wh = await newUser('sp27ro', 'r_read');
+  const seen = (await data(wh)).stockDocs.find(x => x.id === o.id);
+  assert.equal(seen.items[0].sale, undefined, '没有金额权限看不到出库单价');
+});
+
+test('报销：提交 → 驳回改了再提交 → 批准 → 付款记支出流水 → 撤销付款；员工只能看自己的', async () => {
+  await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'sales', 'purchase', 'parties', 'finance', 'hr'] });
+  const role = await ok(admin, 'POST', '/api/roles', { name: '报销员工', perms: ['expense'] });
+  const roleId = role.id || (await ok(admin, 'GET', '/api/roles')).list.find(x => x.name === '报销员工').id;
+  const a = await newUser('bxa', roleId), b = await newUser('bxb', roleId);
+  assert.equal((await call(a, 'POST', '/api/expenses', { applicant: 'bxa', reason: '', lines: [{ category: '差旅', amount: 10 }] })).http, 400, '事由必填');
+  assert.equal((await call(a, 'POST', '/api/expenses', { applicant: 'bxa', reason: '出差', lines: [] })).http, 400, '明细必填');
+  assert.equal((await call(a, 'POST', '/api/expenses', { applicant: 'bxa', reason: '出差', lines: [{ category: '销售收款', amount: 10 }] })).http, 400, '不能用单据自动科目');
+  const e = await ok(a, 'POST', '/api/expenses', { applicant: 'bxa', dept: '销售部', reason: '柳州出差', lines: [{ category: '差旅', amount: 120.5, note: '高铁' }, { category: '住宿费', amount: 200 }, { category: '差旅', amount: 30 }] });
+  assert.equal(e.status, '待审批'); assert.equal(e.amount, 350.5); assert.match(e.no, /^BX\d{8}\d{3}$/);
+  // 附件
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const im = await ok(a, 'POST', `/api/expenses/${e.id}/images`, { data: png });
+  assert.equal(im.imgs.length, 1);
+  const got = await fetch(BASE + `/api/expenses/${e.id}/images/${im.imgs[0]}`, { headers: { Authorization: 'Bearer ' + a } });
+  assert.equal(got.status, 200); assert.equal(got.headers.get('content-type'), 'image/png');
+  assert.equal((await fetch(BASE + `/api/expenses/${e.id}/images/${im.imgs[0]}`, { headers: { Authorization: 'Bearer ' + b } })).status, 403, '别人看不到附件');
+  assert.equal((await fetch(BASE + `/api/products/bx_${e.id}_${im.imgs[0]}/image`, { headers: { Authorization: 'Bearer ' + admin } })).status, 404, '商品图片接口取不到报销附件');
+  // 只能看自己的
+  assert.equal((await data(b)).expenses.length, 0);
+  assert.equal((await data(a)).expenses.length, 1);
+  assert.equal((await call(b, 'PUT', `/api/expenses/${e.id}`, { applicant: 'bxb', reason: 'x', lines: [{ category: '差旅', amount: 1 }] })).http, 403);
+  // 员工不能审批、付款
+  assert.equal((await call(a, 'POST', `/api/expenses/${e.id}/approve`, {})).http, 403);
+  assert.equal((await call(a, 'POST', `/api/expenses/${e.id}/pay`, {})).http, 403);
+  // 驳回 → 修改 → 回到待审批
+  assert.equal((await call(admin, 'POST', `/api/expenses/${e.id}/reject`, {})).http, 400, '驳回要填原因');
+  await ok(admin, 'POST', `/api/expenses/${e.id}/reject`, { reason: '住宿超标' });
+  const e2 = await ok(a, 'PUT', `/api/expenses/${e.id}`, { applicant: 'bxa', dept: '销售部', reason: '柳州出差', lines: [{ category: '差旅', amount: 150.5 }, { category: '住宿费', amount: 150 }] });
+  assert.equal(e2.status, '待审批'); assert.equal(e2.amount, 300.5); assert.equal(e2.rejectReason, undefined);
+  // 没批准不能付款（财务没有审批权限时）；批准后不能再改
+  await ok(admin, 'POST', `/api/expenses/${e.id}/approve`, {});
+  assert.equal((await call(a, 'PUT', `/api/expenses/${e.id}`, { applicant: 'bxa', reason: 'x', lines: [{ category: '差旅', amount: 1 }] })).http, 400);
+  assert.equal((await call(a, 'POST', `/api/expenses/${e.id}/void`, {})).http, 403, '批准后员工不能作废');
+  // 付款：按类别记支出流水，从账户扣
+  const d0 = await data(), acct = d0.accounts.find(x => !x.off), fin0 = d0.finance.length;
+  const paid = await ok(admin, 'POST', `/api/expenses/${e.id}/pay`, { date: new Date().toISOString().slice(0, 10), account: acct.id });
+  assert.equal(paid.status, '已付款');
+  let fs1 = (await data()).finance.filter(f => f.ref === e.no);
+  assert.equal(fs1.length, 2); assert.equal(fs1.find(f => f.category === '差旅').amount, 150.5); assert.ok(fs1.every(f => f.type === 'expense' && f.account === acct.id));
+  assert.equal((await call(admin, 'DELETE', '/api/finance/' + fs1[0].id)).http, 400, '报销生成的流水不能手工删');
+  assert.equal((await call(admin, 'POST', `/api/expenses/${e.id}/void`, {})).http, 400, '已付款要先撤销付款');
+  assert.equal((await call(a, 'POST', `/api/expenses/${e.id}/images`, { data: png })).http, 400, '已付款不能再加附件');
+  // 撤销付款
+  await ok(admin, 'POST', `/api/expenses/${e.id}/unpay`, {});
+  const d2 = await data();
+  assert.equal(d2.finance.length, fin0); assert.equal(d2.expenses.find(x => x.id === e.id).status, '已批准');
+  // 有审批权限的可以从待审批直接付款；员工作废自己的待审批单
+  const e3 = await ok(a, 'POST', '/api/expenses', { applicant: 'bxa', reason: '打车', lines: [{ category: '交通费', amount: 25 }] });
+  assert.equal((await ok(admin, 'POST', `/api/expenses/${e3.id}/pay`, {})).status, '已付款');
+  const e4 = await ok(a, 'POST', '/api/expenses', { applicant: 'bxa', reason: '买笔', lines: [{ category: '办公费', amount: 8 }] });
+  assert.equal((await ok(a, 'POST', `/api/expenses/${e4.id}/void`, {})).status, '已作废');
+  // 有「财务管理」的内置角色自动带报销权限
+  const acc = (await ok(admin, 'GET', '/api/roles')).list.find(x => x.id === 'r_acct');
+  assert.ok(acc.perms.includes('expense') && acc.perms.includes('exp.approve'));
+});

@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.1.3';
+const VERSION = '2.1.4';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -96,8 +96,8 @@ const fail = (msg, status) => { throw new HttpError(msg, status); };
 function audit(ctx, action, detail = '') { S.audit.run(new Date().toISOString(), ctx.user ? ctx.user.name : '-', action, String(detail).slice(0, 300), ctx.ip || ''); }
 
 /* ================= 业务常量 ================= */
-const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials', 'carriers', 'shipments', 'shipBills', 'shipLabels', 'accounts', 'acctTransfers'];
-const DATED = ['sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs', 'shipments', 'shipBills', 'acctTransfers'];
+const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials', 'carriers', 'shipments', 'shipBills', 'shipLabels', 'accounts', 'acctTransfers', 'expenses'];
+const DATED = ['sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs', 'shipments', 'shipBills', 'acctTransfers', 'expenses'];
 const CATS = ['电子产品', '办公用品', '家居用品', '食品饮料'];
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
 const METHODS = ['银行转账', '现金', '支付宝', '微信', '承兑汇票'];
@@ -140,7 +140,8 @@ const PERMS = [
   ['inv.others', '查看 / 处理他人开的单据', 'inventory'], ['inv.transfer', '开调拨单（仓库之间移库）', 'inventory'],
   ['prod.view', '查看商品档案', 'products'], ['prod.edit', '新增 / 编辑商品', 'products'], ['prod.delete', '删除商品', 'products'],
   ['dashboard', '工作台', 'dashboard'], ['sales', '销售管理（全部操作）', 'sales'], ['purchase', '采购管理（全部操作）', 'purchase'],
-  ['parties', '客户 / 供应商管理', 'parties'], ['finance', '财务管理', 'finance'], ['hr', '人事管理', 'hr'], ['reports', '统计报表', 'reports'],
+  ['parties', '客户 / 供应商管理', 'parties'], ['finance', '财务管理', 'finance'],
+  ['expense', '报销：提交、查看自己的报销单', 'finance'], ['exp.approve', '报销审批（查看全部报销单、批准 / 驳回）', 'finance'], ['hr', '人事管理', 'hr'], ['reports', '统计报表', 'reports'],
   ['ship.view', '查看运单、快递账单与运费统计', 'shipping'], ['ship.edit', '登记运单（快递单号、称重）', 'shipping'],
   ['ship.rate', '维护快递公司与报价', 'shipping'], ['ship.bill', '导入快递账单、对账确认', 'shipping']
 ];
@@ -167,6 +168,13 @@ try { db.exec('ALTER TABLE users ADD COLUMN role_id TEXT'); } catch (e) {}
 if (!db.prepare('SELECT COUNT(*) AS n FROM roles').get().n) {
   const ins = db.prepare('INSERT INTO roles (id, name, descr, perms, builtin, sort, created_at) VALUES (?, ?, ?, ?, 1, ?, ?)');
   DEFAULT_ROLES.forEach(([id, name, descr, perms], i) => ins.run(id, name, descr, JSON.stringify(perms), i, new Date().toISOString()));
+}
+if (!getMeta('expPerms', false)) {  // v2.1.4 升级：有「财务管理」权限的角色补上报销提交 / 审批
+  for (const r of db.prepare('SELECT id, perms FROM roles').all()) {
+    let ps; try { ps = JSON.parse(r.perms); } catch (e) { continue; }
+    if (Array.isArray(ps) && ps.includes('finance')) db.prepare('UPDATE roles SET perms = ? WHERE id = ?').run(JSON.stringify([...new Set([...ps, 'expense', 'exp.approve'])]), r.id);
+  }
+  setMeta('expPerms', true);
 }
 const roleById = db.prepare('SELECT * FROM roles WHERE id = ?');
 const rolePerms = r => { try { return cleanPerms(JSON.parse(r.perms)); } catch (e) { return []; } };
@@ -441,6 +449,7 @@ function deleteProductImage(ctx, id) {
 const RAW = Symbol('raw');  // 路由返回 { [RAW]: { type, body } } 时直接输出二进制
 function getProductImage(ctx, id) {
   if (!['inv.view', 'prod.view', 'sales', 'purchase', 'dashboard', 'reports'].some(k => ctx.perms.has(k))) fail('没有权限查看商品', 403);
+  if (String(id).startsWith('bx_')) fail('这个商品没有图片', 404);
   const r = db.prepare('SELECT mime, data FROM images WHERE id = ?').get(id) || fail('这个商品没有图片', 404);
   return { [RAW]: { type: r.mime, body: Buffer.from(r.data) } };
 }
@@ -1037,6 +1046,12 @@ function saveStockDoc(ctx) {
       const price = dir === 'in' && withPrice && i.price !== undefined && i.price !== '' ? Number(i.price) : (p.cost || 0) * (l.rate || 1);
       if (!Number.isFinite(price) || price < 0) fail(`「${p.name}」单价不正确`);
       const it = { productId: p.id, ...l, price: dir === 'in' ? basePrice(round4(price), l) : 0, ...(dir === 'in' && l.rate ? { uprice: round4(price) } : {}), note: str(i.note, 100) };
+      // 出库单价（选填）：实际卖价 / 结算价，只用于单据金额、打印和对账；库存成本照旧按移动加权成本
+      if (dir === 'out' && withPrice && i.sale !== undefined && i.sale !== '' && i.sale !== null) {
+        const sp = Number(i.sale);
+        if (!Number.isFinite(sp) || sp < 0) fail(`「${p.name}」出库单价不正确`);
+        it.sale = basePrice(round4(sp), l); if (l.rate) it.usale = round4(sp);
+      }
       if (p.serial) it.serials = cleanSerials(p, i.serials, l.qty);
       if (dir === 'in' && p.batch) {
         it.batch = { no: str(i.batchNo, 40), prodDate: isDate(i.prodDate) ? i.prodDate : '', expDate: isDate(i.expDate) ? i.expDate : '' };
@@ -1854,7 +1869,7 @@ function visibleData(ctx) {
     finance: any('finance', 'sales', 'purchase', 'reports'), employees: P.has('hr'),
     warehouses: true, transferDocs: P.has('inv.view'), batches: any('inv.view', 'prod.view'), serials: P.has('inv.view'),
     carriers: any('ship.view', 'ship.edit', 'ship.rate'), shipments: any('ship.view', 'ship.edit'), shipBills: P.has('ship.view'), shipLabels: false,
-    accounts: any('finance', 'sales', 'purchase', 'ship.bill'), acctTransfers: P.has('finance')
+    accounts: any('finance', 'sales', 'purchase', 'ship.bill', 'expense'), acctTransfers: P.has('finance'), expenses: any('expense', 'exp.approve', 'finance')
   };
   const byDate = (a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || ''));
   const data = {};
@@ -1863,13 +1878,14 @@ function visibleData(ctx) {
     data.products = data.products.map(({ cost, price, ...p }) => p);
     for (const c of ['customers', 'suppliers']) data[c] = data[c].map(({ prices, ...r }) => r);
   }
+  if (!expAll(P)) data.expenses = data.expenses.filter(o => o.creatorId === ctx.user.id);
   data.shipBills = data.shipBills.map(({ rows, ...b }) => b);  // 账单明细可能上万行，打开账单时再单独取
   // 电子面单密码不下发，只告诉前端有没有设置
   data.carriers = data.carriers.map(c => c.eo ? { ...c, eo: { ...c.eo, customerPwd: '', pwdSet: !!c.eo.customerPwd } } : c);
   // 有审核权限的账号即使不能看他人单据，也能看到待审核的出入库单
   if (!P.has('inv.others')) for (const c of ['stockDocs', 'checkDocs', 'transferDocs']) data[c] = data[c].filter(o => o.creatorId === ctx.user.id || c === 'stockDocs' && o.status === '待审核' && P.has('inv.approve'));
   if (!P.has('inv.cost')) {
-    data.stockDocs = data.stockDocs.map(o => ({ ...o, items: o.items.map(({ price, uprice, ...i }) => i) }));
+    data.stockDocs = data.stockDocs.map(o => ({ ...o, items: o.items.map(({ price, uprice, sale, usale, ...i }) => i) }));
     data.transferDocs = data.transferDocs.map(o => ({ ...o, items: o.items.map(({ cost, ...i }) => i) }));
     data.stockLogs = data.stockLogs.map(({ cost, costAfter, ...l }) => l);
     data.checkDocs = data.checkDocs.map(o => ({ ...o, lines: o.lines.map(({ cost, ...l }) => l) }));
@@ -1909,6 +1925,133 @@ function deleteFinance(ctx, id) {
     if (f.ref) fail('由单据生成的收付款记录不能直接删除');
     del('finance', id); audit(ctx, '删除流水', `${f.category} ${f.amount}`);
   });
+}
+/* ---------- 报销：员工提交 → 审批（批准 / 驳回）→ 财务付款（按类别记支出流水，从资金账户扣）；付款可撤销 ---------- */
+const EXP = { col: 'expenses', prefix: 'BX', title: '报销单' };
+const EXP_CATS = ['差旅', '交通费', '餐费', '住宿费', '办公费', '招待费', '通讯费', '其他支出'];
+const EXP_IMG_MAX = 9;
+const expAll = P => P.has('finance') || P.has('exp.approve');  // 能看全部报销单
+const expPerm = ctx => ['expense', 'exp.approve', 'finance'].find(k => ctx.perms.has(k)) || 'expense';
+function expGet(ctx, id) {
+  const o = get('expenses', id) || fail('报销单不存在', 404);
+  if (!expAll(ctx.perms) && o.creatorId !== ctx.user.id) fail('只能查看自己提交的报销单', 403);
+  return o;
+}
+function cleanExpense(b) {
+  const lines = (Array.isArray(b.lines) ? b.lines : []).filter(l => l && (str(l.category, 20) || Number(l.amount))).map((l, n) => {
+    const category = str(l.category, 20) || fail(`第 ${n + 1} 行请填写报销类别`);
+    if (AUTO_CATS.includes(category)) fail(`「${category}」是单据自动生成的科目，换一个类别`);
+    const amount = round2(Number(l.amount));
+    if (!(amount > 0) || amount > 1e8) fail(`第 ${n + 1} 行金额需大于 0`);
+    return { category, amount, note: str(l.note, 100) };
+  });
+  if (!lines.length) fail('请至少填写一行报销明细');
+  if (lines.length > 30) fail('报销明细最多 30 行');
+  const date = isDate(b.date) ? b.date : today();
+  if (date > today()) fail('报销日期不能晚于今天');
+  return { date, applicant: str(b.applicant, 32) || fail('请填写报销人'), dept: str(b.dept, 32), reason: str(b.reason, 300) || fail('请填写报销事由'),
+    lines, amount: round2(sum(lines, l => l.amount)) };
+}
+function createExpense(ctx) {
+  return tx(() => {
+    const v = cleanExpense(ctx.body);
+    const o = { id: uid(), no: nextNo(EXP), ...v, status: '待审批', imgs: [], creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), time: hhmm() };
+    put('expenses', o); audit(ctx, '提交报销', `${o.no} ${o.applicant} ${o.amount}`);
+    return o;
+  });
+}
+function saveExpense(ctx, id) {
+  return tx(() => {
+    const o = expGet(ctx, id);
+    if (!['待审批', '已驳回'].includes(o.status)) fail(`报销单已${o.status.replace('已', '')}，不能再修改${o.status === '已批准' ? '（可以请审批人驳回后再改）' : ''}`);
+    if (o.creatorId !== ctx.user.id && !ctx.perms.has('finance')) fail('只能修改自己提交的报销单', 403);
+    Object.assign(o, cleanExpense(ctx.body), { status: '待审批', editor: ctx.user.name, editedAt: new Date().toISOString() });
+    delete o.approver; delete o.approvedAt; delete o.rejectReason;
+    put('expenses', o); audit(ctx, '修改报销', `${o.no} ${o.amount}`);
+    return o;
+  });
+}
+function approveExpense(ctx, id, pass) {
+  return tx(() => {
+    const o = get('expenses', id) || fail('报销单不存在', 404);
+    if (o.status !== '待审批') fail(`报销单当前状态为「${o.status}」，不能审批`);
+    if (pass) Object.assign(o, { status: '已批准', approver: ctx.user.name, approvedAt: new Date().toISOString() });
+    else Object.assign(o, { status: '已驳回', approver: ctx.user.name, approvedAt: new Date().toISOString(), rejectReason: str(ctx.body.reason, 200) || fail('请填写驳回原因') });
+    put('expenses', o); audit(ctx, pass ? '批准报销' : '驳回报销', o.no + (pass ? '' : ' ' + o.rejectReason));
+    return o;
+  });
+}
+// 付款：同一类别合并成一笔支出流水（科目 = 报销类别），关联单号 = 报销单号；有审批权限的可以从「待审批」直接批准并付款
+function payExpense(ctx, id) {
+  return tx(() => {
+    const o = get('expenses', id) || fail('报销单不存在', 404), b = ctx.body;
+    if (o.status === '待审批' && ctx.perms.has('exp.approve')) Object.assign(o, { approver: ctx.user.name, approvedAt: new Date().toISOString() });
+    else if (o.status !== '已批准') fail(o.status === '待审批' ? '报销单还没审批，审批通过后才能付款' : `报销单当前状态为「${o.status}」，不能付款`);
+    const date = isDate(b.date) ? b.date : today();
+    if (date > today()) fail('付款日期不能晚于今天');
+    const a = pickAccount(b), cats = {};
+    o.lines.forEach(l => { cats[l.category] = round2((cats[l.category] || 0) + l.amount); });
+    for (const [category, amount] of Object.entries(cats))
+      put('finance', { id: uid(), date, type: 'expense', category, amount, account: a.id, method: a.kind, note: str(`报销 ${o.applicant}：${o.reason}`, 200), ref: o.no, exp: o.id, operator: ctx.user.name });
+    Object.assign(o, { status: '已付款', payer: ctx.user.name, paidAt: new Date().toISOString(), payDate: date, account: a.id });
+    put('expenses', o); audit(ctx, '报销付款', `${o.no} ${o.amount} ${a.name}`);
+    return o;
+  });
+}
+function unpayExpense(ctx, id) {
+  return tx(() => {
+    const o = get('expenses', id) || fail('报销单不存在', 404);
+    if (o.status !== '已付款') fail('报销单还没付款');
+    list('finance').filter(f => f.exp === o.id).forEach(f => del('finance', f.id));
+    Object.assign(o, { status: '已批准' }); delete o.payer; delete o.paidAt; delete o.payDate; delete o.account;
+    put('expenses', o); audit(ctx, '撤销报销付款', `${o.no} ${o.amount}`);
+    return o;
+  });
+}
+function voidExpense(ctx, id) {
+  return tx(() => {
+    const o = expGet(ctx, id);
+    if (o.status === '已作废') fail('报销单已作废');
+    if (o.status === '已付款') fail('已付款的报销单要先「撤销付款」才能作废');
+    const mine = o.creatorId === ctx.user.id && ['待审批', '已驳回'].includes(o.status);
+    if (!mine && !expAll(ctx.perms)) fail('已批准的报销单只有审批人或财务能作废', 403);
+    Object.assign(o, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString(), voidReason: str(ctx.body.reason, 200) });
+    put('expenses', o); audit(ctx, '作废报销', o.no);
+    return o;
+  });
+}
+// 附件（发票、小票照片）：存在 images 表，id = bx_报销单id_序号，随备份一起走
+function addExpenseImage(ctx, id) {
+  const m = /^data:image\/[a-z+]+;base64,([A-Za-z0-9+/=]+)$/.exec(String(ctx.body.data || '')) || fail('图片格式不正确');
+  const buf = Buffer.from(m[1], 'base64');
+  if (buf.length > IMG_MAX) fail('图片太大（最大 800 KB），请换一张或压缩后再传');
+  const mime = imgMime(buf) || fail('只支持 JPG、PNG、WebP 图片');
+  return tx(() => {
+    const o = expGet(ctx, id);
+    if (o.status === '已作废' || o.status === '已付款') fail(`报销单已${o.status.replace('已', '')}，不能再加附件`);
+    const imgs = o.imgs || [];
+    if (imgs.length >= EXP_IMG_MAX) fail(`每张报销单最多 ${EXP_IMG_MAX} 张附件`);
+    const k = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    db.prepare('INSERT OR REPLACE INTO images (id, mime, data, updated_at) VALUES (?, ?, ?, ?)').run(`bx_${o.id}_${k}`, mime, buf, new Date().toISOString());
+    o.imgs = [...imgs, k]; put('expenses', o);
+    return { imgs: o.imgs };
+  });
+}
+function delExpenseImage(ctx, id, k) {
+  return tx(() => {
+    const o = expGet(ctx, id);
+    if (o.status === '已作废' || o.status === '已付款') fail(`报销单已${o.status.replace('已', '')}，不能再删附件`);
+    if (!(o.imgs || []).includes(k)) fail('附件不存在', 404);
+    db.prepare('DELETE FROM images WHERE id = ?').run(`bx_${o.id}_${k}`);
+    o.imgs = o.imgs.filter(x => x !== k); put('expenses', o);
+    return { imgs: o.imgs };
+  });
+}
+function getExpenseImage(ctx, id, k) {
+  const o = expGet(ctx, id);
+  if (!(o.imgs || []).includes(k)) fail('附件不存在', 404);
+  const r = db.prepare('SELECT mime, data FROM images WHERE id = ?').get(`bx_${o.id}_${k}`) || fail('附件不存在', 404);
+  return { [RAW]: { type: r.mime, body: Buffer.from(r.data) } };
 }
 function backup() {
   const data = {};
@@ -1973,7 +2116,7 @@ const publicSettings = ctx => {
 route('GET', '/api/data', ctx => ({
   version: VERSION, settings: { ...publicSettings(ctx), modules: enabledModules(), feedbackUnread: fbUnread() },
   user: { ...publicUser(ctx.user), perms: [...ctx.perms] }, data: visibleData(ctx),
-  meta: { modules: MODULES, perms: PERMS, docTypes: DOC_TYPES, defaultWh: DEFAULT_WH, provinces: PROVINCES, regions: REGIONS }
+  meta: { modules: MODULES, perms: PERMS, docTypes: DOC_TYPES, expCats: EXP_CATS, defaultWh: DEFAULT_WH, provinces: PROVINCES, regions: REGIONS }
 }));
 route('PUT', '/api/settings/expiry', ctx => {
   const n = Math.round(Number(ctx.body.days));
@@ -2149,6 +2292,16 @@ route('POST', '/api/acct-transfers', ctx => addTransfer(ctx), { perm: 'finance' 
 route('DELETE', '/api/acct-transfers/:id', ctx => deleteTransfer(ctx, ctx.params.id), { perm: 'finance' });
 route('PUT', '/api/finance/:id', ctx => editFinance(ctx, ctx.params.id), { perm: 'finance' });
 route('DELETE', '/api/finance/:id', ctx => deleteFinance(ctx, ctx.params.id), { perm: 'finance' });
+route('POST', '/api/expenses', ctx => createExpense(ctx), { perm: expPerm });
+route('PUT', '/api/expenses/:id', ctx => saveExpense(ctx, ctx.params.id), { perm: expPerm });
+route('POST', '/api/expenses/:id/approve', ctx => approveExpense(ctx, ctx.params.id, true), { perm: 'exp.approve' });
+route('POST', '/api/expenses/:id/reject', ctx => approveExpense(ctx, ctx.params.id, false), { perm: 'exp.approve' });
+route('POST', '/api/expenses/:id/pay', ctx => payExpense(ctx, ctx.params.id), { perm: 'finance' });
+route('POST', '/api/expenses/:id/unpay', ctx => unpayExpense(ctx, ctx.params.id), { perm: 'finance' });
+route('POST', '/api/expenses/:id/void', ctx => voidExpense(ctx, ctx.params.id), { perm: expPerm });
+route('POST', '/api/expenses/:id/images', ctx => addExpenseImage(ctx, ctx.params.id), { perm: expPerm });
+route('DELETE', '/api/expenses/:id/images/:k', ctx => delExpenseImage(ctx, ctx.params.id, ctx.params.k), { perm: expPerm });
+route('GET', '/api/expenses/:id/images/:k', ctx => getExpenseImage(ctx, ctx.params.id, ctx.params.k), { perm: expPerm });
 
 route('POST', '/api/password', ctx => {
   const { oldPassword, newPassword } = ctx.body;
@@ -2334,7 +2487,7 @@ async function notifyTick() {
 // ——这些会把别人锁在门外、往外发请求或打扰作者。数据重置靠部署侧（每小时重启并清空数据目录）。
 const DEMO_BLOCK = [/^POST \/api\/password$/, /^(POST|PUT|DELETE) \/api\/(users|roles)(\/|$)/, /^(PUT|POST) \/api\/settings\/(notify|kdn)(\/|$)/,
   /^POST \/api\/ship\/(eorder|track-all)$/, /^POST \/api\/shipments\/[^/]+\/(track|cancel-eorder)$/, /^POST \/api\/(restore|clear)$/, /^POST \/api\/feedback$/,
-  /^(PUT|DELETE) \/api\/products\/[^/]+\/image$/];  // 商品图片：公开演示里不让传图，免得有人传不合适的图片给别的访客看
+  /^(PUT|DELETE) \/api\/products\/[^/]+\/image$/, /^POST \/api\/expenses\/[^/]+\/images$/];  // 商品图片：公开演示里不让传图，免得有人传不合适的图片给别的访客看
 // 在线演示跑在本机 Caddy 后面：只有来自本机的连接才信任 X-Forwarded-For，否则所有访客都是 127.0.0.1，一人输错密码会锁住所有人
 function clientIp(req) {
   const peer = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');

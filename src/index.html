@@ -224,6 +224,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .m-body{padding:20px 22px;max-height:68vh;overflow-y:auto}
 .m-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid var(--border)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.exp-imgs{display:flex;flex-wrap:wrap;gap:8px}.exp-img{position:relative;width:96px;height:96px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg)}.exp-img img{width:100%;height:100%;object-fit:cover;cursor:zoom-in}.exp-img .icon-btn{position:absolute;right:2px;top:2px;background:rgba(0,0,0,.55);color:#fff}
 .pwrap{display:flex;align-items:center;gap:2px}.pwrap input{flex:1;min-width:0}.spm{width:12px;flex:none;text-align:center}.spm b{color:var(--red)}.spm i{color:var(--muted);font-style:normal;cursor:pointer}
 .tip-line{background:var(--orange-soft);color:var(--text);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px}
 .form-grid.fg4{grid-template-columns:repeat(4,1fr)}.fg4 .sp2{grid-column:span 2}.fg4 .sp3{grid-column:span 3}
@@ -343,7 +344,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.1.3 · 数据保存在服务器</div>
+    <div class="side-foot">v2.1.4 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -522,7 +523,7 @@ async function reload() {
   ME = d.user; META = d.meta || META;
   const sig = JSON.stringify(d.data) + JSON.stringify(d.settings) + JSON.stringify(ME.perms);
   const changed = sig !== dataSig; dataSig = sig;
-  db = {warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[], ...d.data, settings:{...d.settings, version:d.version, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
+  db = {warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[], expenses:[], ...d.data, settings:{...d.settings, version:d.version, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
   return changed;
 }
 // 发起写操作 → 成功后重新拉取数据并刷新界面；失败则提示错误并保持弹窗
@@ -891,6 +892,9 @@ const canDocRedo = o => o.status === '已驳回' && o.creatorId === ME.id && can
 // 还没审核的出库单没有出库成本，按商品当前成本预估
 const estItem = (o, i) => o.dir === 'out' && o.status !== '正常' && !(i.price > 0) ? {...i, price:prodOf(i.productId).cost || 0, ...(i.rate ? {uprice:(prodOf(i.productId).cost || 0) * i.rate} : {})} : i;
 const docAmount = o => sum(o.items, i => i.qty * (estItem(o, i).price || 0));
+// 出库单价（选填，按基本单位存 sale，辅助单位另存 usale）：只影响单据金额、打印和对账，库存成本仍按移动加权
+const saleItem = i => i.sale != null ? {...i, price:i.sale, ...(i.rate ? {uprice:i.usale ?? i.sale * i.rate} : {})} : i;
+const docShown = o => sum(o.items, i => i.qty * (saleItem(estItem(o, i)).price || 0));
 /* ---------- 多单位：明细里 qty / price 始终是基本单位，unit / rate / uqty / uprice 记录开单时选的单位 ---------- */
 const lineQty = i => i.rate ? i.uqty : i.qty;
 const lineUnit = (i, p) => i.unit || (p && p.unit) || '';
@@ -1010,11 +1014,11 @@ function pageInventory() {
       {t:'往来单位', r:o => esc(o.party || '-') + (o.project ? `<div class="sub-t">项目：${esc(o.project)}</div>` : '')},
       {t:'商品', r:o => esc(prodOf(o.items[0]?.productId).name) + (o.items.length > 1 ? `<span class="sub-t"> 等${o.items.length}项</span>` : '')},
       {t:'数量', cls:'num', r:o => num(docQty(o)), s:docQty},
-      ...(mo ? [{t:'金额', cls:'num', r:o => money(docAmount(o)), s:docAmount}] : []),
+      ...(mo ? [{t:'金额', cls:'num', r:o => money(docShown(o)) + (o.items.some(i => i.sale != null) ? '<div class="sub-t" title="填了出库单价，按出库单价计">按出库价</div>' : ''), s:docShown}] : []),
       {t:'制单人', r:o => esc(o.creator)},
       {t:'状态', r:o => docBadge(o)},
       {t:'操作', r:o => `<div class="ops">${canDocApprove(o) ? tbtn('审核', 'docView', o.id) : tbtn('查看', 'docView', o.id)}${can('inv.print') ? tbtn('打印', 'docPrint', o.id) : ''}${canDocRedo(o) ? tbtn('重开', 'docRedo', o.id) : ''}${canDocVoid(o) ? tbtn('作废', 'docVoid', o.id, 'danger-text') : ''}</div>`}
-    ], exp:{name:'出入库单', cols:[['单号', o => o.no], ['类型', o => o.type], ['日期', o => o.date], ['单位', o => o.party], ['项目', o => o.project || ''], ['经手人', o => o.handler], ['商品数', o => o.items.length], ['数量', docQty], ...(mo ? [['金额', o => docAmount(o).toFixed(2)]] : []), ['制单人', o => o.creator], ['状态', o => o.status], ['备注', o => o.remark]]}, after:projSum});
+    ], exp:{name:'出入库单', cols:[['单号', o => o.no], ['类型', o => o.type], ['日期', o => o.date], ['单位', o => o.party], ['项目', o => o.project || ''], ['经手人', o => o.handler], ['商品数', o => o.items.length], ['数量', docQty], ...(mo ? [['金额', o => docShown(o).toFixed(2)]] : []), ['制单人', o => o.creator], ['状态', o => o.status], ['备注', o => o.remark]]}, after:projSum});
     // 筛选了某个项目时，显示这个项目的入库 / 出库合计（只算已生效的单据）
     function projSum() {
       const v = getState('docs').f.proj, el = $('#docsSum'); if (!el) return;
@@ -1244,14 +1248,15 @@ function addPicked(draft, blank, pick, ids) {
 function docModal(dir, productId, type0, src) {
   const mo = canMoney(), types = META.docTypes[dir];
   const parties = [...new Set([...db.stockDocs.filter(o => o.dir === dir).map(o => o.party), ...(dir === 'in' ? db.suppliers : db.customers).map(x => x.name)].filter(Boolean))];
-  const blank = () => ({productId:'', unit:'', qty:1, price:'', note:'', batchNo:'', prodDate:'', expDate:'', serials:''});
+  const blank = () => ({productId:'', unit:'', qty:1, price:'', sale:'', note:'', batchNo:'', prodDate:'', expDate:'', serials:''});
+  const lineAmt = it => (+it.qty || 0) * (dir === 'out' && it.sale !== '' ? +it.sale || 0 : +it.price || 0);
   const baseQ = it => (+it.qty || 0) * rateOf(byId(db.products, it.productId), it.unit);
   const draft = {items:[], wh:ui.invWh && byId(db.warehouses, ui.invWh) ? ui.invWh : META.defaultWh};
   const snCol = db.products.some(p => p.serial);
   const p0 = productId && byId(db.products, productId);
   if (src) {  // 从驳回的单据重开：带上原单的类型、单位、明细
     type0 = src.type; draft.wh = src.wh || draft.wh;
-    src.items.filter(i => byId(db.products, i.productId)).forEach(i => draft.items.push({...blank(), productId:i.productId, unit:i.unit || '', qty:lineQty(i), price:+((dir === 'in' && i.price != null ? i.price : byId(db.products, i.productId).cost || 0) * (i.rate || 1)).toFixed(4), note:i.note || '',
+    src.items.filter(i => byId(db.products, i.productId)).forEach(i => draft.items.push({...blank(), productId:i.productId, unit:i.unit || '', qty:lineQty(i), price:+((dir === 'in' && i.price != null ? i.price : byId(db.products, i.productId).cost || 0) * (i.rate || 1)).toFixed(4), sale:i.sale != null ? +(i.usale ?? i.sale * (i.rate || 1)).toFixed(4) : '', note:i.note || '',
       batchNo:(i.batch || {}).no || '', prodDate:(i.batch || {}).prodDate || '', expDate:(i.batch || {}).expDate || '', serials:(i.serials || []).join('\n')}));
     draft.items.push(blank());
   }
@@ -1270,7 +1275,7 @@ function docModal(dir, productId, type0, src) {
   </div>
   <div class="line-head"><b>商品明细</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称搜索，支持扫码枪录入后回车</span><button class="btn sm" id="dPick">${ic('search')}选择商品</button><button class="btn sm" id="dAdd">${ic('plus')}添加一行</button></div>
   <datalist id="dProdList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
-  <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:230px">商品</th><th style="width:60px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th>${mo ? `<th style="width:110px">${dir === 'in' ? '单价' : '成本单价'}</th><th class="num" style="width:110px">金额</th>` : ''}${batchCol ? `<th style="min-width:${dir === 'in' ? 300 : 180}px">${dir === 'in' ? '批号 / 生产日期 / 有效期至' : '出库批次（先到期先出）'}</th>` : ''}${snCol ? '<th style="min-width:170px">序列号</th>' : ''}<th style="width:140px">备注</th><th style="width:44px"></th></tr></thead><tbody id="dItems"></tbody></table></div>
+  <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:230px">商品</th><th style="width:60px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th>${mo ? `<th style="width:110px">${dir === 'in' ? '单价' : '成本单价'}</th>${dir === 'out' ? '<th style="width:120px" title="实际卖价 / 结算价，选填；只影响单据金额、打印和对账，库存成本仍按加权成本">出库单价（选填）</th>' : ''}<th class="num" style="width:110px">金额</th>` : ''}${batchCol ? `<th style="min-width:${dir === 'in' ? 300 : 180}px">${dir === 'in' ? '批号 / 生产日期 / 有效期至' : '出库批次（先到期先出）'}</th>` : ''}${snCol ? '<th style="min-width:170px">序列号</th>' : ''}<th style="width:140px">备注</th><th style="width:44px"></th></tr></thead><tbody id="dItems"></tbody></table></div>
   <label class="field" style="margin-top:16px"><span>单据备注</span><textarea id="dRemark" rows="2">${esc(src ? src.remark : '')}</textarea></label>
   <div class="o-total">合计数量<b id="dQty">0</b>${mo ? `&nbsp;&nbsp;合计金额<b id="dAmt">¥0.00</b>` : ''}</div>
   ${estOn ? `<div class="ship-est" id="dShip">填写收货地址后自动估算运费</div>` : ''}
@@ -1291,7 +1296,7 @@ function docModal(dir, productId, type0, src) {
   };
   const updTotal = () => {
     $('#dQty').textContent = num(sum(draft.items.filter(i => i.productId), i => +i.qty || 0));
-    if (mo) $('#dAmt').textContent = money(sum(draft.items, i => (+i.qty || 0) * (+i.price || 0)));
+    if (mo) $('#dAmt').textContent = money(sum(draft.items, lineAmt));
     estShip();
   };
   // 选了客户：地址为空（或是上次自动带出的）就带出客户档案里的地址
@@ -1323,7 +1328,7 @@ function docModal(dir, productId, type0, src) {
       <td>${unitSel(p, it.unit, i)}</td>
       <td class="num scell ${p && dir === 'out' && have < baseQ(it) ? 'neg' : ''}" title="${p ? esc(stockText(p, have)) : ''}">${p ? inUnit(have, p, it.unit) : ''}</td>
       <td><input type="number" min="1" step="1" data-i="${i}" data-k="qty" value="${it.qty}"></td>
-      ${mo ? (dir === 'in' ? `<td><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"></td>` : `<td class="num sub-t" title="出库按移动加权成本计价">${p ? money(p.cost * rateOf(p, it.unit)) : ''}</td>`) + `<td class="num sub">${money((+it.qty || 0) * (+it.price || 0))}</td>` : ''}
+      ${mo ? (dir === 'in' ? `<td><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"></td>` : `<td class="num sub-t" title="库存按移动加权成本出库">${p ? money(p.cost * rateOf(p, it.unit)) : ''}</td><td><input type="number" min="0" step="0.01" data-i="${i}" data-k="sale" value="${it.sale}" placeholder="${p && p.price ? '售价 ' + +(p.price * rateOf(p, it.unit)).toFixed(2) : '不填按成本'}"></td>`) + `<td class="num sub">${money(lineAmt(it))}</td>` : ''}
       ${batchCell(p, it, i)}
       ${snCol ? `<td class="sncell">${snCell(p, it, i, dir, draft.wh, baseQ(it))}</td>` : ''}
       <td><input data-i="${i}" data-k="note" value="${esc(it.note)}"></td>
@@ -1337,7 +1342,7 @@ function docModal(dir, productId, type0, src) {
     const unit = unitByCode(p, v) || p.unit;
     const dup = draft.items.findIndex((x, k) => k !== i && x.productId === p.id && (x.unit || p.unit) === unit);
     if (dup >= 0) { draft.items[dup].qty = (+draft.items[dup].qty || 0) + (+draft.items[i].qty || 1); draft.items[i] = blank(); renderItems(true); if (!quiet) toast(p.name + ' 已在明细中，数量 +1', 'info'); return true; }
-    Object.assign(draft.items[i], {productId:p.id, unit, price:p.cost != null ? +(p.cost * rateOf(p, unit)).toFixed(4) : ''});
+    Object.assign(draft.items[i], {productId:p.id, unit, price:p.cost != null ? +(p.cost * rateOf(p, unit)).toFixed(4) : '', sale:''});
     if (i === draft.items.length - 1) draft.items.push(blank());
     renderItems(true);
     return true;
@@ -1345,16 +1350,16 @@ function docModal(dir, productId, type0, src) {
   tb.addEventListener('change', e => {
     const t = e.target, i = +t.dataset.i;
     if (t.dataset.k === 'product') pickOnce(t, pick);
-    if (t.dataset.k === 'unit') { const it = draft.items[i], p = byId(db.products, it.productId), r0 = rateOf(p, it.unit); it.unit = t.value; if (it.price !== '') it.price = +(it.price / r0 * rateOf(p, it.unit)).toFixed(4); renderItems(); }
+    if (t.dataset.k === 'unit') { const it = draft.items[i], p = byId(db.products, it.productId), r0 = rateOf(p, it.unit); it.unit = t.value; if (it.price !== '') it.price = +(it.price / r0 * rateOf(p, it.unit)).toFixed(4); if (it.sale !== '') it.sale = +(it.sale / r0 * rateOf(p, it.unit)).toFixed(4); renderItems(); }
   });
   tb.addEventListener('keydown', e => { const t = e.target; if (e.key === 'Enter' && t.dataset.k === 'product') { e.preventDefault(); pickOnce(t, pick); } });
   tb.addEventListener('input', e => {
     const t = e.target, i = +t.dataset.i, k = t.dataset.k;
     if (k === 'batchNo' || k === 'prodDate' || k === 'expDate') { draft.items[i][k] = t.value; return; }
     if (k === 'serials') { draft.items[i].serials = t.value; const c = t.parentNode.querySelector('.sn-c'), n = snList(t.value).length; c.firstChild.textContent = n + ' / ' + baseQ(draft.items[i]); c.classList.toggle('neg', n !== baseQ(draft.items[i])); return; }
-    if (k === 'qty' || k === 'price' || k === 'note') {
+    if (k === 'qty' || k === 'price' || k === 'sale' || k === 'note') {
       draft.items[i][k] = k === 'note' ? t.value : t.value === '' ? '' : +t.value;
-      const s = t.closest('tr').querySelector('.sub'); if (s) s.textContent = money((+draft.items[i].qty || 0) * (+draft.items[i].price || 0));
+      const s = t.closest('tr').querySelector('.sub'); if (s) s.textContent = money(lineAmt(draft.items[i]));
       updTotal();
       // 出库数量变了：原地刷新库存提示与批次预览，不重绘整表（以免打断输入）
       if (dir === 'out' && k === 'qty') tb.querySelectorAll('tr').forEach((tr, n) => {
@@ -1383,7 +1388,7 @@ function docModal(dir, productId, type0, src) {
     const items = draft.items.filter(i => i.productId);
     if (!items.length) return toast('请至少添加一个商品', 'error');
     if (items.some(i => !Number.isInteger(+i.qty) || +i.qty <= 0)) return toast('数量必须为正整数', 'error');
-    if (mo && items.some(i => i.price !== '' && +i.price < 0)) return toast('单价不能为负', 'error');
+    if (mo && items.some(i => i.price !== '' && +i.price < 0 || i.sale !== '' && +i.sale < 0)) return toast('单价不能为负', 'error');
     if (dir === 'out') {
       const need = {}; items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + baseQ(i); });
       const lack = Object.entries(need).map(([pid, q]) => ({p:byId(db.products, pid), q})).filter(x => whQty(x.p, draft.wh) < x.q);
@@ -1395,7 +1400,7 @@ function docModal(dir, productId, type0, src) {
     if (badDate) return toast(`「${byId(db.products, badDate.productId).name}」有效期早于生产日期`, 'error');
     const shipNext = $('#dShipNext') && $('#dShipNext').checked, carrierId = draft.carrierId;
     const body = {dir, type:$('#dType').value, wh:draft.wh, date:$('#dDate').value, party:$('#dParty').value.trim(), handler:$('#dHandler').value.trim(), project:$('#dProject').value.trim(), remark:$('#dRemark').value.trim(),
-      address:$('#dAddr') ? $('#dAddr').value.trim() : '', items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:mo ? i.price : undefined, note:i.note, batchNo:i.batchNo, prodDate:i.prodDate, expDate:i.expDate, ...(byId(db.products, i.productId).serial ? {serials:snList(i.serials)} : {})}))};
+      address:$('#dAddr') ? $('#dAddr').value.trim() : '', items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:mo ? i.price : undefined, ...(mo && dir === 'out' && i.sale !== '' ? {sale:i.sale} : {}), note:i.note, batchNo:i.batchNo, prodDate:i.prodDate, expDate:i.expDate, ...(byId(db.products, i.productId).serial ? {serials:snList(i.serials)} : {})}))};
     $('#dSave').disabled = true; if ($('#dSavePrint')) $('#dSavePrint').disabled = true;
     const r = await mutate('POST', '/api/stockdocs', body, r => docTitle(dir) + (r.status === '待审核' ? '已提交审核：' : '已保存：') + r.no);
     if (!r) { $('#dSave').disabled = false; if ($('#dSavePrint')) $('#dSavePrint').disabled = false; return; }
@@ -1464,7 +1469,7 @@ function slipData(kind, o) {
   }
   return {meta:{no:o.no, type:o.type, date:o.date, party:[K.party, o.party || ''], project:o.project || '', wh:multiWh() || (o.wh && o.wh !== META.defaultWh) ? whName(o.wh) : '', handler:o.handler,
     address:o.address || '', express:o.dir === 'out' && o.id ? shipText('out', o.id) : ''},
-    items:o.items.map(i => estItem(o, i)).map(i => row(i, linePrice(i))), creator:o.creator, handler:o.handler, remark:o.remark, voided, stamp, approver:o.status === '正常' ? o.approver || '' : ''};
+    items:o.items.map(i => saleItem(estItem(o, i))).map(i => row(i, linePrice(i))), creator:o.creator, handler:o.handler, remark:o.remark, voided, stamp, approver:o.status === '正常' ? o.approver || '' : ''};
 }
 function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {}) {
   const K = SLIP_KINDS[kind], d = slipData(kind, o), hasBatch = d.items.some(i => i.batch);
@@ -1897,7 +1902,7 @@ function pageAging() {
 function statementData(name, from, to, priceBy) {
   const docs = db.stockDocs.filter(o => o.status === '正常' && (o.party || '') === name && o.date >= from && o.date <= to)
     .sort((a, b) => (a.date + (a.time || '') + a.no).localeCompare(b.date + (b.time || '') + b.no));
-  const lines = docs.flatMap(o => o.items.map(i => { const p = prodOf(i.productId), up = o.dir === 'out' && priceBy === 'sale' ? (p.price || 0) * (i.rate || 1) : linePrice(i);
+  const lines = docs.flatMap(o => o.items.map(i => { const p = prodOf(i.productId), up = o.dir === 'out' && priceBy === 'sale' ? (i.sale != null ? linePrice(saleItem(i)) : (p.price || 0) * (i.rate || 1)) : linePrice(i);
     return {o, i, p, inQ:o.dir === 'in' ? lineQty(i) : 0, outQ:o.dir === 'out' ? lineQty(i) : 0, unit:lineUnit(i, p), price:up, amount:lineQty(i) * up}; }));
   // 应收 / 应付：客户看销售单与收款，供应商看采购单与付款
   const acc = [];
@@ -1926,7 +1931,7 @@ function pageStatement() {
   $('#invCard').innerHTML = `<div class="toolbar" style="flex-wrap:wrap;gap:10px"><div class="tb-left" style="flex-wrap:wrap">
       <b>往来单位</b><input class="select" id="stName" list="stNames" value="${esc(ui.stName || '')}" placeholder="选择或输入单位名称" style="width:200px"><datalist id="stNames">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
       <b>期间</b><input type="date" class="select" id="stFrom" value="${ui.stFrom}" max="${today()}"><span>至</span><input type="date" class="select" id="stTo" value="${ui.stTo}" max="${today()}">
-      ${mo ? `<select class="select" id="stBy" title="出库单上记的是成本价；给客户对账一般按售价"><option value="sale" ${ui.stBy === 'sale' ? 'selected' : ''}>出库按售价计</option><option value="cost" ${ui.stBy === 'cost' ? 'selected' : ''}>出库按成本计</option></select>` : ''}
+      ${mo ? `<select class="select" id="stBy" title="按售价计：出库单填了出库单价的用出库单价，没填的用商品售价"><option value="sale" ${ui.stBy === 'sale' ? 'selected' : ''}>出库按售价计</option><option value="cost" ${ui.stBy === 'cost' ? 'selected' : ''}>出库按成本计</option></select>` : ''}
       <button class="btn sm primary" id="stGo">${ic('search')}查询</button></div>
     <div class="tb-right">${ui.stName ? (can('inv.print') ? `<button class="btn" data-act="stPrint">${ic('printer')}打印对账单</button>` : '') + (can('inv.export') ? `<button class="btn" data-act="stExport">${ic('download')}导出</button>` : '') : ''}</div></div>
     <div id="stBody" style="padding:0 20px 20px"></div>`;
@@ -3934,7 +3939,7 @@ function printTplPage(body) {
 let USERS = [];
 const fmtTime = t => t ? new Date(t).toLocaleString('zh-CN', {hour12:false}) : '-';
 let ROLES = [];
-const PERM_SHORT = {'inv.view':'查看', 'inv.in':'入库', 'inv.out':'出库', 'inv.check':'盘点录入', 'inv.void':'作废', 'inv.approve':'出入库审核', 'inv.print':'打印', 'inv.export':'导出', 'inv.cost':'金额',
+const PERM_SHORT = {'expense':'报销', 'exp.approve':'报销审批', 'inv.view':'查看', 'inv.in':'入库', 'inv.out':'出库', 'inv.check':'盘点录入', 'inv.void':'作废', 'inv.approve':'出入库审核', 'inv.print':'打印', 'inv.export':'导出', 'inv.cost':'金额',
   'inv.backdate':'补录', 'inv.others':'他人单据', 'inv.checkpost':'盘点审核', 'prod.view':'商品查看', 'prod.edit':'商品编辑', 'prod.delete':'商品删除',
   'ship.view':'运单查看', 'ship.edit':'登记运单', 'ship.rate':'快递报价', 'ship.bill':'快递对账'};
 const permBrief = perms => perms.length ? perms.map(k => `<span class="badge primary plain" style="margin:1px">${esc(PERM_SHORT[k] || (META.perms.find(p => p[0] === k) || [k, k])[1])}</span>`).join('') : '<span class="sub-t">无权限</span>';
@@ -3982,6 +3987,195 @@ function roleEdit(id, copy) {
 }
 
 /* ================= 外壳：导航 / 主题 / 提醒 / 搜索 ================= */
+/* ---------- 报销管理：员工提交报销单（可附发票照片）→ 审批批准 / 驳回 → 财务付款，按类别自动记支出流水 ---------- */
+const EXP_STATUS = {'待审批':'orange', '已批准':'blue', '已驳回':'red', '已付款':'green', '已作废':'gray'};
+const expAll = () => can('finance') || can('exp.approve');
+const expCats = () => [...new Set([...(META.expCats || []), ...(db.expenses || []).flatMap(o => o.lines.map(l => l.category))])];
+const expCatText = o => [...new Set(o.lines.map(l => l.category))].join('、');
+const expCount = () => (db.expenses || []).filter(o => expAll() ? o.status === '待审批' || o.status === '已批准' && can('finance') : o.status === '已驳回' && o.creatorId === ME.id).length;
+function pageExpenses() {
+  if (!ui.expTab) ui.expTab = 'list';
+  const E = db.expenses || [], m = monthKey(today());
+  const live = E.filter(o => o.status !== '已作废' && o.status !== '已驳回');
+  const S = st => E.filter(o => o.status === st);
+  $('#view').innerHTML = pageHead('报销管理', expAll() ? '员工提交报销 → 审批 → 财务付款，付款后自动记入收支流水' : '提交报销单，审批、付款进度在这里查看',
+    `<button class="btn primary" data-act="expNew">${ic('plus')}新建报销单</button>`) + `
+  <div class="grid g4 mb">
+    ${kpi('待审批', S('待审批').length + ' 张', 'clock', 'orange', `<div class="trend"><span>${money(sum(S('待审批'), o => o.amount))}</span></div>`)}
+    ${kpi('待付款', S('已批准').length + ' 张', 'wallet', 'primary', `<div class="trend"><span>${money(sum(S('已批准'), o => o.amount))}</span></div>`)}
+    ${kpi('本月已付款', moneyK(sum(E.filter(o => o.status === '已付款' && monthKey(o.payDate || o.date) === m), o => o.amount)), 'coin', 'green')}
+    ${kpi('本月报销', moneyK(sum(live.filter(o => monthKey(o.date) === m), o => o.amount)), 'tag', 'purple', '<div class="trend"><span>不含驳回、作废</span></div>')}
+  </div>
+  ${tabs('expTab', [['list', '报销单'], ['stat', '按人统计']])}
+  <div class="card" id="expCard"></div>`;
+  const card = $('#expCard');
+  if (ui.expTab === 'list') {
+    const people = [...new Set(E.map(o => o.applicant))].sort((a, b) => a.localeCompare(b, 'zh'));
+    const filters = [{key:'st', label:'全部状态', options:Object.keys(EXP_STATUS), test:(o, v) => o.status === v},
+      {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(o, v) => monthKey(o.date) === v},
+      ...(expAll() ? [{key:'who', label:'全部报销人', options:people, test:(o, v) => o.applicant === v}] : []),
+      {key:'cat', label:'全部类别', options:expCats(), test:(o, v) => o.lines.some(l => l.category === v)}];
+    card.innerHTML = toolbar('exp', {placeholder:'搜索单号 / 报销人 / 事由', filters, buttons:`<button class="btn" data-act="export" data-id="exp">${ic('download')}导出</button>`}) + '<div id="list-exp"></div>';
+    mountList('exp', {rows:() => db.expenses || [], search:o => o.no + o.applicant + (o.dept || '') + o.reason, filters, empty:'还没有报销单，点右上角「新建报销单」', columns:[
+      {t:'单号', r:o => `<a class="link" data-act="expView" data-id="${o.id}">${o.no}</a>`},
+      {t:'日期', r:o => o.date, s:o => o.date + (o.time || '')},
+      {t:'报销人', r:o => `<b>${esc(o.applicant)}</b>${o.dept ? `<div class="sub-t">${esc(o.dept)}</div>` : ''}`, s:o => o.applicant},
+      {t:'类别', r:o => esc(expCatText(o))},
+      {t:'事由', r:o => `<span title="${esc(o.reason)}">${esc(o.reason.length > 24 ? o.reason.slice(0, 24) + '…' : o.reason)}</span>${(o.imgs || []).length ? ` <span class="sub-t" title="附件">📎${o.imgs.length}</span>` : ''}`},
+      {t:'金额', cls:'num', r:o => `<b>${money(o.amount)}</b>`, s:o => o.amount},
+      {t:'状态', r:o => badge(o.status, EXP_STATUS[o.status]), s:o => o.status},
+      {t:'操作', r:o => `<div class="ops">${expOps(o).join('')}</div>`}
+    ], exp:{name:'报销单', cols:[['单号', o => o.no], ['日期', o => o.date], ['报销人', o => o.applicant], ['部门', o => o.dept || ''], ['类别', expCatText], ['事由', o => o.reason], ['金额', o => o.amount], ['状态', o => o.status],
+      ['审批人', o => o.approver || ''], ['付款日期', o => o.payDate || ''], ['付款账户', o => o.account ? acctName(o) : ''], ['明细', o => o.lines.map(l => `${l.category} ${l.amount}${l.note ? '（' + l.note + '）' : ''}`).join('；')], ['提交人', o => o.creator]]}});
+  } else {
+    if (!ui.expMonth) ui.expMonth = m;
+    const ms = lastMonths(12).reverse(), rows = {}, cats = new Set();
+    live.filter(o => !ui.expMonth || monthKey(o.date) === ui.expMonth).forEach(o => {
+      const r = rows[o.applicant] || (rows[o.applicant] = {who:o.applicant, dept:o.dept || '', n:0, amt:0, paid:0, cat:{}});
+      r.n++; r.amt += o.amount; if (o.status === '已付款') r.paid += o.amount; if (o.dept) r.dept = o.dept;
+      o.lines.forEach(l => { r.cat[l.category] = (r.cat[l.category] || 0) + l.amount; cats.add(l.category); });
+    });
+    const list = Object.values(rows).sort((a, b) => b.amt - a.amt), C = [...cats];
+    card.innerHTML = `<div class="toolbar"><div class="tb-left"><select class="select" id="expMonth"><option value="">全部月份</option>${ms.map(x => `<option ${ui.expMonth === x ? 'selected' : ''}>${x}</option>`).join('')}</select>
+      <span class="sub-t">按报销日期统计，不含驳回、作废的报销单</span></div></div>
+    <div class="table-wrap"><table class="tbl"><thead><tr><th>报销人</th><th>部门</th><th class="num">张数</th>${C.map(c => `<th class="num">${esc(c)}</th>`).join('')}<th class="num">合计</th><th class="num">已付款</th><th class="num">未付款</th></tr></thead>
+    <tbody>${list.length ? list.map(r => `<tr><td><b>${esc(r.who)}</b></td><td>${esc(r.dept || '-')}</td><td class="num">${r.n}</td>${C.map(c => `<td class="num">${r.cat[c] ? money(r.cat[c]) : '-'}</td>`).join('')}<td class="num"><b>${money(r.amt)}</b></td><td class="num pos">${money(r.paid)}</td><td class="num ${r.amt - r.paid > 0.001 ? 'neg' : ''}">${money(r.amt - r.paid)}</td></tr>`).join('')
+      + `<tr><td colspan="2"><b>合计</b></td><td class="num"><b>${sum(list, r => r.n)}</b></td>${C.map(c => `<td class="num"><b>${money(sum(list, r => r.cat[c] || 0))}</b></td>`).join('')}<td class="num"><b>${money(sum(list, r => r.amt))}</b></td><td class="num"><b>${money(sum(list, r => r.paid))}</b></td><td class="num"><b>${money(sum(list, r => r.amt - r.paid))}</b></td></tr>`
+      : `<tr><td colspan="${6 + C.length}"><div class="empty">${emptySvg}<p>这个月还没有报销</p></div></td></tr>`}</tbody></table></div>`;
+    $('#expMonth').onchange = e => { ui.expMonth = e.target.value; render(); };
+  }
+}
+function expOps(o) {
+  const b = [], mine = o.creatorId === ME.id;
+  if (o.status === '待审批' && can('exp.approve')) b.push(tbtn('批准', 'expApprove', o.id, 'primary'), tbtn('驳回', 'expReject', o.id));
+  if (o.status === '已批准' && can('finance')) b.push(tbtn('付款', 'expPay', o.id, 'primary'));
+  if (['待审批', '已驳回'].includes(o.status) && (mine || can('finance'))) b.push(tbtn('编辑', 'expEdit', o.id));
+  if (o.status === '已付款' && can('finance')) b.push(tbtn('撤销付款', 'expUnpay', o.id));
+  if (o.status !== '已作废' && o.status !== '已付款' && (mine && ['待审批', '已驳回'].includes(o.status) || expAll())) b.push(tbtn('作废', 'expVoid', o.id, 'danger-text'));
+  return b;
+}
+function expModal(id) {
+  const o = id ? byId(db.expenses, id) : null;
+  const emps = (db.employees || []).filter(e => e.status !== '离职');
+  const people = [...new Set([...emps.map(e => e.name), ...(db.expenses || []).map(x => x.applicant)])];
+  const me = emps.find(e => e.name === ME.name);
+  const lines = o ? o.lines.map(l => ({...l})) : [{category:'', amount:'', note:''}];
+  const imgs = [];  // 新建时先选好的照片，保存后再上传
+  openModal(`${modalHead(o ? '编辑报销单 · ' + o.no : '新建报销单')}<div class="m-body">
+    ${o && o.status === '已驳回' ? `<div class="tip-line" style="background:var(--red-soft)">已被 ${esc(o.approver || '')} 驳回：${esc(o.rejectReason || '')}。修改后保存会重新提交审批。</div>` : ''}
+    <div class="form-grid">
+      <label class="field"><span>报销人 <i>*</i></span><input id="xWho" list="xWhoList" maxlength="32" value="${esc(o ? o.applicant : ME.name)}"><datalist id="xWhoList">${people.map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>
+      <label class="field"><span>部门</span><input id="xDept" list="xDeptList" maxlength="32" value="${esc(o ? o.dept || '' : me ? me.dept || '' : '')}"><datalist id="xDeptList">${[...new Set([...emps.map(e => e.dept), ...(db.expenses || []).map(x => x.dept)].filter(Boolean))].map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>
+      <label class="field"><span>报销日期</span><input type="date" id="xDate" max="${today()}" value="${o ? o.date : today()}"></label>
+      <label class="field"><span>事由 <i>*</i></span><input id="xReason" maxlength="300" placeholder="例如：11 月 5 日去柳州拜访客户" value="${esc(o ? o.reason : '')}"></label>
+    </div>
+    <div class="line-head"><b>报销明细</b><span class="sub-t" style="margin-left:10px;margin-right:auto">类别可以选，也可以直接输入；付款后每个类别记一笔支出</span><button class="btn sm" id="xAdd">${ic('plus')}添加一行</button></div>
+    <datalist id="xCatList">${expCats().map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+    <div class="table-wrap"><table class="tbl items"><thead><tr><th style="width:150px">类别</th><th style="width:130px">金额</th><th>说明（选填）</th><th style="width:44px"></th></tr></thead><tbody id="xLines"></tbody></table></div>
+    <div class="o-total">合计<b id="xSum">¥0.00</b><span class="sub-t" id="xUpper" style="margin-left:10px"></span></div>
+    <div class="line-head" style="margin-top:14px"><b>附件</b><span class="sub-t" style="margin-left:10px;margin-right:auto">发票、小票照片，最多 9 张，手机上可以直接拍照，上传前自动压缩</span><label class="btn sm">${ic('upload')}添加照片<input type="file" id="xFile" accept="image/*" multiple hidden></label></div>
+    <div class="exp-imgs" id="xImgs"></div></div>
+  <div class="m-foot"><span class="sub-t" style="margin-right:auto">保存后为「待审批」</span><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="xSave">${ic('check')}${o ? '保存并提交' : '提交报销'}</button></div>`, 'lg');
+  const tb = $('#xLines');
+  const upd = () => { const t = sum(lines, l => +l.amount || 0); $('#xSum').textContent = money(t); $('#xUpper').textContent = t > 0 ? rmbUpper(t) : ''; };
+  const draw = () => {
+    tb.innerHTML = lines.map((l, i) => `<tr><td><input list="xCatList" maxlength="20" data-i="${i}" data-k="category" value="${esc(l.category)}" placeholder="如：差旅"></td>
+      <td><input type="number" min="0" step="0.01" data-i="${i}" data-k="amount" value="${l.amount}"></td>
+      <td><input maxlength="100" data-i="${i}" data-k="note" value="${esc(l.note || '')}" placeholder="例如：高铁票 柳州—南宁"></td>
+      <td><button class="icon-btn sm" data-del="${i}" title="删除">${ic('trash')}</button></td></tr>`).join('');
+    upd();
+  };
+  const drawImgs = () => {
+    const old = o ? (byId(db.expenses, o.id) || o).imgs || [] : [];
+    $('#xImgs').innerHTML = old.map(k => `<div class="exp-img"><img data-ximg="${o.id}/${k}" alt=""><button class="icon-btn sm" data-rmold="${k}" title="删除">${ic('x')}</button></div>`).join('')
+      + imgs.map((d, i) => `<div class="exp-img"><img src="${d}" alt=""><button class="icon-btn sm" data-rmnew="${i}" title="删除">${ic('x')}</button></div>`).join('')
+      || '<span class="sub-t">没有附件</span>';
+    loadXimgs($('#xImgs'));
+  };
+  tb.addEventListener('input', e => { const t = e.target, i = t.dataset.i; if (i == null) return; lines[+i][t.dataset.k] = t.dataset.k === 'amount' ? (t.value === '' ? '' : +t.value) : t.value; if (t.dataset.k === 'amount') upd(); });
+  tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { lines.splice(+b.dataset.del, 1); if (!lines.length) lines.push({category:'', amount:'', note:''}); draw(); } });
+  $('#xAdd').onclick = () => { lines.push({category:lines.length ? lines[lines.length - 1].category : '', amount:'', note:''}); draw(); tb.querySelectorAll('[data-k=amount]')[lines.length - 1].focus(); };
+  $('#xWho').onchange = e => { const em = emps.find(x => x.name === e.target.value.trim()); if (em && em.dept) $('#xDept').value = em.dept; };
+  $('#xFile').onchange = async e => {
+    const have = (o ? o.imgs || [] : []).length + imgs.length, files = [...e.target.files].slice(0, Math.max(0, 9 - have));
+    if (files.length < e.target.files.length) toast('每张报销单最多 9 张附件', 'error');
+    for (const f of files) { try { imgs.push(await shrinkImage(f, 1400)); } catch (err) { toast(err.message, 'error'); } }
+    e.target.value = ''; drawImgs();
+  };
+  $('#xImgs').onclick = async e => {
+    const n = e.target.closest('[data-rmnew]'); if (n) { imgs.splice(+n.dataset.rmnew, 1); drawImgs(); return; }
+    const d = e.target.closest('[data-rmold]');
+    if (d) { try { const r = await api('DELETE', `/api/expenses/${o.id}/images/${d.dataset.rmold}`); o.imgs = r.imgs; const x = byId(db.expenses, o.id); if (x) x.imgs = r.imgs; drawImgs(); } catch (err) { toast(err.message, 'error'); } }
+  };
+  $('#xSave').onclick = async () => {
+    const ls = lines.filter(l => String(l.category).trim() || +l.amount);
+    if (!$('#xWho').value.trim()) return toast('请填写报销人', 'error'), $('#xWho').focus();
+    if (!$('#xReason').value.trim()) return toast('请填写报销事由', 'error'), $('#xReason').focus();
+    if (!ls.length) return toast('请至少填写一行报销明细', 'error');
+    const bad = ls.findIndex(l => !String(l.category).trim() || !(+l.amount > 0));
+    if (bad >= 0) return toast(`第 ${bad + 1} 行请填写类别和金额`, 'error');
+    const body = {applicant:$('#xWho').value.trim(), dept:$('#xDept').value.trim(), date:$('#xDate').value, reason:$('#xReason').value.trim(), lines:ls.map(l => ({category:String(l.category).trim(), amount:+l.amount, note:l.note || ''}))};
+    $('#xSave').disabled = true;
+    try {
+      const r = await api(o ? 'PUT' : 'POST', '/api/expenses' + (o ? '/' + o.id : ''), body);
+      let fail = 0; for (const data of imgs) { try { await api('POST', `/api/expenses/${r.id}/images`, {data}); } catch (e) { fail++; } }
+      await reload(); closeModal(); render();
+      toast((o ? '报销单已重新提交：' : '报销单已提交：') + r.no + (fail ? `，有 ${fail} 张照片没传上去` : ''), fail ? 'error' : undefined);
+    } catch (e) { toast(e.message, 'error'); $('#xSave').disabled = false; }
+  };
+  draw(); drawImgs();
+  if (!o) $('#xReason').focus();
+}
+// 附件图片要带登录凭证取，取到后换成 blob 地址
+async function loadXimgs(root) {
+  for (const el of root.querySelectorAll('img[data-ximg]')) {
+    if (el.dataset.done) continue; el.dataset.done = '1';
+    try { const t = LS.get('token'), r = await fetch('/api/expenses/' + el.dataset.ximg.split('/').map(encodeURIComponent).join('/images/'), {headers:t ? {Authorization:'Bearer ' + t} : {}});
+      if (!r.ok) throw new Error(r.status); el.src = URL.createObjectURL(await r.blob()); } catch (e) { el.classList.add('broken'); }
+  }
+}
+function expSlip(o) {
+  return `<div class="slip-wrap"><div class="s-title"><h1>${esc(db.settings.company)}</h1><h2>费用报销单</h2></div>
+  <div class="s-meta"><span>单号：<b>${esc(o.no)}</b></span><span>报销日期：${o.date}</span><span>报销人：${esc(o.applicant)}</span><span>部门：${esc(o.dept || '')}</span></div>
+  <table><thead><tr><th style="width:40px">序号</th><th style="width:120px">类别</th><th>说明</th><th style="width:110px">金额</th></tr></thead><tbody>
+  ${o.lines.map((l, n) => `<tr><td class="c">${n + 1}</td><td>${esc(l.category)}</td><td>${esc(l.note || '')}</td><td class="r">${l.amount.toFixed(2)}</td></tr>`).join('')}
+  <tr><td colspan="3" class="r"><b>合计</b></td><td class="r"><b>${o.amount.toFixed(2)}</b></td></tr>
+  <tr><td colspan="4">金额大写：${rmbUpper(o.amount)}</td></tr>
+  <tr><td colspan="4">事由：${esc(o.reason)}${(o.imgs || []).length ? `　（附件 ${o.imgs.length} 张）` : ''}</td></tr></tbody></table>
+  <div class="s-sign"><span>报销人：${esc(o.applicant)}</span><span>审批：${esc(o.approver && o.status !== '已驳回' ? o.approver : '')}</span><span>财务：${esc(o.payer || '')}</span><span>领款人：</span></div>
+  ${o.status === '已付款' ? `<div class="s-meta" style="margin-top:6px"><span>${o.payDate} 从「${esc(acctName(o))}」付款</span></div>` : ''}</div>`;
+}
+function expView(id) {
+  const o = byId(db.expenses, id); if (!o) return toast('报销单不存在或无权查看', 'error');
+  const log = [`${esc(o.creator)} 于 ${fmtTime(o.createdAt)} 提交`, o.editedAt && `${esc(o.editor)} 于 ${fmtTime(o.editedAt)} 修改`,
+    o.approvedAt && (o.status === '已驳回' ? `<span class="neg">${esc(o.approver)} 于 ${fmtTime(o.approvedAt)} 驳回：${esc(o.rejectReason || '')}</span>` : `${esc(o.approver)} 于 ${fmtTime(o.approvedAt)} 批准`),
+    o.paidAt && `${esc(o.payer)} 于 ${fmtTime(o.paidAt)} 付款（${o.payDate} · ${esc(acctName(o))}）`,
+    o.voidAt && `<span class="neg">${esc(o.voidBy)} 于 ${fmtTime(o.voidAt)} 作废${o.voidReason ? '：' + esc(o.voidReason) : ''}</span>`].filter(Boolean);
+  openModal(`${modalHead('报销单 · ' + o.no + ' ' + badge(o.status, EXP_STATUS[o.status]))}<div class="m-body">
+    <div class="slip-preview">${expSlip(o)}</div>
+    ${(o.imgs || []).length ? `<div class="line-head" style="margin-top:14px"><b>附件</b><span class="sub-t" style="margin-left:10px">点图片看大图</span></div><div class="exp-imgs" id="xvImgs">${o.imgs.map(k => `<div class="exp-img"><img data-ximg="${o.id}/${k}" alt="" data-big="1"></div>`).join('')}</div>` : ''}
+    <p class="sub-t" style="margin-top:12px;line-height:1.9">${log.join('<br>')}</p></div>
+  <div class="m-foot" style="flex-wrap:wrap"><span style="margin-right:auto;display:flex;gap:8px;flex-wrap:wrap">${expOps(o).map(h => h.replace('class="tbtn', 'class="btn')).join('')}</span>
+    <button class="btn" data-act="expPrint" data-id="${o.id}">${ic('printer')}打印</button><button class="btn" data-act="closeModal">关闭</button></div>`, 'lg');
+  if ($('#xvImgs')) { loadXimgs($('#xvImgs')); $('#xvImgs').onclick = e => { const im = e.target.closest('img'); if (im && im.src) { const w = window.open(); if (w) w.document.write(`<title>${esc(o.no)} 附件</title><body style="margin:0;background:#111;display:flex;justify-content:center"><img src="${im.src}" style="max-width:100%">`); } }; }
+}
+function expPay(id) {
+  const o = byId(db.expenses, id); if (!o) return;
+  closeModal();
+  formModal({title:'报销付款 · ' + o.no, okText:'确认付款', fields:[
+    {n:'amount', l:'付款金额', disabled:1}, {n:'date', l:'付款日期', type:'date', req:1},
+    {n:'account', l:'从哪个账户付', type:'select', opts:acctOpts()}],
+    data:{amount:money(o.amount), date:today(), account:(accts(true).find(a => !a.off && a.kind === '现金') || accts(true).find(a => !a.off) || {}).id}, onSubmit:v => mutate('POST', `/api/expenses/${id}/pay`, v, `已付款 ${money(o.amount)}，已记入收支流水`)});
+  $('.m-body').insertAdjacentHTML('afterbegin', `<p class="span2 sub-t">${esc(o.applicant)}：${esc(o.reason)}。付款后按类别记支出（${esc(expCatText(o))}），关联单号 ${o.no}；付错了可以「撤销付款」。</p>`);
+}
+function expReject(id) {
+  const o = byId(db.expenses, id); closeModal();
+  formModal({title:'驳回报销单 · ' + o.no, okText:'确认驳回', fields:[{n:'reason', l:'驳回原因（报销人能看到）', req:1, span:1}], onSubmit:v => mutate('POST', `/api/expenses/${id}/reject`, v, '已驳回')});
+}
+function expVoid(id) {
+  const o = byId(db.expenses, id); closeModal();
+  formModal({title:'作废报销单 · ' + o.no, okText:'确认作废', fields:[{n:'reason', l:'作废原因（选填）', span:1}], onSubmit:v => mutate('POST', `/api/expenses/${id}/void`, v, '报销单已作废')});
+}
 const NAV = [
   {id:'dashboard', label:'工作台', icon:'dashboard', fn:pageDashboard, perm:'dashboard'},
   {group:'业务管理'},
@@ -3995,6 +4189,7 @@ const NAV = [
   {id:'suppliers', label:'供应商管理', icon:'truck', fn:() => pageParty('suppliers'), perm:'parties'},
   {group:'运营管理'},
   {id:'finance', label:'财务管理', icon:'wallet', fn:pageFinance, perm:'finance'},
+  {id:'expenses', label:'报销管理', icon:'coin', fn:pageExpenses, badge:expCount, perm:['expense', 'exp.approve', 'finance']},
   {id:'employees', label:'人事管理', icon:'id', fn:pageEmployees, perm:'hr'},
   {id:'reports', label:'统计报表', icon:'chart', fn:pageReports, perm:'reports'},
   {group:'系统'},
@@ -4002,7 +4197,7 @@ const NAV = [
   {id:'settings', label:'系统设置', icon:'settings', fn:pageSettings}
 ];
 const PAGES = Object.fromEntries(NAV.filter(n => n.id).map(n => [n.id, n]));
-const visiblePage = n => !n.perm || can(n.perm);
+const visiblePage = n => !n.perm || [].concat(n.perm).some(can);
 const current = () => { const p = location.hash.replace('#/', ''); return PAGES[p] && visiblePage(PAGES[p]) ? p : (NAV.find(n => n.id && visiblePage(n)) || PAGES.settings).id; };
 function go(p) { if (location.hash === '#/' + p) render(); else location.hash = '#/' + p; }
 function applyTheme() {
@@ -4159,6 +4354,11 @@ const A = {
   finEdit: id => finAdd(id),
   acctEdit, acctTransfer,
   acctDel: id => confirmBox(`确定删除账户「${esc(acctName({account:id}))}」吗？没有收支和转账记录时才能删除，有记录的可以编辑改为停用。`, () => mutate('DELETE', '/api/accounts/' + id, undefined, '账户已删除')),
+  expNew: () => expModal(), expEdit: id => { closeModal(); expModal(id); }, expView: id => expView(id),
+  expApprove: id => { const o = byId(db.expenses, id); confirmBox(`批准 ${o.applicant} 的报销 ${money(o.amount)}（${o.no}）吗？批准后等财务付款。`, () => mutate('POST', `/api/expenses/${id}/approve`, {}, '已批准'), {title:'批准报销', danger:false, okText:'批准'}); },
+  expReject: id => expReject(id), expPay: id => expPay(id), expVoid: id => expVoid(id),
+  expUnpay: id => { const o = byId(db.expenses, id); confirmBox(`撤销 ${o.no} 的付款吗？收支流水里这笔报销的支出会删掉，账户余额恢复，报销单回到「已批准」。`, () => mutate('POST', `/api/expenses/${id}/unpay`, {}, '已撤销付款'), {title:'撤销付款', okText:'撤销付款'}); },
+  expPrint: id => { const o = byId(db.expenses, id); if (o) printFrame(o.no, `<div class="page">${expSlip(o)}${printFoot('out', 0)}</div>`, prefs.paper || 'a4'); },
   acctTrDel: id => confirmBox('确定删除这条转账记录吗？两个账户的余额会恢复。', () => mutate('DELETE', '/api/acct-transfers/' + id, undefined, '已删除')),
   acctFlow: id => { ui.finTab = 'flow'; const st = getState('fin'); st.f = {acct:id}; st.page = 1; render(); },
   finDel: id => confirmBox('确定删除这条收支记录吗？', () => mutate('DELETE', '/api/finance/' + id, undefined, '已删除')),
