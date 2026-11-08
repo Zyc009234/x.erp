@@ -42,6 +42,14 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .nav-item.on::before{content:"";position:absolute;left:-12px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:#818cf8}
 .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:11px;border-radius:10px;padding:0 7px;line-height:18px}
 .side-foot{padding:14px 20px;font-size:12px;color:#475569;white-space:nowrap;overflow:hidden}
+[data-theme=light][data-side=light]{--sidebar:#ffffff;--sidebar-2:#f1f5f9;--sidebar-text:#475569}
+[data-theme=light][data-side=light] .sidebar{border-right:1px solid var(--border)}
+[data-theme=light][data-side=light] .brand{color:var(--text)}
+[data-theme=light][data-side=light] .nav-group{color:#94a3b8}
+[data-theme=light][data-side=light] .nav-item:hover{color:var(--text)}
+[data-theme=light][data-side=light] .nav-item.on{background:var(--primary-soft);color:var(--primary)}
+[data-theme=light][data-side=light] .nav-item.on::before{background:var(--primary)}
+[data-theme=light][data-side=light] .side-foot{color:#94a3b8}
 #scanFab{display:none}
 .native #scanFab{display:flex;position:fixed;right:18px;bottom:22px;z-index:9000;width:56px;height:56px;border-radius:50%;align-items:center;justify-content:center;background:var(--primary);color:#fff;box-shadow:0 6px 20px rgba(79,70,229,.45)}
 .native #scanFab svg.i{width:26px;height:26px}
@@ -216,6 +224,12 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .m-body{padding:20px 22px;max-height:68vh;overflow-y:auto}
 .m-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid var(--border)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.pwrap{display:flex;align-items:center;gap:2px}.pwrap input{flex:1;min-width:0}.spm{width:12px;flex:none;text-align:center}.spm b{color:var(--red)}.spm i{color:var(--muted);font-style:normal;cursor:pointer}
+.tip-line{background:var(--orange-soft);color:var(--text);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px}
+.form-grid.fg4{grid-template-columns:repeat(4,1fr)}.fg4 .sp2{grid-column:span 2}.fg4 .sp3{grid-column:span 3}
+.form-grid>.field{min-width:0}
+@media(max-width:1024px){.form-grid.fg4{grid-template-columns:1fr 1fr}.fg4 .sp3{grid-column:1/-1}}
+@media(max-width:768px){.form-grid.fg4{grid-template-columns:1fr}.fg4 .sp2,.fg4 .sp3{grid-column:auto}}
 .field{display:flex;flex-direction:column;gap:6px}
 .field span{font-size:13px;color:var(--muted);font-weight:500}
 .field i{color:var(--red);font-style:normal}
@@ -329,7 +343,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.1.2 · 数据保存在服务器</div>
+    <div class="side-foot">v2.1.3 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -451,7 +465,7 @@ const LS = {
   get(k, d) { try { const v = localStorage.getItem('erp_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('erp_' + k, JSON.stringify(v)); } catch (e) {} }
 };
-const prefs = Object.assign({theme:'light', pageSize:10}, LS.get('prefs', {}));
+const prefs = Object.assign({theme:'light', side:'dark', pageSize:10}, LS.get('prefs', {}));
 const NATIVE = window.XerpApp || null;  // 在 x.erp 安卓客户端里运行时，由客户端注入（扫码、保存文件、打印、切换服务器）
 let db = {settings:{theme:prefs.theme, pageSize:prefs.pageSize}, products:[], customers:[], suppliers:[], employees:[], sales:[], purchases:[], salesReturns:[], purchaseReturns:[], stockLogs:[], stockDocs:[], checkDocs:[], finance:[], warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[]};
 let ME = null, META = {modules:{}, perms:[], templates:{}, docTypes:{in:[], out:[]}, defaultWh:'w1'}, CLIENT_MODE = false, SERVER_ADDR = '', pending = 0, dataSig = '';
@@ -2502,7 +2516,7 @@ function pagePays(base, tabBar) {
   </div>
   ${tabBar}
   <div class="card">${toolbar(key, {placeholder:'搜索单号 / ' + C.partyLabel + ' / 备注', filters, buttons:`<button class="btn" data-act="export" data-id="${key}">${ic('download')}导出</button><button class="btn" data-act="payListPrint" data-id="${base}">${ic('printer')}打印列表</button>`})}
-  <p class="sub-t" style="padding:0 16px 8px">在销售单 / 采购单上点「${C.payWord}」登记的每一笔都在这里，退货单的退款记为负数。点「打印」出单张${C.payWord}单，「打印列表」按当前筛选打印明细。</p><div id="list-${key}"></div></div>`;
+  <p class="sub-t" style="padding:0 16px 8px">在销售单 / 采购单上点「${C.payWord}」登记的每一笔都在这里，退货单的退款记为负数；记错了可以「编辑」或「删除」，单据的已${C.payWord}会跟着变。点「打印」出单张${C.payWord}单，「打印列表」按当前筛选打印明细。</p><div id="list-${key}"></div></div>`;
   mountList(key, {rows:() => payRows(base), search:r => r.f.ref + r.party + (r.f.note || ''), filters, empty:'还没有' + C.payWord + '记录', columns:[
     {t:'日期', r:r => r.f.date, s:r => r.f.date},
     {t:'关联单号', r:r => r.o ? `<a class="link" data-act="orderView" data-id="${r.k}|${r.o.id}">${esc(r.f.ref)}</a>` : esc(r.f.ref || '-'), s:r => r.f.ref},
@@ -2512,7 +2526,7 @@ function pagePays(base, tabBar) {
     {t:'金额', cls:'num', r:r => `<b class="${r.sign < 0 ? 'neg' : ''}">${money(r.sign * r.f.amount)}</b>`, s:r => r.sign * r.f.amount},
     {t:'经办人', r:r => esc(r.f.operator || '-')},
     {t:'备注', r:r => `<span class="sub-t">${esc(r.f.note || '')}</span>`},
-    {t:'操作', r:r => `<div class="ops">${tbtn('打印', 'payPrint', base + '|' + r.f.id)}</div>`}
+    {t:'操作', r:r => `<div class="ops">${tbtn('打印', 'payPrint', base + '|' + r.f.id)}${r.o && can(base) && r.o.status !== '已作废' ? tbtn('编辑', 'payEdit', r.k + '|' + r.o.id + '|' + r.f.id) + tbtn('删除', 'payDel', r.k + '|' + r.o.id + '|' + r.f.id, 'danger-text') : ''}</div>`}
   ], exp:{name:C.payWord + '记录', cols:[['日期', r => r.f.date], ['关联单号', r => r.f.ref], [C.partyLabel, r => r.party], ['类型', r => r.word], ['账户', r => acctName(r.f)], ['金额', r => (r.sign * r.f.amount).toFixed(2)], ['经办人', r => r.f.operator || ''], ['备注', r => r.f.note || '']]}});
 }
 // 单张收付款单：沿用单据打印的纸张设置
@@ -2553,10 +2567,11 @@ function orderOps(kind, o) {
     if (src && o.status !== '已作废' && unpaidOf(kind, o) > 0.001 && unpaidOf(C.src, src) > 0.001) b.push(tbtn('冲抵', 'offset', id));
   } else if (kind === 'sales') {
     if (o.status === '待发货') b.push(tbtn('发货', 'ship', id, 'primary'), tbtn('编辑', 'orderEdit', id));
-    if (o.status === '已发货') b.push(tbtn('完成', 'complete', id, 'primary'));
+    if (o.status === '已发货') b.push(tbtn('完成', 'complete', id, 'primary'), tbtn('编辑', 'orderEdit', id));
   } else {
     if (o.status === '待审核') b.push(tbtn('审核', 'approve', id, 'primary'), tbtn('编辑', 'orderEdit', id));
     if (o.status === '已审核') b.push(tbtn('入库', 'inbound', id, 'primary'), tbtn('编辑', 'orderEdit', id), tbtn('反审核', 'unapprove', id));
+    if (o.status === '已入库') b.push(tbtn('编辑', 'orderEdit', id));
   }
   if (o.status !== '已作废' && unpaidOf(kind, o) > 0.001) b.push(tbtn(C.payWord, 'pay', id));
   if (ORD[kind + 'Return'] && ORD[kind + 'Return'].srcOk.includes(o.status) && can(kind)) b.push(tbtn('退货', 'orderReturn', id));
@@ -2584,14 +2599,15 @@ function orderModal(kind, id, srcId0) {
   const srcOpts = pid => `<option value="">不关联（直接退货）</option>` + (pid ? db[S0.db].filter(s => s[S0.partyKey] === pid && C.srcOk.includes(s.status)) : [])
     .map(s => `<option value="${s.id}" ${s.id === draft.srcId ? 'selected' : ''}>${s.no} · ${s.date} · ${money(orderTotal(s))}</option>`).join('');
   openModal(`${modalHead((o ? '编辑' : '新建') + C.title + (o ? ' · ' + o.no : ''))}
-  <div class="m-body">${o && o.status === '已审核' ? '<div class="sub-t" style="margin-bottom:10px">这张采购单已审核，保存修改后会退回「待审核」，需要重新审核才能入库。</div>' : ''}<div class="form-grid">
+  <div class="m-body">${o && o.status === '已审核' ? '<div class="sub-t" style="margin-bottom:10px">这张采购单已审核，保存修改后会退回「待审核」，需要重新审核才能入库。</div>' : ''}${o && (o.status === '已发货' || o.status === '已入库') ? `<div class="tip-line">这张单已${o.status.slice(1)}。只改${kind === 'sales' ? '单价、' : ''}优惠或备注不影响库存；改了商品、数量${kind === 'purchase' ? '或单价' : ''}，保存时会把原来的${kind === 'sales' ? '出库' : '入库'}冲回，按新明细重新${kind === 'sales' ? '出库' : '入库'}（库存流水里能看到「改单冲回」）。${kind === 'purchase' ? '货已经卖出去一部分的，就不能再改数量或单价了。' : ''}</div>` : ''}<div class="form-grid">
     <label class="field"><span>${C.partyLabel} <i>*</i></span><select id="oParty"><option value="">请选择${C.partyLabel}</option>${db[C.party].map(p => `<option value="${p.id}" ${p.id === party0 ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
     <label class="field"><span>单据日期 <i>*</i></span><input type="date" id="oDate" value="${o ? o.date : today()}"></label>
     ${C.src ? `<label class="field span2"><span>关联原${S0.doc}（只列出${C.srcOk.join(' / ')}的单子；选了按原单带出商品，限退未退的数量）</span><select id="oSrc">${srcOpts(party0)}</select></label>` : ''}
   </div>
   <div class="line-head"><b>${C.src ? '退货明细' : '商品明细'}</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称搜索，支持扫码枪录入后回车</span><button class="btn sm" id="oPick">${ic('search')}选择商品</button><button class="btn sm" id="oAdd">${ic('plus')}添加一行</button></div>
   <datalist id="oProdList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
-  <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:240px">商品</th><th style="width:70px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th><th style="width:120px">${C.src ? '退货单价' : '单价'}</th><th class="num" style="width:120px">小计</th><th style="width:44px"></th></tr></thead><tbody id="oItems"></tbody></table></div>
+  <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:240px">商品</th><th style="width:70px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th><th style="width:130px">${C.src ? '退货单价' : '单价'}</th><th class="num" style="width:120px">小计</th><th style="width:44px"></th></tr></thead><tbody id="oItems"></tbody></table></div>
+  <div class="sub-t" style="margin-top:6px">单价后的 <b style="color:var(--red)">*</b> 表示用的是这个${C.partyLabel}的专属价；灰色 * 表示设了专属价但单价被改过，点一下恢复。专属价在「${C.party === 'customers' ? '客户' : '供应商'}管理」里设置。</div>
   <label class="field" style="margin-top:16px"><span>备注</span><textarea id="oRemark" rows="2">${esc(o ? o.remark : '')}</textarea></label>
   ${C.src ? '' : `<div class="o-disc"><span>明细合计 <b id="oSub">¥0.00</b></span><label>优惠 / 抹零 <input type="number" id="oDisc" min="0" step="0.01" value="${o && o.discount ? o.discount : ''}" placeholder="0"></label><button class="btn sm" id="oRound" title="先抹掉角分；没有角分就抹掉 10 元以下的零头">抹零</button></div>`}
   <div class="o-total">合计数量<b id="oQty">0</b>&nbsp;&nbsp;${C.src ? '合计金额' : '应' + C.payWord}<b id="oTotal">¥0.00</b></div></div>
@@ -2616,14 +2632,22 @@ function orderModal(kind, id, srcId0) {
       <td>${unitSel(p, it.unit, i)}</td>
       <td class="num" title="${p ? esc(stockText(p, p.stock)) : ''}">${p ? inUnit(p.stock, p, it.unit) : ''}${p && left ? `<div class="sub-t">可退 ${inUnit(left[p.id] || 0, p, it.unit)}</div>` : ''}</td>
       <td><input type="number" min="1" step="1" data-i="${i}" data-k="qty" value="${it.qty}"></td>
-      <td><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"></td>
+      <td><div class="pwrap"><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"><span class="spm">${p ? spMark(p, it) : ''}</span></div></td>
       <td class="num sub">${money(sub(it))}</td>
       <td><button class="icon-btn sm" data-del="${i}" title="删除">${ic('trash')}</button></td></tr>`; }).join('');
     updTotal();
     if (focusLast) { const ins = tb.querySelectorAll('[data-k=product]'); ins[ins.length - 1].focus(); }
   };
   // 默认单价：关联了原单按原单价，否则按商品档案的售价 / 成本价
-  const priceOf = (p, unit) => { const s = srcOf(), l = s && s.items.find(x => x.productId === p.id); return +((l ? l.price : p[C.priceKey] || 0) * rateOf(p, unit)).toFixed(4); };
+  // 没关联原单时：这个${C.partyLabel}设了专属价就用专属价，否则用商品档案的价格
+  const partyNow = () => $('#oParty') ? $('#oParty').value : party0;
+  const priceOf = (p, unit, party = partyNow()) => { const s = srcOf(), l = s && s.items.find(x => x.productId === p.id), sp = specialPrice(C.party, party, p.id);
+    return +((l ? l.price : sp != null ? sp : p[C.priceKey] || 0) * rateOf(p, unit)).toFixed(4); };
+  const spMark = (p, it) => { const sp = specialPrice(C.party, partyNow(), p.id); if (sp == null || it.price === '') return '';
+    const v = +(sp * rateOf(p, it.unit)).toFixed(4); return Math.abs(+it.price - v) < 1e-6 ? `<b title="${C.partyLabel}专属价（通用价 ${money((p[C.priceKey] || 0) * rateOf(p, it.unit))}）">*</b>` : `<i title="这个${C.partyLabel}的专属价是 ${money(v)}，点一下填入" data-sp="${v}">*</i>`; };
+  let curParty = party0;
+  // 换了${C.partyLabel}：还是按上一个${C.partyLabel}自动带出的单价，改成新${C.partyLabel}的价格；手改过的不动
+  const reprice = np => { draft.items.forEach(it => { const p = it.productId && byId(db.products, it.productId); if (p && it.price !== '' && Math.abs(+it.price - priceOf(p, it.unit, curParty)) < 1e-6) it.price = priceOf(p, it.unit, np); }); curParty = np; };
   const pick = (i, v, quiet) => {
     const p = findProduct(v);
     if (!p) { if (v) toast('未找到商品：' + v, 'error'); draft.items[i].productId = ''; renderItems(); return false; }
@@ -2644,12 +2668,14 @@ function orderModal(kind, id, srcId0) {
   tb.addEventListener('input', e => {
     const t = e.target, i = +t.dataset.i, k = t.dataset.k;
     if (k === 'qty' || k === 'price') { draft.items[i][k] = t.value === '' ? '' : +t.value; t.closest('tr').querySelector('.sub').textContent = money(sub(draft.items[i])); updTotal(); }
+    if (k === 'price') { const it = draft.items[i], p = byId(db.products, it.productId); t.closest('tr').querySelector('.spm').innerHTML = p ? spMark(p, it) : ''; }
   });
-  tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { draft.items.splice(+b.dataset.del, 1); if (!draft.items.length) draft.items.push(blank()); renderItems(); } });
+  tb.addEventListener('click', e => { const m = e.target.closest('[data-sp]'); if (m) { const tr = m.closest('tr'), inp = tr.querySelector('[data-k=price]'); draft.items[+inp.dataset.i].price = +m.dataset.sp; renderItems(); return; } const b = e.target.closest('[data-del]'); if (b) { draft.items.splice(+b.dataset.del, 1); if (!draft.items.length) draft.items.push(blank()); renderItems(); } });
   $('#oAdd').onclick = () => { draft.items.push(blank()); renderItems(true); };
   $('#oPick').onclick = () => productPicker({have:draft.items.map(i => i.productId), onPick:ids => addPicked(draft, blank, pick, ids)});
+  if (!C.src) $('#oParty').onchange = e => { reprice(e.target.value); renderItems(); };
   if (C.src) {
-    $('#oParty').onchange = e => { const s = srcOf(); if (s && s[S0.partyKey] !== e.target.value) draft.srcId = ''; $('#oSrc').innerHTML = srcOpts(e.target.value); renderItems(); };
+    $('#oParty').onchange = e => { const s = srcOf(); if (s && s[S0.partyKey] !== e.target.value) draft.srcId = ''; $('#oSrc').innerHTML = srcOpts(e.target.value); reprice(e.target.value); renderItems(); };
     $('#oSrc').onchange = e => { draft.srcId = e.target.value; const s = srcOf(); if (s) { fillFromSrc(s); draft.items.push(blank()); } renderItems(); };
   }
   $('#oSave').onclick = () => {
@@ -2688,7 +2714,7 @@ function orderView(kind, id) {
     </tbody></table>
     <div class="doc-sum">${o.discount ? `<div>明细合计：<b>${money(itemsTotal(o))}</b></div><div>优惠：<b>-${money(o.discount)}</b></div>` : ''}<div>合计：<b>${money(total)}</b></div><div>已${C.payWord}：<b class="pos">${money(paid)}</b></div><div>未${C.payWord}：<b class="neg">${money(total - paid)}</b></div></div>
     ${o.remark ? `<p style="margin-top:12px;color:var(--muted)">备注：${esc(o.remark)}</p>` : ''}
-    ${pays.length || o.offset ? `<h4 style="margin:18px 0 8px">${C.payWord}记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(acctName(f))}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td><td style="width:1%">${tbtn('打印', 'payPrint', kind.replace('Return', '') + '|' + f.id)}</td></tr>`).join('')}
+    ${pays.length || o.offset ? `<h4 style="margin:18px 0 8px">${C.payWord}记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(acctName(f))}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td><td style="width:1%"><div class="ops">${tbtn('打印', 'payPrint', kind.replace('Return', '') + '|' + f.id)}${can(kind.replace('Return', '')) && o.status !== '已作废' ? tbtn('编辑', 'payEdit', kind + '|' + o.id + '|' + f.id) + tbtn('删除', 'payDel', kind + '|' + o.id + '|' + f.id, 'danger-text') : ''}</div></td></tr>`).join('')}
       ${o.offset ? `<tr><td>-</td><td>退货冲抵</td><td class="num">${money(o.offset)}</td><td class="sub-t">${C.src ? '抵扣原单 ' + esc(o.srcNo) + ' 的欠款' : '由退货单抵扣'}</td></tr>` : ''}</tbody></table>` : ''}
     ${(() => { const R = ORD[kind + 'Return'], rs = R ? db[R.db].filter(r => r.srcId === o.id) : []; return rs.length ? `<h4 style="margin:18px 0 8px">退货记录</h4><table class="tbl compact"><tbody>${rs.map(r => `<tr><td><a class="link" data-act="orderView" data-id="${kind}Return|${r.id}">${r.no}</a></td><td>${r.date}</td><td>${badge(r.status)}</td><td class="num">${money(orderTotal(r))}</td></tr>`).join('')}</tbody></table>` : ''; })()}
     ${kind === 'sales' && o.status !== '待发货' ? shipBlock('sales', o, o.status !== '已作废') : ''}
@@ -3104,17 +3130,17 @@ function carrierEdit(id) {
   const opt = (list, cur) => list.map(([v, l]) => `<option value="${v}" ${+cur === v ? 'selected' : ''}>${l}</option>`).join('');
   const inp = (idn, label, v, extra = '') => `<label class="field"><span>${label}</span><input id="${idn}" value="${esc(v ?? '')}" ${extra}></label>`;
   openModal(`${modalHead((c ? '编辑' : '新增') + '快递公司 / 报价')}<div class="m-body">
-    <div class="form-grid" style="grid-template-columns:repeat(4,1fr)">
+    <div class="form-grid fg4">
       ${inp('cName', '名称 <i>*</i>', d.name, 'placeholder="如 中通快递"')}${inp('cCode', '快递鸟编码（面单 / 轨迹用）', d.code, 'placeholder="如 ZTO" list="kdnCodes"')}<datalist id="kdnCodes">${KDN_CODES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</datalist>
       <label class="field"><span>计费重量进位</span><select id="cStep">${opt([[0, '不进位'], [0.01, '0.01kg'], [0.1, '0.1kg'], [0.5, '0.5kg'], [1, '1kg（不足 1kg 按 1kg）']], d.step)}</select></label>
       <label class="field"><span>抛比（体积重 = 长×宽×高 ÷ 抛比）</span><select id="cVol">${opt([[0, '不计体积重'], [5000, '5000'], [6000, '6000'], [8000, '8000'], [12000, '12000']], d.volDiv)}</select></label>
       ${inp('cPack', '包材重量 kg（估重时加上）', d.pack, 'type="number" step="any" min="0"')}${inp('cIns', '保价费率 %', d.insureRate, 'type="number" step="any" min="0"')}
       ${inp('cInsMin', '最低保价费 ¥', d.insureMin, 'type="number" step="any" min="0"')}${inp('cTol', '对账容差 ¥（差额以内算一致）', d.tol, 'type="number" step="any" min="0"')}
-      <label class="field" style="grid-column:span 3"><span>备注</span><input id="cRemark" value="${esc(d.remark || '')}"></label>
+      <label class="field sp3"><span>备注</span><input id="cRemark" value="${esc(d.remark || '')}"></label>
       <div class="field"><span>状态</span><label class="chk" style="padding-top:8px"><input type="checkbox" id="cOn" ${d.enabled ? 'checked' : ''}>启用</label></div>
     </div>
     <details style="margin-top:14px" ${d.eo && d.eo.customerName ? 'open' : ''}><summary style="cursor:pointer;font-weight:600">电子面单账号（快递鸟下单用，找发货网点开通）</summary>
-      <div class="form-grid" style="grid-template-columns:repeat(4,1fr);margin-top:10px">
+      <div class="form-grid fg4" style="margin-top:10px">
         ${inp('eoName', '客户号 CustomerName', (d.eo || {}).customerName)}${inp('eoPwd', '密码 CustomerPwd', '', `type="password" autocomplete="new-password" placeholder="${(d.eo || {}).pwdSet ? '已保存，不改请留空' : '网点给的密码'}"`)}
         ${inp('eoMonth', '月结号 MonthCode', (d.eo || {}).monthCode)}${inp('eoSite', '网点编码 SendSite', (d.eo || {}).sendSite)}
         <label class="field"><span>运费付款方式</span><select id="eoPay">${opt([[1, '寄方付（现付）'], [3, '月结'], [2, '到付'], [4, '第三方付（顺丰）']], (d.eo || {}).payType || 1)}</select></label>
@@ -3378,9 +3404,9 @@ function kdnCard(k) {
   const sd = k.sender || {}, inp = (id, label, v, extra = '') => `<label class="field"><span>${label}</span><input id="${id}" value="${esc(v || '')}" ${extra}></label>`;
   return `<div class="card" style="margin-top:16px"><div class="card-head"><h3>快递鸟（电子面单 / 物流轨迹）</h3>${k.ready ? badge(k.sandbox ? '已配置 · 沙箱' : '已配置', k.sandbox ? 'orange' : 'green') : badge('未配置', 'gray')}</div><div class="card-body">
     <p class="sub-t" style="margin-bottom:10px">在 kdniao.com 注册并实名后，在「我的服务」里看商户 ID 和 AppKey。电子面单还要在「快递报价」里给每家快递填快递鸟编码和网点给的电子面单账号。服务器需要能连外网；轨迹查询每天最多 500 次。</p>
-    <div class="form-grid" style="grid-template-columns:repeat(4,1fr)">
+    <div class="form-grid fg4">
       ${inp('kdEbid', '商户 ID（EBusinessID）', k.ebid)}${inp('kdKey', 'AppKey', '', `type="password" placeholder="${k.keySet ? '已保存，不改请留空' : '必填'}" autocomplete="new-password"`)}
-      <div class="field" style="grid-column:span 2"><span>选项</span><div style="display:flex;gap:14px;flex-wrap:wrap;padding-top:8px"><label class="chk"><input type="checkbox" id="kdSandbox" ${k.sandbox ? 'checked' : ''}>沙箱环境（测试用，不会真的下单）</label><label class="chk"><input type="checkbox" id="kdAuto" ${k.autoTrack ? 'checked' : ''}>白天每 4 小时自动刷新物流轨迹</label></div></div>
+      <div class="field sp2"><span>选项</span><div style="display:flex;gap:14px;flex-wrap:wrap;padding-top:8px"><label class="chk"><input type="checkbox" id="kdSandbox" ${k.sandbox ? 'checked' : ''}>沙箱环境（测试用，不会真的下单）</label><label class="chk"><input type="checkbox" id="kdAuto" ${k.autoTrack ? 'checked' : ''}>白天每 4 小时自动刷新物流轨迹</label></div></div>
       <b style="grid-column:1/-1;margin-top:4px">寄件人（打在面单上）</b>
       ${inp('kdName', '寄件人', sd.name)}${inp('kdMobile', '手机', sd.mobile)}${inp('kdTel', '固定电话（选填）', sd.tel)}${inp('kdCompany', '公司（选填）', sd.company)}
       ${inp('kdProv', '省', sd.province, 'placeholder="浙江省"')}${inp('kdCity', '市', sd.city, 'placeholder="杭州市"')}${inp('kdArea', '区县', sd.area, 'placeholder="余杭区"')}${inp('kdPost', '邮编（EMS / 邮政必填）', sd.postCode)}
@@ -3406,6 +3432,102 @@ async function trackAllUi() {
 }
 
 /* ================= 页面：客户 / 供应商 ================= */
+/* ---------- 收付款记录：修改 / 删除 ---------- */
+function payEdit(kind, oid, fid) {
+  const C = ORD[kind], o = byId(db[C.db], oid), f = db.finance.find(x => x.id === fid); if (!o || !f) return;
+  const max = orderTotal(o) - ((o[C.paidKey] || 0) - f.amount);
+  closeModal();
+  formModal({title:'修改' + C.payWord + '记录 · ' + o.no, okText:'保存', fields:[
+    {n:'amount', l:`${C.payWord}金额（最多 ${money(max)}）`, type:'number', req:1}, {n:'date', l:'日期', type:'date', req:1},
+    {n:'account', l:'资金账户', type:'select', opts:acctOpts(f.account)}, {n:'note', l:'备注'}],
+    data:{amount:f.amount, date:f.date, account:f.account, note:f.note || ''}, onSubmit:v => {
+      if (v.amount <= 0 || v.amount > max + 0.001) return toast('金额需在 0 ~ ' + money(max) + ' 之间', 'error');
+      return mutate('PUT', `/api/orders/${kind}/${oid}/pays/${fid}`, v, C.payWord + '记录已修改');
+    }});
+}
+function payDel(kind, oid, fid) {
+  const C = ORD[kind], o = byId(db[C.db], oid), f = db.finance.find(x => x.id === fid); if (!o || !f) return;
+  confirmBox(`删除 ${o.no} 在 ${f.date} 的这笔${C.payWord} ${money(f.amount)} 吗？单据的已${C.payWord}会减掉这笔，资金账户余额也会跟着变。`,
+    () => mutate('DELETE', `/api/orders/${kind}/${oid}/pays/${fid}`, undefined, '已删除这笔' + C.payWord), {title:'删除' + C.payWord + '记录', okText:'删除'});
+}
+
+/* ---------- 客户 / 供应商专属价：按基本单位存，开单时自动带出，用辅助单位开单按换算比例算 ---------- */
+const specialPrice = (col, partyId, pid) => { const r = partyId && byId(db[col], partyId), v = r && r.prices && r.prices[pid]; return v != null ? v : null; };
+function priceManage(type, id) {
+  const r = byId(db[type], id); if (!r) return;
+  const isC = type === 'customers', key = isC ? 'price' : 'cost', word = isC ? '售价' : '进价';
+  const rows = Object.entries(r.prices || {}).map(([pid, v]) => ({pid, v})).filter(x => byId(db.products, x.pid));
+  const draw = () => {
+    $('#spBody').innerHTML = rows.length ? rows.map((x, i) => { const p = byId(db.products, x.pid); return `<tr><td><b>${esc(p.name)}</b><div class="sub-t">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''}</div></td>
+      <td class="num">${money(p[key] || 0)}</td><td><input type="number" min="0" step="0.01" data-i="${i}" value="${x.v}" style="width:110px"> <span class="sub-t">/ ${esc(p.unit || '')}</span></td>
+      <td><button class="icon-btn sm" data-rm="${i}" title="删除">${ic('trash')}</button></td></tr>`; }).join('')
+      : `<tr><td colspan="4" class="sub-t" style="text-align:center;padding:20px">还没有专属价，开单时用商品档案里的${word}</td></tr>`;
+  };
+  openModal(`${modalHead('专属价 · ' + r.name)}<div class="m-body">
+    <p class="sub-t" style="margin-bottom:10px">给这个${isC ? '客户' : '供应商'}单独定价的商品，开${isC ? '销售' : '采购'}单时自动按专属价填，单价后面会标红色 *；没设的商品照常用商品档案里的${word}。价格按基本单位填，用辅助单位开单会按换算比例算。</p>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap"><input class="select" style="flex:2;min-width:180px" id="spProd" list="spList" placeholder="商品编码 / 条码 / 名称"><datalist id="spList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
+      <input class="select" style="flex:1;min-width:90px" id="spPrice" type="number" min="0" step="0.01" placeholder="专属价"><button class="btn primary" id="spAdd">${ic('plus')}添加</button></div>
+    <div class="table-wrap"><table class="tbl"><thead><tr><th>商品</th><th class="num" style="width:90px">通用${word}</th><th style="width:170px">专属价</th><th style="width:44px"></th></tr></thead><tbody id="spBody"></tbody></table></div></div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="spSave">${ic('check')}保存</button></div>`, 'lg');
+  draw();
+  const add = () => {
+    const p = findProduct($('#spProd').value.trim()), v = $('#spPrice').value;
+    if (!p) return toast('没找到这个商品', 'error'), $('#spProd').focus();
+    if (v === '' || +v < 0) return toast('请填写专属价', 'error'), $('#spPrice').focus();
+    const i = rows.findIndex(x => x.pid === p.id);
+    if (i >= 0) rows[i].v = +v; else rows.unshift({pid:p.id, v:+v});
+    $('#spProd').value = ''; $('#spPrice').value = ''; draw(); $('#spProd').focus();
+  };
+  $('#spAdd').onclick = add;
+  $('#spPrice').onkeydown = e => { if (e.key === 'Enter') add(); };
+  $('#spProd').onkeydown = e => { if (e.key === 'Enter') { const p = findProduct(e.target.value.trim()); if (p && $('#spPrice').value === '') $('#spPrice').value = p[key] || ''; $('#spPrice').focus(); } };
+  $('#spBody').oninput = e => { const i = e.target.dataset.i; if (i != null) rows[+i].v = e.target.value; };
+  $('#spBody').onclick = e => { const b = e.target.closest('[data-rm]'); if (b) { rows.splice(+b.dataset.rm, 1); draw(); } };
+  $('#spSave').onclick = () => {
+    if (rows.some(x => x.v === '' || +x.v < 0)) return toast('专属价不能为空或负数，不要的请删掉这一行', 'error');
+    mutate('PUT', `/api/prices/${type}/${id}`, {prices:Object.fromEntries(rows.map(x => [x.pid, +x.v]))}, '专属价已保存');
+  };
+}
+// 导入：第一行表头，需要「客户名称 / 供应商名称」「商品编码（或条码、名称）」「专属价」三列；单价留空 = 删除这条专属价
+function priceImport(type) {
+  const isC = type === 'customers', who = isC ? '客户' : '供应商';
+  openModal(`${modalHead('导入' + who + '专属价')}<div class="m-body">
+    <p class="sub-t" style="margin-bottom:10px">用 Excel（.xlsx）或 CSV，第一行是表头，需要三列：<b>${who}名称</b>、<b>商品编码</b>（也可以填条码或商品名称）、<b>专属价</b>（按基本单位）。同一个${who}同一个商品已有专属价的会被覆盖；专属价留空表示删掉这条。有任何一行出错就整批不导入。</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="priceTpl" data-id="${type}">${ic('download')}下载模板</button><label class="btn primary">${ic('upload')}选择文件<input type="file" id="spFile" accept=".xlsx,.xls,.csv" hidden></label></div>
+    <div id="spRes" style="margin-top:12px"></div></div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">关闭</button></div>`);
+  $('#spFile').onchange = async e => {
+    const file = e.target.files[0]; if (!file) return;
+    try {
+      const aoa = await readSheet(file), norm = v => String(v ?? '').replace(/[\s*＊()（）]/g, '');
+      const hi = aoa.findIndex(r => r.some(c => /名称$|^客户$|^供应商$/.test(norm(c))) && r.some(c => /价/.test(norm(c))));
+      if (hi < 0) throw new Error(`没找到表头，第一行需要有「${who}名称」「商品编码」「专属价」三列，建议下载模板填写`);
+      const h = aoa[hi].map(norm), col = re => h.findIndex(x => re.test(x));
+      const cParty = col(isC ? /^客户(名称)?$/ : /^供应商(名称)?$/), cProd = [col(/^商品编码$|^编码$|^SKU$/i), col(/条码/), col(/^商品(名称)?$/)].find(i => i >= 0), cPrice = col(/专属价|单价|价格/);
+      if (cParty < 0 || cProd == null || cPrice < 0) throw new Error(`表头需要有「${who}名称」「商品编码」「专属价」三列`);
+      const rows = [];
+      for (let j = hi + 1; j < aoa.length; j++) { const r = aoa[j], party = String(r[cParty] ?? '').trim(), product = String(r[cProd] ?? '').trim();
+        rows[j - hi - 1] = {party, product, price:r[cPrice] === '' || r[cPrice] == null ? '' : String(r[cPrice]).trim()}; }
+      const res = await api('POST', `/api/prices/${type}/import`, {rows});
+      await reload(); render();
+      $('#spRes').innerHTML = `<div class="tip-line" style="background:var(--green-soft)">导入成功：${res.parties} 个${who}，${res.rows} 行。</div>`;
+      toast('专属价已导入');
+    } catch (err) { $('#spRes').innerHTML = `<div class="tip-line" style="background:var(--red-soft)">${esc(err.message)}</div>`; }
+    e.target.value = '';
+  };
+}
+async function priceTpl(type) {
+  const who = type === 'customers' ? '客户' : '供应商', p = db.products[0], q = db.products[1];
+  const head = [who + '名称', '商品编码', '专属价'], demo = [[(db[type][0] || {}).name || '示例' + who, p ? p.sku : 'A1001', 5.5], [(db[type][0] || {}).name || '示例' + who, q ? q.sku : 'A1002', 12]];
+  try {
+    const X = await loadXLSX(), ws = X.utils.aoa_to_sheet([head, ...demo]), wb = X.utils.book_new();
+    ws['!cols'] = [{wch:20}, {wch:16}, {wch:10}];
+    X.utils.book_append_sheet(wb, ws, '专属价');
+    if (NATIVE) saveFile(who + '专属价导入模板.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', X.write(wb, {type:'array', bookType:'xlsx'}));
+    else X.writeFile(wb, who + '专属价导入模板.xlsx');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
 function pageParty(type) {
   const isC = type === 'customers', kind = isC ? 'sales' : 'purchase', C = ORD[kind];
   const orders = pid => db[C.db].filter(o => o[C.partyKey] === pid && o.status !== '已作废');
@@ -3418,7 +3540,7 @@ function pageParty(type) {
     ${kpi(isC ? '累计销售额' : '累计采购额', moneyK(sum(db[C.db].filter(o => o.status !== '已作废'), orderTotal)), 'coin', 'blue')}
     ${kpi(isC ? '应收合计' : '应付合计', moneyK(partyDue(kind)), 'wallet', 'orange')}
   </div>
-  <div class="card">${toolbar(type, {placeholder:'搜索名称 / 联系人 / 电话', filters, buttons:`<button class="btn" data-act="export" data-id="${type}">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="${type}">${ic('plus')}新增${ENT[type].title}</button>`})}<div id="list-${type}"></div></div>`;
+  <div class="card">${toolbar(type, {placeholder:'搜索名称 / 联系人 / 电话', filters, buttons:`${can(kind) ? `<button class="btn" data-act="priceImport" data-id="${type}">${ic('upload')}导入专属价</button>` : ''}<button class="btn" data-act="export" data-id="${type}">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="${type}">${ic('plus')}新增${ENT[type].title}</button>`})}<div id="list-${type}"></div></div>`;
   mountList(type, {rows:() => db[type], search:r => r.name + r.contact + r.phone, filters, columns:[
     {t:'名称', r:r => `<b>${esc(r.name)}</b><div class="sub-t">${esc(r.address || '')}</div>`, s:r => r.name},
     {t:'联系人', r:r => `${esc(r.contact)}<div class="sub-t">${esc(r.phone)}</div>`},
@@ -3427,7 +3549,8 @@ function pageParty(type) {
     {t:isC ? '累计消费' : '累计采购', cls:'num', r:r => money(sum(orders(r.id), orderTotal)), s:r => sum(orders(r.id), orderTotal)},
     {t:isC ? '应收' : '应付', cls:'num', r:r => { const u = partyDue(kind, r.id); return u > 0 ? `<span class="neg">${money(u)}</span>` : money(u); }, s:r => partyDue(kind, r.id)},
     {t:'最近交易', r:r => orders(r.id)[0]?.date || '-'},
-    {t:'操作', r:r => `<div class="ops">${tbtn('订单', 'partyOrders', type + '|' + r.id)}${tbtn('编辑', 'edit', type + '|' + r.id)}${tbtn('删除', 'del', type + '|' + r.id, 'danger-text')}</div>`}
+    {t:'专属价', cls:'num', r:r => { const n = Object.keys(r.prices || {}).length; return n ? `<a class="link" data-act="priceManage" data-id="${type}|${r.id}">${n} 个商品</a>` : '<span class="sub-t">-</span>'; }, s:r => Object.keys(r.prices || {}).length},
+    {t:'操作', r:r => `<div class="ops">${tbtn('订单', 'partyOrders', type + '|' + r.id)}${can(kind) ? tbtn('专属价', 'priceManage', type + '|' + r.id) : ''}${tbtn('编辑', 'edit', type + '|' + r.id)}${tbtn('删除', 'del', type + '|' + r.id, 'danger-text')}</div>`}
   ], exp:{name:ENT[type].title + '列表', cols:[['名称', r => r.name], ['联系人', r => r.contact], ['电话', r => r.phone], ['邮箱', r => r.email], [isC ? '等级' : '类目', r => isC ? r.level : r.category], ['地址', r => r.address], ['订单数', r => orders(r.id).length], ['累计金额', r => sum(orders(r.id), orderTotal).toFixed(2)]]}});
 }
 
@@ -3689,6 +3812,7 @@ function pageSettings() {
     <div class="card"><div class="card-head"><h3>界面偏好（仅本机）</h3></div><div class="card-body">
       <div class="form-grid">
         <label class="field"><span>界面主题</span><select id="sTheme"><option value="light" ${st.theme === 'light' ? 'selected' : ''}>浅色</option><option value="dark" ${st.theme === 'dark' ? 'selected' : ''}>深色</option><option value="auto" ${st.theme === 'auto' ? 'selected' : ''}>跟随系统</option></select></label>
+        <label class="field"><span>左侧菜单颜色</span><select id="sSide"><option value="dark" ${prefs.side !== 'light' ? 'selected' : ''}>深色</option><option value="light" ${prefs.side === 'light' ? 'selected' : ''}>浅色（深色主题下仍为深色）</option></select></label>
         <label class="field"><span>每页显示条数</span><select id="sPs">${[10, 15, 20, 50].map(n => `<option ${+st.pageSize === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       </div>
       <div style="margin-top:16px;text-align:right"><button class="btn" data-act="savePrefs">${ic('check')}保存偏好</button></div>
@@ -3884,6 +4008,7 @@ function go(p) { if (location.hash === '#/' + p) render(); else location.hash = 
 function applyTheme() {
   const t = db.settings.theme === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : db.settings.theme;
   document.documentElement.dataset.theme = t;
+  document.documentElement.dataset.side = prefs.side === 'light' ? 'light' : 'dark';
   $('#themeBtn').innerHTML = ic(t === 'dark' ? 'sun' : 'moon');
 }
 function render() {
@@ -4023,6 +4148,8 @@ const A = {
   partyOrders: v => { const [t, id] = split(v); const page = t === 'customers' ? 'sales' : 'purchase'; const st = getState(page); st.f = {party:id}; st.q = ''; st.page = 1; go(page); },
   orderNew: k => orderModal(k),
   orderEdit: v => { const [k, id] = split(v); closeModal(); orderModal(k, id); },
+  payEdit: v => payEdit(...split(v)), payDel: v => payDel(...split(v)),
+  priceManage: v => { closeModal(); priceManage(...split(v)); }, priceImport: t => priceImport(t), priceTpl: t => priceTpl(t),
   orderReturn: v => { const [k, id] = split(v); closeModal(); orderModal(k + 'Return', null, id); },
   orderView: v => orderView(...split(v)),
   orderPrint: v => orderPrint(...split(v)),
@@ -4036,7 +4163,7 @@ const A = {
   acctFlow: id => { ui.finTab = 'flow'; const st = getState('fin'); st.f = {acct:id}; st.page = 1; render(); },
   finDel: id => confirmBox('确定删除这条收支记录吗？', () => mutate('DELETE', '/api/finance/' + id, undefined, '已删除')),
   rptExport: () => exportCSV('月度经营报表', ['月份', '订单数', '销售额', '销售成本', '毛利', '毛利率%', '采购额', '运营费用', '净利润'], ui.rptStats.map(s => [s.mk, s.count, s.sales.toFixed(2), s.cost.toFixed(2), s.gp.toFixed(2), s.rate.toFixed(1), s.purchase.toFixed(2), s.exp.toFixed(2), s.net.toFixed(2)])),
-  savePrefs: () => { db.settings.theme = $('#sTheme').value; db.settings.pageSize = +$('#sPs').value; savePrefs(); applyTheme(); toast('偏好已保存'); render(); },
+  savePrefs: () => { db.settings.theme = $('#sTheme').value; prefs.side = $('#sSide').value; db.settings.pageSize = +$('#sPs').value; savePrefs(); applyTheme(); toast('偏好已保存'); render(); },
   saveStats: on => mutate('PUT', '/api/settings', {stats:on}, on ? '已开启匿名使用统计' : '已关闭匿名使用统计'),
   saveApprove: () => mutate('PUT', '/api/settings', {docApprove:{in:$('#apIn').checked, out:$('#apOut').checked}}, '审核设置已保存'),
   saveCompany: () => mutate('PUT', '/api/settings', {company:$('#sCompany').value.trim()}, '公司名称已保存'),
