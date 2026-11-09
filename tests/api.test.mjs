@@ -1072,3 +1072,90 @@ test('报销：提交 → 驳回改了再提交 → 批准 → 付款记支出�
   const acc = (await ok(admin, 'GET', '/api/roles')).list.find(x => x.id === 'r_acct');
   assert.ok(acc.perms.includes('expense') && acc.perms.includes('exp.approve'));
 });
+
+test('订单业务员：不填默认开单人，填了就记填的', async () => {
+  await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'sales', 'purchase', 'parties', 'finance', 'hr', 'reports'] });
+  const c = await ok(admin, 'POST', '/api/customers', { name: '业绩客户' });
+  const p = await newProduct('YJ01');
+  const a = await ok(admin, 'POST', '/api/orders/sales', { partyId: c.id, date: '2026-11-09', items: [{ productId: p.id, qty: 1, price: 10 }] });
+  assert.equal(a.handler, '管理员');
+  const b = await ok(admin, 'POST', '/api/orders/sales', { partyId: c.id, date: '2026-11-09', handler: '小王', items: [{ productId: p.id, qty: 1, price: 10 }] });
+  assert.equal(b.handler, '小王'); assert.equal(b.creator, '管理员');
+  const e = await ok(admin, 'PUT', `/api/orders/sales/${b.id}`, { partyId: c.id, date: '2026-11-09', handler: '小李', items: [{ productId: p.id, qty: 2, price: 10 }] });
+  assert.equal(e.handler, '小李');
+});
+
+test('BOM：保存校验、表头、导入、按 BOM 成本改成本价', async () => {
+  const fp = await newProduct('BOMF1'), m1 = await newProduct('BOMM1', { cost: 2 }), m2 = await newProduct('BOMM2', { cost: 5 });
+  // 「生产 / BOM」模块默认不启用：接口拒绝，也不下发 BOM
+  const mods = ['inventory', 'products', 'sales', 'purchase', 'parties', 'finance', 'hr', 'reports'];
+  await ok(admin, 'PUT', '/api/settings', { modules: mods });
+  assert.equal((await call(admin, 'PUT', `/api/products/${fp.id}/bom`, { lines: [{ productId: m1.id, qty: 1 }] })).http, 403);
+  assert.match((await call(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '生产入库', bom: true, items: [{ productId: fp.id, qty: 1 }] })).error, /模块未启用/);
+  await ok(admin, 'PUT', '/api/settings', { modules: [...mods, 'bom'] });
+  assert.equal((await call(admin, 'PUT', `/api/products/${fp.id}/bom`, { lines: [{ productId: fp.id, qty: 1 }] })).http, 400, '不能包含自己');
+  assert.equal((await call(admin, 'PUT', `/api/products/${fp.id}/bom`, { lines: [{ productId: m1.id, qty: 0 }] })).http, 400, '用量要大于 0');
+  assert.equal((await call(admin, 'PUT', `/api/products/${fp.id}/bom`, { lines: [{ productId: m1.id, qty: 1 }, { productId: m1.id, qty: 2 }] })).http, 400, '重复物料');
+  await ok(admin, 'PUT', '/api/bom/cols', { show: ['sku', 'name', 'qty', 'price', 'amount'], custom: ['位号', '损耗率'] });
+  assert.equal((await call(admin, 'PUT', '/api/bom/cols', { custom: ['用量'] })).http, 400, '自定义列不能和内置列重名');
+  let r = await ok(admin, 'PUT', `/api/products/${fp.id}/bom`, { applyCost: true, lines: [{ productId: m1.id, qty: 3, x: { 位号: 'R1-R3', 乱写: 'x' } }, { name: '包装盒', unit: '个', qty: 1, price: 1.5 }] });
+  assert.equal(r.bom.length, 2); assert.deepEqual(r.bom[0].x, { 位号: 'R1-R3' }, '只保留设置过的自定义列');
+  assert.equal(r.cost, 7.5, '3×2 + 1×1.5');
+  // 导入：整份替换
+  const imp = await ok(admin, 'POST', '/api/bom/import', { boms: [{ productId: fp.id, lines: [{ productId: m1.id, qty: 2 }, { productId: m2.id, qty: 1 }] }] });
+  assert.equal(imp.rows, 2);
+  r = await prod(fp.id); assert.equal(r.bom.length, 2); assert.equal(r.bom[1].productId, m2.id);
+  assert.equal((await call(admin, 'POST', '/api/bom/import', { boms: [{ productId: fp.id, lines: [{ productId: 'nope', qty: 1 }] }] })).http, 400);
+  // 有库存时不能直接改成本价
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', items: [{ productId: fp.id, qty: 1, price: 9 }] });
+  assert.equal((await call(admin, 'PUT', `/api/products/${fp.id}/bom`, { applyCost: true, lines: [{ productId: m1.id, qty: 1 }] })).http, 400);
+  // 看不到价格的账号拿不到档案外物料单价
+  await ok(admin, 'PUT', `/api/products/${fp.id}/bom`, { lines: [{ productId: m1.id, qty: 2 }, { name: '胶水', qty: 1, price: 3 }] });
+  const ro = await newUser('bomro', 'r_prod');  // 有 BOM 权限、看不到价格
+  const seen = (await data(ro)).products.find(x => x.id === fp.id);
+  assert.equal(seen.bom[1].price, undefined); assert.equal(seen.cost, undefined);
+});
+
+test('生产入库按 BOM 领料：扣原料，成品成本按原料累加，作废原路退回', async () => {
+  const fp = await newProduct('SCF1'), m1 = await newProduct('SCM1'), m2 = await newProduct('SCM2');
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', items: [{ productId: m1.id, qty: 100, price: 2 }, { productId: m2.id, qty: 10, price: 5 }] });
+  await ok(admin, 'PUT', `/api/products/${fp.id}/bom`, { lines: [{ productId: m1.id, qty: 3 }, { productId: m2.id, qty: 0.5 }, { name: '包装盒', qty: 1, price: 1 }] });
+  // 原料不足 / 不是整数
+  assert.match((await call(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '生产入库', bom: true, items: [{ productId: fp.id, qty: 30 }] })).error, /原料不足/);
+  assert.match((await call(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '生产入库', bom: true, items: [{ productId: fp.id, qty: 3 }] })).error, /整数/);
+  const nb = await newProduct('SCF2');
+  assert.match((await call(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '生产入库', bom: true, items: [{ productId: nb.id, qty: 1 }] })).error, /没有设置 BOM/);
+  // 生产 4 个：扣 m1 12、m2 2；成本 = (12×2 + 2×5 + 4×1) / 4 = 9.5
+  const o = await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '生产入库', bom: true, items: [{ productId: fp.id, qty: 4, price: 999 }] });
+  assert.equal(o.bom, true);
+  let F = await prod(fp.id), A = await prod(m1.id), B = await prod(m2.id);
+  assert.equal(F.stock, 4); assert.equal(F.cost, 9.5); assert.equal(A.stock, 88); assert.equal(B.stock, 8);
+  const d = await doc(o.id); assert.equal(d.items[0].price, 9.5); assert.equal(d.items[0].mats.length, 2);
+  // 作废：成品扣回，原料退回
+  await ok(admin, 'POST', `/api/stockdocs/${o.id}/void`, { reason: '测试' });
+  F = await prod(fp.id); A = await prod(m1.id); B = await prod(m2.id);
+  assert.equal(F.stock, 0); assert.equal(A.stock, 100); assert.equal(B.stock, 10); assert.equal(A.cost, 2);
+  // 不勾选按 BOM：照常按填的单价入库，不扣原料
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '生产入库', items: [{ productId: fp.id, qty: 2, price: 8 }] });
+  assert.equal((await prod(m1.id)).stock, 100); assert.equal((await prod(fp.id)).cost, 8);
+  // 开启入库审核：审核通过时才领料
+  await setApprove(true, false);
+  const pend = await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '生产入库', bom: true, items: [{ productId: fp.id, qty: 2 }] });
+  assert.equal(pend.status, '待审核'); assert.equal((await prod(m1.id)).stock, 100);
+  await ok(admin, 'POST', `/api/stockdocs/${pend.id}/approve`, {});
+  assert.equal((await prod(m1.id)).stock, 94); assert.equal((await prod(m2.id)).stock, 9);
+  await setApprove(false, false);
+});
+
+test('「生产 / BOM」模块关掉后不下发 BOM；能编辑商品的内置角色自动有 BOM 权限', async () => {
+  const fp = (await data()).products.find(p => p.bom && p.bom.length);
+  assert.ok(fp, '前面的测试设置过 BOM');
+  await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products'] });
+  assert.equal((await data()).products.find(p => p.id === fp.id).bom, undefined);
+  await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'bom'] });
+  assert.ok((await data()).products.find(p => p.id === fp.id).bom.length);
+  const roles = (await ok(admin, 'GET', '/api/roles')).list;
+  assert.ok(roles.find(r => r.id === 'r_prod').perms.includes('bom'));
+  assert.ok(!roles.find(r => r.id === 'r_wh').perms.includes('bom'));
+  await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'sales', 'purchase', 'parties', 'finance', 'hr', 'reports'] });
+});

@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.1.5';
+const VERSION = '2.1.6';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -126,7 +126,7 @@ const TRANSFER = { col: 'transferDocs', prefix: 'DB', title: '调拨单' };
 const DEFAULT_WH = 'w1';
 
 /* ================= 模块 / 权限 ================= */
-const MODULES = { inventory: '库存管理', products: '商品管理', dashboard: '工作台', sales: '销售管理', purchase: '采购管理', parties: '客户 / 供应商', finance: '财务管理', hr: '人事管理', reports: '统计报表', shipping: '物流运费' };
+const MODULES = { inventory: '库存管理', products: '商品管理', bom: '生产 / BOM', dashboard: '工作台', sales: '销售管理', purchase: '采购管理', parties: '客户 / 供应商', finance: '财务管理', hr: '人事管理', reports: '统计报表', shipping: '物流运费' };
 const DEMO = process.env.XERP_DEMO === '1';  // 在线演示，见 HTTP 服务部分的 DEMO_BLOCK
 // 默认只开库存和商品；在线演示默认全开，方便别人看全部功能
 const DEFAULT_MODULES = DEMO ? Object.keys(MODULES) : ['inventory', 'products'];
@@ -139,6 +139,7 @@ const PERMS = [
   ['inv.cost', '查看价格与金额', 'inventory'], ['inv.backdate', '单据日期可选非当天（补录）', 'inventory'],
   ['inv.others', '查看 / 处理他人开的单据', 'inventory'], ['inv.transfer', '开调拨单（仓库之间移库）', 'inventory'],
   ['prod.view', '查看商品档案', 'products'], ['prod.edit', '新增 / 编辑商品', 'products'], ['prod.delete', '删除商品', 'products'],
+  ['bom', '设置 BOM 物料清单、生产入库按 BOM 领料', 'bom'],
   ['dashboard', '工作台', 'dashboard'], ['sales', '销售管理（全部操作）', 'sales'], ['purchase', '采购管理（全部操作）', 'purchase'],
   ['parties', '客户 / 供应商管理', 'parties'], ['finance', '财务管理', 'finance'],
   ['expense', '报销：提交、查看自己的报销单', 'finance'], ['exp.approve', '报销审批（查看全部报销单、批准 / 驳回）', 'finance'], ['hr', '人事管理', 'hr'], ['reports', '统计报表', 'reports'],
@@ -175,6 +176,13 @@ if (!getMeta('expPerms', false)) {  // v2.1.4 升级：有「财务管理」权�
     if (Array.isArray(ps) && ps.includes('finance')) db.prepare('UPDATE roles SET perms = ? WHERE id = ?').run(JSON.stringify([...new Set([...ps, 'expense', 'exp.approve'])]), r.id);
   }
   setMeta('expPerms', true);
+}
+if (!getMeta('bomPerm', false)) {  // v2.1.6 升级：能编辑商品的角色补上 BOM 权限（模块默认不启用，启用后才生效）
+  for (const r of db.prepare('SELECT id, perms FROM roles').all()) {
+    let ps; try { ps = JSON.parse(r.perms); } catch (e) { continue; }
+    if (Array.isArray(ps) && ps.includes('prod.edit') && !ps.includes('bom')) db.prepare('UPDATE roles SET perms = ? WHERE id = ?').run(JSON.stringify([...ps, 'bom']), r.id);
+  }
+  setMeta('bomPerm', true);
 }
 const roleById = db.prepare('SELECT * FROM roles WHERE id = ?');
 const rolePerms = r => { try { return cleanPerms(JSON.parse(r.perms)); } catch (e) { return []; } };
@@ -738,7 +746,7 @@ function saveOrder(ctx, kind, id) {
     }
     const discount = C.src ? 0 : round2(Number(b.discount) || 0);
     if (discount < 0 || discount > itemsTotal({ items }) + 0.001) fail('优惠金额要在 0 到明细合计之间');
-    const data = { [C.partyKey]: party, date: b.date, remark: str(b.remark, 500), items, ...(C.src ? { srcId: src ? src.id : '', srcNo: src ? src.no : '' } : { discount }) };
+    const data = { [C.partyKey]: party, date: b.date, remark: str(b.remark, 500), handler: str(b.handler, 32) || ctx.user.name, items, ...(C.src ? { srcId: src ? src.id : '', srcNo: src ? src.no : '' } : { discount }) };
     if (id) {
       const o = get(C.col, id) || fail('单据不存在', 404);
       // 采购单审核后、入库前也能改，改完回到待审核重新审核
@@ -989,6 +997,7 @@ function lackOf(items, wh) {
 const lackText = (lack, wh) => `${whName(wh)}库存不足：` + lack.map(x => x.p ? `${x.p.name}（需 ${x.q}，现有 ${whQty(x.p, wh)}）` : '商品已删除').join('、');
 // 单据入账：逐行改库存，出库行回填成本单价，批次写回明细
 function postStockDoc(ctx, o) {
+  if (o.dir === 'in' && o.bom) bomConsume(ctx, o);
   o.items.forEach(i => {
     const m = moveStock(ctx, get('products', i.productId), o.dir === 'in' ? i.qty : -i.qty, o.type, o.no, i.note || o.party, { price: o.dir === 'in' ? i.price : undefined, date: o.date, wh: o.wh, batch: i.batch, serials: i.serials });
     if (o.dir === 'out') { i.price = round4(m.unit); if (i.rate) i.uprice = round4(m.unit * i.rate); }
@@ -1030,6 +1039,117 @@ function unitQty(p, i) {
 }
 // 录入的是所选单位的单价，按基本单位保存且不取整，保证 数量 × 单价 等于录入金额
 const basePrice = (price, l) => (l.rate ? price / l.rate : price);
+/* ---------- BOM（物料清单）：每个商品可挂一份；用量按成品 1 个基本单位计；
+   物料可以是商品档案里的商品（成本取商品当前成本），也可以是档案外的物料（手填单价）；
+   「生产入库」勾选按 BOM 领料时：按用量扣原料库存，成品入库成本 = 原料实际出库成本 + 档案外物料单价，逐项累加 ---------- */
+const BOM_BUILTIN = ['sku', 'name', 'spec', 'unit', 'qty', 'price', 'amount', 'note'];
+function bomCols() {
+  const c = getMeta('settings', {}).bomCols || {};
+  return { show: Array.isArray(c.show) ? c.show : BOM_BUILTIN, custom: Array.isArray(c.custom) ? c.custom : [] };
+}
+function cleanBomLines(p, raw) {
+  if (!Array.isArray(raw)) fail('BOM 格式不正确');
+  if (raw.length > 300) fail('一个商品的 BOM 最多 300 行');
+  const custom = bomCols().custom, seen = new Set();
+  return raw.filter(l => l && (l.productId || str(l.name, 100))).map((l, n) => {
+    const at = `第 ${n + 1} 行`, qty = Number(l.qty);
+    if (!Number.isFinite(qty) || qty <= 0 || qty > 1e6) fail(`${at}用量需大于 0`);
+    const x = {};
+    for (const k of custom) { const v = str(l.x && l.x[k], 100); if (v) x[k] = v; }
+    const base = { qty: round4(qty), note: str(l.note, 100), ...(Object.keys(x).length ? { x } : {}) };
+    if (l.productId) {
+      const m = get('products', str(l.productId, 64)) || fail(`${at}的物料不在商品档案里（可能已删除）`);
+      if (m.id === p.id) fail(`${at}：BOM 里不能包含商品自己`);
+      if (seen.has(m.id)) fail(`${at}：「${m.name}」重复了，同一物料请合并成一行`);
+      seen.add(m.id);
+      return { productId: m.id, ...base };
+    }
+    const price = l.price === '' || l.price == null ? 0 : Number(l.price);
+    if (!Number.isFinite(price) || price < 0) fail(`${at}单价不正确`);
+    return { name: str(l.name, 100), spec: str(l.spec, 60), unit: str(l.unit, 10), price: round4(price), ...base };
+  });
+}
+// BOM 成本：每个基本单位成品需要的物料成本合计
+const bomCost = lines => round4(sum(lines || [], l => l.qty * (l.productId ? ((get('products', l.productId) || {}).cost || 0) : l.price || 0)));
+function saveBom(ctx, id) {
+  return tx(() => {
+    const p = get('products', id) || fail('商品不存在', 404);
+    const lines = cleanBomLines(p, ctx.body.lines);
+    if (lines.length) p.bom = lines; else delete p.bom;
+    // 按 BOM 成本更新成本价：只在没有库存时可以（有库存时成本按移动加权平均，生产入库会按 BOM 自动算）
+    if (ctx.body.applyCost) {
+      if (!seesPrice(ctx.perms)) fail('没有查看价格的权限', 403);
+      if (p.stock) fail(`「${p.name}」还有库存 ${p.stock}，成本价由入库自动计算；请用「生产入库」按 BOM 领料入库，入库成本会按 BOM 自动累加`);
+      p.cost = bomCost(lines);
+    }
+    put('products', p); audit(ctx, '修改 BOM', `${p.name} ${lines.length} 项`);
+    return p;
+  });
+}
+// 批量导入：{ boms: [{ productId, lines }] }，列出的商品整份替换；任何一行出错整批不导入
+function importBoms(ctx) {
+  const boms = Array.isArray(ctx.body.boms) ? ctx.body.boms : fail('没有可导入的数据');
+  if (!boms.length) fail('没有可导入的数据');
+  return tx(() => {
+    let n = 0;
+    for (const b of boms) {
+      const p = get('products', str(b && b.productId, 64)) || fail('成品不在商品档案里');
+      try { const lines = cleanBomLines(p, b.lines); if (lines.length) p.bom = lines; else delete p.bom; n += lines.length; }
+      catch (e) { fail(`「${p.name}」${e.message}`); }
+      put('products', p);
+    }
+    audit(ctx, '导入 BOM', `${boms.length} 个商品 ${n} 行`);
+    return { products: boms.length, rows: n };
+  });
+}
+function saveBomCols(ctx) {
+  const b = ctx.body, show = (Array.isArray(b.show) ? b.show : BOM_BUILTIN).filter(k => BOM_BUILTIN.includes(k));
+  for (const k of ['name', 'qty']) if (!show.includes(k)) show.push(k);
+  const custom = [...new Set((Array.isArray(b.custom) ? b.custom : []).map(c => str(c, 12)).filter(Boolean))];
+  if (custom.length > 8) fail('自定义列最多 8 个');
+  const clash = custom.find(c => ['物料编码', '编码', '物料名称', '名称', '规格', '单位', '用量', '单价', '金额', '备注'].includes(c));
+  if (clash) fail(`「${clash}」和内置列重名，换个名字`);
+  const s = getMeta('settings', {}); s.bomCols = { show: BOM_BUILTIN.filter(k => show.includes(k)), custom }; setMeta('settings', s);
+  audit(ctx, '修改 BOM 表头', custom.join('、'));
+  return s.bomCols;
+}
+// 生产入库按 BOM 领料：在成品入库前调用，扣原料、算出成品单价写回明细；领料记录存在 i.mats，作废时原路退回
+function bomConsume(ctx, o) {
+  const wh = o.wh || DEFAULT_WH;
+  const plan = o.items.map(i => { const p = get('products', i.productId) || fail('单据里有商品已被删除'); return { i, p, lines: p.bom || [] }; });
+  const noBom = plan.filter(x => !x.lines.length).map(x => x.p.name);
+  if (noBom.length) fail(`「${noBom.join('、')}」没有设置 BOM，不能按 BOM 领料（可以先在商品管理里设置 BOM，或取消「按 BOM 领料」）`);
+  // 先汇总检查库存，一次说清缺哪些
+  const need = {};
+  for (const { i, p, lines } of plan) for (const l of lines) if (l.productId) {
+    const q = round4(l.qty * i.qty);
+    if (Math.abs(q - Math.round(q)) > 1e-6) fail(`「${p.name}」生产 ${i.qty} 需要「${(get('products', l.productId) || {}).name}」${q}，库存按整数计，请调整 BOM 用量或生产数量`);
+    need[l.productId] = (need[l.productId] || 0) + Math.round(q);
+  }
+  const lack = Object.entries(need).map(([pid, q]) => ({ m: get('products', pid), q })).filter(x => !x.m || whQty(x.m, wh) < x.q);
+  if (lack.length) fail('原料不足，不能生产入库：' + lack.map(x => x.m ? `${x.m.name}（需 ${x.q}，${whName(wh)}现有 ${whQty(x.m, wh)}）` : '有物料已被删除').join('、'));
+  const serial = Object.keys(need).map(pid => get('products', pid)).find(m => m.serial);
+  if (serial) fail(`原料「${serial.name}」启用了序列号，不能自动领料，请先用出库单登记序列号领料`);
+  for (const { i, p, lines } of plan) {
+    let total = 0; i.mats = [];
+    for (const l of lines) {
+      if (!l.productId) { total += l.qty * i.qty * (l.price || 0); continue; }
+      const m = get('products', l.productId), q = Math.round(l.qty * i.qty);
+      const r = moveStock(ctx, m, -q, '生产领料', o.no, p.name, { date: o.date, wh });
+      total += q * r.unit;
+      i.mats.push({ productId: m.id, qty: q, cost: round4(r.unit), ...(r.alloc ? { batches: r.alloc.map(({ no, expDate, qty }) => ({ no, expDate, qty })) } : {}) });
+    }
+    i.price = round4(total / i.qty);
+    if (i.rate) i.uprice = round4(i.price * i.rate);
+  }
+}
+function bomReturn(ctx, o, reason) {
+  const wh = o.wh || DEFAULT_WH;
+  o.items.forEach(i => (i.mats || []).forEach(x => {
+    const m = get('products', x.productId); if (!m) return;
+    moveStock(ctx, m, x.qty, '作废冲回', o.no, reason || '生产入库作废，原料退回', { price: x.cost, wh, alloc: m.batch && x.batches ? x.batches : undefined, undo: o.no });
+  }));
+}
 function saveStockDoc(ctx) {
   const b = ctx.body, dir = b.dir === 'out' ? 'out' : 'in', D = DOC[dir];
   if (!DOC_TYPES[dir].includes(b.type)) fail('请选择' + D.title.slice(0, 2) + '类型');
@@ -1065,7 +1185,10 @@ function saveStockDoc(ctx) {
     if (new Set(sn).size < sn.length) fail('同一张单据里序列号有重复');
     items.forEach(i => { if (i.serials) checkSerials(get('products', i.productId), i.serials, dir === 'in' ? 1 : -1, wh); });
     const pending = needApprove(dir);
-    const o = { id: uid(), no: nextNo(D), dir, type: b.type, wh, date, time: hhmm(), party: str(b.party, 100), handler: str(b.handler, 32), remark: str(b.remark, 500),
+    const useBom = dir === 'in' && b.type === '生产入库' && !!b.bom;
+    if (useBom && !ctx.perms.has('bom')) fail('没有权限：' + PERM_LABEL.bom + (enabledModules().includes('bom') ? '' : '（「生产 / BOM」模块未启用）'), 403);
+    if (useBom && items.some(i => i.serials)) fail('按 BOM 领料的生产入库暂不支持序列号成品，请取消「按 BOM 领料」');
+    const o = { id: uid(), no: nextNo(D), dir, type: b.type, ...(useBom ? { bom: true } : {}), wh, date, time: hhmm(), party: str(b.party, 100), handler: str(b.handler, 32), remark: str(b.remark, 500),
       ...(str(b.project, 60) ? { project: str(b.project, 60) } : {}),
       ...(dir === 'out' && str(b.address, 200) ? { address: str(b.address, 200) } : {}), items, status: pending ? '待审核' : '正常', creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), printCount: 0 };
     if (!pending) postStockDoc(ctx, o);
@@ -1116,6 +1239,7 @@ function voidStockDoc(ctx, id) {
       const alloc = p.batch && i.batches ? i.batches : undefined;
       moveStock(ctx, p, o.dir === 'in' ? -i.qty : i.qty, '作废冲回', o.no, reason, o.dir === 'in' ? { reversePrice: i.price, wh, alloc, undo: o.no } : { price: i.price, wh, alloc, undo: o.no });
     });
+    if (o.dir === 'in' && o.bom) bomReturn(ctx, o, reason);  // 生产入库：领用的原料退回
     Object.assign(o, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString(), voidReason: reason });
     put('stockDocs', o);
     voidShipmentsOf('out', o.id);
@@ -1875,9 +1999,10 @@ function visibleData(ctx) {
   const data = {};
   COLS.forEach(c => { data[c] = want[c] ? list(c) : []; if (DATED.includes(c)) data[c].sort(byDate); });
   if (!seesPrice(P)) {
-    data.products = data.products.map(({ cost, price, ...p }) => p);
+    data.products = data.products.map(({ cost, price, ...p }) => p.bom ? { ...p, bom: p.bom.map(({ price, ...l }) => l) } : p);
     for (const c of ['customers', 'suppliers']) data[c] = data[c].map(({ prices, ...r }) => r);
   }
+  if (!P.has('bom')) data.products = data.products.map(({ bom, ...p }) => p);
   if (!expAll(P)) data.expenses = data.expenses.filter(o => o.creatorId === ctx.user.id);
   data.shipBills = data.shipBills.map(({ rows, ...b }) => b);  // 账单明细可能上万行，打开账单时再单独取
   // 电子面单密码不下发，只告诉前端有没有设置
@@ -2238,6 +2363,9 @@ route('POST', '/api/products/import', ctx => importProducts(ctx), { perm: 'prod.
 route('GET', '/api/products/:id/image', ctx => getProductImage(ctx, ctx.params.id));
 route('PUT', '/api/products/:id/image', ctx => saveProductImage(ctx, ctx.params.id), { perm: 'prod.edit' });
 route('DELETE', '/api/products/:id/image', ctx => deleteProductImage(ctx, ctx.params.id), { perm: 'prod.edit' });
+route('PUT', '/api/products/:id/bom', ctx => saveBom(ctx, ctx.params.id), { perm: 'bom' });
+route('POST', '/api/bom/import', ctx => importBoms(ctx), { perm: 'bom' });
+route('PUT', '/api/bom/cols', ctx => saveBomCols(ctx), { perm: 'bom' });
 route('POST', '/api/stockdocs', ctx => saveStockDoc(ctx), { perm: ctx => ctx.body.dir === 'out' ? 'inv.out' : 'inv.in' });
 route('POST', '/api/stockdocs/:id/void', ctx => voidStockDoc(ctx, ctx.params.id), { perm: 'inv.view' });  // 具体权限在函数里按单据状态判断
 route('POST', '/api/stockdocs/:id/approve', ctx => approveStockDoc(ctx, ctx.params.id, true), { perm: 'inv.approve' });

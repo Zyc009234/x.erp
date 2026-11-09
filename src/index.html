@@ -224,6 +224,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .m-body{padding:20px 22px;max-height:68vh;overflow-y:auto}
 .m-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid var(--border)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.pop-menu{position:fixed;z-index:200;min-width:130px;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:4px;display:flex;flex-direction:column}.pop-menu button{border:0;background:none;text-align:left;padding:8px 12px;border-radius:7px;font:inherit;color:var(--text);cursor:pointer}.pop-menu button:hover{background:var(--panel2)}.pop-menu .danger-text{color:var(--red)}
 .exp-imgs{display:flex;flex-wrap:wrap;gap:8px}.exp-img{position:relative;width:96px;height:96px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg)}.exp-img img{width:100%;height:100%;object-fit:cover;cursor:zoom-in}.exp-img .icon-btn{position:absolute;right:2px;top:2px;background:rgba(0,0,0,.55);color:#fff}
 .pwrap{display:flex;align-items:center;gap:2px}.pwrap input{flex:1;min-width:0}.spm{width:12px;flex:none;text-align:center}.spm b{color:var(--red)}.spm i{color:var(--muted);font-style:normal;cursor:pointer}
 .tip-line{background:var(--orange-soft);color:var(--text);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px}
@@ -344,7 +345,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.1.5 · 数据保存在服务器</div>
+    <div class="side-foot">v2.1.6 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -845,6 +846,20 @@ function delEntity(type, id) {
   const rec = byId(db[type], id), cfg = ENT[type];
   confirmBox(`确定删除${cfg.title}「${esc(rec.name)}」吗？此操作不可撤销。`, () => mutate('DELETE', `/api/${type}/${id}`, undefined, '已删除'));
 }
+// 商品行「更多」菜单里的操作
+const prodMoreItems = p => [can('prod.edit') && ['图片', 'imgView', p.id], can('bom') && ['BOM 物料清单', 'bomOpen', p.id], can('prod.delete') && ['删除', 'del', 'products|' + p.id, 'danger-text']].filter(Boolean);
+// 小弹出菜单：贴着按钮显示，点任意地方关闭；菜单项本身也是 data-act 按钮
+function popMenu(anchor, items) {
+  const old = $('.pop-menu'); if (old) { old.remove(); if (old._anchor === anchor) return; }
+  const m = document.createElement('div'); m.className = 'pop-menu'; m._anchor = anchor;
+  m.innerHTML = items.map(([l, act, id, cls]) => `<button class="${cls || ''}" data-act="${act}" data-id="${esc(id)}">${l}</button>`).join('');
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect(), h = m.offsetHeight, w = m.offsetWidth;
+  m.style.left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) + 'px';
+  m.style.top = (r.bottom + h + 8 > innerHeight ? r.top - h - 4 : r.bottom + 4) + 'px';
+  const close = e => { if (e && e.target === anchor) return; m.remove(); document.removeEventListener('click', close, true); removeEventListener('scroll', close, true); };
+  setTimeout(() => { document.addEventListener('click', close, true); addEventListener('scroll', close, true); });
+}
 function pageProducts() {
   const filters = [
     {key:'cat', label:'全部分类', options:cats(), test:(p, v) => p.category === v},
@@ -853,7 +868,7 @@ function pageProducts() {
   const pr = seesPrice();
   const btns = `<button class="btn" data-act="labelOpen">${ic('tag')}打印标签</button>`
     + (can('inv.export') || isAdmin() ? `<button class="btn" data-act="export" data-id="products">${ic('download')}导出</button>` : '')
-    + (can('prod.edit') ? `<button class="btn" data-act="catManage">${ic('box')}分类</button><button class="btn" data-act="importOpen">${ic('upload')}导入</button><button class="btn primary" data-act="add" data-id="products">${ic('plus')}新增商品</button>` : '');
+    + (can('prod.edit') ? `<button class="btn" data-act="catManage">${ic('box')}分类</button><button class="btn" data-act="importOpen">${ic('upload')}导入</button>${can('bom') ? `<button class="btn" data-act="bomImport">${ic('upload')}导入 BOM</button>` : ''}<button class="btn primary" data-act="add" data-id="products">${ic('plus')}新增商品</button>` : '');
   $('#view').innerHTML = pageHead('商品管理', '维护商品档案、规格与安全库存') + `
   <div class="grid g4 mb">
     ${kpi('商品总数', db.products.length, 'box', 'primary')}
@@ -864,7 +879,7 @@ function pageProducts() {
   <div class="card">${toolbar('products', {placeholder:'搜索编码 / 名称 / 规格', filters, buttons:btns})}<div id="list-products"></div></div>`;
   mountList('products', {rows:() => db.products, search:p => p.sku + (p.barcode || '') + p.name + (p.spec || '') + p.category, filters, columns:[
     {t:'商品编码', r:p => `<span class="sub-t">${esc(p.sku)}</span>${p.barcode ? `<div class="sub-t">${ic('barcode')} ${esc(p.barcode)}</div>` : ''}`, s:p => p.sku},
-    {t:'商品名称', r:p => `<div class="pcell">${pimg(p)}<div><b>${esc(p.name)}</b>${p.batch ? ' <span class="badge blue plain">批次</span>' : ''}${p.spec ? `<div class="sub-t">${esc(p.spec)}</div>` : ''}</div></div>`, s:p => p.name},
+    {t:'商品名称', r:p => `<div class="pcell">${pimg(p)}<div><b>${esc(p.name)}</b>${p.batch ? ' <span class="badge blue plain">批次</span>' : ''}${can('bom') && (p.bom || []).length ? ` <a class="badge purple plain" data-act="bomOpen" data-id="${p.id}" title="BOM 物料清单">BOM ${p.bom.length}</a>` : ''}${p.spec ? `<div class="sub-t">${esc(p.spec)}</div>` : ''}</div></div>`, s:p => p.name},
     {t:'分类', r:p => badge(p.category, 'primary plain')},
     {t:'单位', r:p => esc(p.unit) + ((p.units || []).length ? `<div class="sub-t">${p.units.map(u => '1' + esc(u.name) + '=' + u.rate + esc(p.unit)).join(' ')}</div>` : '')},
     ...(pr ? [
@@ -873,8 +888,161 @@ function pageProducts() {
       {t:'毛利率', cls:'num', r:p => p.price ? ((p.price - p.cost) / p.price * 100).toFixed(1) + '%' : '-', s:p => p.price ? (p.price - p.cost) / p.price : 0}] : []),
     {t:'库存', cls:'num', r:p => `<b>${num(p.stock)}</b>${stockText(p, p.stock) ? `<div class="sub-t">${esc(stockText(p, p.stock))}</div>` : ''}`, s:p => p.stock},
     {t:'状态', r:p => badge(...stockStatus(p))},
-    {t:'操作', r:p => `<div class="ops">${can('prod.edit') ? tbtn('编辑', 'edit', 'products|' + p.id) + tbtn('图片', 'imgView', p.id) : ''}${can('inv.in') ? tbtn('入库', 'stock', 'in|' + p.id) : ''}${can('prod.delete') ? tbtn('删除', 'del', 'products|' + p.id, 'danger-text') : ''}</div>`}
+    {t:'操作', r:p => `<div class="ops">${can('prod.edit') ? tbtn('编辑', 'edit', 'products|' + p.id) : ''}${can('inv.in') ? tbtn('入库', 'stock', 'in|' + p.id) : ''}${prodMoreItems(p).length ? tbtn('更多 ▾', 'prodMore', p.id) : ''}</div>`}
   ], exp:{name:'商品列表', cols:[['商品编码', p => p.sku], ['商品名称', p => p.name], ['规格型号', p => p.spec], ['分类', p => p.category], ['单位', p => p.unit], ...(pr ? [['成本价', p => p.cost], ['销售价', p => p.price]] : []), ['库存', p => p.stock], ['安全库存', p => p.safety]]}});
+}
+
+/* ---------- BOM（物料清单）：商品管理里每个商品可设；表头可选、可加自定义列；可导入 Excel；成本按物料逐项累加 ---------- */
+const BOM_COLS = {sku:'物料编码', name:'物料名称', spec:'规格', unit:'单位', qty:'用量', price:'单价', amount:'金额', note:'备注'};
+const bomColsCfg = () => { const c = db.settings.bomCols || {}; return {show:c.show || Object.keys(BOM_COLS), custom:c.custom || []}; };
+const bomLineCost = l => l.productId ? (prodOf(l.productId).cost || 0) : +l.price || 0;
+const bomCostOf = lines => sum(lines || [], l => (+l.qty || 0) * bomLineCost(l));
+function bomModal(id) {
+  const p = byId(db.products, id); if (!p) return;
+  const edit = can('bom'), pr = seesPrice(), cfg = bomColsCfg();
+  const show = k => cfg.show.includes(k) && (pr || !['price', 'amount'].includes(k));
+  const lines = (p.bom || []).map(l => ({...l, x:{...(l.x || {})}}));
+  const blank = () => ({productId:'', name:'', spec:'', unit:'', qty:1, price:'', note:'', x:{}});
+  if (edit) lines.push(blank());
+  openModal(`${modalHead('BOM 物料清单 · ' + esc(p.name))}<div class="m-body">
+    <p class="sub-t" style="margin-bottom:10px">用量按做 1 ${esc(p.unit)}「${esc(p.name)}」需要的数量填。物料可以从商品档案里选（成本取商品当前成本价），也可以直接输入档案外的物料并填单价。${edit ? '「生产入库」时勾选「按 BOM 领料」，会自动扣原料库存，成品入库成本按原料成本累加。' : ''}</p>
+    ${edit ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn sm" id="bAdd">${ic('plus')}添加一行</button><label class="btn sm">${ic('upload')}从 Excel 导入<input type="file" id="bFile" accept=".xlsx,.xls,.csv" hidden></label><button class="btn sm" id="bTpl">${ic('download')}下载模板</button><button class="btn sm" id="bCols">${ic('settings')}表头设置</button></div>` : ''}
+    <datalist id="bProdList">${db.products.filter(x => x.id !== p.id).map(x => `<option value="${esc(prodLabel(x))}">`).join('')}</datalist>
+    <div class="table-wrap"><table class="tbl items"><thead><tr>${show('sku') ? '<th style="width:110px">物料编码</th>' : ''}<th style="min-width:200px">物料名称</th>${show('spec') ? '<th style="width:110px">规格</th>' : ''}${show('unit') ? '<th style="width:60px">单位</th>' : ''}<th style="width:90px">用量</th>${show('price') ? '<th style="width:100px">单价</th>' : ''}${show('amount') ? '<th class="num" style="width:100px">金额</th>' : ''}${cfg.custom.map(c => `<th style="width:100px">${esc(c)}</th>`).join('')}${show('note') ? '<th style="width:130px">备注</th>' : ''}${edit ? '<th style="width:44px"></th>' : ''}</tr></thead><tbody id="bBody"></tbody></table></div>
+    ${pr ? `<div class="o-total">BOM 成本（每 ${esc(p.unit)}）<b id="bSum">¥0.00</b><span class="sub-t" style="margin-left:10px">当前成本价 ${money(p.cost || 0)}</span></div>` : ''}</div>
+  <div class="m-foot">${edit && pr ? `<label class="chk" style="margin-right:auto" title="${p.stock ? '有库存时成本价由入库自动计算，请用生产入库按 BOM 领料' : ''}"><input type="checkbox" id="bApply" ${p.stock ? 'disabled' : ''}>保存时把成本价改成 BOM 成本${p.stock ? '（有库存，不能直接改）' : ''}</label>` : ''}
+    <button class="btn" data-act="closeModal">${edit ? '取消' : '关闭'}</button>${edit ? `<button class="btn primary" id="bSave">${ic('check')}保存</button>` : ''}</div>`, 'xl');
+  const tb = $('#bBody'), dis = edit ? '' : 'disabled';
+  const draw = () => {
+    tb.innerHTML = lines.map((l, i) => { const m = l.productId ? prodOf(l.productId) : null; return `<tr>
+      ${show('sku') ? `<td class="sub-t">${m ? esc(m.sku) : ''}</td>` : ''}
+      <td><input list="bProdList" data-i="${i}" data-k="name" value="${esc(m ? prodLabel(m) : l.name || '')}" placeholder="编码 / 名称，或直接输入" ${dis}></td>
+      ${show('spec') ? `<td>${m ? `<span class="sub-t">${esc(m.spec || '')}</span>` : `<input data-i="${i}" data-k="spec" value="${esc(l.spec || '')}" ${dis}>`}</td>` : ''}
+      ${show('unit') ? `<td>${m ? esc(m.unit) : `<input data-i="${i}" data-k="unit" value="${esc(l.unit || '')}" ${dis}>`}</td>` : ''}
+      <td><input type="number" min="0" step="any" data-i="${i}" data-k="qty" value="${l.qty}" ${dis}></td>
+      ${show('price') ? `<td>${m ? `<span class="sub-t" title="商品当前成本价">${money(m.cost || 0)}</span>` : `<input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${l.price ?? ''}" ${dis}>`}</td>` : ''}
+      ${show('amount') ? `<td class="num amt">${money((+l.qty || 0) * bomLineCost(l))}</td>` : ''}
+      ${cfg.custom.map(c => `<td><input data-i="${i}" data-x="${esc(c)}" value="${esc((l.x || {})[c] || '')}" ${dis}></td>`).join('')}
+      ${show('note') ? `<td><input data-i="${i}" data-k="note" value="${esc(l.note || '')}" ${dis}></td>` : ''}
+      ${edit ? `<td><button class="icon-btn sm" data-del="${i}" title="删除">${ic('trash')}</button></td>` : ''}</tr>`; }).join('')
+      || `<tr><td colspan="12" class="sub-t" style="text-align:center;padding:20px">还没有设置 BOM</td></tr>`;
+    upd();
+  };
+  const upd = () => { if ($('#bSum')) $('#bSum').textContent = money(bomCostOf(lines.filter(l => l.productId || l.name))); };
+  if (!edit) return draw();
+  tb.addEventListener('change', e => {
+    const t = e.target, i = +t.dataset.i; if (t.dataset.k !== 'name') return;
+    const v = t.value.trim(), m = findProduct(v);
+    if (m && m.id === p.id) { toast('BOM 里不能包含商品自己', 'error'); t.value = ''; return; }
+    Object.assign(lines[i], m ? {productId:m.id, name:''} : {productId:'', name:v});
+    if (i === lines.length - 1 && v) lines.push(blank());
+    draw(); const ins = tb.querySelectorAll('[data-k=qty]'); if (ins[i]) ins[i].focus();
+  });
+  tb.addEventListener('input', e => {
+    const t = e.target, i = t.dataset.i; if (i == null) return;
+    if (t.dataset.x) { lines[+i].x[t.dataset.x] = t.value; return; }
+    const k = t.dataset.k; if (k === 'name') return;
+    lines[+i][k] = t.value;
+    if (k === 'qty' || k === 'price') { const a = t.closest('tr').querySelector('.amt'); if (a) a.textContent = money((+lines[+i].qty || 0) * bomLineCost(lines[+i])); upd(); }
+  });
+  tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { lines.splice(+b.dataset.del, 1); if (!lines.length) lines.push(blank()); draw(); } });
+  $('#bAdd').onclick = () => { lines.push(blank()); draw(); const ins = tb.querySelectorAll('[data-k=name]'); ins[ins.length - 1].focus(); };
+  $('#bTpl').onclick = () => bomTpl(p);
+  $('#bCols').onclick = () => bomColsModal(() => bomModal(id));
+  $('#bFile').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try {
+      const got = await bomParse(f, p);
+      if (got.multi) throw new Error('这个文件里有「成品编码」列，是多个商品的 BOM，请到商品管理工具栏点「导入 BOM」');
+      lines.splice(0, lines.length, ...got.lines, blank()); draw(); toast(`已读入 ${got.lines.length} 行，确认无误后点「保存」`);
+    } catch (err) { toast(err.message, 'error'); }
+  };
+  $('#bSave').onclick = () => {
+    const ls = lines.filter(l => l.productId || String(l.name || '').trim());
+    const bad = ls.findIndex(l => !(+l.qty > 0)); if (bad >= 0) return toast(`第 ${bad + 1} 行用量需大于 0`, 'error');
+    mutate('PUT', `/api/products/${id}/bom`, {lines:ls.map(l => ({productId:l.productId || undefined, name:l.productId ? undefined : String(l.name).trim(), spec:l.spec || '', unit:l.unit || '', qty:+l.qty, price:l.price === '' ? '' : +l.price, note:l.note || '', x:l.x})), applyCost:!!($('#bApply') && $('#bApply').checked)}, ls.length ? `BOM 已保存（${ls.length} 项）` : 'BOM 已清空');
+  };
+  draw();
+}
+function bomColsModal(back) {
+  const cfg = bomColsCfg(), opt = ['sku', 'spec', 'unit', 'price', 'amount', 'note'];
+  openModal(`${modalHead('BOM 表头设置')}<div class="m-body">
+    <p class="sub-t" style="margin-bottom:10px">勾选要显示的列（物料名称、用量必须有）；自定义列可以填位号、供应商、损耗率等，每个商品的 BOM 都会有这些列，导入时按列名对上。所有人共用。</p>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:14px">${opt.map(k => `<label class="chk"><input type="checkbox" data-c="${k}" ${cfg.show.includes(k) ? 'checked' : ''}>${BOM_COLS[k]}</label>`).join('')}</div>
+    <label class="field"><span>自定义列（用逗号或顿号隔开，最多 8 个）</span><input id="bcCustom" value="${esc(cfg.custom.join('、'))}" placeholder="例如：位号、供应商、损耗率"></label></div>
+  <div class="m-foot"><button class="btn" id="bcBack">返回</button><button class="btn primary" id="bcSave">${ic('check')}保存</button></div>`);
+  $('#bcBack').onclick = back;
+  $('#bcSave').onclick = async () => {
+    const show = ['name', 'qty', ...[...document.querySelectorAll('[data-c]')].filter(x => x.checked).map(x => x.dataset.c)];
+    const custom = $('#bcCustom').value.split(/[,，、]+/).map(x => x.trim()).filter(Boolean);
+    try { await api('PUT', '/api/bom/cols', {show, custom}); await reload(); toast('表头已保存'); back(); } catch (e) { toast(e.message, 'error'); }
+  };
+}
+// 读 Excel / CSV：表头里找 成品编码（多商品时）、物料编码 / 物料名称、规格、单位、用量、单价、备注、自定义列
+async function bomParse(file, one) {
+  const aoa = await readSheet(file), norm = v => String(v ?? '').replace(/[\s*＊]/g, '');
+  const hi = aoa.findIndex(r => r.some(c => /用量|数量/.test(norm(c))));
+  if (hi < 0) throw new Error('没找到表头：需要有「物料编码」或「物料名称」和「用量」列，建议先下载模板');
+  const h = aoa[hi].map(norm), col = re => h.findIndex(x => re.test(x));
+  const C = {parent:col(/^(成品|父件|产品)(编码|名称)?$/), code:col(/^(物料|子件|材料)?编码$|^SKU$/i), name:col(/^(物料|子件|材料)?名称$/), spec:col(/^规格/), unit:col(/^单位$/), qty:col(/^用量$|^数量$|^单位用量$/), price:col(/^单价$|^成本价?$/), note:col(/^备注$/)};
+  if (C.qty < 0 || C.code < 0 && C.name < 0) throw new Error('表头需要有「物料编码」或「物料名称」，以及「用量」');
+  const custom = bomColsCfg().custom.map(c => [c, h.indexOf(norm(c))]).filter(([, i]) => i >= 0);
+  const cell = (r, i) => i < 0 ? '' : String(r[i] ?? '').trim();
+  const groups = new Map(), errs = [];
+  for (let j = hi + 1; j < aoa.length; j++) {
+    const r = aoa[j], code = cell(r, C.code), name = cell(r, C.name), q = cell(r, C.qty), at = `第 ${j + 1} 行`;
+    if (!code && !name && !q) continue;
+    let parent = one;
+    if (!one || C.parent >= 0 && cell(r, C.parent)) {
+      const pv = cell(r, C.parent); parent = pv && findProduct(pv);
+      if (!parent) { errs.push(`${at}：成品「${pv || '（空）'}」不在商品档案里`); continue; }
+    }
+    if (!(+q > 0)) { errs.push(`${at}：用量需大于 0`); continue; }
+    const m = (code && findProduct(code)) || (name && db.products.find(x => x.name === name && !code));
+    if (m && m.id === parent.id) { errs.push(`${at}：BOM 里不能包含商品自己`); continue; }
+    if (!m && !name) { errs.push(`${at}：物料编码「${code}」不在商品档案里，档案外的物料请填「物料名称」`); continue; }
+    const x = Object.fromEntries(custom.map(([c, i]) => [c, cell(r, i)]).filter(([, v]) => v));
+    const l = m ? {productId:m.id, qty:+q, note:cell(r, C.note), x} : {name, spec:cell(r, C.spec), unit:cell(r, C.unit), qty:+q, price:cell(r, C.price) === '' ? '' : +cell(r, C.price) || 0, note:cell(r, C.note), x};
+    const g = groups.get(parent.id) || []; const dup = m && g.find(y => y.productId === m.id);
+    if (dup) dup.qty = +(dup.qty + l.qty).toFixed(4); else g.push(l);
+    groups.set(parent.id, g);
+  }
+  if (errs.length) throw new Error(errs.slice(0, 6).join('；') + (errs.length > 6 ? `……共 ${errs.length} 处` : ''));
+  if (!groups.size) throw new Error('文件里没有 BOM 数据');
+  return {multi:!one || C.parent >= 0 && groups.size > 1 || C.parent >= 0 && !groups.has(one.id), groups, lines:one ? groups.get(one.id) || [] : []};
+}
+function bomImport() {
+  openModal(`${modalHead('导入 BOM')}<div class="m-body">
+    <p class="sub-t" style="margin-bottom:10px">一个文件可以放多个商品的 BOM：第一行表头，需要 <b>成品编码</b>、<b>物料编码</b>（档案外的物料改填 <b>物料名称</b>，可再填规格、单位、单价）、<b>用量</b>（做 1 个成品需要多少），可选 <b>备注</b> 和你在「表头设置」里加的自定义列。文件里出现的成品，原来的 BOM 会被整份替换；有任何一行出错就整批不导入。</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="biTpl">${ic('download')}下载模板</button><label class="btn primary">${ic('upload')}选择文件<input type="file" id="biFile" accept=".xlsx,.xls,.csv" hidden></label></div>
+    <div id="biRes" style="margin-top:12px"></div></div>
+  <div class="m-foot"><button class="btn" data-act="closeModal">关闭</button></div>`);
+  $('#biTpl').onclick = () => bomTpl(null);
+  $('#biFile').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try {
+      const got = await bomParse(f, null);
+      const res = await api('POST', '/api/bom/import', {boms:[...got.groups].map(([productId, lines]) => ({productId, lines}))});
+      await reload(); render();
+      $('#biRes').innerHTML = `<div class="tip-line" style="background:var(--green-soft)">导入成功：${res.products} 个商品，${res.rows} 行物料。</div>`;
+      toast('BOM 已导入');
+    } catch (err) { $('#biRes').innerHTML = `<div class="tip-line" style="background:var(--red-soft)">${esc(err.message)}</div>`; }
+  };
+}
+async function bomTpl(p) {
+  const cfg = bomColsCfg(), a = db.products[0], b = db.products[1];
+  const head = [...(p ? [] : ['成品编码']), '物料编码', '物料名称', '规格', '单位', '用量', '单价', '备注', ...cfg.custom];
+  const pad = r => [...r, ...cfg.custom.map(() => '')];
+  const demo = [pad([...(p ? [] : [(p || a || {}).sku || 'P001']), (b || {}).sku || 'A1001', '', '', '', 2, '', '档案里的物料只填编码']),
+    pad([...(p ? [] : [(a || {}).sku || 'P001']), '', '包装纸箱', '30×20×15', '个', 1, 1.5, '档案外的物料填名称和单价'])];
+  try {
+    const X = await loadXLSX(), ws = X.utils.aoa_to_sheet([head, ...demo]), wb = X.utils.book_new();
+    ws['!cols'] = head.map(() => ({wch:14}));
+    X.utils.book_append_sheet(wb, ws, 'BOM');
+    const name = (p ? p.name + ' ' : '') + 'BOM导入模板.xlsx';
+    if (NATIVE) saveFile(name, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', X.write(wb, {type:'array', bookType:'xlsx'}));
+    else X.writeFile(wb, name);
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 /* ================= 页面：库存 ================= */
@@ -1279,6 +1447,7 @@ function docModal(dir, productId, type0, src) {
   <label class="field" style="margin-top:16px"><span>单据备注</span><textarea id="dRemark" rows="2">${esc(src ? src.remark : '')}</textarea></label>
   <div class="o-total">合计数量<b id="dQty">0</b>${mo ? `&nbsp;&nbsp;合计金额<b id="dAmt">¥0.00</b>` : ''}</div>
   ${estOn ? `<div class="ship-est" id="dShip">填写收货地址后自动估算运费</div>` : ''}
+  ${dir === 'in' ? '<div id="dBom"></div>' : ''}
   ${dir === 'out' && shipOn() && can('ship.edit') ? `<label class="chk" style="margin-top:8px"><input type="checkbox" id="dShipNext" ${type0 === '销售出库' || !type0 && types[0] === '销售出库' ? 'checked' : ''}>保存后登记快递单号</label>` : ''}</div>
   <div class="m-foot">${docApproveOn(dir) ? `<span class="sub-t" style="margin-right:auto">已开启审核：保存后为「待审核」，审核通过才改库存</span>` : ''}<button class="btn" data-act="closeModal">取消</button><button class="btn" id="dSave">${docApproveOn(dir) ? '提交审核' : '保存'}</button>${can('inv.print') ? `<button class="btn primary" id="dSavePrint">${ic('printer')}${docApproveOn(dir) ? '提交并打印' : '保存并打印'}</button>` : ''}</div>`, 'lg');
   const tb = $('#dItems');
@@ -1294,7 +1463,22 @@ function docModal(dir, productId, type0, src) {
       try { const q = await api('POST', '/api/ship/quote', {address, items}); if (seq === estSeq && $('#dShip')) { $('#dShip').innerHTML = shipQuoteLine(q); draft.carrierId = (q.quotes.find(x => !x.error) || {}).carrierId || ''; } } catch (e) {}
     }, 500);
   };
+  // 生产入库：成品有 BOM 时可以按 BOM 领料，预览要扣的原料和预计成本
+  draft.useBom = true;
+  const bomBox = () => {
+    const el = $('#dBom'); if (!el) return;
+    const fin = draft.items.filter(i => i.productId && (byId(db.products, i.productId).bom || []).length && +i.qty > 0);
+    if (!can('bom') || $('#dType').value !== '生产入库' || !fin.length) { el.innerHTML = ''; return; }
+    const need = {}; let extra = 0;
+    fin.forEach(i => { const q = baseQ(i); byId(db.products, i.productId).bom.forEach(l => { if (l.productId) need[l.productId] = (need[l.productId] || 0) + l.qty * q; else extra += l.qty * q * (l.price || 0); }); });
+    const mats = Object.entries(need).map(([pid, q]) => { const m = prodOf(pid), have = whQty(m, draft.wh); return `<span class="${have < q - 1e-9 ? 'neg' : ''}" title="${multiWh() ? whName(draft.wh) : ''}现有 ${have}">${esc(m.name)} ×${+q.toFixed(4)}${have < q - 1e-9 ? `（只有 ${have}）` : ''}</span>`; });
+    const cost = sum(Object.entries(need), ([pid, q]) => q * (prodOf(pid).cost || 0)) + extra;
+    el.innerHTML = `<div class="tip-line" style="margin-top:10px"><label class="chk"><input type="checkbox" id="dUseBom" ${draft.useBom ? 'checked' : ''}><b>按 BOM 领料</b></label>
+      <div style="margin-top:6px">${draft.useBom ? `保存后自动扣原料：${mats.join('、') || '（BOM 里都是档案外物料）'}${canMoney() ? `；成品入库成本按原料成本累加，预计合计 <b>${money(cost)}</b>，上面的单价不用填` : ''}` : '不扣原料，按上面填的单价入库'}</div></div>`;
+    $('#dUseBom').onchange = e => { draft.useBom = e.target.checked; bomBox(); };
+  };
   const updTotal = () => {
+    bomBox();
     $('#dQty').textContent = num(sum(draft.items.filter(i => i.productId), i => +i.qty || 0));
     if (mo) $('#dAmt').textContent = money(sum(draft.items, lineAmt));
     estShip();
@@ -1370,7 +1554,7 @@ function docModal(dir, productId, type0, src) {
     }
   });
   if ($('#dWh')) $('#dWh').onchange = e => { draft.wh = e.target.value; renderItems(); };
-  $('#dType').onchange = () => { if (dir === 'out') renderItems(); if ($('#dShipNext')) $('#dShipNext').checked = $('#dType').value === '销售出库'; };
+  $('#dType').onchange = () => { if (dir === 'out') renderItems(); bomBox(); if ($('#dShipNext')) $('#dShipNext').checked = $('#dType').value === '销售出库'; };
   tb.addEventListener('click', e => {
     const a = e.target.closest('[data-snauto]');
     if (a) {
@@ -1399,7 +1583,7 @@ function docModal(dir, productId, type0, src) {
     const badDate = items.find(i => i.prodDate && i.expDate && i.expDate < i.prodDate);
     if (badDate) return toast(`「${byId(db.products, badDate.productId).name}」有效期早于生产日期`, 'error');
     const shipNext = $('#dShipNext') && $('#dShipNext').checked, carrierId = draft.carrierId;
-    const body = {dir, type:$('#dType').value, wh:draft.wh, date:$('#dDate').value, party:$('#dParty').value.trim(), handler:$('#dHandler').value.trim(), project:$('#dProject').value.trim(), remark:$('#dRemark').value.trim(),
+    const body = {dir, type:$('#dType').value, ...(dir === 'in' && $('#dType').value === '生产入库' && $('#dUseBom') && $('#dUseBom').checked ? {bom:true} : {}), wh:draft.wh, date:$('#dDate').value, party:$('#dParty').value.trim(), handler:$('#dHandler').value.trim(), project:$('#dProject').value.trim(), remark:$('#dRemark').value.trim(),
       address:$('#dAddr') ? $('#dAddr').value.trim() : '', items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:mo ? i.price : undefined, ...(mo && dir === 'out' && i.sale !== '' ? {sale:i.sale} : {}), note:i.note, batchNo:i.batchNo, prodDate:i.prodDate, expDate:i.expDate, ...(byId(db.products, i.productId).serial ? {serials:snList(i.serials)} : {})}))};
     $('#dSave').disabled = true; if ($('#dSavePrint')) $('#dSavePrint').disabled = true;
     const r = await mutate('POST', '/api/stockdocs', body, r => docTitle(dir) + (r.status === '待审核' ? '已提交审核：' : '已保存：') + r.no);
@@ -2607,6 +2791,7 @@ function orderModal(kind, id, srcId0) {
   <div class="m-body">${o && o.status === '已审核' ? '<div class="sub-t" style="margin-bottom:10px">这张采购单已审核，保存修改后会退回「待审核」，需要重新审核才能入库。</div>' : ''}${o && (o.status === '已发货' || o.status === '已入库') ? `<div class="tip-line">这张单已${o.status.slice(1)}。只改${kind === 'sales' ? '单价、' : ''}优惠或备注不影响库存；改了商品、数量${kind === 'purchase' ? '或单价' : ''}，保存时会把原来的${kind === 'sales' ? '出库' : '入库'}冲回，按新明细重新${kind === 'sales' ? '出库' : '入库'}（库存流水里能看到「改单冲回」）。${kind === 'purchase' ? '货已经卖出去一部分的，就不能再改数量或单价了。' : ''}</div>` : ''}<div class="form-grid">
     <label class="field"><span>${C.partyLabel} <i>*</i></span><select id="oParty"><option value="">请选择${C.partyLabel}</option>${db[C.party].map(p => `<option value="${p.id}" ${p.id === party0 ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
     <label class="field"><span>单据日期 <i>*</i></span><input type="date" id="oDate" value="${o ? o.date : today()}"></label>
+    <label class="field"><span>${kind === 'sales' ? '业务员' : kind === 'purchase' ? '采购员' : '经手人'}</span><input id="oHandler" list="oHList" maxlength="32" value="${esc(o ? o.handler || o.creator || '' : ME.name)}" placeholder="默认开单人"><datalist id="oHList">${handlerNames().map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>
     ${C.src ? `<label class="field span2"><span>关联原${S0.doc}（只列出${C.srcOk.join(' / ')}的单子；选了按原单带出商品，限退未退的数量）</span><select id="oSrc">${srcOpts(party0)}</select></label>` : ''}
   </div>
   <div class="line-head"><b>${C.src ? '退货明细' : '商品明细'}</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称搜索，支持扫码枪录入后回车</span><button class="btn sm" id="oPick">${ic('search')}选择商品</button><button class="btn sm" id="oAdd">${ic('plus')}添加一行</button></div>
@@ -2692,7 +2877,7 @@ function orderModal(kind, id, srcId0) {
     if (items.some(i => !Number.isInteger(+i.qty) || +i.qty <= 0)) return toast('数量必须为正整数', 'error');
     if (items.some(i => +i.price < 0)) return toast('单价不能为负', 'error');
     if (disc() < 0 || disc() > sum(items, sub) + 0.001) return toast('优惠金额要在 0 到明细合计之间', 'error');
-    const body = {partyId:party, date, remark, ...(C.src ? {srcId:draft.srcId} : {discount:disc()}), items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:+i.price || 0}))};
+    const body = {partyId:party, date, remark, handler:$('#oHandler').value.trim(), ...(C.src ? {srcId:draft.srcId} : {discount:disc()}), items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:+i.price || 0}))};
     const b = $('#oSave'); b.disabled = true;
     mutate(o ? 'PUT' : 'POST', '/api/orders/' + kind + (o ? '/' + o.id : ''), body, r => (o ? '已更新：' : '已创建：') + r.no)
       .finally(() => { b.disabled = false; });
@@ -2709,7 +2894,7 @@ function orderView(kind, id) {
     <h2>${esc(db.settings.company)}</h2><div class="doc-sub">${C.doc} · ${o.no} &nbsp; ${badge(o.status)}</div>
     <div class="doc-info">
       <div><span>${C.partyLabel}：</span>${esc(party.name || '-')}</div><div><span>单据日期：</span>${o.date}</div>
-      <div><span>联系人：</span>${esc(party.contact || '-')} ${esc(party.phone || '')}</div><div><span>制单人：</span>${esc(db.settings.user)}</div>
+      <div><span>联系人：</span>${esc(party.contact || '-')} ${esc(party.phone || '')}</div><div><span>${kind.startsWith('sales') ? '业务员' : kind === 'purchase' ? '采购员' : '经手人'}：</span>${esc(o.handler || o.creator || '-')}${o.creator && o.handler && o.creator !== o.handler ? ` <span class="sub-t">（${esc(o.creator)} 开单）</span>` : ''}</div>
       <div style="grid-column:1/-1"><span>地址：</span>${esc(party.address || '-')}</div>
       ${o.wh && multiWh() ? `<div><span>${{sales:'发货', purchase:'入库', salesReturn:'退货入库', purchaseReturn:'退货出库'}[kind]}仓库：</span>${esc(whName(o.wh))}</div>` : ''}
       ${C.src ? `<div><span>原单：</span>${o.srcId && byId(db[ORD[C.src].db], o.srcId) ? `<a class="link" data-act="orderView" data-id="${C.src}|${o.srcId}">${esc(o.srcNo)}</a>` : esc(o.srcNo || '未关联')}</div>` : ''}
@@ -3702,7 +3887,78 @@ function pageEmployees() {
 }
 
 /* ================= 页面：报表 ================= */
+/* ---------- 人员业绩：销售 / 采购按业务员（或开单人）统计；出入库单按经手人（或开单人）统计，点名字看按商品的明细 ---------- */
+const rptTabs = () => tabs('rptTab', [['overview', '经营概况'], ['people', '人员业绩']]);
+const whoOf = (o, by) => (by === 'creator' ? o.creator : o.handler || o.creator) || '（未记录）';
+const inRangeD = o => o.date >= ui.ppFrom && o.date <= ui.ppTo;
+function peopleData() {
+  const by = ui.ppBy, rows = {}, R = n => rows[n] || (rows[n] = {who:n, so:0, sales:0, gp:0, recv:0, ret:0, po:0, pur:0, inN:0, inQ:0, inA:0, outN:0, outQ:0, outA:0});
+  if (can('sales') || can('reports')) {
+    validSales().filter(inRangeD).forEach(o => { const r = R(whoOf(o, by)); r.so++; r.sales += orderTotal(o); r.gp += orderTotal(o) - orderCost(o); r.recv += o.received || 0; });
+    (db.salesReturns || []).filter(o => o.status !== '已作废' && inRangeD(o)).forEach(o => { R(whoOf(o, by)).ret += orderTotal(o); });
+  }
+  if (can('purchase') || can('reports')) db.purchases.filter(o => o.status !== '已作废' && inRangeD(o)).forEach(o => { const r = R(whoOf(o, by)); r.po++; r.pur += orderTotal(o); });
+  if (can('inv.view')) db.stockDocs.filter(o => o.status === '正常' && inRangeD(o)).forEach(o => {
+    const r = R(whoOf(o, by)), q = docQty(o), a = docShown(o);
+    if (o.dir === 'in') { r.inN++; r.inQ += q; r.inA += a; } else { r.outN++; r.outQ += q; r.outA += a; }
+  });
+  return Object.values(rows).sort((a, b) => b.sales - a.sales || b.outQ + b.inQ - a.outQ - a.inQ);
+}
+function pagePeople() {
+  if (!ui.ppFrom) [ui.ppFrom, ui.ppTo] = monthRange(0);
+  ui.ppBy = ui.ppBy || 'handler';
+  const mo = canMoney(), S = can('sales') || can('reports'), P = can('purchase') || can('reports'), I = can('inv.view');
+  const list = peopleData(), who = ui.ppBy === 'creator' ? '开单人' : '业务员 / 经手人';
+  const sRows = list.filter(r => r.so || r.ret || r.po), iRows = list.filter(r => r.inN || r.outN);
+  const T = k => sum(sRows, r => r[k]), TI = k => sum(iRows, r => r[k]);
+  const range = [['本月', 0], ['上月', -1]].map(([l, k]) => { const [f, t] = monthRange(k); return `<button class="btn sm ${ui.ppFrom === f && ui.ppTo === t ? 'primary' : ''}" data-act="ppRange" data-id="${f}|${t}">${l}</button>`; }).join('')
+    + `<button class="btn sm ${ui.ppFrom === today().slice(0, 4) + '-01-01' && ui.ppTo === today() ? 'primary' : ''}" data-act="ppRange" data-id="${today().slice(0, 4)}-01-01|${today()}">今年</button>`;
+  const name = n => `<a class="link" data-act="ppDetail" data-id="${esc(n)}">${esc(n)}</a>`;
+  $('#view').innerHTML = pageHead('统计报表', '经营数据多维度分析') + rptTabs() + `
+  <div class="card mb"><div class="toolbar" style="flex-wrap:wrap;gap:10px"><div class="tb-left" style="flex-wrap:wrap;gap:8px">
+    <input type="date" class="select" id="ppFrom" value="${ui.ppFrom}"><span class="sub-t">至</span><input type="date" class="select" id="ppTo" value="${ui.ppTo}">${range}
+    <select class="select" id="ppBy"><option value="handler" ${ui.ppBy === 'handler' ? 'selected' : ''}>按业务员 / 经手人</option><option value="creator" ${ui.ppBy === 'creator' ? 'selected' : ''}>按开单人</option></select></div>
+    <div class="tb-right"><button class="btn" data-act="ppExport">${ic('download')}导出</button></div></div>
+    <p class="sub-t" style="padding:0 20px 14px">业务员：销售单、采购单上填的「业务员 / 采购员」，出入库单上的「经手人」；没填的算开单人。点名字看这个人经手的商品明细。</p></div>
+  ${S || P ? `<div class="card mb"><div class="card-head"><h3>销售 / 采购业绩</h3><span class="sub-t">不含作废单据，按单据日期</span></div><div class="table-wrap"><table class="tbl"><thead><tr><th>${who}</th>
+    ${S ? `<th class="num">销售单数</th>${mo ? '<th class="num">销售额</th><th class="num">退货额</th><th class="num">净销售额</th><th class="num">毛利</th><th class="num">已收款</th>' : ''}` : ''}${P ? `<th class="num">采购单数</th>${mo ? '<th class="num">采购额</th>' : ''}` : ''}</tr></thead><tbody>
+    ${sRows.length ? sRows.map(r => `<tr><td><b>${name(r.who)}</b></td>${S ? `<td class="num">${r.so}</td>${mo ? `<td class="num">${money(r.sales)}</td><td class="num">${r.ret ? '-' + money(r.ret) : '-'}</td><td class="num"><b>${money(r.sales - r.ret)}</b></td><td class="num ${r.gp >= 0 ? 'pos' : 'neg'}">${money(r.gp)}</td><td class="num">${money(r.recv)}</td>` : ''}` : ''}${P ? `<td class="num">${r.po}</td>${mo ? `<td class="num">${money(r.pur)}</td>` : ''}` : ''}</tr>`).join('')
+      + `<tr style="font-weight:700;background:var(--panel2)"><td>合计</td>${S ? `<td class="num">${T('so')}</td>${mo ? `<td class="num">${money(T('sales'))}</td><td class="num">${T('ret') ? '-' + money(T('ret')) : '-'}</td><td class="num">${money(T('sales') - T('ret'))}</td><td class="num">${money(T('gp'))}</td><td class="num">${money(T('recv'))}</td>` : ''}` : ''}${P ? `<td class="num">${T('po')}</td>${mo ? `<td class="num">${money(T('pur'))}</td>` : ''}` : ''}</tr>`
+      : `<tr><td colspan="9"><div class="empty">${emptySvg}<p>这段时间没有销售 / 采购单</p></div></td></tr>`}</tbody></table></div></div>` : ''}
+  ${I ? `<div class="card"><div class="card-head"><h3>出入库经手统计</h3><span class="sub-t">库存管理里的入库单、出库单（已生效的），出库金额填了出库单价的按出库单价</span></div><div class="table-wrap"><table class="tbl"><thead><tr><th>${who}</th>
+    <th class="num">入库单数</th><th class="num">入库数量</th>${mo ? '<th class="num">入库金额</th>' : ''}<th class="num">出库单数</th><th class="num">出库数量</th>${mo ? '<th class="num">出库金额</th>' : ''}</tr></thead><tbody>
+    ${iRows.length ? iRows.map(r => `<tr><td><b>${name(r.who)}</b></td><td class="num">${r.inN}</td><td class="num">${num(r.inQ)}</td>${mo ? `<td class="num">${money(r.inA)}</td>` : ''}<td class="num">${r.outN}</td><td class="num">${num(r.outQ)}</td>${mo ? `<td class="num">${money(r.outA)}</td>` : ''}</tr>`).join('')
+      + `<tr style="font-weight:700;background:var(--panel2)"><td>合计</td><td class="num">${TI('inN')}</td><td class="num">${num(TI('inQ'))}</td>${mo ? `<td class="num">${money(TI('inA'))}</td>` : ''}<td class="num">${TI('outN')}</td><td class="num">${num(TI('outQ'))}</td>${mo ? `<td class="num">${money(TI('outA'))}</td>` : ''}</tr>`
+      : `<tr><td colspan="7"><div class="empty">${emptySvg}<p>这段时间没有出入库单</p></div></td></tr>`}</tbody></table></div></div>` : ''}`;
+  const set = () => { const f = $('#ppFrom').value, t = $('#ppTo').value; if (f && t && f <= t) { ui.ppFrom = f; ui.ppTo = t; } ui.ppBy = $('#ppBy').value; render(); };
+  ['#ppFrom', '#ppTo', '#ppBy'].forEach(k => { $(k).onchange = set; });
+}
+// 某个人经手的商品明细：销售、采购、入库、出库分别汇总数量和金额，下面列单据
+function ppDetail(n) {
+  const by = ui.ppBy, mo = canMoney(), P = {}, docs = [];
+  const add = (pid, k, q, a) => { const r = P[pid] || (P[pid] = {pid, sq:0, sa:0, pq:0, pa:0, iq:0, ia:0, oq:0, oa:0}); r[k + 'q'] += q; r[k + 'a'] += a; };
+  if (can('sales') || can('reports')) validSales().filter(o => inRangeD(o) && whoOf(o, by) === n).forEach(o => { docs.push({o, t:'销售单', amt:orderTotal(o), view:`sales|${o.id}`}); o.items.forEach(i => add(i.productId, 's', i.qty, i.qty * i.price)); });
+  if (can('purchase') || can('reports')) db.purchases.filter(o => o.status !== '已作废' && inRangeD(o) && whoOf(o, by) === n).forEach(o => { docs.push({o, t:'采购单', amt:orderTotal(o), view:`purchase|${o.id}`}); o.items.forEach(i => add(i.productId, 'p', i.qty, i.qty * i.price)); });
+  if (can('inv.view')) db.stockDocs.filter(o => o.status === '正常' && inRangeD(o) && whoOf(o, by) === n).forEach(o => { docs.push({o, t:o.type, amt:docShown(o), doc:o.id});
+    o.items.forEach(i => add(i.productId, o.dir === 'in' ? 'i' : 'o', i.qty, i.qty * (saleItem(i).price || 0))); });
+  const rows = Object.values(P).sort((a, b) => b.sq + b.oq + b.iq + b.pq - a.sq - a.oq - a.iq - a.pq);
+  const c = (q, a) => q ? `${num(q)}${mo ? `<div class="sub-t">${money(a)}</div>` : ''}` : '<span class="sub-t">-</span>';
+  docs.sort((a, b) => b.o.date.localeCompare(a.o.date));
+  openModal(`${modalHead(esc(n) + ' · 经手明细')}<div class="m-body">
+    <p class="sub-t" style="margin-bottom:10px">${ui.ppFrom} 至 ${ui.ppTo}，${ui.ppBy === 'creator' ? '按开单人' : '按业务员 / 经手人'}，数量按基本单位</p>
+    <div class="table-wrap"><table class="tbl compact"><thead><tr><th>商品</th><th class="num">销售</th><th class="num">采购</th><th class="num">入库</th><th class="num">出库</th></tr></thead><tbody>
+    ${rows.map(r => { const p = prodOf(r.pid); return `<tr><td><b>${esc(p.name)}</b><div class="sub-t">${esc(p.sku || '')} · ${esc(p.unit || '')}</div></td><td class="num">${c(r.sq, r.sa)}</td><td class="num">${c(r.pq, r.pa)}</td><td class="num">${c(r.iq, r.ia)}</td><td class="num">${c(r.oq, r.oa)}</td></tr>`; }).join('') || '<tr><td colspan="5" class="sub-t">没有记录</td></tr>'}</tbody></table></div>
+    <div class="line-head" style="margin-top:14px"><b>单据（${docs.length}）</b></div>
+    <div class="table-wrap"><table class="tbl compact"><thead><tr><th>单号</th><th>类型</th><th>日期</th>${mo ? '<th class="num">金额</th>' : ''}</tr></thead><tbody>
+    ${docs.map(d => `<tr><td><a class="link" data-act="${d.doc ? 'docView' : 'orderView'}" data-id="${d.doc || d.view}">${d.o.no}</a></td><td>${esc(d.t)}</td><td>${d.o.date}</td>${mo ? `<td class="num">${money(d.amt)}</td>` : ''}</tr>`).join('')}</tbody></table></div></div>
+  <div class="m-foot"><button class="btn" data-act="ppDetailExport" data-id="${esc(n)}">${ic('download')}导出明细</button><button class="btn" data-act="closeModal">关闭</button></div>`, 'lg');
+  ui.ppLast = {n, rows};
+}
+// 业务员 / 经手人候选：员工、以前填过的、当前账号
+const handlerNames = () => [...new Set([ME.name, ...(db.employees || []).filter(e => e.status !== '离职').map(e => e.name), ...['sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockDocs'].flatMap(c => (db[c] || []).map(o => o.handler))].filter(Boolean))];
 function pageReports() {
+  if (!ui.rptTab) ui.rptTab = 'overview';
+  if (ui.rptTab === 'people') return pagePeople();
   if (!ui.rptN) ui.rptN = 6;
   const months = lastMonths(ui.rptN), S = validSales();
   const stats = months.map(mk => {
@@ -3718,7 +3974,7 @@ function pageReports() {
   const topC = Object.entries(cAmt).sort((a, b) => b[1] - a[1]).slice(0, 8), cMax = topC[0] ? topC[0][1] : 1;
   const T = {sales:sum(stats, s => s.sales), gp:sum(stats, s => s.gp), exp:sum(stats, s => s.exp), net:sum(stats, s => s.net)};
   ui.rptStats = stats;
-  $('#view').innerHTML = pageHead('统计报表', '经营数据多维度分析', `<select class="select" id="rptN"><option value="3" ${ui.rptN == 3 ? 'selected' : ''}>近 3 个月</option><option value="6" ${ui.rptN == 6 ? 'selected' : ''}>近 6 个月</option><option value="12" ${ui.rptN == 12 ? 'selected' : ''}>近 12 个月</option></select><button class="btn" data-act="rptExport">${ic('download')}导出报表</button>`) + `
+  $('#view').innerHTML = pageHead('统计报表', '经营数据多维度分析', `<select class="select" id="rptN"><option value="3" ${ui.rptN == 3 ? 'selected' : ''}>近 3 个月</option><option value="6" ${ui.rptN == 6 ? 'selected' : ''}>近 6 个月</option><option value="12" ${ui.rptN == 12 ? 'selected' : ''}>近 12 个月</option></select><button class="btn" data-act="rptExport">${ic('download')}导出报表</button>`) + rptTabs() + `
   <div class="grid g4 mb">
     ${kpi('销售总额', moneyK(T.sales), 'sales', 'primary', `<div class="trend"><span>${inRange.length} 笔订单</span></div>`)}
     ${kpi('毛利总额', moneyK(T.gp), 'coin', 'green', `<div class="trend"><span>毛利率 ${T.sales ? (T.gp / T.sales * 100).toFixed(1) : 0}%</span></div>`)}
@@ -4359,6 +4615,12 @@ const A = {
   expReject: id => expReject(id), expPay: id => expPay(id), expVoid: id => expVoid(id),
   expUnpay: id => { const o = byId(db.expenses, id); confirmBox(`撤销 ${o.no} 的付款吗？收支流水里这笔报销的支出会删掉，账户余额恢复，报销单回到「已批准」。`, () => mutate('POST', `/api/expenses/${id}/unpay`, {}, '已撤销付款'), {title:'撤销付款', okText:'撤销付款'}); },
   expPrint: id => { const o = byId(db.expenses, id); if (o) printFrame(o.no, `<div class="page">${expSlip(o)}${printFoot('out', 0)}</div>`, prefs.paper || 'a4'); },
+  ppRange: v => { [ui.ppFrom, ui.ppTo] = split(v); render(); }, ppDetail: n => ppDetail(n),
+  ppExport: () => { const mo = canMoney(); exportCSV('人员业绩_' + ui.ppFrom + '_' + ui.ppTo, ['人员', '销售单数', ...(mo ? ['销售额', '退货额', '净销售额', '毛利', '已收款'] : []), '采购单数', ...(mo ? ['采购额'] : []), '入库单数', '入库数量', ...(mo ? ['入库金额'] : []), '出库单数', '出库数量', ...(mo ? ['出库金额'] : [])],
+    peopleData().map(r => [r.who, r.so, ...(mo ? [r.sales, r.ret, r.sales - r.ret, r.gp, r.recv].map(x => x.toFixed(2)) : []), r.po, ...(mo ? [r.pur.toFixed(2)] : []), r.inN, r.inQ, ...(mo ? [r.inA.toFixed(2)] : []), r.outN, r.outQ, ...(mo ? [r.outA.toFixed(2)] : [])])); },
+  ppDetailExport: () => { const L = ui.ppLast; if (!L) return; exportCSV(L.n + '_经手明细_' + ui.ppFrom + '_' + ui.ppTo, ['商品编码', '商品名称', '单位', '销售数量', '销售金额', '采购数量', '采购金额', '入库数量', '入库金额', '出库数量', '出库金额'],
+    L.rows.map(r => { const p = prodOf(r.pid); return [p.sku, p.name, p.unit, r.sq, r.sa.toFixed(2), r.pq, r.pa.toFixed(2), r.iq, r.ia.toFixed(2), r.oq, r.oa.toFixed(2)]; })); },
+  bomOpen: id => { closeModal(); bomModal(id); }, prodMore: (id, el) => { const p = byId(db.products, id); if (p) popMenu(el, prodMoreItems(p)); }, bomImport: () => bomImport(),
   acctTrDel: id => confirmBox('确定删除这条转账记录吗？两个账户的余额会恢复。', () => mutate('DELETE', '/api/acct-transfers/' + id, undefined, '已删除')),
   acctFlow: id => { ui.finTab = 'flow'; const st = getState('fin'); st.f = {acct:id}; st.page = 1; render(); },
   finDel: id => confirmBox('确定删除这条收支记录吗？', () => mutate('DELETE', '/api/finance/' + id, undefined, '已删除')),
