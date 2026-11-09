@@ -31,7 +31,9 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
@@ -71,6 +73,11 @@ public class MainActivity extends Activity {
     private WebView printView;
     private long lastBack;
     private final Handler ui = new Handler(Looper.getMainLooper());
+    private int connSeq = 0;          // 每次连接加 1，旧的连接结果、超时检查作废
+    private boolean pageDone = true;  // 服务端首页是否已加载完
+    private static final int LOAD_TIMEOUT = 20000;
+    private LinearLayout connBox;     // 「正在连接」遮罩：原生控件，WebView 还没启动好也能马上显示
+    private TextView connAddr;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -89,8 +96,74 @@ public class MainActivity extends Activity {
         setupBack();
 
         if (server.isEmpty()) askServer(true);
-        else web.loadUrl(server + "/");
+        else connect();
     }
+
+    /* ---------- 连接：先显示「正在连接」页（随时可以更换服务器），5 秒探测服务端，通了再打开；打开超过 15 秒也提示 ---------- */
+    private void connect() {
+        int seq = ++connSeq;
+        String url = server;
+        showConnecting();
+        new Thread(() -> {
+            String err = ping(url, 5000);
+            ui.post(() -> {
+                if (seq != connSeq) return;  // 期间换了服务器或点了重试
+                if (err != null) { showError(err); return; }
+                openServer(seq);
+            });
+        }).start();
+    }
+
+    private void openServer(int seq) {
+        pageDone = false;
+        web.loadUrl(server + "/");
+        ui.postDelayed(() -> {
+            if (seq != connSeq || pageDone) return;
+            connSeq++;
+            web.stopLoading();
+            showError("服务器响应太慢（超过 " + LOAD_TIMEOUT / 1000 + " 秒）");
+        }, LOAD_TIMEOUT);
+    }
+
+    private void showConnecting() {
+        if (connBox == null) {
+            connBox = new LinearLayout(this);
+            connBox.setOrientation(LinearLayout.VERTICAL);
+            connBox.setGravity(Gravity.CENTER_HORIZONTAL);
+            connBox.setBackgroundColor(Color.WHITE);
+            connBox.setPadding(dp(24), dp(120), dp(24), 0);
+            connBox.setClickable(true);  // 挡住下面的 WebView
+            ProgressBar pb = new ProgressBar(this);
+            connBox.addView(pb, new LinearLayout.LayoutParams(dp(44), dp(44)));
+            TextView t = new TextView(this);
+            t.setText("正在连接服务器…");
+            t.setTextSize(18);
+            t.setTextColor(0xFF1F2937);
+            t.setGravity(Gravity.CENTER);
+            t.setPadding(0, dp(18), 0, dp(6));
+            connBox.addView(t);
+            connAddr = new TextView(this);
+            connAddr.setTextSize(14);
+            connAddr.setTextColor(0xFF6B7280);
+            connAddr.setGravity(Gravity.CENTER);
+            connBox.addView(connAddr);
+            Button b = new Button(this);
+            b.setText("更换服务器");
+            b.setTextSize(16);
+            b.setAllCaps(false);
+            b.setTextColor(0xFF4F46E5);
+            b.setBackgroundColor(0xFFEEF2FF);
+            b.setOnClickListener(v -> askServer(false));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(280), dp(48));
+            lp.topMargin = dp(32);
+            connBox.addView(b, lp);
+            root.addView(connBox, new FrameLayout.LayoutParams(-1, -1));
+        }
+        connAddr.setText(server);
+        connBox.setVisibility(View.VISIBLE);
+    }
+
+    private void hideConnecting() { if (connBox != null) connBox.setVisibility(View.GONE); }
 
     /* ---------- 全面屏：内容避开状态栏、导航栏和输入法 ---------- */
     private void applyInsets() {
@@ -132,8 +205,14 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void onPageCommitVisible(WebView view, String url) { markDone(url); }
+
+            @Override
+            public void onPageFinished(WebView view, String url) { markDone(url); }
+
+            @Override
             public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
-                if (req.isForMainFrame()) showError(String.valueOf(err.getDescription()));
+                if (req.isForMainFrame()) { connSeq++; showError(String.valueOf(err.getDescription())); }
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
@@ -236,7 +315,8 @@ public class MainActivity extends Activity {
         server = url;
         prefs.edit().putString("server", url).apply();
         web.clearHistory();
-        web.loadUrl(url + "/");
+        showConnecting();
+        openServer(++connSeq);  // 刚探测过，直接打开
         toast("已连接 " + url);
     }
 
@@ -312,7 +392,12 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    private void markDone(String url) {
+        if (url != null && !server.isEmpty() && url.startsWith(server)) { pageDone = true; hideConnecting(); }
+    }
+
     private void showError(String why) {
+        hideConnecting();
         String html = "<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'><meta charset='utf-8'>"
                 + "<style>body{font-family:sans-serif;padding:48px 24px;text-align:center;color:#1f2937}h2{margin:12px 0}p{color:#6b7280;line-height:1.6}"
                 + "button{display:block;width:100%;max-width:320px;margin:12px auto;height:46px;border:0;border-radius:10px;font-size:16px}"
@@ -336,7 +421,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public void changeServer() { ui.post(() -> askServer(false)); }
 
-        @JavascriptInterface public void retry() { ui.post(() -> { if (server.isEmpty()) askServer(true); else web.loadUrl(server + "/"); }); }
+        @JavascriptInterface public void retry() { ui.post(() -> { if (server.isEmpty()) askServer(true); else connect(); }); }
 
         /** 保存导出的文件：让用户选择保存位置（不需要存储权限） */
         @JavascriptInterface public void saveFile(String name, String mime, String base64) {
