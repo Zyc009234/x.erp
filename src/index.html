@@ -224,6 +224,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .m-body{padding:20px 22px;max-height:68vh;overflow-y:auto}
 .m-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid var(--border)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.bom-tbl{table-layout:fixed;min-width:760px}.bom-tbl input{width:100%;box-sizing:border-box}
 .pop-menu{position:fixed;z-index:200;min-width:130px;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:4px;display:flex;flex-direction:column}.pop-menu button{border:0;background:none;text-align:left;padding:8px 12px;border-radius:7px;font:inherit;color:var(--text);cursor:pointer}.pop-menu button:hover{background:var(--panel2)}.pop-menu .danger-text{color:var(--red)}
 .exp-imgs{display:flex;flex-wrap:wrap;gap:8px}.exp-img{position:relative;width:96px;height:96px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg)}.exp-img img{width:100%;height:100%;object-fit:cover;cursor:zoom-in}.exp-img .icon-btn{position:absolute;right:2px;top:2px;background:rgba(0,0,0,.55);color:#fff}
 .pwrap{display:flex;align-items:center;gap:2px}.pwrap input{flex:1;min-width:0}.spm{width:12px;flex:none;text-align:center}.spm b{color:var(--red)}.spm i{color:var(--muted);font-style:normal;cursor:pointer}
@@ -345,7 +346,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.1.6 · 数据保存在服务器</div>
+    <div class="side-foot">v2.1.7 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -902,21 +903,23 @@ function bomModal(id) {
   const edit = can('bom'), pr = seesPrice(), cfg = bomColsCfg();
   const show = k => cfg.show.includes(k) && (pr || !['price', 'amount'].includes(k));
   const lines = (p.bom || []).map(l => ({...l, x:{...(l.x || {})}}));
-  const blank = () => ({productId:'', name:'', spec:'', unit:'', qty:1, price:'', note:'', x:{}});
+  const blank = () => ({productId:'', sku:'', name:'', spec:'', unit:'', qty:1, price:'', note:'', x:{}});
   if (edit) lines.push(blank());
   openModal(`${modalHead('BOM 物料清单 · ' + esc(p.name))}<div class="m-body">
     <p class="sub-t" style="margin-bottom:10px">用量按做 1 ${esc(p.unit)}「${esc(p.name)}」需要的数量填。物料可以从商品档案里选（成本取商品当前成本价），也可以直接输入档案外的物料并填单价。${edit ? '「生产入库」时勾选「按 BOM 领料」，会自动扣原料库存，成品入库成本按原料成本累加。' : ''}</p>
     ${edit ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn sm" id="bAdd">${ic('plus')}添加一行</button><label class="btn sm">${ic('upload')}从 Excel 导入<input type="file" id="bFile" accept=".xlsx,.xls,.csv" hidden></label><button class="btn sm" id="bTpl">${ic('download')}下载模板</button><button class="btn sm" id="bCols">${ic('settings')}表头设置</button></div>` : ''}
     <datalist id="bProdList">${db.products.filter(x => x.id !== p.id).map(x => `<option value="${esc(prodLabel(x))}">`).join('')}</datalist>
-    <div class="table-wrap"><table class="tbl items"><thead><tr>${show('sku') ? '<th style="width:110px">物料编码</th>' : ''}<th style="min-width:200px">物料名称</th>${show('spec') ? '<th style="width:110px">规格</th>' : ''}${show('unit') ? '<th style="width:60px">单位</th>' : ''}<th style="width:90px">用量</th>${show('price') ? '<th style="width:100px">单价</th>' : ''}${show('amount') ? '<th class="num" style="width:100px">金额</th>' : ''}${cfg.custom.map(c => `<th style="width:100px">${esc(c)}</th>`).join('')}${show('note') ? '<th style="width:130px">备注</th>' : ''}${edit ? '<th style="width:44px"></th>' : ''}</tr></thead><tbody id="bBody"></tbody></table></div>
+    <datalist id="bSkuList">${db.products.filter(x => x.id !== p.id && x.sku).map(x => `<option value="${esc(x.sku)}">${esc(x.name)}</option>`).join('')}</datalist>
+    <div class="table-wrap"><table class="tbl items bom-tbl"><thead><tr><th style="width:40px">序号</th>${show('sku') ? '<th style="width:130px">物料编码</th>' : ''}<th style="width:200px">物料名称</th>${show('spec') ? '<th style="width:180px">规格</th>' : ''}${show('unit') ? '<th style="width:60px">单位</th>' : ''}<th style="width:90px">用量</th>${show('price') ? '<th style="width:100px">单价</th>' : ''}${show('amount') ? '<th class="num" style="width:100px">金额</th>' : ''}${cfg.custom.map(c => `<th style="width:100px">${esc(c)}</th>`).join('')}${show('note') ? '<th style="width:130px">备注</th>' : ''}${edit ? '<th style="width:44px"></th>' : ''}</tr></thead><tbody id="bBody"></tbody></table></div>
     ${pr ? `<div class="o-total">BOM 成本（每 ${esc(p.unit)}）<b id="bSum">¥0.00</b><span class="sub-t" style="margin-left:10px">当前成本价 ${money(p.cost || 0)}</span></div>` : ''}</div>
-  <div class="m-foot">${edit && pr ? `<label class="chk" style="margin-right:auto" title="${p.stock ? '有库存时成本价由入库自动计算，请用生产入库按 BOM 领料' : ''}"><input type="checkbox" id="bApply" ${p.stock ? 'disabled' : ''}>保存时把成本价改成 BOM 成本${p.stock ? '（有库存，不能直接改）' : ''}</label>` : ''}
+  <div class="m-foot">${edit && pr ? `<label class="chk" style="margin-right:auto" title="${p.stock ? '有库存时成本价由入库自动计算，请用生产入库按 BOM 领料' : ''}"><input type="checkbox" id="bApply" ${p.stock ? 'disabled' : ''}>保存时把成本价改成 BOM 成本${p.stock ? `（还有库存 ${p.stock}，库存为 0 时才能勾选）` : ''}</label>` : ''}
     <button class="btn" data-act="closeModal">${edit ? '取消' : '关闭'}</button>${edit ? `<button class="btn primary" id="bSave">${ic('check')}保存</button>` : ''}</div>`, 'xl');
   const tb = $('#bBody'), dis = edit ? '' : 'disabled';
   const draw = () => {
     tb.innerHTML = lines.map((l, i) => { const m = l.productId ? prodOf(l.productId) : null; return `<tr>
-      ${show('sku') ? `<td class="sub-t">${m ? esc(m.sku) : ''}</td>` : ''}
-      <td><input list="bProdList" data-i="${i}" data-k="name" value="${esc(m ? prodLabel(m) : l.name || '')}" placeholder="编码 / 名称，或直接输入" ${dis}></td>
+      <td class="sub-t" style="text-align:center">${i + 1}</td>
+      ${show('sku') ? `<td><input list="bSkuList" data-i="${i}" data-k="sku" value="${esc(m ? m.sku || '' : l.sku || '')}" placeholder="填或选" ${dis}></td>` : ''}
+      <td><input list="bProdList" data-i="${i}" data-k="name" value="${esc(m ? m.name : l.name || '')}" title="${esc(m ? prodLabel(m) : l.name || '')}" placeholder="选商品，或直接输入" ${dis}></td>
       ${show('spec') ? `<td>${m ? `<span class="sub-t">${esc(m.spec || '')}</span>` : `<input data-i="${i}" data-k="spec" value="${esc(l.spec || '')}" ${dis}>`}</td>` : ''}
       ${show('unit') ? `<td>${m ? esc(m.unit) : `<input data-i="${i}" data-k="unit" value="${esc(l.unit || '')}" ${dis}>`}</td>` : ''}
       <td><input type="number" min="0" step="any" data-i="${i}" data-k="qty" value="${l.qty}" ${dis}></td>
@@ -931,17 +934,21 @@ function bomModal(id) {
   const upd = () => { if ($('#bSum')) $('#bSum').textContent = money(bomCostOf(lines.filter(l => l.productId || l.name))); };
   if (!edit) return draw();
   tb.addEventListener('change', e => {
-    const t = e.target, i = +t.dataset.i; if (t.dataset.k !== 'name') return;
-    const v = t.value.trim(), m = findProduct(v);
+    const t = e.target, i = +t.dataset.i, k = t.dataset.k; if (k !== 'name' && k !== 'sku') return;
+    const v = t.value.trim(), l = lines[i], old = l.productId ? prodOf(l.productId) : null;
+    // 编码：对上商品档案就带出物料；对不上就当档案外物料的编码
+    const m = k === 'sku' ? (v ? db.products.find(x => x.sku === v) : null) : (v && db.products.find(x => x.name === v) || findProduct(v));
     if (m && m.id === p.id) { toast('BOM 里不能包含商品自己', 'error'); t.value = ''; return; }
-    Object.assign(lines[i], m ? {productId:m.id, name:''} : {productId:'', name:v});
+    if (m) Object.assign(l, {productId:m.id, name:'', sku:''});
+    else if (k === 'sku') Object.assign(l, old ? {productId:'', name:old.name, spec:old.spec || '', unit:old.unit || '', price:old.cost || ''} : {}, {sku:v});
+    else Object.assign(l, {productId:'', name:v}, old ? {sku:''} : {});
     if (i === lines.length - 1 && v) lines.push(blank());
-    draw(); const ins = tb.querySelectorAll('[data-k=qty]'); if (ins[i]) ins[i].focus();
+    draw(); const ins = tb.querySelectorAll(k === 'sku' && !m ? '[data-k=name]' : '[data-k=qty]'); if (ins[i]) ins[i].focus();
   });
   tb.addEventListener('input', e => {
     const t = e.target, i = t.dataset.i; if (i == null) return;
     if (t.dataset.x) { lines[+i].x[t.dataset.x] = t.value; return; }
-    const k = t.dataset.k; if (k === 'name') return;
+    const k = t.dataset.k; if (k === 'name' || k === 'sku') return;
     lines[+i][k] = t.value;
     if (k === 'qty' || k === 'price') { const a = t.closest('tr').querySelector('.amt'); if (a) a.textContent = money((+lines[+i].qty || 0) * bomLineCost(lines[+i])); upd(); }
   });
@@ -958,9 +965,10 @@ function bomModal(id) {
     } catch (err) { toast(err.message, 'error'); }
   };
   $('#bSave').onclick = () => {
+    const nn = lines.findIndex(l => !l.productId && l.sku && !String(l.name || '').trim()); if (nn >= 0) return toast(`第 ${nn + 1} 行：编码「${lines[nn].sku}」不在商品档案里，档案外的物料请填写物料名称`, 'error');
     const ls = lines.filter(l => l.productId || String(l.name || '').trim());
     const bad = ls.findIndex(l => !(+l.qty > 0)); if (bad >= 0) return toast(`第 ${bad + 1} 行用量需大于 0`, 'error');
-    mutate('PUT', `/api/products/${id}/bom`, {lines:ls.map(l => ({productId:l.productId || undefined, name:l.productId ? undefined : String(l.name).trim(), spec:l.spec || '', unit:l.unit || '', qty:+l.qty, price:l.price === '' ? '' : +l.price, note:l.note || '', x:l.x})), applyCost:!!($('#bApply') && $('#bApply').checked)}, ls.length ? `BOM 已保存（${ls.length} 项）` : 'BOM 已清空');
+    mutate('PUT', `/api/products/${id}/bom`, {lines:ls.map(l => ({productId:l.productId || undefined, sku:l.productId ? undefined : l.sku || '', name:l.productId ? undefined : String(l.name).trim(), spec:l.spec || '', unit:l.unit || '', qty:+l.qty, price:l.price === '' ? '' : +l.price, note:l.note || '', x:l.x})), applyCost:!!($('#bApply') && $('#bApply').checked)}, ls.length ? `BOM 已保存（${ls.length} 项）` : 'BOM 已清空');
   };
   draw();
 }
@@ -1002,7 +1010,7 @@ async function bomParse(file, one) {
     if (m && m.id === parent.id) { errs.push(`${at}：BOM 里不能包含商品自己`); continue; }
     if (!m && !name) { errs.push(`${at}：物料编码「${code}」不在商品档案里，档案外的物料请填「物料名称」`); continue; }
     const x = Object.fromEntries(custom.map(([c, i]) => [c, cell(r, i)]).filter(([, v]) => v));
-    const l = m ? {productId:m.id, qty:+q, note:cell(r, C.note), x} : {name, spec:cell(r, C.spec), unit:cell(r, C.unit), qty:+q, price:cell(r, C.price) === '' ? '' : +cell(r, C.price) || 0, note:cell(r, C.note), x};
+    const l = m ? {productId:m.id, qty:+q, note:cell(r, C.note), x} : {sku:code, name, spec:cell(r, C.spec), unit:cell(r, C.unit), qty:+q, price:cell(r, C.price) === '' ? '' : +cell(r, C.price) || 0, note:cell(r, C.note), x};
     const g = groups.get(parent.id) || []; const dup = m && g.find(y => y.productId === m.id);
     if (dup) dup.qty = +(dup.qty + l.qty).toFixed(4); else g.push(l);
     groups.set(parent.id, g);

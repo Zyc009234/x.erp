@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.1.6';
+const VERSION = '2.1.7';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -1066,7 +1066,8 @@ function cleanBomLines(p, raw) {
     }
     const price = l.price === '' || l.price == null ? 0 : Number(l.price);
     if (!Number.isFinite(price) || price < 0) fail(`${at}单价不正确`);
-    return { name: str(l.name, 100), spec: str(l.spec, 60), unit: str(l.unit, 10), price: round4(price), ...base };
+    const sku = str(l.sku, 40);
+    return { ...(sku ? { sku } : {}), name: str(l.name, 100), spec: str(l.spec, 60), unit: str(l.unit, 10), price: round4(price), ...base };
   });
 }
 // BOM 成本：每个基本单位成品需要的物料成本合计

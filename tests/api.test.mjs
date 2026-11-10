@@ -1098,8 +1098,9 @@ test('BOM：保存校验、表头、导入、按 BOM 成本改成本价', async 
   assert.equal((await call(admin, 'PUT', `/api/products/${fp.id}/bom`, { lines: [{ productId: m1.id, qty: 1 }, { productId: m1.id, qty: 2 }] })).http, 400, '重复物料');
   await ok(admin, 'PUT', '/api/bom/cols', { show: ['sku', 'name', 'qty', 'price', 'amount'], custom: ['位号', '损耗率'] });
   assert.equal((await call(admin, 'PUT', '/api/bom/cols', { custom: ['用量'] })).http, 400, '自定义列不能和内置列重名');
-  let r = await ok(admin, 'PUT', `/api/products/${fp.id}/bom`, { applyCost: true, lines: [{ productId: m1.id, qty: 3, x: { 位号: 'R1-R3', 乱写: 'x' } }, { name: '包装盒', unit: '个', qty: 1, price: 1.5 }] });
+  let r = await ok(admin, 'PUT', `/api/products/${fp.id}/bom`, { applyCost: true, lines: [{ productId: m1.id, qty: 3, x: { 位号: 'R1-R3', 乱写: 'x' } }, { sku: "BZ-01", name: "包装盒", unit: "个", qty: 1, price: 1.5 }] });
   assert.equal(r.bom.length, 2); assert.deepEqual(r.bom[0].x, { 位号: 'R1-R3' }, '只保留设置过的自定义列');
+  assert.equal(r.bom[1].sku, "BZ-01", "档案外物料保留编码"); assert.equal(r.bom[0].sku, undefined);
   assert.equal(r.cost, 7.5, '3×2 + 1×1.5');
   // 导入：整份替换
   const imp = await ok(admin, 'POST', '/api/bom/import', { boms: [{ productId: fp.id, lines: [{ productId: m1.id, qty: 2 }, { productId: m2.id, qty: 1 }] }] });
