@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -42,9 +43,19 @@ async function newUser(username, roleId) {
 // 模拟快递鸟：校验签名，按 RequestType 返回结果，收到的请求记在 kdnReqs 里
 const KDN_KEY = 'test-app-key', kdnReqs = [], statsReqs = [], fbStore = [];
 let kdnMock;
+const FAKE_PKG = Buffer.from('fake-update-package-2.9.3'), FAKE_SHA = crypto.createHash('sha256').update(FAKE_PKG).digest('hex');
+let badPkg = false;
 async function startKdnMock() {
   const http = await import('node:http'), crypto = await import('node:crypto');
   kdnMock = http.createServer((req, res) => {
+    const origin = 'http://' + (req.headers.host || '127.0.0.1');
+    if (req.method === 'GET' && req.url === '/updates.json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ schema: 1, latest: '99.0.0', publishedAt: '2026-11-14T18:00:00+08:00', notes: ['测试更新说明'],
+        packages: { windows: { version: '99.0.0', url: origin + '/pkg', sha256: FAKE_SHA, size: FAKE_PKG.length, file: 'xerp-99.0.0-windows-x64-setup.exe', kind: 'exe' } } }));
+      return;
+    }
+    if (req.method === 'GET' && req.url === '/pkg') { res.end(badPkg ? Buffer.from('bad-package') : FAKE_PKG); return; }
     let b = ''; req.on('data', c => { b += c; });
     req.on('end', () => {
       if (req.url === '/stats') { statsReqs.push(JSON.parse(b)); res.end('{"ok":true}'); return; }  // 匿名使用统计
@@ -69,7 +80,7 @@ async function startKdnMock() {
 
 before(async () => {
   const kdnBase = await startKdnMock();
-  srv = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js'), '--data', DATA, '--port', String(PORT)], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, XERP_KDN_BASE: kdnBase, XERP_STATS_URL: kdnBase + '/stats', XERP_STATS_DELAY: '200', XERP_FEEDBACK_URL: kdnBase + '/fb' } });
+  srv = spawn(process.execPath, [path.join(ROOT, 'src', 'server.js'), '--data', DATA, '--port', String(PORT)], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, XERP_KDN_BASE: kdnBase, XERP_STATS_URL: kdnBase + '/stats', XERP_STATS_DELAY: '200', XERP_FEEDBACK_URL: kdnBase + '/fb', XERP_UPDATE_URL: kdnBase + '/updates.json', XERP_UPDATE_ALLOW_LOCAL: '1' } });
   let log = ''; srv.stdout.on('data', d => { log += d; }); srv.stderr.on('data', d => { log += d; });
   for (let i = 0; i < 100; i++) {
     try { if ((await fetch(BASE + '/api/ping')).ok) break; } catch (e) {}
@@ -86,6 +97,27 @@ test('登录：密码错误被拒绝，未登录不能访问数据', async () =>
   assert.equal((await call(null, 'GET', '/api/data')).http, 401);
   const ping = await ok(null, 'GET', '/api/ping');
   assert.equal(ping.app, 'XERP');
+});
+
+test('商品：品牌可保存，商品编码留空自动生成且不重复', async () => {
+  const a = await ok(admin, 'POST', '/api/products', { name: '自动编码商品A', brand: '测试品牌', unit: '个', price: 12 });
+  assert.match(a.sku, /^P\d{8}-\d{3}$/);
+  assert.equal(a.brand, '测试品牌');
+  const b = await ok(admin, 'POST', '/api/products', { name: '自动编码商品B', unit: '个', price: 12 });
+  assert.match(b.sku, /^P\d{8}-\d{3}$/);
+  assert.notEqual(a.sku, b.sku);
+  assert.equal((await prod(a.id)).brand, '测试品牌');
+});
+
+test('管理员修正商品成本：库存数量不变，写审计，普通角色被拒绝', async () => {
+  const p = await newProduct('COSTADJ1', { cost: 5 });
+  await inDoc(admin, [{ productId:p.id, qty:10, price:5 }]);
+  const r = await ok(admin, 'PUT', `/api/products/${p.id}/cost`, { cost:7.5, reason:'录入成本错误' });
+  assert.equal(r.cost, 7.5);
+  const q = await prod(p.id);
+  assert.equal(q.stock, 10); assert.equal(q.cost, 7.5);
+  const clerk = await newUser('costclerk', 'r_wh');
+  assert.equal((await call(clerk, 'PUT', `/api/products/${p.id}/cost`, { cost:1, reason:'x' })).http, 403);
 });
 
 test('入库单 / 出库单：改库存，成本按移动加权平均', async () => {
@@ -119,6 +151,63 @@ test('作废入库单把货扣回，作废出库单把货退回', async () => {
   await ok(admin, 'POST', `/api/stockdocs/${a.id}/void`, { reason: '开错了' });
   assert.equal((await prod(p.id)).stock, 0);
   assert.equal((await call(admin, 'POST', `/api/stockdocs/${a.id}/void`, {})).http, 400, '不能重复作废');
+});
+
+test('批量导入入库单 / 出库单：按单据编号合并行，整批校验', async () => {
+  const p = await newProduct('IMPDOC1');
+  const rows = [
+    { doc:'RK-IMP-1', date:'2026-11-05', dir:'入库', type:'采购入库', party:'导入供应商', sku:'IMPDOC1', qty:5, unit:'个', price:4 },
+    { doc:'RK-IMP-1', date:'2026-11-05', dir:'入库', type:'采购入库', party:'导入供应商', sku:'IMPDOC1', qty:2, unit:'个', price:6 },
+    { doc:'CK-IMP-1', date:'2026-11-05', dir:'出库', type:'领料出库', party:'生产部', sku:'IMPDOC1', qty:3, unit:'个' }
+  ];
+  const r = await ok(admin, 'POST', '/api/stockdocs/import', {rows});
+  assert.equal(r.docs, 2); assert.equal(r.rows.length, 3);
+  const q = await prod(p.id);
+  assert.equal(q.stock, 4);
+  assert.ok(Math.abs(q.cost - 32 / 7) < 0.0001);
+  const before = q.stock;
+  const bad = await call(admin, 'POST', '/api/stockdocs/import', {rows:[{doc:'BAD-IMP', date:'2026-11-05', dir:'入库', type:'其他入库', sku:'NOT-EXIST', qty:1}]});
+  assert.equal(bad.http, 400);
+  assert.equal((await prod(p.id)).stock, before, '出错时整批不写入');
+});
+
+test('批量导入销售单 / 采购单：按单据编号合并行并校验往来单位', async () => {
+  await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'sales', 'purchase', 'parties', 'finance', 'reports'] });
+  const p = await newProduct('IMPORD1', { price: 18, cost: 8 });
+  const c = await ok(admin, 'POST', '/api/customers', { name: '导入销售客户', contact: '张三', phone: '13800000001' });
+  const s = await ok(admin, 'POST', '/api/suppliers', { name: '导入采购供应商', contact: '李四', phone: '13800000002' });
+  const r = await ok(admin, 'POST', '/api/stockdocs/import', { rows: [
+    { doc:'XS-IMP-1', date:'2026-11-05', dir:'销售', type:'销售单', party:'导入销售客户', address:'本单地址', sku:'IMPORD1', qty:2, price:18 },
+    { doc:'XS-IMP-1', date:'2026-11-05', dir:'销售', type:'销售单', party:'导入销售客户', address:'本单地址', sku:'IMPORD1', qty:1, price:0 },
+    { doc:'CG-IMP-1', date:'2026-11-05', dir:'采购', type:'采购单', party:'导入采购供应商', sku:'IMPORD1', qty:5, price:8 }
+  ]});
+  assert.equal(r.docs, 2);
+  const d = await data();
+  const sales = d.sales.find(o => o.no === r.numbers[0]);
+  const purchase = d.purchases.find(o => o.no === r.numbers[1]);
+  assert.equal(sales.items.length, 2); assert.equal(sales.address, '本单地址');
+  assert.equal(purchase.items.length, 1); assert.equal(purchase.items[0].qty, 5);
+  const bad = await call(admin, 'POST', '/api/stockdocs/import', { rows:[{doc:'XS-BAD', date:'2026-11-05', dir:'销售', party:'不存在客户', sku:'IMPORD1', qty:1, price:1}] });
+  assert.equal(bad.http, 400);
+});
+
+test('项目档案：新建、改名同步出入库单、已引用不能删除', async () => {
+  const p = await newProduct('PRJ2');
+  const pr = await ok(admin, 'POST', '/api/projects', { name:'3号工地', status:'进行中', startDate:'2026-11-01', manager:'管理员' });
+  const d = await ok(admin, 'POST', '/api/stockdocs', { dir:'in', type:'采购入库', project:'3号工地', items:[{productId:p.id, qty:1, price:1}] });
+  const e = await ok(admin, 'PUT', `/api/projects/${pr.id}`, { name:'3号工地二期', status:'暂停', startDate:'2026-11-01' });
+  assert.equal(e.name, '3号工地二期');
+  assert.equal((await doc(d.id)).project, '3号工地二期');
+  assert.equal((await call(admin, 'DELETE', `/api/projects/${pr.id}`)).http, 400, '已引用项目不能删除');
+});
+
+test('商品分类支持子分类：父级改名同步子级，父级不能直接删除', async () => {
+  const p = await newProduct('CATSUB1', { category:'电子产品/手机' });
+  await ok(admin, 'PUT', '/api/categories', { list:['电子产品','电子产品/手机'], rename:{from:'电子产品', to:'数码'} });
+  const after = (await data()).products.find(x => x.id === p.id);
+  assert.equal(after.category, '数码/手机');
+  const bad = await call(admin, 'PUT', '/api/categories', { list:['数码','数码/手机'], remove:'数码' });
+  assert.equal(bad.http, 400);
 });
 
 test('多单位：按箱录入换算成基本单位', async () => {
@@ -336,11 +425,11 @@ test('序列号：开启审核时，待审核的入库单审核通过才登记',
 });
 
 /* ---------- Excel 导入：条码与辅助单位 ---------- */
-test('导入：带条码和辅助单位，条码重复时整批不导入', async () => {
-  const r = await ok(admin, 'POST', '/api/products/import', { rows: [{ sku: 'I001', name: '导入一', barcode: '690000000001', units: '箱=24/690000000024；盒=6', stock: 48, cost: 1 }] });
+test('导入：带品牌、条码和辅助单位，条码重复时整批不导入', async () => {
+  const r = await ok(admin, 'POST', '/api/products/import', { rows: [{ sku: 'I001', name: '导入一', brand: '导入品牌', barcode: '690000000001', units: '箱=24/690000000024；盒=6', stock: 48, cost: 1 }] });
   assert.equal(r.created, 1);
   const p = (await data()).products.find(x => x.sku === 'I001');
-  assert.equal(p.barcode, '690000000001'); assert.equal(p.stock, 48);
+  assert.equal(p.brand, '导入品牌'); assert.equal(p.barcode, '690000000001'); assert.equal(p.stock, 48);
   assert.deepEqual(p.units, [{ name: '箱', rate: 24, barcode: '690000000024' }, { name: '盒', rate: 6 }]);
   const bad = await call(admin, 'POST', '/api/products/import', { rows: [{ sku: 'I002', name: '导入二', barcode: '690000000024' }, { sku: 'I003', name: '导入三' }] });
   assert.equal(bad.http, 400); assert.match(bad.error, /已被商品 I001 使用/);
@@ -716,6 +805,79 @@ test('订单优惠：合计减去优惠，收款以优惠后为准，优惠不�
   assert.equal((await call(admin, 'PUT', `/api/orders/sales/${so.id}`, { partyId: cu.id, date: '2026-11-05', discount: 20, items: [{ productId: p.id, qty: 3, price: 33.3 }] })).http, 400, '已收 90，改优惠后合计不能低于已收');
 });
 
+test('明细行优惠：行金额、订单合计和打印金额都按行优惠扣减', async () => {
+  const p = await newProduct('LINEDISC1', { price:20 });
+  const c = await ok(admin, 'POST', '/api/customers', { name:'行优惠客户', contact:'张三', phone:'13800000009' });
+  const o = await ok(admin, 'POST', '/api/orders/sales', { partyId:c.id, date:'2026-11-05', items:[{productId:p.id, qty:2, price:20, lineDiscount:3}] });
+  assert.equal(o.items[0].lineDiscount, 3);
+  assert.equal(o.items.reduce((s, i) => s + i.qty * i.price - (i.lineDiscount || 0), 0), 37);
+  const e = await ok(admin, 'PUT', `/api/orders/sales/${o.id}`, { partyId:c.id, date:'2026-11-05', items:[{productId:p.id, qty:2, price:20, lineDiscount:4}] });
+  assert.equal(e.items.reduce((s, i) => s + i.qty * i.price - (i.lineDiscount || 0), 0), 36);
+  assert.equal((await call(admin, 'POST', '/api/orders/sales', { partyId:c.id, date:'2026-11-05', items:[{productId:p.id, qty:1, price:20, lineDiscount:21}] })).http, 400);
+});
+
+test('销售订单收货地址：可以按单保存和修改，不覆盖客户档案', async () => {
+  await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'sales', 'purchase', 'parties', 'finance', 'reports'] });
+  const p = await newProduct('ADDR1', { price: 12 });
+  const c = await ok(admin, 'POST', '/api/customers', { name: '地址测试客户', contact: '张三', phone: '13800000000', address: '客户档案地址' });
+  const o = await ok(admin, 'POST', '/api/orders/sales', { partyId: c.id, date: '2026-11-05', address: '本单收货地址', items: [{ productId: p.id, qty: 1, price: 12 }] });
+  assert.equal(o.address, '本单收货地址');
+  const e = await ok(admin, 'PUT', `/api/orders/sales/${o.id}`, { partyId: c.id, date: '2026-11-05', address: '修改后的本单地址', items: [{ productId: p.id, qty: 1, price: 12 }] });
+  assert.equal(e.address, '修改后的本单地址');
+  assert.equal((await data()).customers.find(x => x.id === c.id).address, '客户档案地址');
+});
+
+test('同一商品可以在订单里多行，赠品行可按 0 元入库', async () => {
+  await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'sales', 'purchase', 'parties', 'finance', 'reports'] });
+  const p = await newProduct('DUP1', { cost: 10, price: 20 });
+  const c = await ok(admin, 'POST', '/api/customers', { name: '多行客户', contact: '李四', phone: '13900000000' });
+  const so = await ok(admin, 'POST', '/api/orders/sales', { partyId: c.id, date: '2026-11-05', items: [{ productId: p.id, qty: 2, price: 20 }, { productId: p.id, qty: 1, price: 0 }] });
+  assert.equal(so.items.length, 2);
+  assert.equal(so.items[1].price, 0);
+  const su = await ok(admin, 'POST', '/api/suppliers', { name: '赠品供应商', contact: '王五', phone: '13700000000' });
+  const po = await ok(admin, 'POST', '/api/orders/purchase', { partyId: su.id, date: '2026-11-05', items: [{ productId: p.id, qty: 10, price: 5 }, { productId: p.id, qty: 1, price: 0 }] });
+  assert.equal(po.items.length, 2);
+  assert.equal(po.items[0].qty, 10);
+  assert.equal(po.items[1].price, 0);
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/approve`);
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/inbound`);
+  const stocked = await prod(p.id);
+  assert.equal(stocked.stock, 11);
+  assert.ok(Math.abs(stocked.cost - 50 / 11) < 0.0001, '0 元赠品行不应吃掉采购成本');
+});
+
+test('客户跟进记录：添加、查看、删除', async () => {
+  const c = await ok(admin, 'POST', '/api/customers', { name: '跟进测试客户', contact: '赵六', phone: '13600000000' });
+  const f = await ok(admin, 'POST', `/api/customers/${c.id}/followups`, { text: '第一次电话沟通，下周回访' });
+  assert.equal(f.text, '第一次电话沟通，下周回访');
+  assert.equal(f.by, '管理员');
+  let row = (await data()).customers.find(x => x.id === c.id);
+  assert.equal(row.followups.length, 1);
+  await ok(admin, 'DELETE', `/api/customers/${c.id}/followups/${f.id}`);
+  row = (await data()).customers.find(x => x.id === c.id);
+  assert.equal(row.followups.length, 0);
+});
+
+test('客户/供应商独立收付款：可先记预收，再核销到订单', async () => {
+  await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'sales', 'purchase', 'parties', 'finance', 'reports'] });
+  const p = await newProduct('PPAY1', { price: 20 });
+  const c = await ok(admin, 'POST', '/api/customers', { name: '往来款客户', contact: '周七', phone: '13500000000' });
+  const so = await ok(admin, 'POST', '/api/orders/sales', { partyId: c.id, date: '2026-11-05', items: [{ productId: p.id, qty: 1, price: 20 }] });
+  const pp = await ok(admin, 'POST', '/api/party-payments', { partyType:'customer', partyId:c.id, date:'2026-11-05', amount:5, note:'预收测试' });
+  assert.equal(pp.amount, 5);
+  let d = await data();
+  assert.equal(d.partyPayments.filter(x => x.partyId === c.id).length, 1);
+  assert.equal(d.finance.find(x => x.id === pp.financeId).category, '客户预收款');
+  await ok(admin, 'POST', `/api/party-payments/${pp.id}/apply`, { orderId:so.id });
+  d = await data();
+  assert.equal(d.sales.find(x => x.id === so.id).received, 5);
+  assert.equal(d.partyPayments.find(x => x.id === pp.id).appliedOrderNo, so.no);
+  await ok(admin, 'DELETE', `/api/party-payments/${pp.id}`);
+  d = await data();
+  assert.equal(d.sales.find(x => x.id === so.id).received, 0);
+  assert.equal(d.partyPayments.filter(x => x.id === pp.id).length, 0);
+});
+
 test('记一笔：科目可以自己填，手工记录可以修改，单据生成的不能改', async () => {
   const f = await ok(admin, 'POST', '/api/finance', { type: 'expense', category: '物业费', amount: 200, date: '2026-11-05', method: '微信' });
   assert.equal(f.category, '物业费');
@@ -903,8 +1065,13 @@ test('出入库单可以填项目，打印模板能勾选项目', async () => {
   assert.equal(d2.project, '3号工地');
   const d3 = await ok(admin, 'POST', '/api/stockdocs', { dir: 'out', type: '领料出库', items: [{ productId: p.id, qty: 1 }] });
   assert.ok(!('project' in d3), '不填项目就不存这个字段');
-  const all = await ok(admin, 'PUT', '/api/settings/print', { kind: 'out', tpl: { meta: { project: false, no: true } } });
+  const all = await ok(admin, 'PUT', '/api/settings/print', { kind: 'out', tpl: { meta: { project: false, no: true }, paper: 'a4l', font: 'hei', logo: 'data:image/png;base64,iVBORw0KGgo=', cols: [{ k: 'idx', on: true, w: 20, al: 'center' }, { k: 'name', on: true, w: 80, al: 'left' }] } });
   assert.equal(all.out.meta.project, false);
+  assert.equal(all.out.paper, 'a4l');
+  assert.equal(all.out.font, 'hei');
+  assert.equal(all.out.logo, 'data:image/png;base64,iVBORw0KGgo=');
+  assert.equal(all.out.cols[0].w, 20);
+  assert.equal(all.out.cols[0].al, 'center');
   await ok(admin, 'PUT', '/api/settings/print', { kind: 'out', tpl: null });
 });
 
@@ -1148,6 +1315,34 @@ test('生产入库按 BOM 领料：扣原料，成品成本按原料累加，作
   await setApprove(false, false);
 });
 
+test('BOM 自动组装 / 拆卸：成对生成出入库单，成本连续分摊', async () => {
+  const fp = await newProduct('ASF1'), m1 = await newProduct('ASM1', { cost: 2 }), m2 = await newProduct('ASM2', { cost: 5 });
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', items: [{ productId: m1.id, qty: 20, price: 2 }, { productId: m2.id, qty: 10, price: 5 }] });
+  await ok(admin, 'PUT', `/api/products/${fp.id}/bom`, { lines: [{ productId: m1.id, qty: 2 }, { productId: m2.id, qty: 1 }, { name: '包装盒', qty: 1, price: 1 }] });
+  assert.match((await call(admin, 'POST', '/api/bom/assemble', { productId: fp.id, qty: 11 })).error, /物料不足/);
+  assert.match((await call(admin, 'POST', '/api/bom/assemble', { productId: fp.id, qty: 0 })).error, /正整数/);
+  assert.match((await call(admin, 'POST', '/api/bom/disassemble', { productId: fp.id, qty: 1 })).error, /成品不足/);
+  // 组装 4 个：领 m1 8、m2 4，再加 4 个包装盒；成本 = 8×2 + 4×5 + 4×1 = 40，单位成本 10
+  const a = await ok(admin, 'POST', '/api/bom/assemble', { productId: fp.id, qty: 4 });
+  assert.equal(a.out.type, '组装出库'); assert.equal(a.in.type, '组装入库'); assert.equal(a.unitCost, 10);
+  let F = await prod(fp.id), A = await prod(m1.id), B = await prod(m2.id);
+  assert.equal(F.stock, 4); assert.equal(F.cost, 10); assert.equal(A.stock, 12); assert.equal(B.stock, 6);
+  const aOut = await doc(a.out.id), aIn = await doc(a.in.id);
+  assert.equal(aOut.items.length, 2); assert.equal(aIn.items[0].qty, 4); assert.equal(aOut.bomGroup, aIn.bomGroup);
+  // 拆卸 1 个：成品 -1，物料 +2 / +1；10 元成本按 BOM 金额 4:5 分摊
+  const d = await ok(admin, 'POST', '/api/bom/disassemble', { productId: fp.id, qty: 1 });
+  assert.equal(d.out.type, '拆卸出库'); assert.equal(d.in.type, '拆卸入库');
+  F = await prod(fp.id); A = await prod(m1.id); B = await prod(m2.id);
+  assert.equal(F.stock, 3); assert.equal(A.stock, 14); assert.equal(B.stock, 7);
+  const dIn = await doc(d.in.id);
+  assert.equal(dIn.items.length, 2);
+  assert.ok(Math.abs(dIn.items[0].price - 2.2222) < 0.001, '物料 1 分到 4/9 的成本');
+  const sumIn = dIn.items.reduce((s, i) => s + i.price * i.qty, 0);
+  assert.ok(Math.abs(sumIn - 10) < 0.01, '拆回的物料成本合计等于成品出库成本');
+  const nb = await newProduct('ASF2');
+  assert.match((await call(admin, 'POST', '/api/bom/assemble', { productId: nb.id, qty: 1 })).error, /没有设置 BOM/);
+});
+
 test('「生产 / BOM」模块关掉后不下发 BOM；能编辑商品的内置角色自动有 BOM 权限', async () => {
   const fp = (await data()).products.find(p => p.bom && p.bom.length);
   assert.ok(fp, '前面的测试设置过 BOM');
@@ -1159,4 +1354,52 @@ test('「生产 / BOM」模块关掉后不下发 BOM；能编辑商品的内置�
   assert.ok(roles.find(r => r.id === 'r_prod').perms.includes('bom'));
   assert.ok(!roles.find(r => r.id === 'r_wh').perms.includes('bom'));
   await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'sales', 'purchase', 'parties', 'finance', 'hr', 'reports'] });
+});
+
+test('FIFO 成本：按最早入库成本结转，切换口径和成本修正重建成本层', async () => {
+  const p = await newProduct('FIFO1');
+  await ok(admin, 'PUT', '/api/settings', { costMethod: 'fifo' });
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', items: [{ productId: p.id, qty: 10, price: 2 }] });
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', items: [{ productId: p.id, qty: 10, price: 5 }] });
+  let x = await prod(p.id);
+  assert.equal(x.stock, 20); assert.equal(x.cost, 3.5);
+  // 出 12：先出 10 个 2 元，再出 2 个 5 元，成本 30，单价 2.5；剩余 8 个 5 元
+  const o = await ok(admin, 'POST', '/api/stockdocs', { dir: 'out', type: '领料出库', items: [{ productId: p.id, qty: 12 }] });
+  x = await prod(p.id);
+  assert.equal(x.stock, 8); assert.equal(x.cost, 5); assert.equal(o.items[0].price, 2.5);
+  // 作废出库单：按 2.5 退回一层，库存价值 70 / 20 = 3.5
+  await ok(admin, 'POST', `/api/stockdocs/${o.id}/void`, { reason: '测试' });
+  x = await prod(p.id); assert.equal(x.stock, 20); assert.equal(x.cost, 3.5);
+  // 切回移动加权：按当前平均成本出库，不重算历史
+  await ok(admin, 'PUT', '/api/settings', { costMethod: 'avg' });
+  const o2 = await ok(admin, 'POST', '/api/stockdocs', { dir: 'out', type: '领料出库', items: [{ productId: p.id, qty: 1 }] });
+  assert.equal(o2.items[0].price, 3.5);
+  // 再切回 FIFO：现有 19 个按 3.5 重建期初成本层
+  await ok(admin, 'PUT', '/api/settings', { costMethod: 'fifo' });
+  const o3 = await ok(admin, 'POST', '/api/stockdocs', { dir: 'out', type: '领料出库', items: [{ productId: p.id, qty: 2 }] });
+  assert.equal(o3.items[0].price, 3.5);
+  x = await prod(p.id); assert.equal(x.stock, 17); assert.equal(x.cost, 3.5);
+  // 管理员修正成本：成本层按新成本重建，之后出库按 6 元结转
+  await ok(admin, 'PUT', `/api/products/${p.id}/cost`, { cost: 6, reason: '测试修正' });
+  const o4 = await ok(admin, 'POST', '/api/stockdocs', { dir: 'out', type: '领料出库', items: [{ productId: p.id, qty: 1 }] });
+  assert.equal(o4.items[0].price, 6);
+  assert.equal((await prod(p.id)).stock, 16);
+  await ok(admin, 'PUT', '/api/settings', { costMethod: 'avg' });
+});
+
+test('在线更新：只检查并下载，SHA 校验失败拒绝，非管理员不能操作', async () => {
+  const r = await ok(admin, 'GET', '/api/update/check');
+  assert.equal(r.ok, true); assert.equal(r.hasUpdate, true); assert.equal(r.latest, '99.0.0');
+  assert.equal(r.platform, 'win32'); assert.equal(r.package.kind, 'exe'); assert.equal(r.canDownload, true);
+  const ro = await newUser('updread', 'r_read');
+  assert.equal((await call(ro, 'GET', '/api/update/check')).http, 403);
+  badPkg = true;
+  const bad = await call(admin, 'POST', '/api/update/download', { version: '99.0.0' });
+  assert.equal(bad.http, 400); assert.match(bad.error, /SHA-256/);
+  badPkg = false;
+  const d = await ok(admin, 'POST', '/api/update/download', { version: '99.0.0' });
+  assert.equal(d.ok, true); assert.equal(d.sha256, FAKE_SHA); assert.equal(d.kind, 'exe');
+  assert.ok(fs.existsSync(d.path)); assert.equal(fs.readFileSync(d.path).toString(), FAKE_PKG.toString());
+  const d2 = await ok(admin, 'POST', '/api/update/download', { version: '99.0.0' });
+  assert.equal(d2.path, d.path);
 });

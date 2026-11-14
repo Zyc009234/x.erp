@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "latest": "2.9.3",
+  "publishedAt": "2026-11-14T17:02:38+08:00",
+  "notes": [
+    "新增应用内检查更新，只检查版本和下载安装包，下载前必须用户确认，不会自动安装",
+    "飞牛 / Windows 显示保存路径和安装步骤，Docker 显示升级命令",
+    "FIFO 成本、BOM 自动组装 / 拆卸、商品分类父子级等此前功能继续保留。"
+  ],
+  "packages": {
+    "fnos": {
+      "version": "2.9.3",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.3.fpk",
+      "sha256": "14022be8e7b4f45d353b61e643797b11028242d9bb54d6cd0c179306f0890e66",
+      "size": 678056,
+      "file": "xerp-2.9.3.fpk",
+      "kind": "fpk"
+    },
+    "windows": {
+      "version": "2.9.3",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.3-windows-x64-setup.exe",
+      "sha256": "76a73d187081dcfad49ac3e80bb8e42c8fe517eab2d6aa40adc9571faa052ebc",
+      "size": 24582225,
+      "file": "xerp-2.9.3-windows-x64-setup.exe",
+      "kind": "exe"
+    },
+    "android": {
+      "version": "2.9.3",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.3-android.apk",
+      "sha256": "8874306efa571a6e58bc0f208b3152176a898cf6dc27e77b27393fa34149d68c",
+      "size": 271137,
+      "file": "xerp-2.9.3-android.apk",
+      "kind": "apk"
+    },
+    "docker": {
+      "version": "2.9.3",
+      "kind": "docker",
+      "image": "ghcr.io/zyc009234/xerp:2.9.3"
+    }
+  }
+}
