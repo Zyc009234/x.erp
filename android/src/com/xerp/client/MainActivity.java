@@ -112,6 +112,7 @@ public class MainActivity extends Activity {
         if (server.isEmpty()) askServer(true);
         else connect();
         if (!server.isEmpty()) ui.postDelayed(this::autoCheckUpdate, 5000);
+        ui.postDelayed(this::resumePendingInstall, 800);
     }
 
     /* ---------- 连接：先显示「正在连接」页（随时可以更换服务器），5 秒探测服务端，通了再打开；打开超过 15 秒也提示 ---------- */
@@ -565,12 +566,14 @@ public class MainActivity extends Activity {
     private void installApk(File file) {
         if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
             pendingInstall = file;
+            prefs.edit().putString("pendingApk", file.getAbsolutePath()).apply();
             toast("请允许 x.erp 安装未知应用，返回后会继续安装");
             try { startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()))); }
             catch (Exception e) { toast("请在系统设置里允许安装未知应用"); }
             return;
         }
         pendingInstall = null;
+        prefs.edit().remove("pendingApk").apply();
         Uri uri = Uri.parse("content://com.xerp.client.updates/" + Uri.encode(file.getName()));
         Intent i = new Intent(Intent.ACTION_VIEW);
         i.setDataAndType(uri, "application/vnd.android.package-archive");
@@ -676,14 +679,21 @@ public class MainActivity extends Activity {
 
     int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 
+    private void resumePendingInstall() {
+        String path = prefs.getString("pendingApk", "");
+        File f = pendingInstall != null ? pendingInstall : (path.isEmpty() ? null : new File(path));
+        if (f == null || !f.isFile()) {
+            if (!path.isEmpty()) prefs.edit().remove("pendingApk").apply();
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) return;
+        ui.postDelayed(() -> installApk(f), 400);
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
-        if (pendingInstall != null && (Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls())) {
-            File f = pendingInstall;
-            pendingInstall = null;
-            ui.postDelayed(() -> installApk(f), 300);
-        }
+        resumePendingInstall();
     }
 
     @Override

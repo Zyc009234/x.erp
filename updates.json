@@ -1,42 +1,41 @@
 {
   "schema": 1,
-  "latest": "2.9.4",
-  "publishedAt": "2026-11-14T17:25:46+08:00",
+  "latest": "2.9.5",
+  "publishedAt": "2026-11-14T17:57:05+08:00",
   "notes": [
-    "安卓客户端支持应用内检查更新，自动检查（每 24 小时最多一次），确认后下载 APK，系统再次确认安装",
-    "打开问题反馈先弹出作者微信收款码，关闭后进入反馈页面",
-    "应用内检查更新、FIFO 成本、BOM 自动组装 / 拆卸等此前功能继续保留。"
+    "修复安卓 WebView 不兼容 CSS inset 导致问题反馈打赏弹窗不显示的问题",
+    "安卓客户端应用内更新、问题反馈打赏弹窗、FIFO 成本、BOM 自动组装 / 拆卸等继续保留。"
   ],
   "packages": {
     "fnos": {
-      "version": "2.9.4",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.4.fpk",
-      "sha256": "4a075b29cd8dd92b4688c6e6b3ba5f90f802dffdab3e8a24f0d83713a9359c02",
-      "size": 678042,
-      "file": "xerp-2.9.4.fpk",
+      "version": "2.9.5",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.5.fpk",
+      "sha256": "6bf94a921bc32f8ba5a25d801d025c718badeccc1da833d12152d33b988f51ce",
+      "size": 678005,
+      "file": "xerp-2.9.5.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.9.4",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.4-windows-x64-setup.exe",
-      "sha256": "acb332bd4660cc39bbface0f4616245a07258efaa4f8b112c0953bfea1f83d8e",
-      "size": 24585862,
-      "file": "xerp-2.9.4-windows-x64-setup.exe",
+      "version": "2.9.5",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.5-windows-x64-setup.exe",
+      "sha256": "9af99a35c3d28ffaba507b202dc1d67153dc8d44ea04169636d1f6c26dd0dc92",
+      "size": 24583383,
+      "file": "xerp-2.9.5-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.9.4",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.4-android.apk",
-      "sha256": "53b96bb90b5352e6983b10d75c41c187574162131fde9b65a044521e245bfb2f",
+      "version": "2.9.5",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.5-android.apk",
+      "sha256": "09ccdcef7dd460abf6f2ed097cecbbf11c8b00ae41091cf7e43c4da958dd344f",
       "size": 275233,
-      "file": "xerp-2.9.4-android.apk",
+      "file": "xerp-2.9.5-android.apk",
       "kind": "apk",
-      "versionCode": 20904
+      "versionCode": 20905
     },
     "docker": {
-      "version": "2.9.4",
+      "version": "2.9.5",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.9.4"
+      "image": "ghcr.io/zyc009234/xerp:2.9.5"
     }
   }
 }
