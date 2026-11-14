@@ -18,6 +18,7 @@ const pkg = (file, kind) => {
   return { version: ver, url: base + file, sha256: crypto.createHash('sha256').update(buf).digest('hex'), size: buf.length, file, kind };
 };
 const notes = String(manifest.changelog || '').replace(/^.*?：/, '').split(/[；;]\s*/).map(s => s.replace(/^\d+）\s*/, '').trim()).filter(Boolean);
+const vp = ver.split('.').map(Number), versionCode = (vp[0] || 0) * 10000 + (vp[1] || 0) * 100 + (vp[2] || 0);
 const out = {
   schema: 1,
   latest: ver,
@@ -26,7 +27,7 @@ const out = {
   packages: {
     fnos: pkg(`xerp-${ver}.fpk`, 'fpk'),
     windows: pkg(`xerp-${ver}-windows-x64-setup.exe`, 'exe'),
-    android: pkg(`xerp-${ver}-android.apk`, 'apk'),
+    android: { ...pkg(`xerp-${ver}-android.apk`, 'apk'), versionCode },
     docker: { version: ver, kind: 'docker', image: `ghcr.io/zyc009234/xerp:${ver}` }
   }
 };

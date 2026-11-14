@@ -7,12 +7,14 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.print.PrintAttributes;
 import android.print.PrintManager;
 import android.text.InputType;
@@ -38,9 +40,13 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -48,6 +54,7 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.URL;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -63,6 +70,7 @@ public class MainActivity extends Activity {
     static String VERSION = "";
     private static final int REQ_SCAN = 1, REQ_FILE = 2, REQ_SAVE = 3;
     private static final int DEFAULT_PORT = 8686;
+    private static final String UPDATE_MANIFEST = "https://www.zhaoyoucai.xyz/xerp/updates.json";
 
     private WebView web;
     private FrameLayout root;
@@ -71,6 +79,8 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private byte[] pendingSave;
     private WebView printView;
+    private int versionCode = 0;
+    private File pendingInstall;
     private long lastBack;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private int connSeq = 0;          // 每次连接加 1，旧的连接结果、超时检查作废
@@ -84,7 +94,11 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         prefs = getSharedPreferences("xerp", MODE_PRIVATE);
         server = prefs.getString("server", "");
-        try { VERSION = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { }
+        try {
+            PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+            VERSION = pi.versionName;
+            versionCode = Build.VERSION.SDK_INT >= 28 ? (int) pi.getLongVersionCode() : pi.versionCode;
+        } catch (Exception ignored) { }
 
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.WHITE);
@@ -97,6 +111,7 @@ public class MainActivity extends Activity {
 
         if (server.isEmpty()) askServer(true);
         else connect();
+        if (!server.isEmpty()) ui.postDelayed(this::autoCheckUpdate, 5000);
     }
 
     /* ---------- 连接：先显示「正在连接」页（随时可以更换服务器），5 秒探测服务端，通了再打开；打开超过 15 秒也提示 ---------- */
@@ -410,10 +425,183 @@ public class MainActivity extends Activity {
 
     static String escape(String s) { return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"); }
 
+    /* ---------- 安卓客户端更新：自动检查，下载后交给系统安装程序，用户还要再确认一次 ---------- */
+    private void autoCheckUpdate() {
+        long last = prefs.getLong("lastUpdateCheck", 0);
+        if (System.currentTimeMillis() - last < 24 * 3600 * 1000L) return;
+        prefs.edit().putLong("lastUpdateCheck", System.currentTimeMillis()).apply();
+        runUpdateCheck(false);
+    }
+
+    private void runUpdateCheck(boolean manual) {
+        if (manual) ui.post(() -> toast("正在检查客户端更新…"));
+        new Thread(() -> {
+            HttpURLConnection c = null;
+            try {
+                c = (HttpURLConnection) new URL(UPDATE_MANIFEST).openConnection();
+                c.setConnectTimeout(8000);
+                c.setReadTimeout(8000);
+                c.setRequestProperty("User-Agent", "x.erp/" + VERSION);
+                int code = c.getResponseCode();
+                if (code != 200) throw new Exception("HTTP " + code);
+                JSONObject j = new JSONObject(readText(c.getInputStream()));
+                JSONObject pkgs = j.optJSONObject("packages");
+                JSONObject p = pkgs == null ? null : pkgs.optJSONObject("android");
+                if (p == null) throw new Exception("更新清单里没有安卓版本");
+                String latest = p.optString("version", "");
+                int latestCode = p.optInt("versionCode", 0);
+                boolean newer = latestCode > 0 ? latestCode > versionCode : compareVersion(latest, VERSION) > 0;
+                if (!newer) {
+                    if (manual) ui.post(() -> toast("已是最新版本 v" + VERSION));
+                    return;
+                }
+                String url = p.optString("url", ""), sha = p.optString("sha256", "");
+                if (url.isEmpty() || sha.isEmpty()) throw new Exception("更新清单缺少安装包地址");
+                long size = p.optLong("size", 0);
+                String notes = notesText(j.optJSONArray("notes"));
+                ui.post(() -> showUpdateDialog(latest, url, sha, size, notes));
+            } catch (Exception e) {
+                if (manual) ui.post(() -> toast("检查更新失败：" + e.getMessage()));
+            } finally {
+                if (c != null) c.disconnect();
+            }
+        }).start();
+    }
+
+    private static String readText(InputStream in) throws Exception {
+        try (InputStream input = in; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = input.read(buf)) > 0) out.write(buf, 0, n);
+            return out.toString("UTF-8");
+        }
+    }
+
+    private static String notesText(JSONArray arr) {
+        if (arr == null) return "";
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < arr.length(); i++) b.append("• ").append(arr.optString(i)).append('\n');
+        return b.toString();
+    }
+
+    private void showUpdateDialog(String latest, String url, String sha, long size, String notes) {
+        if (isFinishing() || isDestroyed()) return;
+        String msg = "当前版本 v" + VERSION + "，最新版本 v" + latest + (size > 0 ? " · " + formatSize(size) : "") + "\n\n"
+            + (notes == null ? "" : notes) + "\n下载后系统会再次确认安装，不会静默更新。";
+        new AlertDialog.Builder(this)
+            .setTitle("发现新版本 v" + latest)
+            .setMessage(msg)
+            .setPositiveButton("下载并安装", (d, w) -> downloadUpdate(latest, url, sha, size))
+            .setNegativeButton("稍后", null)
+            .show();
+    }
+
+    private void downloadUpdate(String version, String url, String sha, long size) {
+        File base = getExternalFilesDir(null);
+        if (base == null) base = getFilesDir();
+        File dir = new File(base, "updates");
+        if (!dir.exists() && !dir.mkdirs()) { toast("无法创建下载目录"); return; }
+        File file = new File(dir, "xerp-" + version + ".apk");
+        ProgressDialog pd = new ProgressDialog(this);
+        pd.setTitle("下载 x.erp " + version);
+        pd.setMessage("准备下载…");
+        pd.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+        pd.setMax(100);
+        pd.setCancelable(false);
+        pd.show();
+        new Thread(() -> {
+            HttpURLConnection c = null;
+            try {
+                c = (HttpURLConnection) new URL(url).openConnection();
+                c.setConnectTimeout(10000);
+                c.setReadTimeout(30000);
+                c.setRequestProperty("User-Agent", "x.erp/" + VERSION);
+                int code = c.getResponseCode();
+                if (code != 200) throw new Exception("HTTP " + code);
+                long total = c.getContentLengthLong();
+                if (total <= 0) total = size;
+                long got = 0;
+                int lastPct = -1;
+                try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(file)) {
+                    byte[] buf = new byte[16384];
+                    int n;
+                    while ((n = in.read(buf)) > 0) {
+                        out.write(buf, 0, n);
+                        got += n;
+                        if (total > 0) {
+                            int pct = (int) (got * 100 / total);
+                            if (pct != lastPct) {
+                                lastPct = pct;
+                                final int show = pct;
+                                ui.post(() -> { if (pd.isShowing()) pd.setProgress(show); });
+                            }
+                        }
+                    }
+                }
+                String hash = sha256(file);
+                if (!hash.equalsIgnoreCase(sha)) throw new Exception("安装包 SHA-256 校验失败");
+                ui.post(() -> { pd.dismiss(); installApk(file); });
+            } catch (Exception e) {
+                try { file.delete(); } catch (Exception ignored) { }
+                ui.post(() -> { pd.dismiss(); toast("下载失败：" + e.getMessage()); });
+            } finally {
+                if (c != null) c.disconnect();
+            }
+        }).start();
+    }
+
+    private static String sha256(File file) throws Exception {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        try (FileInputStream in = new FileInputStream(file)) {
+            byte[] buf = new byte[16384];
+            int n;
+            while ((n = in.read(buf)) > 0) md.update(buf, 0, n);
+        }
+        StringBuilder s = new StringBuilder();
+        for (byte b : md.digest()) s.append(String.format("%02x", b));
+        return s.toString();
+    }
+
+    private void installApk(File file) {
+        if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
+            pendingInstall = file;
+            toast("请允许 x.erp 安装未知应用，返回后会继续安装");
+            try { startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()))); }
+            catch (Exception e) { toast("请在系统设置里允许安装未知应用"); }
+            return;
+        }
+        pendingInstall = null;
+        Uri uri = Uri.parse("content://com.xerp.client.updates/" + Uri.encode(file.getName()));
+        Intent i = new Intent(Intent.ACTION_VIEW);
+        i.setDataAndType(uri, "application/vnd.android.package-archive");
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        try { startActivity(i); }
+        catch (ActivityNotFoundException e) { toast("没有找到系统安装程序"); }
+    }
+
+    private static String formatSize(long n) {
+        if (n >= 1024 * 1024) return String.format("%.1f MB", n / 1024.0 / 1024.0);
+        return Math.max(1, Math.round(n / 1024.0)) + " KB";
+    }
+
+    private static int compareVersion(String a, String b) {
+        String[] x = String.valueOf(a).split("\\."), y = String.valueOf(b).split("\\.");
+        for (int i = 0; i < 3; i++) {
+            int n = i < x.length ? parseInt(x[i]) : 0, m = i < y.length ? parseInt(y[i]) : 0;
+            if (n != m) return n - m;
+        }
+        return 0;
+    }
+
+    private static int parseInt(String s) {
+        try { return Integer.parseInt(s); } catch (Exception e) { return 0; }
+    }
+
     /* ---------- 页面调用的手机能力 ---------- */
     class Bridge {
         @JavascriptInterface public String version() { return VERSION; }
         @JavascriptInterface public String server() { return server; }
+        @JavascriptInterface public void checkAppUpdate() { runUpdateCheck(true); }
 
         @JavascriptInterface public void scan() {
             ui.post(() -> startActivityForResult(new Intent(MainActivity.this, ScanActivity.class), REQ_SCAN));
@@ -487,6 +675,16 @@ public class MainActivity extends Activity {
     }
 
     int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (pendingInstall != null && (Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls())) {
+            File f = pendingInstall;
+            pendingInstall = null;
+            ui.postDelayed(() -> installApk(f), 300);
+        }
+    }
 
     @Override
     protected void onDestroy() {
