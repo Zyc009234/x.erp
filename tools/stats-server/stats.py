@@ -26,7 +26,7 @@ STATE = os.environ.get('STATE_DIRECTORY') or os.environ.get('XERP_STATS_DIR') or
 PORT = int(os.environ.get('XERP_STATS_PORT', '8092'))
 XDB = os.environ.get('XERP_STATS_XDB') or os.path.join(HERE, 'ip2region_v4.xdb')
 DB_FILE, PW_FILE, KEY_FILE = (os.path.join(STATE, f) for f in ('stats.db', 'admin.pw', 'ip.key'))
-PLATS = {'win32': 'Windows', 'linux': '飞牛 / Linux', 'darwin': 'macOS', 'docker': 'Docker'}
+PLATS = {'win32': 'Windows', 'linux': '飞牛 / Linux', 'fnos': '飞牛 / Linux', 'darwin': 'macOS', 'docker': 'Docker'}
 lock = threading.Lock()
 
 
@@ -144,7 +144,14 @@ def report():
         daily = {d: (u, n) for d, u, n in q(f'SELECT day, COUNT(DISTINCT {WHO}), COUNT(*) FROM days WHERE day >= ? GROUP BY day', ago(29))}
         cities = q(f"SELECT COALESCE(city, '未知（升级统计前的数据）'), COUNT(DISTINCT {WHO}), COUNT(DISTINCT id), COUNT(*) FROM days WHERE day >= ? GROUP BY 1 ORDER BY 2 DESC, 4 DESC", ago(29))
         vers = q(f'SELECT version, COUNT(DISTINCT {WHO}), COUNT(*) FROM installs WHERE last_seen >= ? GROUP BY version', ago(29))
-        plats = q(f'SELECT plat, COUNT(DISTINCT {WHO}), COUNT(*) FROM installs WHERE last_seen >= ? GROUP BY plat ORDER BY 2 DESC', ago(29))
+        groups, plats = {}, []
+        for k, label in PLATS.items(): groups.setdefault(label, []).append(k)
+        for label, keys in groups.items():
+            a, b = one(f"SELECT COUNT(DISTINCT {WHO}), COUNT(*) FROM installs WHERE last_seen >= ? AND plat IN ({','.join('?' * len(keys))})", ago(29), *keys)
+            if b: plats.append((label, a, b))
+        a, b = one(f"SELECT COUNT(DISTINCT {WHO}), COUNT(*) FROM installs WHERE last_seen >= ? AND plat NOT IN ({','.join('?' * len(PLATS))})", ago(29), *PLATS)
+        if b: plats.append(('其他', a, b))
+        plats.sort(key=lambda r: (r[2], r[1]), reverse=True)
     vers.sort(key=lambda r: [int(x) for x in r[0].split('.')], reverse=True)
     days = [ago(n) for n in range(29, -1, -1)]
     top = max([daily.get(d, (0, 0))[0] for d in days] + [1])
@@ -163,7 +170,7 @@ body{{margin:0;background:var(--bg);color:var(--fg);font:14px/1.6 system-ui,"Pin
 <div class="c"><h2>每日活跃 IP<small>近 30 天，鼠标停在柱子上看设备数</small></h2><div class="bars">{bars}</div></div>
 <div class="c"><h2>城市分布<small>近 30 天；使用天次 = 设备每天上报一次的累计次数</small></h2>{tbl(['城市', 'IP', '设备', '使用天次'], cities)}</div>
 <div class="two"><div class="c"><h2>版本分布<small>近 30 天活跃</small></h2>{tbl(['版本', 'IP', '设备'], [('v' + v, a, b) for v, a, b in vers])}</div>
-<div class="c"><h2>系统分布<small>近 30 天活跃</small></h2>{tbl(['系统', 'IP', '设备'], [(PLATS.get(p, '其他'), a, b) for p, a, b in plats])}</div></div></main></body></html>'''
+<div class="c"><h2>系统分布<small>近 30 天活跃</small></h2>{tbl(['系统', 'IP', '设备'], [(p, a, b) for p, a, b in plats])}</div></div></main></body></html>'''
 
 
 # ---------- 用户留言 ----------
