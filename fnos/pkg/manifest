@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 2.9.4
+version               = 2.9.5
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 根据用户反馈继续改进：1）安卓客户端支持应用内检查更新，自动检查（每 24 小时最多一次），确认后下载 APK，系统再次确认安装；2）打开问题反馈先弹出作者微信收款码，关闭后进入反馈页面；3）应用内检查更新、FIFO 成本、BOM 自动组装 / 拆卸等此前功能继续保留。
+changelog             = 根据用户反馈继续改进：1）修复安卓 WebView 不兼容 CSS inset 导致问题反馈打赏弹窗不显示的问题；2）安卓客户端应用内更新、问题反馈打赏弹窗、FIFO 成本、BOM 自动组装 / 拆卸等继续保留。

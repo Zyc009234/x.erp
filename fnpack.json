@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.9.5": {
+          "changelog": "根据用户反馈继续改进：1）修复安卓 WebView 不兼容 CSS inset 导致问题反馈打赏弹窗不显示的问题；2）安卓客户端应用内更新、问题反馈打赏弹窗、FIFO 成本、BOM 自动组装 / 拆卸等继续保留。",
+          "updated_at": "2026-11-14T17:56:22+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.5.fpk",
+              "sha256": "6bf94a921bc32f8ba5a25d801d025c718badeccc1da833d12152d33b988f51ce",
+              "size": 678005
+            }
+          }
+        },
         "2.9.4": {
           "changelog": "根据用户反馈继续改进：1）安卓客户端支持应用内检查更新，自动检查（每 24 小时最多一次），确认后下载 APK，系统再次确认安装；2）打开问题反馈先弹出作者微信收款码，关闭后进入反馈页面；3）应用内检查更新、FIFO 成本、BOM 自动组装 / 拆卸等此前功能继续保留。",
           "updated_at": "2026-11-14T17:24:54+08:00",
@@ -53,17 +64,6 @@
               "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.3.fpk",
               "sha256": "14022be8e7b4f45d353b61e643797b11028242d9bb54d6cd0c179306f0890e66",
               "size": 678056
-            }
-          }
-        },
-        "2.9.2": {
-          "changelog": "根据用户反馈继续改进：1）新增先进先出（FIFO）成本口径，可在系统设置里切换，出库按最早入库成本结转，切换时现有库存按当前成本生成期初成本层，历史不重算；2）BOM 自动组装 / 拆卸、商品分类父子级、明细行优惠等此前功能继续保留。",
-          "updated_at": "2026-11-14T16:29:41+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.2.fpk",
-              "sha256": "5edb18740bc451c3fd89ee6047cc32c760541111393ba582eaca401141218587",
-              "size": 675879
             }
           }
         }
