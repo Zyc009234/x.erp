@@ -4,9 +4,9 @@
 
 ## 安装
 
-1. 安装 `xerp-payrelay-1.0.0.apk`。
+1. 安装 `xerp-payrelay-1.0.1.apk`。
 2. 打开电脑后台 `https://www.zhaoyoucai.xyz/xerp-cloud/admin` →「收款助手」→ 添加，复制显示的 **ID** 和 **密钥**。
-3. 手机 App 填入服务器地址（默认 `https://www.zhaoyoucai.xyz/xerp-cloud`）、ID、密钥，点「保存并启动」。
+3. 手机 App 填入服务器地址（默认 `https://www.zhaoyoucai.xyz/xerp-cloud`）、ID、密钥，点「保存并启动」；也可以扫描配置二维码后点「粘贴配置」自动填入。
 4. 点「打开通知使用权」，在系统设置里勾选「x.erp 收款助手」。
 5. 点「发送测试心跳」，显示连接成功即可。
 

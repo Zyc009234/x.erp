@@ -1,7 +1,11 @@
 package com.xerp.payrelay;
 
 import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -80,6 +84,16 @@ public class MainActivity extends Activity {
             }).start();
         });
 
+        Button paste = button(root, "粘贴配置（从二维码复制）");
+        paste.setOnClickListener(v -> {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            ClipData clip = cm == null ? null : cm.getPrimaryClip();
+            if (clip == null || clip.getItemCount() == 0) { toast("剪贴板是空的"); return; }
+            String text = clip.getItemAt(0).coerceToText(this).toString();
+            if (applyConfigText(text)) toast("配置已导入并启动");
+            else toast("没有识别到配置，请复制完整二维码文字");
+        });
+
         status = new TextView(this);
         status.setTextSize(14);
         status.setTextColor(0xff334155);
@@ -90,6 +104,58 @@ public class MainActivity extends Activity {
         scroll.addView(root);
         setContentView(scroll);
         if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 1);
+        handleLink(getIntent());
+        refresh();
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (handleLink(intent)) toast("配置已从二维码导入并启动");
+    }
+
+    private boolean handleLink(Intent intent) {
+        if (intent == null || intent.getData() == null) return false;
+        Uri u = intent.getData();
+        if (!"xerp-payrelay".equals(u.getScheme())) return false;
+        String b = u.getQueryParameter("base");
+        String d = u.getQueryParameter("device");
+        String s = u.getQueryParameter("secret");
+        if (d == null || s == null) return false;
+        applyConfig(b, d, s);
+        return true;
+    }
+
+    private boolean applyConfigText(String text) {
+        text = text == null ? "" : text.trim();
+        if (text.startsWith("xerp-payrelay://")) {
+            Uri u = Uri.parse(text);
+            String b = u.getQueryParameter("base");
+            String d = u.getQueryParameter("device");
+            String s = u.getQueryParameter("secret");
+            if (d == null || s == null) return false;
+            applyConfig(b, d, s);
+            return true;
+        }
+        String b = null, d = null, s = null;
+        for (String t : text.split("[\\s|,;]+")) {
+            if (t.startsWith("http://") || t.startsWith("https://")) b = t;
+            else if (t.startsWith("rly_")) d = t;
+            else if (t.matches("[0-9a-fA-F]{32,64}")) s = t;
+        }
+        if (d == null || s == null) return false;
+        applyConfig(b, d, s);
+        return true;
+    }
+
+    private void applyConfig(String b, String d, String s) {
+        if (b != null && !b.isEmpty()) base.setText(b);
+        device.setText(d);
+        secret.setText(s);
+        RelayClient.prefs(this).edit()
+                .putString("base", b == null || b.isEmpty() ? RelayClient.DEFAULT_BASE : b)
+                .putString("device", d).putString("secret", s).apply();
+        RelayService.start(this);
         refresh();
     }
 
