@@ -28,9 +28,9 @@ const MAX_UPLOAD = 200 * MB;
 fs.mkdirSync(BLOB_DIR, { recursive: true });
 
 const PLANS = {
-  basic: { name: '基础版', quota: 1 * GB, days: 365, max: 7, price: 48 },
-  plus: { name: '标准版', quota: 5 * GB, days: 365, max: 15, price: 128 },
-  pro: { name: '专业版', quota: 10 * GB, days: 365, max: 30, price: 228 },
+  basic: { name: '基础版', quota: 1 * GB, days: 365, max: 7, price: 10 },
+  plus: { name: '标准版', quota: 5 * GB, days: 365, max: 15, price: 20 },
+  pro: { name: '专业版', quota: 10 * GB, days: 365, max: 30, price: 30 },
 };
 
 const db = new DatabaseSync(DB_FILE);
@@ -285,7 +285,7 @@ function adminPage(req, res, flash) {
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const rowsA = accounts.map(a => `<tr><td>${esc(a.name || '未命名')}<br><small>${esc(a.device)}</small></td><td>${esc(PLANS[a.plan]?.name || a.plan)}</td><td>${fmtBytes(a.used)} / ${fmtBytes(a.quota)}</td><td>${esc(fmtTime(a.expires))}</td><td>${a.n}</td><td>${esc(fmtTime(a.last_seen))}</td></tr>`).join('');
   const rowsC = codes.map(c => `<tr><td><code>${esc(c.code)}</code></td><td>${esc(PLANS[c.plan]?.name || c.plan)}</td><td>${esc(c.used_by || '未使用')}</td><td>${esc(fmtTime(c.created))}</td><td>${esc(c.note || '')}</td></tr>`).join('');
-  const rowsO = orders.map(o => `<tr><td>${esc(o.id)}</td><td>${esc(PLANS[o.plan]?.name || o.plan)}</td><td>¥${(o.amount / 100).toFixed(2)}</td><td>${esc(o.status)}</td><td>${esc(o.code || '')}</td><td>${o.status === 'paid' ? '' : `<form method=post action="/admin/order"><input type=hidden name=id value="${esc(o.id)}"><button>标记已付并发码</button></form>`}</td></tr>`).join('');
+  const rowsO = orders.map(o => `<tr><td>${esc(o.id)}</td><td>${esc(PLANS[o.plan]?.name || o.plan)}</td><td>¥${(o.amount / 100).toFixed(2)}</td><td>${esc(o.status)}</td><td>${esc(o.contact || '')}</td><td>${esc(o.code || '')}</td><td>${o.status === 'paid' ? '' : `<form method=post action="/admin/order"><input type=hidden name=id value="${esc(o.id)}"><button>标记已付并发码</button></form>`}</td></tr>`).join('');
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(`<!doctype html><html lang=zh-CN><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>x.erp 云备份后台</title>
 <style>body{font:14px/1.6 system-ui,"Microsoft YaHei";margin:0;background:#f6f7fb;color:#1e293b}main{max-width:1100px;margin:0 auto;padding:24px 16px}h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:22px 0 10px}.m{color:#64748b}.c{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 10px 7px 0;border-bottom:1px solid #e2e8f0;white-space:nowrap}th{color:#64748b;font-weight:500;font-size:12px}code{background:#f1f5f9;padding:2px 5px;border-radius:4px}form.inline{display:flex;gap:8px;flex-wrap:wrap;align-items:center}input,select,button{padding:7px 9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;background:#fff}button{background:#4f46e5;border-color:#4f46e5;color:#fff;cursor:pointer}small{color:#94a3b8}.flash{background:#dcfce7;border:1px solid #86efac;padding:10px 12px;border-radius:8px;margin:12px 0;white-space:pre-wrap}</style></head><body><main>
@@ -294,7 +294,7 @@ ${flash ? `<div class=flash>${esc(flash)}</div>` : ''}
 <h2>生成授权码</h2><div class=c><form class=inline method=post action="/admin/code"><select name=plan>${Object.entries(PLANS).map(([k, p]) => `<option value=${k}>${p.name} · ${fmtBytes(p.quota)} / ${p.days} 天 · ¥${p.price}</option>`).join('')}</select><input name=count type=number value=1 min=1 max=20 style="width:70px"><input name=note placeholder="备注（客户/订单号）" style="min-width:200px"><button>生成</button></form></div>
 <h2>授权码</h2><div class=c><table><tr><th>授权码</th><th>套餐</th><th>使用账号</th><th>生成时间</th><th>备注</th></tr>${rowsC || '<tr><td colspan=5 class=m>暂无</td></tr>'}</table></div>
 <h2>云备份账号</h2><div class=c><table><tr><th>名称 / 设备</th><th>套餐</th><th>已用 / 容量</th><th>到期</th><th>份数</th><th>最近上报</th></tr>${rowsA || '<tr><td colspan=6 class=m>暂无</td></tr>'}</table></div>
-<h2>订单</h2><div class=c><table><tr><th>订单号</th><th>套餐</th><th>金额</th><th>状态</th><th>授权码</th><th></th></tr>${rowsO || '<tr><td colspan=6 class=m>暂无</td></tr>'}</table></div>
+<h2>订单</h2><div class=c><table><tr><th>订单号</th><th>套餐</th><th>金额</th><th>状态</th><th>联系方式</th><th>授权码</th><th></th></tr>${rowsO || '<tr><td colspan=7 class=m>暂无</td></tr>'}</table></div>
 </main></body></html>`);
 }
 
@@ -325,7 +325,14 @@ async function buy(plan){
     const r=await fetch('/xerp-cloud/api/pay/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan,contact:(document.getElementById('contact')||{}).value||''})});
     const d=await r.json();
     if(!r.ok) throw new Error(d.error||'创建订单失败');
-    if(d.disabled){box.textContent='在线支付暂未开通，请联系作者购买授权码。';return;}
+    if(d.disabled){
+      const m=await fetch('/xerp-cloud/api/order/manual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan,contact:(document.getElementById('contact')||{}).value||''})});
+      const o=await m.json();
+      if(!m.ok) throw new Error(o.error||'创建订单失败');
+      box.innerHTML='订单号 <b>'+o.order+'</b>，应付 <b>¥'+(o.amount/100).toFixed(2)+'</b><br>请用微信扫码支付，付款后把订单号发给作者；作者确认后这里会自动显示授权码。<br><img src="/xerp/img/wechat-pay.jpg" alt="微信收款码" style="width:190px;margin-top:10px;border-radius:10px;background:#fff">';
+      pollOrder(o.order);
+      return;
+    }
     location.href=d.url;
   }catch(e){box.textContent=e.message;}
 }
@@ -377,10 +384,25 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    if (req.method === 'POST' && p === '/api/order/manual') {
+      const b = await jsonBody(req);
+      const plan = PLANS[b.plan];
+      if (!plan) return fail(res, 400, '套餐不存在');
+      const no = 'M' + Date.now() + crypto.randomBytes(2).toString('hex').toUpperCase();
+      db.prepare('INSERT INTO orders (id, plan, amount, status, created, channel, contact) VALUES (?,?,?,?,?,?,?)')
+        .run(no, b.plan, plan.price * 100, 'pending', now(), 'manual', String(b.contact || '').slice(0, 100) || null);
+      return json(res, 200, { order: no, amount: plan.price * 100, plan: b.plan });
+    }
     if (req.method === 'POST' && p === '/api/pay/create') {
       const b = await jsonBody(req);
       const plan = PLANS[b.plan];
       if (!plan) return fail(res, 400, '套餐不存在');
+      if (process.env.EPAY_MOCK === '1') {
+        const no = 'T' + Date.now() + crypto.randomBytes(3).toString('hex');
+        db.prepare('INSERT INTO orders (id, plan, amount, status, created, channel, contact) VALUES (?,?,?,?,?,?,?)')
+          .run(no, b.plan, plan.price * 100, 'pending', now(), 'mock', String(b.contact || '').slice(0, 100) || null);
+        return json(res, 200, { url: BASE + '/mock-pay?order=' + no, order: no });
+      }
       if (!process.env.EPAY_URL || !process.env.EPAY_PID || !process.env.EPAY_KEY) return json(res, 200, { disabled: true });
       const no = 'X' + Date.now() + crypto.randomBytes(3).toString('hex');
       db.prepare('INSERT INTO orders (id, plan, amount, status, created, channel, contact) VALUES (?,?,?,?,?,?,?)')
@@ -398,6 +420,24 @@ const server = http.createServer(async (req, res) => {
       const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(p.slice('/api/order/'.length));
       if (!o) return fail(res, 404, '订单不存在');
       return json(res, 200, { status: o.status, code: o.code || null, plan: o.plan, amount: o.amount });
+    }
+    if (req.method === 'GET' && p === '/mock-pay') {
+      const no = url.searchParams.get('order') || '';
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(`<!doctype html><html lang=zh-CN><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>模拟支付</title>
+<body style="font:16px/1.8 system-ui;background:#0f172a;color:#e2e8f0;max-width:520px;margin:60px auto;padding:0 18px">
+<h2>模拟支付（仅测试）</h2><p>订单 ${no}</p><form method=post action="${BASE}/api/pay/mock"><input type=hidden name=order value="${no}"><button style="padding:12px 22px;border:0;border-radius:10px;background:#6366f1;color:#fff;font:inherit;cursor:pointer">模拟支付成功</button></form></body></html>`);
+    }
+    if (req.method === 'POST' && p === '/api/pay/mock') {
+      const f = await formBody(req);
+      const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(f.get('order'));
+      if (!o) { res.writeHead(404); return res.end('order not found'); }
+      if (o.status !== 'paid') {
+        const code = createCode(o.plan, '模拟支付 ' + o.id, o.id);
+        db.prepare('UPDATE orders SET status = ?, paid = ?, code = ? WHERE id = ?').run('paid', now(), code, o.id);
+      }
+      res.writeHead(302, { Location: BASE + '/buy?order=' + encodeURIComponent(o.id) });
+      return res.end();
     }
     if (req.method === 'POST' && p === '/api/pay/notify') {
       const f = await formBody(req);
