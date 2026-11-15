@@ -1,40 +1,40 @@
 {
   "schema": 1,
-  "latest": "2.9.6",
-  "publishedAt": "2026-11-15T11:56:51+08:00",
+  "latest": "2.9.7",
+  "publishedAt": "2026-11-15T12:10:32+08:00",
   "notes": [
-    "打赏后请留下联系方式，我们将优先修改您的任务要求。其余功能与 2.9.5 一致。"
+    "制作不易麻烦给个赏钱。其余功能与 2.9.6 一致。"
   ],
   "packages": {
     "fnos": {
-      "version": "2.9.6",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.6.fpk",
-      "sha256": "70c8dd5774a36f55a82d2162ffa13c7b991fd2aa13e2a463c0cb2a2a6a3c735e",
-      "size": 678056,
-      "file": "xerp-2.9.6.fpk",
+      "version": "2.9.7",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.7.fpk",
+      "sha256": "43ee780b12568e2fbc33d7110761edcfd6c54540e18b07096a2a816d531bbcaf",
+      "size": 677917,
+      "file": "xerp-2.9.7.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.9.6",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.6-windows-x64-setup.exe",
-      "sha256": "d98d5652d62b7d1b47ffbd8b1b6c1db38e2d89279a9acc3cc3d588124518c139",
-      "size": 24584473,
-      "file": "xerp-2.9.6-windows-x64-setup.exe",
+      "version": "2.9.7",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.7-windows-x64-setup.exe",
+      "sha256": "647645447a36da6ee94a41be773d2e240ccc1d635835093844c13eaef1ca267d",
+      "size": 24585444,
+      "file": "xerp-2.9.7-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.9.6",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.6-android.apk",
-      "sha256": "0f11ee47f8035eaf446ca20735a30d7c52642e2c0002e4da927f1f75b85f9c8f",
+      "version": "2.9.7",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.7-android.apk",
+      "sha256": "14564d41cd6cbd480b9e76a24fa21e0b01581ba01880b033be1dbe2797bc3dd9",
       "size": 275233,
-      "file": "xerp-2.9.6-android.apk",
+      "file": "xerp-2.9.7-android.apk",
       "kind": "apk",
-      "versionCode": 20906
+      "versionCode": 20907
     },
     "docker": {
-      "version": "2.9.6",
+      "version": "2.9.7",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.9.6"
+      "image": "ghcr.io/zyc009234/xerp:2.9.7"
     }
   }
 }

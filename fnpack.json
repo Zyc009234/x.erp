@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.9.7": {
+          "changelog": "打赏弹窗文案调整：制作不易麻烦给个赏钱。其余功能与 2.9.6 一致。",
+          "updated_at": "2026-11-15T12:10:32+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.7.fpk",
+              "sha256": "43ee780b12568e2fbc33d7110761edcfd6c54540e18b07096a2a816d531bbcaf",
+              "size": 677917
+            }
+          }
+        },
         "2.9.6": {
           "changelog": "打赏弹窗文案调整：打赏后请留下联系方式，我们将优先修改您的任务要求。其余功能与 2.9.5 一致。",
           "updated_at": "2026-11-15T11:56:52+08:00",
@@ -53,17 +64,6 @@
               "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.5.fpk",
               "sha256": "6bf94a921bc32f8ba5a25d801d025c718badeccc1da833d12152d33b988f51ce",
               "size": 678005
-            }
-          }
-        },
-        "2.9.4": {
-          "changelog": "根据用户反馈继续改进：1）安卓客户端支持应用内检查更新，自动检查（每 24 小时最多一次），确认后下载 APK，系统再次确认安装；2）打开问题反馈先弹出作者微信收款码，关闭后进入反馈页面；3）应用内检查更新、FIFO 成本、BOM 自动组装 / 拆卸等此前功能继续保留。",
-          "updated_at": "2026-11-14T17:24:54+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.4.fpk",
-              "sha256": "4a075b29cd8dd92b4688c6e6b3ba5f90f802dffdab3e8a24f0d83713a9359c02",
-              "size": 678042
             }
           }
         }
