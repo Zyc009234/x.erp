@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "latest": "2.10.1",
-  "publishedAt": "2026-11-15T17:04:41+08:00",
+  "publishedAt": "2026-11-15T17:12:46+08:00",
   "notes": [
     "云备份 + 远程访问。新增远程访问隧道，不用公网 IP 也能在外面打开 ERP",
     "不购买不影响基础功能。"
@@ -10,23 +10,23 @@
     "fnos": {
       "version": "2.10.1",
       "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.1.fpk",
-      "sha256": "e5e87f138e73e3f07bb36ea293d66d4218dfef289b2eb9f218629f44e0f0e1eb",
-      "size": 686149,
+      "sha256": "75fd8a14e418a21fb5522b40ea69fce9fff76b4446f34d3e7014f1543b643b2c",
+      "size": 686189,
       "file": "xerp-2.10.1.fpk",
       "kind": "fpk"
     },
     "windows": {
       "version": "2.10.1",
       "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.1-windows-x64-setup.exe",
-      "sha256": "6ccf2e08170945a92b3425513ba829b829d7a5ea1d9cdd4b59839b6e2ca642a4",
-      "size": 24589789,
+      "sha256": "39190156debff5e56a553a01323c524aa70dbe622828a31ba1078fe2f8ea5749",
+      "size": 24589806,
       "file": "xerp-2.10.1-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
       "version": "2.10.1",
       "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.1-android.apk",
-      "sha256": "c0a4aba001a7d3a7c28e3b7ac20bc154eae1ca5c62f3729e69c44b4be365892f",
+      "sha256": "d48dfce0e004b9f197546839e6a11f5fb54bea9849e3859c682a28e80150cb04",
       "size": 275233,
       "file": "xerp-2.10.1-android.apk",
       "kind": "apk",

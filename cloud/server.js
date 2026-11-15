@@ -517,6 +517,16 @@ const server = http.createServer(async (req, res) => {
       if (!a) return fail(res, 401, '授权已失效，请重新激活');
       return json(res, 200, status(a));
     }
+    if (req.method === 'POST' && p === '/api/tunnel/init') {
+      const a = accountOf(req);
+      if (!a) return fail(res, 401, '授权已失效，请重新激活');
+      if (a.expires < now()) return fail(res, 402, '云服务已到期');
+      const slug = a.slug || crypto.randomBytes(5).toString('hex');
+      const tunnelSecret = crypto.randomBytes(24).toString('hex');
+      db.prepare('UPDATE accounts SET slug = ?, tunnel_hash = ? WHERE id = ?')
+        .run(slug, crypto.createHash('sha256').update(tunnelSecret).digest('hex'), a.id);
+      return json(res, 200, { slug, tunnelSecret, url: `https://${slug}.${TUNNEL_DOMAIN}` });
+    }
     if (p.startsWith('/api/backup/') && (req.method === 'PUT' || req.method === 'POST')) {
       const a = accountOf(req);
       if (!a) return fail(res, 401, '授权已失效，请重新激活');

@@ -3198,10 +3198,15 @@ route('POST', '/api/cloud/auto', ctx => {
   audit(ctx, on ? '开启云备份自动上传' : '关闭云备份自动上传');
   return { ok: true, ...cloudState() };
 }, { admin: true });
-route('POST', '/api/cloud/remote', ctx => {
+route('POST', '/api/cloud/remote', async ctx => {
   const on = !!ctx.body.enabled;
   if (on && !config.cloud.token) fail('还没有开通云服务，请先输入授权码');
-  if (on && !config.cloud.tunnelSecret) fail('缺少远程访问密钥，请重新输入授权码开通');
+  if (on && !config.cloud.tunnelSecret) {
+    const r = await cloudReq('/tunnel/init', { method: 'POST', token: config.cloud.token, body: {} });
+    const d = await r.json();
+    if (d.tunnelSecret) { config.cloud.tunnelSecret = d.tunnelSecret; config.cloud.slug = d.slug; }
+  }
+  if (on && !config.cloud.tunnelSecret) fail('远程访问初始化失败，请稍后再试');
   config.cloud.remote = on; saveConfig();
   if (on) cloudTunnelStart(); else cloudTunnelStop();
   audit(ctx, on ? '开启远程访问' : '关闭远程访问');

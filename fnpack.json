@@ -36,12 +36,12 @@
       "releases": {
         "2.10.1": {
           "changelog": "云服务套餐（10 元起）：云备份 + 远程访问。新增远程访问隧道，不用公网 IP 也能在外面打开 ERP；不购买不影响基础功能。",
-          "updated_at": "2026-11-15T17:04:41+08:00",
+          "updated_at": "2026-11-15T17:12:46+08:00",
           "packages": {
             "all": {
               "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.1.fpk",
-              "sha256": "e5e87f138e73e3f07bb36ea293d66d4218dfef289b2eb9f218629f44e0f0e1eb",
-              "size": 686149
+              "sha256": "75fd8a14e418a21fb5522b40ea69fce9fff76b4446f34d3e7014f1543b643b2c",
+              "size": 686189
             }
           }
         },
