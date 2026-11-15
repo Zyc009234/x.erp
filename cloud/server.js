@@ -301,8 +301,8 @@ ${flash ? `<div class=flash>${esc(flash)}</div>` : ''}
 function buyPage() {
   const cards = Object.entries(PLANS).map(([k, p]) => `<div class=plan><h3>${p.name}</h3><div class=price>¥${p.price}<small>/年</small></div><ul><li>${fmtBytes(p.quota)} 加密云备份空间</li><li>保留最近 ${p.max} 份备份</li><li>NAS 故障可下载恢复</li><li>服务器只存密文</li></ul><button onclick="buy('${k}')">购买</button></div>`).join('');
   return `<!doctype html><html lang=zh-CN><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>x.erp 云备份</title>
-<style>body{font:15px/1.7 system-ui,"Microsoft YaHei";margin:0;background:#0f172a;color:#e2e8f0}main{max-width:960px;margin:0 auto;padding:48px 16px}h1{font-size:30px;margin:0 0 8px}p.sub{color:#94a3b8;margin:0 0 28px}.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.plan{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:22px}.plan h3{margin:0 0 6px;font-size:18px}.price{font-size:30px;font-weight:700;margin-bottom:14px}.price small{font-size:13px;color:#94a3b8;font-weight:400}.plan ul{padding-left:18px;color:#cbd5e1;font-size:13px}.plan button{width:100%;padding:10px;border:0;border-radius:10px;background:#6366f1;color:#fff;font:inherit;cursor:pointer}.note{margin-top:26px;color:#94a3b8;font-size:13px}#msg{margin-top:18px;padding:14px;border-radius:10px;background:#1e293b;display:none;white-space:pre-wrap}#msg.show{display:block}</style></head>
-<body><main><h1>x.erp 云备份</h1><p class=sub>数据在本机加密后上传，服务器看不到你的业务数据。换机、NAS 故障、误删都能恢复。</p><div class=plans>${cards}</div><div id=msg></div>
+<style>body{font:15px/1.7 system-ui,"Microsoft YaHei";margin:0;background:#0f172a;color:#e2e8f0}main{max-width:960px;margin:0 auto;padding:48px 16px}h1{font-size:30px;margin:0 0 8px}p.sub{color:#94a3b8;margin:0 0 18px}.contact{margin:0 0 24px}.contact input{width:100%;max-width:360px;padding:10px 12px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font:inherit}.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.plan{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:22px}.plan h3{margin:0 0 6px;font-size:18px}.price{font-size:30px;font-weight:700;margin-bottom:14px}.price small{font-size:13px;color:#94a3b8;font-weight:400}.plan ul{padding-left:18px;color:#cbd5e1;font-size:13px}.plan button{width:100%;padding:10px;border:0;border-radius:10px;background:#6366f1;color:#fff;font:inherit;cursor:pointer}.note{margin-top:26px;color:#94a3b8;font-size:13px}#msg{margin-top:18px;padding:14px;border-radius:10px;background:#1e293b;display:none;white-space:pre-wrap}#msg.show{display:block}</style></head>
+<body><main><h1>x.erp 云备份</h1><p class=sub>数据在本机加密后上传，服务器看不到你的业务数据。换机、NAS 故障、误删都能恢复。</p><div class=contact><input id=contact placeholder="微信 / 手机号（选填，方便补发授权码）"></div><div class=plans>${cards}</div><div id=msg></div>
 <p class=note>购买后授权码会显示在本页，也会稍后发到你留下的联系方式。授权码在 x.erp「云备份」页面输入即可开通。</p>
 <script>
 async function pollOrder(no){
@@ -322,7 +322,7 @@ if(orderNo) pollOrder(orderNo);
 async function buy(plan){
   const box=document.getElementById('msg');box.className='show';box.textContent='正在创建订单…';
   try{
-    const r=await fetch('/xerp-cloud/api/pay/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan})});
+    const r=await fetch('/xerp-cloud/api/pay/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan,contact:(document.getElementById('contact')||{}).value||''})});
     const d=await r.json();
     if(!r.ok) throw new Error(d.error||'创建订单失败');
     if(d.disabled){box.textContent='在线支付暂未开通，请联系作者购买授权码。';return;}
