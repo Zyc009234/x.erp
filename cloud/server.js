@@ -56,6 +56,14 @@ db.exec(`
     id TEXT PRIMARY KEY, plan TEXT NOT NULL, amount INTEGER NOT NULL, status TEXT NOT NULL,
     created INTEGER NOT NULL, paid INTEGER, channel TEXT, code TEXT, contact TEXT
   );
+  CREATE TABLE IF NOT EXISTS relays (
+    id TEXT PRIMARY KEY, name TEXT, secret TEXT NOT NULL, created INTEGER NOT NULL,
+    last_seen INTEGER, enabled INTEGER NOT NULL DEFAULT 1
+  );
+  CREATE TABLE IF NOT EXISTS relay_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, relay TEXT, amount INTEGER, source TEXT,
+    text TEXT, at INTEGER, matched TEXT
+  );
 `);
 
 function now() { return Math.floor(Date.now() / 1000); }
@@ -175,6 +183,32 @@ function createCode(planKey, note, orderNo) {
     .run(code, planKey, p.days, p.quota, p.max, now(), orderNo || null, note || null);
   return code;
 }
+function relayHmac(secret, msg) {
+  return crypto.createHmac('sha256', String(secret)).update(String(msg)).digest('hex');
+}
+function safeEqualHex(a, b) {
+  const x = Buffer.from(String(a || ''), 'hex'), y = Buffer.from(String(b || ''), 'hex');
+  return x.length === y.length && x.length > 0 && crypto.timingSafeEqual(x, y);
+}
+function relayOnline() {
+  const t = db.prepare('SELECT MAX(last_seen) AS t FROM relays WHERE enabled = 1').get().t || 0;
+  return { online: now() - t < 180, lastSeen: t || null };
+}
+function verifyRelay(b) {
+  const r = db.prepare('SELECT * FROM relays WHERE id = ? AND enabled = 1').get(String(b.device || ''));
+  if (!r) throw Object.assign(new Error('收款助手未注册或已停用'), { status: 403 });
+  const at = +b.at;
+  if (!at || Math.abs(now() - at) > 300) throw Object.assign(new Error('请求已过期，请检查手机时间'), { status: 400 });
+  const want = relayHmac(r.secret, [b.device, b.source || '', b.amount || 0, at, b.nonce || ''].join('\n'));
+  if (!safeEqualHex(want, b.sign)) throw Object.assign(new Error('签名不正确'), { status: 403 });
+  db.prepare('UPDATE relays SET last_seen = ? WHERE id = ?').run(now(), r.id);
+  return r;
+}
+function uniqueAmount(base) {
+  const used = new Set(db.prepare("SELECT amount FROM orders WHERE status = 'pending' AND channel = 'relay' AND created > ?").all(now() - 1800).map(r => r.amount));
+  for (let i = 1; i <= 99; i++) if (!used.has(base + i)) return base + i;
+  return base;
+}
 function sanitizeName(name) {
   return /^[A-Za-z0-9._-]{1,120}$/.test(name) ? name : null;
 }
@@ -282,19 +316,28 @@ function adminPage(req, res, flash) {
   });
   const codes = db.prepare('SELECT * FROM codes ORDER BY created DESC LIMIT 40').all();
   const orders = db.prepare('SELECT * FROM orders ORDER BY created DESC LIMIT 20').all();
+  const relays = db.prepare('SELECT * FROM relays ORDER BY created DESC').all();
+  const relayLogs = db.prepare('SELECT * FROM relay_log ORDER BY id DESC LIMIT 30').all();
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const rowsA = accounts.map(a => `<tr><td>${esc(a.name || '未命名')}<br><small>${esc(a.device)}</small></td><td>${esc(PLANS[a.plan]?.name || a.plan)}</td><td>${fmtBytes(a.used)} / ${fmtBytes(a.quota)}</td><td>${esc(fmtTime(a.expires))}</td><td>${a.n}</td><td>${esc(fmtTime(a.last_seen))}</td></tr>`).join('');
   const rowsC = codes.map(c => `<tr><td><code>${esc(c.code)}</code></td><td>${esc(PLANS[c.plan]?.name || c.plan)}</td><td>${esc(c.used_by || '未使用')}</td><td>${esc(fmtTime(c.created))}</td><td>${esc(c.note || '')}</td></tr>`).join('');
-  const rowsO = orders.map(o => `<tr><td>${esc(o.id)}</td><td>${esc(PLANS[o.plan]?.name || o.plan)}</td><td>¥${(o.amount / 100).toFixed(2)}</td><td>${esc(o.status)}</td><td>${esc(o.contact || '')}</td><td>${esc(o.code || '')}</td><td>${o.status === 'paid' ? '' : `<form method=post action="/admin/order"><input type=hidden name=id value="${esc(o.id)}"><button>标记已付并发码</button></form>`}</td></tr>`).join('');
+  const rowsO = orders.map(o => `<tr><td>${esc(o.id)}</td><td>${esc(PLANS[o.plan]?.name || o.plan)}</td><td>¥${(o.amount / 100).toFixed(2)}</td><td>${esc(o.status)}</td><td>${esc(o.contact || '')}</td><td>${esc(o.code || '')}</td><td>${o.status === 'paid' ? '' : `<form method=post action="admin/order"><input type=hidden name=id value="${esc(o.id)}"><button>标记已付并发码</button></form>`}</td></tr>`).join('');
+  const rowsR = relays.map(r => `<tr><td>${esc(r.name || '未命名')}<br><small>${esc(r.id)}</small></td><td>${now() - (r.last_seen || 0) < 180 ? '<b style="color:#16a34a">在线</b>' : '<span class=m>离线</span>'}</td><td>${esc(fmtTime(r.last_seen))}</td><td><form method=post action="admin/relay"><input type=hidden name=id value="${esc(r.id)}"><input type=hidden name=toggle value="1"><button>${r.enabled ? '停用' : '启用'}</button></form></td></tr>`).join('');
+  const rowsL = relayLogs.map(l => `<tr><td>${esc(fmtTime(l.at))}</td><td>${esc(l.source || '')}</td><td>¥${((l.amount || 0) / 100).toFixed(2)}</td><td>${esc(l.matched || '未匹配')}</td><td style="max-width:360px;white-space:normal">${esc(l.text || '')}</td></tr>`).join('');
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(`<!doctype html><html lang=zh-CN><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>x.erp 云备份后台</title>
 <style>body{font:14px/1.6 system-ui,"Microsoft YaHei";margin:0;background:#f6f7fb;color:#1e293b}main{max-width:1100px;margin:0 auto;padding:24px 16px}h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:22px 0 10px}.m{color:#64748b}.c{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 10px 7px 0;border-bottom:1px solid #e2e8f0;white-space:nowrap}th{color:#64748b;font-weight:500;font-size:12px}code{background:#f1f5f9;padding:2px 5px;border-radius:4px}form.inline{display:flex;gap:8px;flex-wrap:wrap;align-items:center}input,select,button{padding:7px 9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;background:#fff}button{background:#4f46e5;border-color:#4f46e5;color:#fff;cursor:pointer}small{color:#94a3b8}.flash{background:#dcfce7;border:1px solid #86efac;padding:10px 12px;border-radius:8px;margin:12px 0;white-space:pre-wrap}</style></head><body><main>
 <h1>x.erp 云备份后台</h1><div class=m>当前共 ${accounts.length} 个账号，云端已用 ${fmtBytes(accounts.reduce((n, a) => n + a.used, 0))} / ${fmtBytes(TOTAL_QUOTA)}</div>
 ${flash ? `<div class=flash>${esc(flash)}</div>` : ''}
-<h2>生成授权码</h2><div class=c><form class=inline method=post action="/admin/code"><select name=plan>${Object.entries(PLANS).map(([k, p]) => `<option value=${k}>${p.name} · ${fmtBytes(p.quota)} / ${p.days} 天 · ¥${p.price}</option>`).join('')}</select><input name=count type=number value=1 min=1 max=20 style="width:70px"><input name=note placeholder="备注（客户/订单号）" style="min-width:200px"><button>生成</button></form></div>
+<h2>生成授权码</h2><div class=c><form class=inline method=post action="admin/code"><select name=plan>${Object.entries(PLANS).map(([k, p]) => `<option value=${k}>${p.name} · ${fmtBytes(p.quota)} / ${p.days} 天 · ¥${p.price}</option>`).join('')}</select><input name=count type=number value=1 min=1 max=20 style="width:70px"><input name=note placeholder="备注（客户/订单号）" style="min-width:200px"><button>生成</button></form></div>
 <h2>授权码</h2><div class=c><table><tr><th>授权码</th><th>套餐</th><th>使用账号</th><th>生成时间</th><th>备注</th></tr>${rowsC || '<tr><td colspan=5 class=m>暂无</td></tr>'}</table></div>
 <h2>云备份账号</h2><div class=c><table><tr><th>名称 / 设备</th><th>套餐</th><th>已用 / 容量</th><th>到期</th><th>份数</th><th>最近上报</th></tr>${rowsA || '<tr><td colspan=6 class=m>暂无</td></tr>'}</table></div>
 <h2>订单</h2><div class=c><table><tr><th>订单号</th><th>套餐</th><th>金额</th><th>状态</th><th>联系方式</th><th>授权码</th><th></th></tr>${rowsO || '<tr><td colspan=7 class=m>暂无</td></tr>'}</table></div>
+<h2>收款助手</h2><div class=c>
+<form class=inline method=post action="admin/relay"><input name=name placeholder="设备名，如 收款手机" style="min-width:180px"><button>添加收款助手</button></form>
+<p class=m style="font-size:13px">添加后把显示的 ID 和密钥填到安卓 App 里。手机保持联网、微信通知权限打开。</p>
+<table><tr><th>名称 / ID</th><th>状态</th><th>最近心跳</th><th></th></tr>${rowsR || '<tr><td colspan=4 class=m>暂无</td></tr>'}</table></div>
+<h2>到账通知记录</h2><div class=c><table><tr><th>时间</th><th>来源</th><th>金额</th><th>匹配订单</th><th>通知原文</th></tr>${rowsL || '<tr><td colspan=5 class=m>暂无</td></tr>'}</table></div>
 </main></body></html>`);
 }
 
@@ -302,14 +345,15 @@ function buyPage() {
   const cards = Object.entries(PLANS).map(([k, p]) => `<div class=plan><h3>${p.name}</h3><div class=price>¥${p.price}<small>/年</small></div><ul><li>${fmtBytes(p.quota)} 加密云备份空间</li><li>保留最近 ${p.max} 份备份</li><li>NAS 故障可下载恢复</li><li>服务器只存密文</li></ul><button onclick="buy('${k}')">购买</button></div>`).join('');
   return `<!doctype html><html lang=zh-CN><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>x.erp 云备份</title>
 <style>body{font:15px/1.7 system-ui,"Microsoft YaHei";margin:0;background:#0f172a;color:#e2e8f0}main{max-width:960px;margin:0 auto;padding:48px 16px}h1{font-size:30px;margin:0 0 8px}p.sub{color:#94a3b8;margin:0 0 18px}.contact{margin:0 0 24px}.contact input{width:100%;max-width:360px;padding:10px 12px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font:inherit}.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.plan{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:22px}.plan h3{margin:0 0 6px;font-size:18px}.price{font-size:30px;font-weight:700;margin-bottom:14px}.price small{font-size:13px;color:#94a3b8;font-weight:400}.plan ul{padding-left:18px;color:#cbd5e1;font-size:13px}.plan button{width:100%;padding:10px;border:0;border-radius:10px;background:#6366f1;color:#fff;font:inherit;cursor:pointer}.note{margin-top:26px;color:#94a3b8;font-size:13px}#msg{margin-top:18px;padding:14px;border-radius:10px;background:#1e293b;display:none;white-space:pre-wrap}#msg.show{display:block}</style></head>
-<body><main><h1>x.erp 云备份</h1><p class=sub>数据在本机加密后上传，服务器看不到你的业务数据。换机、NAS 故障、误删都能恢复。</p><div class=contact><input id=contact placeholder="微信 / 手机号（选填，方便补发授权码）"></div><div class=plans>${cards}</div><div id=msg></div>
+<body><main><h1>x.erp 云备份</h1><p class=sub>数据在本机加密后上传，服务器看不到你的业务数据。换机、NAS 故障、误删都能恢复。</p><div class=contact><input id=contact placeholder="微信 / 手机号（选填，方便补发授权码）"></div><div id=paystate style="color:#94a3b8;font-size:13px;margin:-14px 0 20px">正在检查收款助手…</div><div class=plans>${cards}</div><div id=msg></div>
 <p class=note>购买后授权码会显示在本页，也会稍后发到你留下的联系方式。授权码在 x.erp「云备份」页面输入即可开通。</p>
 <script>
-async function pollOrder(no){
-  const box=document.getElementById('msg');box.className='show';box.textContent='订单 '+no+' 等待支付…';
+async function pollOrder(no,keep){
+  const box=document.getElementById('msg');box.className='show';
+  if(!keep) box.textContent='订单 '+no+' 等待支付…';
   for(let i=0;i<200;i++){
     try{
-      const r=await fetch('/xerp-cloud/api/order/'+encodeURIComponent(no));
+      const r=await fetch('api/order/'+encodeURIComponent(no));
       const d=await r.json();
       if(d.status==='paid'&&d.code){box.innerHTML='支付成功，授权码：<b style="font-size:20px">'+d.code+'</b><br>打开 x.erp →「云备份」输入即可开通。';return;}
     }catch(e){}
@@ -317,20 +361,37 @@ async function pollOrder(no){
   }
   box.textContent='还没有收到支付结果。如果已经付款，请联系作者补发授权码。';
 }
+let relayOnline=false;
+(async()=>{
+  try{
+    const r=await fetch('api/relay/status');const d=await r.json();
+    relayOnline=!!d.online;
+    const el=document.getElementById('paystate');
+    if(el) el.textContent=relayOnline?'收款助手在线：付款后自动发授权码':'收款助手离线：将生成订单号，由作者确认后发码';
+  }catch(e){}
+})();
 const orderNo=new URLSearchParams(location.search).get('order');
 if(orderNo) pollOrder(orderNo);
 async function buy(plan){
   const box=document.getElementById('msg');box.className='show';box.textContent='正在创建订单…';
   try{
-    const r=await fetch('/xerp-cloud/api/pay/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan,contact:(document.getElementById('contact')||{}).value||''})});
+    if(relayOnline){
+      const m=await fetch('api/order/relay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan,contact:(document.getElementById('contact')||{}).value||''})});
+      const o=await m.json();
+      if(!m.ok) throw new Error(o.error||'创建订单失败');
+      box.innerHTML='订单号 <b>'+o.order+'</b>，应付 <b>¥'+(o.amount/100).toFixed(2)+'</b><br>金额包含随机尾数，请<b>精确支付</b>这个金额。付款后这里会自动显示授权码。<br><img src="https://www.zhaoyoucai.xyz/xerp/img/wechat-pay.jpg" alt="微信收款码" style="width:190px;margin-top:10px;border-radius:10px;background:#fff">';
+      pollOrder(o.order,true);
+      return;
+    }
+    const r=await fetch('api/pay/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan,contact:(document.getElementById('contact')||{}).value||''})});
     const d=await r.json();
     if(!r.ok) throw new Error(d.error||'创建订单失败');
     if(d.disabled){
-      const m=await fetch('/xerp-cloud/api/order/manual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan,contact:(document.getElementById('contact')||{}).value||''})});
+      const m=await fetch('api/order/manual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan,contact:(document.getElementById('contact')||{}).value||''})});
       const o=await m.json();
       if(!m.ok) throw new Error(o.error||'创建订单失败');
-      box.innerHTML='订单号 <b>'+o.order+'</b>，应付 <b>¥'+(o.amount/100).toFixed(2)+'</b><br>请用微信扫码支付，付款后把订单号发给作者；作者确认后这里会自动显示授权码。<br><img src="/xerp/img/wechat-pay.jpg" alt="微信收款码" style="width:190px;margin-top:10px;border-radius:10px;background:#fff">';
-      pollOrder(o.order);
+      box.innerHTML='订单号 <b>'+o.order+'</b>，应付 <b>¥'+(o.amount/100).toFixed(2)+'</b><br>请用微信扫码支付，付款后把订单号发给作者；作者确认后这里会自动显示授权码。<br><img src="https://www.zhaoyoucai.xyz/xerp/img/wechat-pay.jpg" alt="微信收款码" style="width:190px;margin-top:10px;border-radius:10px;background:#fff">';
+      pollOrder(o.order,true);
       return;
     }
     location.href=d.url;
@@ -345,6 +406,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && (p === '/api/ping' || p === '/ping')) return json(res, 200, { ok: true, app: 'XERP-CLOUD', version: 1, plans: Object.keys(PLANS).length });
     if (req.method === 'GET' && p === '/api/plans') return json(res, 200, { plans: Object.entries(PLANS).map(([k, v]) => ({ key: k, name: v.name, quota: v.quota, days: v.days, max: v.max, price: v.price })), payment: !!process.env.EPAY_URL });
+    if (req.method === 'GET' && p === '/api/relay/status') return json(res, 200, relayOnline());
     if (req.method === 'GET' && (p === '/' || p === '/buy')) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(buyPage()); }
 
     if (req.method === 'POST' && p === '/api/activate') {
@@ -384,6 +446,17 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    if (req.method === 'POST' && p === '/api/order/relay') {
+      const b = await jsonBody(req);
+      const plan = PLANS[b.plan];
+      if (!plan) return fail(res, 400, '套餐不存在');
+      if (!relayOnline().online) return fail(res, 503, '收款助手离线，请联系作者');
+      const no = 'R' + Date.now() + crypto.randomBytes(2).toString('hex').toUpperCase();
+      const amount = uniqueAmount(plan.price * 100);
+      db.prepare('INSERT INTO orders (id, plan, amount, status, created, channel, contact) VALUES (?,?,?,?,?,?,?)')
+        .run(no, b.plan, amount, 'pending', now(), 'relay', String(b.contact || '').slice(0, 100) || null);
+      return json(res, 200, { order: no, amount, plan: b.plan, relay: true });
+    }
     if (req.method === 'POST' && p === '/api/order/manual') {
       const b = await jsonBody(req);
       const plan = PLANS[b.plan];
@@ -392,6 +465,28 @@ const server = http.createServer(async (req, res) => {
       db.prepare('INSERT INTO orders (id, plan, amount, status, created, channel, contact) VALUES (?,?,?,?,?,?,?)')
         .run(no, b.plan, plan.price * 100, 'pending', now(), 'manual', String(b.contact || '').slice(0, 100) || null);
       return json(res, 200, { order: no, amount: plan.price * 100, plan: b.plan });
+    }
+    if (req.method === 'POST' && p === '/api/relay/heartbeat') {
+      const b = await jsonBody(req);
+      verifyRelay({ ...b, amount: 0, source: 'heartbeat' });
+      return json(res, 200, { ok: true, online: true });
+    }
+    if (req.method === 'POST' && p === '/api/relay/notify') {
+      const b = await jsonBody(req);
+      const relay = verifyRelay(b);
+      const amount = Math.round(+b.amount || 0);
+      let matched = null;
+      if (amount > 0) {
+        const o = db.prepare("SELECT * FROM orders WHERE status = 'pending' AND channel = 'relay' AND amount = ? AND created > ? ORDER BY created ASC LIMIT 1").get(amount, now() - 1800);
+        if (o) {
+          const code = createCode(o.plan, '收款助手 ' + relay.name, o.id);
+          db.prepare('UPDATE orders SET status = ?, paid = ?, code = ? WHERE id = ?').run('paid', now(), code, o.id);
+          matched = o.id;
+        }
+      }
+      db.prepare('INSERT INTO relay_log (relay, amount, source, text, at, matched) VALUES (?,?,?,?,?,?)')
+        .run(relay.id, amount, String(b.source || '').slice(0, 20), String(b.text || '').slice(0, 500), now(), matched);
+      return json(res, 200, { ok: true, matched: !!matched, order: matched });
     }
     if (req.method === 'POST' && p === '/api/pay/create') {
       const b = await jsonBody(req);
@@ -467,6 +562,19 @@ const server = http.createServer(async (req, res) => {
       const codes = [];
       for (let i = 0; i < count; i++) codes.push(createCode(plan, note));
       return adminPage(req, res, '已生成：\n' + codes.join('\n'));
+    }
+    if (p === '/admin/relay' && req.method === 'POST') {
+      if (!needAdmin(req, res)) return;
+      const f = await formBody(req);
+      if (f.get('toggle')) {
+        const r = db.prepare('SELECT * FROM relays WHERE id = ?').get(f.get('id'));
+        if (r) db.prepare('UPDATE relays SET enabled = ? WHERE id = ?').run(r.enabled ? 0 : 1, r.id);
+        return adminPage(req, res, r ? `收款助手「${r.name || r.id}」已${r.enabled ? '停用' : '启用'}` : '设备不存在');
+      }
+      const id = 'rly_' + crypto.randomBytes(6).toString('hex');
+      const secret = crypto.randomBytes(24).toString('hex');
+      db.prepare('INSERT INTO relays (id, name, secret, created) VALUES (?,?,?,?)').run(id, String(f.get('name') || '').slice(0, 40) || '收款手机', secret, now());
+      return adminPage(req, res, `收款助手已添加，请把下面两行填到手机 App：\nID: ${id}\n密钥: ${secret}`);
     }
     if (p === '/admin/order' && req.method === 'POST') {
       if (!needAdmin(req, res)) return;
