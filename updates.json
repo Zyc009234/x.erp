@@ -1,41 +1,41 @@
 {
   "schema": 1,
-  "latest": "2.10.1",
-  "publishedAt": "2026-11-15T17:12:46+08:00",
+  "latest": "2.11.0",
+  "publishedAt": "2026-11-16T07:44:17+08:00",
   "notes": [
-    "云备份 + 远程访问。新增远程访问隧道，不用公网 IP 也能在外面打开 ERP",
-    "不购买不影响基础功能。"
+    "新增报销付款回单、备用金领用/多报销单冲抵、报销会签（部门负责人→财务→可选总经理，含审批意见和流程状态）、人事身份证号与生日提醒（默认7天，可切7/15/30，本月生日列表）",
+    "云服务支持换机恢复。"
   ],
   "packages": {
     "fnos": {
-      "version": "2.10.1",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.1.fpk",
-      "sha256": "75fd8a14e418a21fb5522b40ea69fce9fff76b4446f34d3e7014f1543b643b2c",
-      "size": 686189,
-      "file": "xerp-2.10.1.fpk",
+      "version": "2.11.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.11.0.fpk",
+      "sha256": "051db5658ec2cd7e03b6613610fc77cf2b1b8bb6077ed03583c5f661292c76af",
+      "size": 697251,
+      "file": "xerp-2.11.0.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.10.1",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.1-windows-x64-setup.exe",
-      "sha256": "39190156debff5e56a553a01323c524aa70dbe622828a31ba1078fe2f8ea5749",
-      "size": 24589806,
-      "file": "xerp-2.10.1-windows-x64-setup.exe",
+      "version": "2.11.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.11.0-windows-x64-setup.exe",
+      "sha256": "587b66398e9064ee0d424ebe4baad42da0aec01707e21e4087b2adfc1b8410d1",
+      "size": 24598323,
+      "file": "xerp-2.11.0-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.10.1",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.1-android.apk",
-      "sha256": "d48dfce0e004b9f197546839e6a11f5fb54bea9849e3859c682a28e80150cb04",
+      "version": "2.11.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.11.0-android.apk",
+      "sha256": "6d3a047ae2a90b29fbfd60407d20161e816af7a6cbe18ecb6945edea7cefbdba",
       "size": 275233,
-      "file": "xerp-2.10.1-android.apk",
+      "file": "xerp-2.11.0-android.apk",
       "kind": "apk",
-      "versionCode": 21001
+      "versionCode": 21100
     },
     "docker": {
-      "version": "2.10.1",
+      "version": "2.11.0",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.10.1"
+      "image": "ghcr.io/zyc009234/xerp:2.11.0"
     }
   }
 }

@@ -346,7 +346,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.10.1 · 数据保存在服务器</div>
+    <div class="side-foot">v2.11.0 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -533,7 +533,7 @@ async function reload() {
   ME = d.user; META = d.meta || META;
   const sig = JSON.stringify(d.data) + JSON.stringify(d.settings) + JSON.stringify(ME.perms);
   const changed = sig !== dataSig; dataSig = sig;
-  db = {warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[], expenses:[], partyPayments:[], projects:[], ...d.data, settings:{...d.settings, version:d.version, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
+  db = {warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[], expenses:[], advances:[], partyPayments:[], projects:[], ...d.data, settings:{...d.settings, version:d.version, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
   return changed;
 }
 // 发起写操作 → 成功后重新拉取数据并刷新界面；失败则提示错误并保持弹窗
@@ -834,6 +834,7 @@ const ENT = {
   employees: {title:'员工', fields:[
     {n:'no', l:'工号', ph:'留空自动生成'}, {n:'name', l:'姓名', req:1}, {n:'gender', l:'性别', type:'select', opts:['男', '女']},
     {n:'dept', l:'部门（可选择或直接输入）', type:'combo', opts:() => depts(), ph:'如：生产部、售后部'}, {n:'position', l:'职位', req:1}, {n:'phone', l:'手机号'},
+    {n:'idCard', l:'身份证号（仅人事可见）', ph:'用于生日提醒，列表会脱敏'},
     {n:'salary', l:'月薪（元）', type:'number'}, {n:'joinDate', l:'入职日期', type:'date', def:today()},
     {n:'status', l:'状态', type:'select', opts:['在职', '试用期', '离职']}]}
 };
@@ -4122,6 +4123,24 @@ function finAdd(id) {
 }
 
 /* ================= 页面：人事 ================= */
+function idBirthday(id) {
+  const s = String(id || '').trim().toUpperCase();
+  if (!/^\d{17}[\dX]$/.test(s) && !/^\d{15}$/.test(s)) return '';
+  const d = s.length === 18 ? s.slice(6, 14) : '19' + s.slice(6, 12);
+  const y = +d.slice(0, 4), m = +d.slice(4, 6), day = +d.slice(6, 8);
+  return y >= 1900 && m >= 1 && m <= 12 && day >= 1 && day <= 31 ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` : '';
+}
+function birthdayDays(b) {
+  if (!b) return 9999;
+  const d = new Date(b + 'T00:00:00'), now = new Date(today() + 'T00:00:00');
+  let x = new Date(now.getFullYear(), d.getMonth(), d.getDate());
+  if (x < now) x = new Date(now.getFullYear() + 1, d.getMonth(), d.getDate());
+  return Math.round((x - now) / 864e5);
+}
+function maskIdCard(id) {
+  const s = String(id || '');
+  return s.length >= 10 ? s.slice(0, 6) + '********' + s.slice(-4) : s;
+}
 function pageEmployees() {
   const on = db.employees.filter(e => e.status !== '离职');
   const filters = [{key:'dept', label:'全部部门', options:[...depts(), ...(db.employees.some(e => !e.dept) ? ['未分配部门'] : [])], test:(e, v) => (e.dept || '未分配部门') === v}, {key:'st', label:'全部状态', options:['在职', '试用期', '离职'], test:(e, v) => e.status === v}];
@@ -4142,13 +4161,30 @@ function pageEmployees() {
     {t:'职位', r:e => esc(e.position)},
     {t:'手机', r:e => esc(e.phone || '-')},
     {t:'月薪', cls:'num', r:e => money(e.salary), s:e => e.salary},
+    {t:'生日', r:e => { const b = idBirthday(e.idCard); return b ? `<span title="${esc(maskIdCard(e.idCard))}">${b.slice(5)} <span class="sub-t">${birthdayDays(b)} 天后</span></span>` : '<span class="sub-t">-</span>'; }, s:e => idBirthday(e.idCard)},
     {t:'入职日期', r:e => esc(e.joinDate), s:e => e.joinDate},
     {t:'状态', r:e => badge(e.status)},
     {t:'操作', r:e => `<div class="ops">${tbtn('编辑', 'edit', 'employees|' + e.id)}${tbtn('删除', 'del', 'employees|' + e.id, 'danger-text')}</div>`}
-  ], exp:{name:'员工名单', cols:[['工号', e => e.no], ['姓名', e => e.name], ['性别', e => e.gender], ['部门', e => e.dept], ['职位', e => e.position], ['手机', e => e.phone], ['月薪', e => e.salary], ['入职日期', e => e.joinDate], ['状态', e => e.status]]}});
+  ], exp:{name:'员工名单', cols:[['工号', e => e.no], ['姓名', e => e.name], ['性别', e => e.gender], ['部门', e => e.dept], ['职位', e => e.position], ['手机', e => e.phone], ['身份证号', e => maskIdCard(e.idCard)], ['生日', e => idBirthday(e.idCard)], ['月薪', e => e.salary], ['入职日期', e => e.joinDate], ['状态', e => e.status]]}});
   const dl = [...depts(), '未分配部门'].filter(d => on.some(e => (e.dept || '未分配部门') === d));
   const dc = dl.map(d => on.filter(e => (e.dept || '未分配部门') === d).length);
   chart('e1', {type:'doughnut', data:{labels:dl, datasets:[{data:dc, backgroundColor:dl.map((_, i) => PALETTE[i % PALETTE.length]), borderWidth:0}]}, options:{cutout:'62%'}});
+  const bdays = on.map(e => ({ e, b: idBirthday(e.idCard) })).filter(x => x.b).map(x => ({ ...x, days: birthdayDays(x.b) })).sort((a, b) => a.days - b.days);
+  const remindDays = +db.settings.birthdayDays || 7;
+  const near = bdays.filter(x => x.days <= remindDays);
+  const mm = today().slice(5, 7);
+  const thisMonth = bdays.filter(x => x.b.slice(5, 7) === mm).sort((a, b) => a.b.slice(5).localeCompare(b.b.slice(5)));
+  $('#view').insertAdjacentHTML('beforeend', `<div class="card" style="margin-top:16px"><div class="card-head"><h3>生日提醒</h3><span class="sub-t">仅人事可见 · 提前 <select id="bdDays" class="select" style="width:auto;padding:3px 6px">${[7, 15, 30].map(n => `<option value="${n}" ${remindDays === n ? 'selected' : ''}>${n}</option>`).join('')}</select> 天提醒</span></div><div class="card-body">
+    ${near.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>员工</th><th>部门</th><th>生日</th><th class="num">还有</th></tr></thead><tbody>${near.map(x => `<tr><td><b>${esc(x.e.name)}</b><div class="sub-t">${esc(x.e.no)}</div></td><td>${esc(x.e.dept || '-')}</td><td>${x.b}</td><td class="num">${x.days === 0 ? '<b style="color:var(--red)">今天</b>' : x.days + ' 天'}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">未来 ${remindDays} 天没有员工生日。</div>`}
+    <div class="line-head" style="margin-top:16px"><b>本月生日</b><span class="sub-t" style="margin-left:10px">本月共 ${thisMonth.length} 人</span></div>
+    ${thisMonth.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>员工</th><th>部门</th><th>生日</th><th class="num">还有</th></tr></thead><tbody>${thisMonth.map(x => `<tr><td><b>${esc(x.e.name)}</b></td><td>${esc(x.e.dept || '-')}</td><td>${x.b.slice(5).replace('-', ' 月 ')} 日</td><td class="num">${x.b.slice(5) < today().slice(5) ? '已过' : x.days === 0 ? '今天' : x.days + ' 天'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="sub-t">本月没有员工生日。</p>'}
+  </div></div>`);
+  const bdSel = $('#bdDays');
+  if (bdSel) bdSel.onchange = async e => {
+    const n = +e.target.value;
+    try { await api('PUT', '/api/settings', { birthdayDays: n }); await reload(); render(); toast(`生日提醒已改为提前 ${n} 天`); }
+    catch (err) { toast(err.message, 'error'); }
+  };
 }
 
 /* ================= 页面：报表 ================= */
@@ -4368,7 +4404,8 @@ function cloudDraw() {
       <div class="card"><div class="card-head"><h3>开通 / 续费</h3></div><div class="card-body">
         ${CLOUD.error ? `<div class="tip-line" style="color:var(--red)">${esc(CLOUD.error)}</div>` : ''}
         <label class="field"><span>授权码</span><input id="cloudCode" placeholder="XERP-XXXX-XXXX-XXXX" autocomplete="off"></label>
-        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn primary" data-act="cloudActivate">${ic('check')}开通云备份</button><a class="btn" href="https://www.zhaoyoucai.xyz/xerp-cloud/buy" target="_blank" rel="noopener">${ic('cart')}购买授权码</a></div>
+        <label class="chk" style="margin-top:10px"><input type="checkbox" id="cloudTransfer">换机恢复：NAS 重装 / 换了新设备，把云服务迁移到这台设备（旧设备会下线）</label>
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn primary" data-act="cloudActivate">${ic('check')}开通云服务</button><a class="btn" href="https://www.zhaoyoucai.xyz/xerp-cloud/buy" target="_blank" rel="noopener">${ic('cart')}购买授权码</a></div>
         <p class="sub-t" style="margin:12px 0 0">付款后授权码会显示在购买页面。输入后立即开通，不需要重启。</p>
       </div></div>
     </div>`;
@@ -4387,7 +4424,7 @@ function cloudDraw() {
       <div class="card"><div class="card-body"><div class="sub-t">上次上传</div><div style="font-size:16px;font-weight:600;margin-top:4px">${CLOUD.local.lastUpload ? esc(fmtTime(CLOUD.local.lastUpload)) : '还没有上传'}</div><div class="sub-t">${CLOUD.local.auto ? '自动备份已开启' : '自动备份未开启'}</div></div></div>
     </div>
     <div class="card" style="margin-bottom:12px"><div class="card-head"><h3>远程访问</h3><label class="chk"><input type="checkbox" data-act="cloudRemote" ${CLOUD.remote && CLOUD.remote.enabled ? 'checked' : ''}>开启</label></div><div class="card-body">
-      ${CLOUD.remote && CLOUD.remote.url ? `<p style="margin:0 0 6px">外部地址：<code>${esc(CLOUD.remote.url)}</code> <button class="btn sm" data-act="cloudCopyRemote">复制</button></p><p class="sub-t" style="margin:0">状态：${CLOUD.remote.online ? '<b style="color:var(--green)">已连接</b>' : '正在连接 / 离线'}。在外面用手机或电脑打开这个地址，就能像在局域网一样使用。</p>` : '<p class="sub-t" style="margin:0">请重新输入一次授权码，获取远程访问地址。10 元套餐已包含云备份和远程访问。</p>'}
+      ${CLOUD.remote && CLOUD.remote.url ? `<p style="margin:0 0 6px">外部地址：<code>${esc(CLOUD.remote.url)}</code> <button class="btn sm" data-act="cloudCopyRemote">复制</button></p><p class="sub-t" style="margin:0">状态：${CLOUD.remote.online ? '<b style="color:var(--green)">已连接</b>' : '正在连接 / 离线'}。在外面用手机或电脑打开这个地址，就能像在局域网一样使用。</p>` : '<p class="sub-t" style="margin:0">请重新输入一次授权码，获取远程访问地址。2 元/月起套餐已包含云备份和远程访问。</p>'}
     </div></div>
     <div class="card" style="margin-bottom:12px"><div class="card-head"><h3>备份密码</h3>${CLOUD.local.hasKey ? `<button class="btn sm" data-act="cloudPassToggle">修改密码</button>` : ''}</div><div class="card-body">
       ${CLOUD.local.hasKey && !cloudShowPass ? '<p class="sub-t" style="margin:0">已设置并记住密码，备份时不需要再输入。<b>密码丢失后云端备份无法解密</b>，请另外记一份。</p>' : `
@@ -4525,6 +4562,16 @@ function pageSettings() {
       <p class="sub-t" style="margin-bottom:10px">开启后，新开的单据先是「待审核」，由有「审核出入库单」权限的账号审核通过后才改库存；驳回的单据不影响库存，制单人可以修改后重新开单。已经开好的单据不受影响。</p>
       <div style="display:flex;flex-wrap:wrap;gap:6px 22px"><label class="chk"><input type="checkbox" id="apIn" ${(st.docApprove || {}).in ? 'checked' : ''}>入库单需要审核</label><label class="chk"><input type="checkbox" id="apOut" ${(st.docApprove || {}).out ? 'checked' : ''}>出库单需要审核</label></div>
       <div style="margin-top:14px;text-align:right"><button class="btn primary" data-act="saveApprove">${ic('check')}保存审核设置</button></div>
+    </div></div>
+    <div class="card" style="margin-top:16px"><div class="card-head"><h3>报销审批流程</h3><span class="sub-t">按部门负责人 → 财务 → 总经理</span></div><div class="card-body">
+      <p class="sub-t" style="margin-bottom:10px">部门负责人每行一个：<code>销售部=张三</code>，多个会签人用逗号分隔；财务、总经理可填多个用户名。节点有多人时必须全部同意才进入下一步；申请人本人会自动跳过自己的节点。留空则按原来的单级审批。</p>
+      <div class="form-grid">
+        <label class="field span2"><span>部门负责人（每行：部门=用户名）</span><textarea id="efHeads" rows="4" placeholder="销售部=zhangsan&#10;仓库=wangwu">${esc(Object.entries((st.expenseFlow || {}).deptHeads || {}).map(([d, u]) => d + '=' + [].concat(u).join(',')).join('\n'))}</textarea></label>
+        <label class="field"><span>财务审批人（逗号分隔）</span><input id="efFinance" value="${esc([].concat((st.expenseFlow || {}).finance || []).join(', '))}"></label>
+        <label class="field"><span>总经理审批人（逗号分隔）</span><input id="efGm" value="${esc([].concat((st.expenseFlow || {}).gm || []).join(', '))}"></label>
+        <label class="field"><span>总经理起点金额（元，0=每单都要）</span><input type="number" min="0" step="0.01" id="efThreshold" value="${esc((st.expenseFlow || {}).gmThreshold || 0)}"></label>
+      </div>
+      <div style="margin-top:14px;text-align:right"><button class="btn primary" data-act="saveExpFlow">${ic('check')}保存审批流程</button></div>
     </div></div>
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>成本核算</h3></div><div class="card-body">
       <p class="sub-t" style="margin-bottom:10px">移动加权平均：每次入库后按总结存重算平均成本，出库按当前平均成本结转。先进先出 FIFO：每次入库记一层成本，出库从最早入库的那层开始结转，更接近实际进货批次成本。</p>
@@ -4702,27 +4749,32 @@ function roleEdit(id, copy) {
 /* ================= 外壳：导航 / 主题 / 提醒 / 搜索 ================= */
 /* ---------- 报销管理：员工提交报销单（可附发票照片）→ 审批批准 / 驳回 → 财务付款，按类别自动记支出流水 ---------- */
 const EXP_STATUS = {'待审批':'orange', '已批准':'blue', '已驳回':'red', '已付款':'green', '已作废':'gray'};
+const ADV_STATUS = {'待审批':'orange', '已批准':'blue', '已发放':'purple', '部分核销':'orange', '已核销':'green', '已驳回':'red', '已作废':'gray'};
+const advRemainingUI = a => Math.round((((a && a.amount) || 0) - ((a && a.used) || 0) - ((a && a.returned) || 0)) * 100) / 100;
 const expAll = () => can('finance') || can('exp.approve');
 const expCats = () => [...new Set([...(META.expCats || []), ...(db.expenses || []).flatMap(o => o.lines.map(l => l.category))])];
 const expCatText = o => [...new Set(o.lines.map(l => l.category))].join('、');
-const expCount = () => (db.expenses || []).filter(o => expAll() ? o.status === '待审批' || o.status === '已批准' && can('finance') : o.status === '已驳回' && o.creatorId === ME.id).length;
+const expCount = () => (db.expenses || []).filter(o => expAll() ? o.status === '待审批' || o.status === '已批准' && can('finance') : o.status === '已驳回' && o.creatorId === ME.id).length
+  + (db.advances || []).filter(a => expAll() ? a.status === '待审批' || a.status === '已批准' && can('finance') : a.status === '已驳回' && a.creatorId === ME.id).length;
 function pageExpenses() {
   if (!ui.expTab) ui.expTab = 'list';
   const E = db.expenses || [], m = monthKey(today());
   const live = E.filter(o => o.status !== '已作废' && o.status !== '已驳回');
   const S = st => E.filter(o => o.status === st);
   $('#view').innerHTML = pageHead('报销管理', expAll() ? '员工提交报销 → 审批 → 财务付款，付款后自动记入收支流水' : '提交报销单，审批、付款进度在这里查看',
-    `<button class="btn primary" data-act="expNew">${ic('plus')}新建报销单</button>`) + `
+    `<button class="btn" data-act="advNew">${ic('plus')}备用金领用</button><button class="btn primary" data-act="expNew">${ic('plus')}新建报销单</button>`) + `
   <div class="grid g4 mb">
     ${kpi('待审批', S('待审批').length + ' 张', 'clock', 'orange', `<div class="trend"><span>${money(sum(S('待审批'), o => o.amount))}</span></div>`)}
     ${kpi('待付款', S('已批准').length + ' 张', 'wallet', 'primary', `<div class="trend"><span>${money(sum(S('已批准'), o => o.amount))}</span></div>`)}
     ${kpi('本月已付款', moneyK(sum(E.filter(o => o.status === '已付款' && monthKey(o.payDate || o.date) === m), o => o.amount)), 'coin', 'green')}
     ${kpi('本月报销', moneyK(sum(live.filter(o => monthKey(o.date) === m), o => o.amount)), 'tag', 'purple', '<div class="trend"><span>不含驳回、作废</span></div>')}
   </div>
-  ${tabs('expTab', [['list', '报销单'], ['stat', '按人统计']])}
+  ${tabs('expTab', [['list', '报销单'], ['adv', '备用金'], ['stat', '按人统计']])}
   <div class="card" id="expCard"></div>`;
   const card = $('#expCard');
-  if (ui.expTab === 'list') {
+  if (ui.expTab === 'adv') {
+    drawAdvanceCard(card);
+  } else if (ui.expTab === 'list') {
     const people = [...new Set(E.map(o => o.applicant))].sort((a, b) => a.localeCompare(b, 'zh'));
     const filters = [{key:'st', label:'全部状态', options:Object.keys(EXP_STATUS), test:(o, v) => o.status === v},
       {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(o, v) => monthKey(o.date) === v},
@@ -4758,9 +4810,102 @@ function pageExpenses() {
     $('#expMonth').onchange = e => { ui.expMonth = e.target.value; render(); };
   }
 }
+/* ---------- 备用金 ---------- */
+function drawAdvanceCard(card) {
+  const A = db.advances || [];
+  const S = st => A.filter(a => a.status === st);
+  const people = [...new Set(A.map(a => a.applicant))].sort((a, b) => a.localeCompare(b, 'zh'));
+  const filters = [{ key: 'st', label: '全部状态', options: Object.keys(ADV_STATUS), test: (a, v) => a.status === v },
+    { key: 'month', label: '全部月份', options: lastMonths(12).reverse(), test: (a, v) => monthKey(a.date) === v },
+    ...(expAll() ? [{ key: 'who', label: '全部领用人', options: people, test: (a, v) => a.applicant === v }] : [])];
+  card.innerHTML = `<div class="grid g4 mb">
+    ${kpi('待审批', S('待审批').length + ' 张', 'clock', 'orange')}
+    ${kpi('待发放', S('已批准').length + ' 张', 'wallet', 'primary')}
+    ${kpi('未核销余额', moneyK(sum(A.filter(a => ['已发放', '部分核销'].includes(a.status)), advRemainingUI)), 'coin', 'green')}
+    ${kpi('已核销', S('已核销').length + ' 张', 'check', 'purple')}
+  </div>` + toolbar('adv', { placeholder: '搜索单号 / 领用人 / 用途', filters,
+    buttons: `<button class="btn primary" data-act="advNew">${ic('plus')}备用金领用</button>` }) + '<div id="list-adv"></div>';
+  mountList('adv', { rows: () => db.advances || [], search: a => a.no + a.applicant + (a.dept || '') + (a.purpose || ''),
+    filters, empty: '还没有备用金单，点右上角「备用金领用」',
+    columns: [
+      { t: '单号', r: a => `<a class="link" data-act="advView" data-id="${a.id}">${a.no}</a>` },
+      { t: '日期', r: a => a.date, s: a => a.date },
+      { t: '领用人', r: a => `<b>${esc(a.applicant)}</b>${a.dept ? `<div class="sub-t">${esc(a.dept)}</div>` : ''}`, s: a => a.applicant },
+      { t: '金额', cls: 'num', r: a => `<b>${money(a.amount)}</b>`, s: a => a.amount },
+      { t: '已冲抵', cls: 'num', r: a => money(a.used || 0), s: a => a.used || 0 },
+      { t: '已退回', cls: 'num', r: a => money(a.returned || 0), s: a => a.returned || 0 },
+      { t: '未核销', cls: 'num', r: a => `<b>${money(advRemainingUI(a))}</b>`, s: advRemainingUI },
+      { t: '状态', r: a => badge(a.status, ADV_STATUS[a.status]), s: a => a.status },
+      { t: '操作', r: a => `<div class="ops">${advOps(a).join('')}</div>` }
+    ],
+    exp: { name: '备用金', cols: [['单号', a => a.no], ['日期', a => a.date], ['领用人', a => a.applicant], ['部门', a => a.dept || ''], ['金额', a => a.amount], ['已冲抵', a => a.used || 0], ['已退回', a => a.returned || 0], ['未核销', advRemainingUI], ['状态', a => a.status], ['用途', a => a.purpose]] } });
+}
+function advOps(a) {
+  const b = [], mine = a.creatorId === ME.id;
+  if (a.status === '待审批' && can('exp.approve')) b.push(tbtn('批准', 'advApprove', a.id, 'primary'), tbtn('驳回', 'advReject', a.id));
+  if (a.status === '已批准' && can('finance')) b.push(tbtn('发放', 'advPay', a.id, 'primary'));
+  if (['已发放', '部分核销'].includes(a.status) && can('finance')) b.push(tbtn('退回余额', 'advReturn', a.id));
+  if (['待审批', '已驳回'].includes(a.status) && (mine || can('finance'))) b.push(tbtn('编辑', 'advEdit', a.id));
+  if (!['已作废', '已发放', '部分核销', '已核销'].includes(a.status) && (mine || can('finance'))) b.push(tbtn('作废', 'advVoid', a.id, 'danger-text'));
+  return b;
+}
+function advModal(id) {
+  const a = id ? byId(db.advances, id) : null;
+  const emps = (db.employees || []).filter(e => e.status !== '离职');
+  const people = [...new Set([...emps.map(e => e.name), ...(db.advances || []).map(x => x.applicant)])];
+  const me = emps.find(e => e.name === ME.name);
+  formModal({ title: a ? '编辑备用金 · ' + a.no : '备用金领用', fields: [
+    { n: 'applicant', l: '领用人', req: 1, type: 'combo', opts: people },
+    { n: 'dept', l: '部门', type: 'combo', opts: depts() },
+    { n: 'date', l: '领用日期', type: 'date', req: 1 },
+    { n: 'amount', l: '金额（元）', type: 'number', req: 1 },
+    { n: 'purpose', l: '用途', req: 1, span: 1 },
+    { n: 'note', l: '备注（选填）', type: 'textarea', span: 1 }
+  ], data: a ? { ...a } : { applicant: ME.name, dept: me ? me.dept || '' : '', date: today() },
+  onSubmit: v => mutate(a ? 'PUT' : 'POST', '/api/advances' + (a ? '/' + a.id : ''), v, a ? '备用金已保存' : '备用金申请已提交') });
+  const who = $('#mform input[name=applicant]');
+  if (who) who.addEventListener('change', () => { const e = emps.find(x => x.name === who.value.trim()); if (e && e.dept) { const d = $('#mform input[name=dept]'); if (d) d.value = e.dept; } });
+}
+function advView(id) {
+  const a = byId(db.advances, id); if (!a) return;
+  const exps = (db.expenses || []).filter(o => o.advanceId === a.id);
+  openModal(`${modalHead('备用金 · ' + a.no + ' ' + badge(a.status, ADV_STATUS[a.status]))}<div class="m-body">
+    <div class="form-grid">
+      <div class="field"><span>领用人</span><b>${esc(a.applicant)}</b></div><div class="field"><span>部门</span><b>${esc(a.dept || '-')}</b></div>
+      <div class="field"><span>领用日期</span><b>${esc(a.date)}</b></div><div class="field"><span>金额</span><b>${money(a.amount)}</b></div>
+      <div class="field"><span>已冲抵</span><b>${money(a.used || 0)}</b></div><div class="field"><span>已退回</span><b>${money(a.returned || 0)}</b></div>
+      <div class="field"><span>未核销余额</span><b style="color:var(--red)">${money(advRemainingUI(a))}</b></div><div class="field"><span>用途</span><b>${esc(a.purpose)}</b></div>
+    </div>
+    <p class="sub-t" style="margin-top:12px">${a.note ? esc(a.note) + '<br>' : ''}${a.approver ? esc(a.approver) + ' 审批 · ' + fmtTime(a.approvedAt) + '<br>' : ''}${a.payer ? esc(a.payer) + ' 发放 · ' + fmtTime(a.paidAt) + ' · ' + esc(acctName(a)) : ''}<br>备用金发放 / 退回目前只记本台账，不自动生成收支流水。</p>
+    <div class="line-head" style="margin-top:14px"><b>关联报销单</b><span class="sub-t" style="margin-left:10px">多张报销单可以分次冲抵</span></div>
+    ${exps.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>单号</th><th>事由</th><th class="num">报销金额</th><th class="num">冲抵金额</th><th>状态</th></tr></thead><tbody>${exps.map(o => `<tr><td><a class="link" data-act="expView" data-id="${o.id}">${o.no}</a></td><td>${esc(o.reason)}</td><td class="num">${money(o.amount)}</td><td class="num">${money(o.advanceOffset || 0)}</td><td>${badge(o.status, EXP_STATUS[o.status])}</td></tr>`).join('')}</tbody></table></div>` : '<p class="sub-t">还没有关联报销单。</p>'}
+  </div><div class="m-foot" style="flex-wrap:wrap"><span style="margin-right:auto;display:flex;gap:8px;flex-wrap:wrap">${advOps(a).map(h => h.replace('class="tbtn', 'class="btn')).join('')}</span><button class="btn" data-act="closeModal">关闭</button></div>`, 'lg');
+}
+function advPay(id) {
+  const a = byId(db.advances, id); if (!a) return; closeModal();
+  formModal({ title: '发放备用金 · ' + a.no, okText: '确认发放', fields: [
+    { n: 'amount', l: '发放金额', disabled: 1 }, { n: 'date', l: '发放日期', type: 'date', req: 1 },
+    { n: 'account', l: '从哪个账户发放', type: 'select', opts: acctOpts() }
+  ], data: { amount: money(a.amount), date: today(), account: (accts(true).find(x => !x.off && x.kind === '现金') || accts(true).find(x => !x.off) || {}).id },
+  onSubmit: v => mutate('POST', `/api/advances/${id}/pay`, v, `已发放 ${money(a.amount)}`) });
+}
+function advReturn(id) {
+  const a = byId(db.advances, id); if (!a) return; closeModal();
+  formModal({ title: '退回备用金 · ' + a.no, okText: '确认退回', fields: [
+    { n: 'amount', l: `退回金额（未核销 ${money(advRemainingUI(a))}）`, type: 'number', req: 1 }
+  ], data: { amount: advRemainingUI(a) }, onSubmit: v => mutate('POST', `/api/advances/${id}/return`, v, '已登记退回') });
+}
+function advReject(id) {
+  const a = byId(db.advances, id); if (!a) return; closeModal();
+  formModal({ title: '驳回备用金 · ' + a.no, okText: '确认驳回', fields: [{ n: 'reason', l: '驳回原因', req: 1, span: 1 }], onSubmit: v => mutate('POST', `/api/advances/${id}/reject`, v, '已驳回') });
+}
+
 function expOps(o) {
   const b = [], mine = o.creatorId === ME.id;
-  if (o.status === '待审批' && can('exp.approve')) b.push(tbtn('批准', 'expApprove', o.id, 'primary'), tbtn('驳回', 'expReject', o.id));
+  const step = o.approval && o.approval.steps && o.approval.steps[o.approval.current];
+  const acted = step && (step.acted || []).some(x => x.by === ME.username);
+  const canAct = o.status === '待审批' && can('exp.approve') && !acted && (isAdmin() || !step || !(step.approvers || []).length || step.approvers.includes(ME.username));
+  if (canAct) b.push(tbtn('批准', 'expApprove', o.id, 'primary'), tbtn('驳回', 'expReject', o.id));
   if (o.status === '已批准' && can('finance')) b.push(tbtn('付款', 'expPay', o.id, 'primary'));
   if (['待审批', '已驳回'].includes(o.status) && (mine || can('finance'))) b.push(tbtn('编辑', 'expEdit', o.id));
   if (o.status === '已付款' && can('finance')) b.push(tbtn('撤销付款', 'expUnpay', o.id));
@@ -4771,6 +4916,7 @@ function expModal(id) {
   const o = id ? byId(db.expenses, id) : null;
   const emps = (db.employees || []).filter(e => e.status !== '离职');
   const people = [...new Set([...emps.map(e => e.name), ...(db.expenses || []).map(x => x.applicant)])];
+  const advs = (db.advances || []).filter(a => ['已发放', '部分核销'].includes(a.status) && advRemainingUI(a) > 0);
   const me = emps.find(e => e.name === ME.name);
   const lines = o ? o.lines.map(l => ({...l})) : [{category:'', amount:'', note:''}];
   const imgs = [];  // 新建时先选好的照片，保存后再上传
@@ -4781,6 +4927,9 @@ function expModal(id) {
       <label class="field"><span>部门</span><input id="xDept" list="xDeptList" maxlength="32" value="${esc(o ? o.dept || '' : me ? me.dept || '' : '')}"><datalist id="xDeptList">${[...new Set([...emps.map(e => e.dept), ...(db.expenses || []).map(x => x.dept)].filter(Boolean))].map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>
       <label class="field"><span>报销日期</span><input type="date" id="xDate" max="${today()}" value="${o ? o.date : today()}"></label>
       <label class="field"><span>事由 <i>*</i></span><input id="xReason" maxlength="300" placeholder="例如：11 月 5 日去柳州拜访客户" value="${esc(o ? o.reason : '')}"></label>
+      <label class="field"><span>冲抵备用金（可选）</span><select id="xAdv"><option value="">不冲抵</option></select></label>
+      <label class="field"><span>冲抵金额（元）</span><input type="number" min="0" step="0.01" id="xAdvAmt" value="${o && o.advanceOffset ? o.advanceOffset : ''}" placeholder="选择备用金后填写"></label>
+      <p class="sub-t span2" id="xAdvHint" style="margin:-4px 0 4px">备用金冲抵只抵扣余额，不重复生成付款流水；不冲抵就留空。</p>
     </div>
     <div class="line-head"><b>报销明细</b><span class="sub-t" style="margin-left:10px;margin-right:auto">类别可以选，也可以直接输入；付款后每个类别记一笔支出</span><button class="btn sm" id="xAdd">${ic('plus')}添加一行</button></div>
     <datalist id="xCatList">${expCats().map(c => `<option value="${esc(c)}">`).join('')}</datalist>
@@ -4805,10 +4954,24 @@ function expModal(id) {
       || '<span class="sub-t">没有附件</span>';
     loadXimgs($('#xImgs'));
   };
-  tb.addEventListener('input', e => { const t = e.target, i = t.dataset.i; if (i == null) return; lines[+i][t.dataset.k] = t.dataset.k === 'amount' ? (t.value === '' ? '' : +t.value) : t.value; if (t.dataset.k === 'amount') upd(); });
+  tb.addEventListener('input', e => { const t = e.target, i = t.dataset.i; if (i == null) return; lines[+i][t.dataset.k] = t.dataset.k === 'amount' ? (t.value === '' ? '' : +t.value) : t.value; if (t.dataset.k === 'amount') { upd(); syncAdv(); } });
   tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { lines.splice(+b.dataset.del, 1); if (!lines.length) lines.push({category:'', amount:'', note:''}); draw(); } });
   $('#xAdd').onclick = () => { lines.push({category:lines.length ? lines[lines.length - 1].category : '', amount:'', note:''}); draw(); tb.querySelectorAll('[data-k=amount]')[lines.length - 1].focus(); };
-  $('#xWho').onchange = e => { const em = emps.find(x => x.name === e.target.value.trim()); if (em && em.dept) $('#xDept').value = em.dept; };
+  const fillAdv = () => {
+    const who = $('#xWho').value.trim(), cur = o && o.advanceId || $('#xAdv').value;
+    const list = advs.filter(a => !who || a.applicant === who);
+    $('#xAdv').innerHTML = '<option value="">不冲抵</option>' + list.map(a => `<option value="${a.id}">${esc(a.no)} · ${esc(a.applicant)} · 余 ${money(advRemainingUI(a))}</option>`).join('');
+    if (cur && list.some(a => a.id === cur)) $('#xAdv').value = cur;
+    syncAdv();
+  };
+  const syncAdv = () => {
+    const a = byId(advs, $('#xAdv').value), total = sum(lines, l => +l.amount || 0);
+    const max = a ? Math.min(total, advRemainingUI(a)) : 0;
+    $('#xAdvAmt').max = max > 0 ? max : '';
+    $('#xAdvHint').textContent = a ? `这张备用金剩余 ${money(advRemainingUI(a))}，本次最多可冲抵 ${money(max)}。` : '备用金冲抵只抵扣余额，不重复生成付款流水；不冲抵就留空。';
+  };
+  $('#xWho').onchange = e => { const em = emps.find(x => x.name === e.target.value.trim()); if (em && em.dept) $('#xDept').value = em.dept; fillAdv(); };
+  $('#xAdv').onchange = syncAdv;
   $('#xFile').onchange = async e => {
     const have = (o ? o.imgs || [] : []).length + imgs.length, files = [...e.target.files].slice(0, Math.max(0, 9 - have));
     if (files.length < e.target.files.length) toast('每张报销单最多 9 张附件', 'error');
@@ -4827,7 +4990,8 @@ function expModal(id) {
     if (!ls.length) return toast('请至少填写一行报销明细', 'error');
     const bad = ls.findIndex(l => !String(l.category).trim() || !(+l.amount > 0));
     if (bad >= 0) return toast(`第 ${bad + 1} 行请填写类别和金额`, 'error');
-    const body = {applicant:$('#xWho').value.trim(), dept:$('#xDept').value.trim(), date:$('#xDate').value, reason:$('#xReason').value.trim(), lines:ls.map(l => ({category:String(l.category).trim(), amount:+l.amount, note:l.note || ''}))};
+    const body = {applicant:$('#xWho').value.trim(), dept:$('#xDept').value.trim(), date:$('#xDate').value, reason:$('#xReason').value.trim(), lines:ls.map(l => ({category:String(l.category).trim(), amount:+l.amount, note:l.note || ''})),
+      advanceId:$('#xAdv').value, advanceOffset:+$('#xAdvAmt').value || 0};
     $('#xSave').disabled = true;
     try {
       const r = await api(o ? 'PUT' : 'POST', '/api/expenses' + (o ? '/' + o.id : ''), body);
@@ -4836,7 +5000,7 @@ function expModal(id) {
       toast((o ? '报销单已重新提交：' : '报销单已提交：') + r.no + (fail ? `，有 ${fail} 张照片没传上去` : ''), fail ? 'error' : undefined);
     } catch (e) { toast(e.message, 'error'); $('#xSave').disabled = false; }
   };
-  draw(); drawImgs();
+  draw(); drawImgs(); fillAdv();
   if (!o) $('#xReason').focus();
 }
 // 附件图片要带登录凭证取，取到后换成 blob 地址
@@ -4847,6 +5011,15 @@ async function loadXimgs(root) {
       if (!r.ok) throw new Error(r.status); el.src = URL.createObjectURL(await r.blob()); } catch (e) { el.classList.add('broken'); }
   }
 }
+async function loadPayXimgs(root) {
+  for (const el of root.querySelectorAll('img[data-pximg]')) {
+    if (el.dataset.done) continue; el.dataset.done = '1';
+    try {
+      const t = LS.get('token'), r = await fetch('/api/expenses/' + el.dataset.pximg.split('/').map(encodeURIComponent).join('/payimages/'), { headers: t ? { Authorization: 'Bearer ' + t } : {} });
+      if (!r.ok) throw new Error(r.status); el.src = URL.createObjectURL(await r.blob());
+    } catch (e) { el.classList.add('broken'); }
+  }
+}
 function expSlip(o) {
   return `<div class="slip-wrap"><div class="s-title"><h1>${esc(db.settings.company)}</h1><h2>费用报销单</h2></div>
   <div class="s-meta"><span>单号：<b>${esc(o.no)}</b></span><span>报销日期：${o.date}</span><span>报销人：${esc(o.applicant)}</span><span>部门：${esc(o.dept || '')}</span></div>
@@ -4854,7 +5027,7 @@ function expSlip(o) {
   ${o.lines.map((l, n) => `<tr><td class="c">${n + 1}</td><td>${esc(l.category)}</td><td>${esc(l.note || '')}</td><td class="r">${l.amount.toFixed(2)}</td></tr>`).join('')}
   <tr><td colspan="3" class="r"><b>合计</b></td><td class="r"><b>${o.amount.toFixed(2)}</b></td></tr>
   <tr><td colspan="4">金额大写：${rmbUpper(o.amount)}</td></tr>
-  <tr><td colspan="4">事由：${esc(o.reason)}${(o.imgs || []).length ? `　（附件 ${o.imgs.length} 张）` : ''}</td></tr></tbody></table>
+  <tr><td colspan="4">事由：${esc(o.reason)}${(o.imgs || []).length ? `　（附件 ${o.imgs.length} 张）` : ''}${o.advanceId && o.advanceOffset ? `　（冲抵备用金 ${Number(o.advanceOffset).toFixed(2)}）` : ''}${(o.payImgs || []).length ? `　（付款回单 ${o.payImgs.length} 张）` : ''}</td></tr></tbody></table>
   <div class="s-sign"><span>报销人：${esc(o.applicant)}</span><span>审批：${esc(o.approver && o.status !== '已驳回' ? o.approver : '')}</span><span>财务：${esc(o.payer || '')}</span><span>领款人：</span></div>
   ${o.status === '已付款' ? `<div class="s-meta" style="margin-top:6px"><span>${o.payDate} 从「${esc(acctName(o))}」付款</span></div>` : ''}</div>`;
 }
@@ -4864,13 +5037,28 @@ function expView(id) {
     o.approvedAt && (o.status === '已驳回' ? `<span class="neg">${esc(o.approver)} 于 ${fmtTime(o.approvedAt)} 驳回：${esc(o.rejectReason || '')}</span>` : `${esc(o.approver)} 于 ${fmtTime(o.approvedAt)} 批准`),
     o.paidAt && `${esc(o.payer)} 于 ${fmtTime(o.paidAt)} 付款（${o.payDate} · ${esc(acctName(o))}）`,
     o.voidAt && `<span class="neg">${esc(o.voidBy)} 于 ${fmtTime(o.voidAt)} 作废${o.voidReason ? '：' + esc(o.voidReason) : ''}</span>`].filter(Boolean);
+  const ap = o.approval;
+  const approvalHtml = ap && Array.isArray(ap.steps) && ap.steps.length ? `<div class="line-head" style="margin-top:14px"><b>审批流程</b><span class="sub-t" style="margin-left:10px">每个节点会签人全部同意后进入下一步</span></div>
+    <div style="display:flex;flex-direction:column;gap:8px">${ap.steps.map((s, i) => {
+      const on = i === ap.current && o.status === '待审批', ok = s.status === '已通过' || i < ap.current, no = s.status === '已驳回';
+      const people = (s.approvers || []).map(x => esc(x)).join('、') || '有审批权限的人';
+      const acts = (s.acted || []).map(x => `<div class="sub-t">${esc(x.name)} ${x.pass ? '同意' : '驳回'}${x.comment ? '：' + esc(x.comment) : ''} · ${fmtTime(x.at)}</div>`).join('');
+      return `<div style="padding:9px 12px;border:1px solid ${on ? 'var(--primary)' : 'var(--border)'};border-radius:10px;background:${on ? 'var(--primary-soft)' : 'var(--panel2)'}">
+        <b>${i + 1}. ${esc(s.name)}</b> <span class="sub-t" style="margin-left:8px">${ok ? '已通过' : no ? '已驳回' : on ? '进行中' : '待审批'} · ${people}</span>${acts}</div>`;
+    }).join('')}</div>` : '';
+  const payImgs = o.payImgs || [];
   openModal(`${modalHead('报销单 · ' + o.no + ' ' + badge(o.status, EXP_STATUS[o.status]))}<div class="m-body">
     <div class="slip-preview">${expSlip(o)}</div>
     ${(o.imgs || []).length ? `<div class="line-head" style="margin-top:14px"><b>附件</b><span class="sub-t" style="margin-left:10px">点图片看大图</span></div><div class="exp-imgs" id="xvImgs">${o.imgs.map(k => `<div class="exp-img"><img data-ximg="${o.id}/${k}" alt="" data-big="1"></div>`).join('')}</div>` : ''}
+    ${o.status === '已付款' || can('finance') ? `<div class="line-head" style="margin-top:14px"><b>付款回单</b><span class="sub-t" style="margin-left:10px;margin-right:auto">财务付款后上传，打印 / 导出备查</span>${o.status === '已付款' && can('finance') ? `<label class="btn sm">${ic('upload')}上传<input type="file" id="xPayFile" accept="image/*" hidden></label>` : ''}</div>
+      <div class="exp-imgs" id="xvPayImgs">${payImgs.length ? payImgs.map(k => `<div class="exp-img"><img data-pximg="${o.id}/${k}" alt=""><button class="icon-btn sm" data-rmpay="${k}" title="删除">${ic('x')}</button></div>`).join('') : '<span class="sub-t">还没有付款回单</span>'}</div>` : ''}
+    ${approvalHtml}
     <p class="sub-t" style="margin-top:12px;line-height:1.9">${log.join('<br>')}</p></div>
   <div class="m-foot" style="flex-wrap:wrap"><span style="margin-right:auto;display:flex;gap:8px;flex-wrap:wrap">${expOps(o).map(h => h.replace('class="tbtn', 'class="btn')).join('')}</span>
     <button class="btn" data-act="expPrint" data-id="${o.id}">${ic('printer')}打印</button><button class="btn" data-act="closeModal">关闭</button></div>`, 'lg');
   if ($('#xvImgs')) { loadXimgs($('#xvImgs')); $('#xvImgs').onclick = e => { const im = e.target.closest('img'); if (im && im.src) { const w = window.open(); if (w) w.document.write(`<title>${esc(o.no)} 附件</title><body style="margin:0;background:#111;display:flex;justify-content:center"><img src="${im.src}" style="max-width:100%">`); } }; }
+  if ($('#xvPayImgs')) { loadPayXimgs($('#xvPayImgs')); $('#xvPayImgs').onclick = async e => { const im = e.target.closest('img'); const rm = e.target.closest('[data-rmpay]'); if (rm) { try { const r = await api('DELETE', `/api/expenses/${o.id}/payimages/${rm.dataset.rmpay}`); o.payImgs = r.payImgs; const x = byId(db.expenses, o.id); if (x) x.payImgs = r.payImgs; closeModal(); expView(o.id); } catch (err) { toast(err.message, 'error'); } } else if (im && im.src) { const w = window.open(); if (w) w.document.write(`<title>${esc(o.no)} 付款回单</title><body style="margin:0;background:#111;display:flex;justify-content:center"><img src="${im.src}" style="max-width:100%">`); } }; }
+  if ($('#xPayFile')) $('#xPayFile').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const data = await shrinkImage(f, 1400); const r = await api('POST', `/api/expenses/${o.id}/payimages`, {data}); o.payImgs = r.payImgs; const x = byId(db.expenses, o.id); if (x) x.payImgs = r.payImgs; closeModal(); expView(o.id); } catch (err) { toast(err.message, 'error'); } };
 }
 function expPay(id) {
   const o = byId(db.expenses, id); if (!o) return;
@@ -4879,7 +5067,7 @@ function expPay(id) {
     {n:'amount', l:'付款金额', disabled:1}, {n:'date', l:'付款日期', type:'date', req:1},
     {n:'account', l:'从哪个账户付', type:'select', opts:acctOpts()}],
     data:{amount:money(o.amount), date:today(), account:(accts(true).find(a => !a.off && a.kind === '现金') || accts(true).find(a => !a.off) || {}).id}, onSubmit:v => mutate('POST', `/api/expenses/${id}/pay`, v, `已付款 ${money(o.amount)}，已记入收支流水`)});
-  $('.m-body').insertAdjacentHTML('afterbegin', `<p class="span2 sub-t">${esc(o.applicant)}：${esc(o.reason)}。付款后按类别记支出（${esc(expCatText(o))}），关联单号 ${o.no}；付错了可以「撤销付款」。</p>`);
+  $('.m-body').insertAdjacentHTML('afterbegin', `<p class="span2 sub-t">${esc(o.applicant)}：${esc(o.reason)}。付款后按类别记支出（${esc(expCatText(o))}），关联单号 ${o.no}；付错了可以「撤销付款」。${o.advanceId && o.advanceOffset ? `<br><b>其中 ${money(o.advanceOffset)} 冲抵备用金</b>（只抵扣备用金余额，不重复生成付款流水）。` : ''}</p>`);
 }
 function expReject(id) {
   const o = byId(db.expenses, id); closeModal();
@@ -5045,7 +5233,7 @@ const A = {
   cloudActivate: async () => {
     const code = ($('#cloudCode') || {}).value?.trim();
     if (!code) return toast('请输入授权码', 'error');
-    try { CLOUD = await api('POST', '/api/cloud/activate', { code }); cloudShowPass = true; cloudDraw(); toast('云备份已开通，请设置备份密码'); }
+    try { CLOUD = await api('POST', '/api/cloud/activate', { code, transfer: !!(document.querySelector('#cloudTransfer') || {}).checked }); cloudShowPass = true; cloudDraw(); toast('云服务已开通，请设置备份密码'); }
     catch (e) { toast(e.message, 'error'); }
   },
   cloudSetPass: async () => {
@@ -5079,11 +5267,23 @@ const A = {
       if (el.checked) setTimeout(cloudLoad, 2500);
     } catch (e) { el.checked = !el.checked; toast(e.message, 'error'); }
   },
-  cloudCopyRemote: async () => {
+  cloudCopyRemote: () => {
     const url = CLOUD.remote && CLOUD.remote.url;
     if (!url) return toast('还没有远程访问地址', 'error');
-    try { await navigator.clipboard.writeText(url); toast('地址已复制'); }
-    catch (e) { toast(url, 'info'); }
+    const done = () => toast('地址已复制');
+    const fallback = () => {
+      const t = document.createElement('textarea');
+      t.value = url; t.style.position = 'fixed'; t.style.left = '-9999px'; t.style.top = '0';
+      document.body.appendChild(t); t.focus(); t.select(); t.setSelectionRange(0, 9999);
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) {}
+      t.remove();
+      if (ok) done(); else toast(url, 'info');
+    };
+    try {
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(url).then(done).catch(fallback);
+      else fallback();
+    } catch (e) { fallback(); }
   },
   cloudDelete: id => confirmBox('删除这份云端备份？删除后不能再恢复。', async () => {
     try { const r = await api('DELETE', '/api/cloud/backups/' + id); CLOUD = { ...CLOUD, ...r }; cloudDraw(); toast('已删除'); }
@@ -5149,7 +5349,15 @@ const A = {
   acctEdit, acctTransfer,
   acctDel: id => confirmBox(`确定删除账户「${esc(acctName({account:id}))}」吗？没有收支和转账记录时才能删除，有记录的可以编辑改为停用。`, () => mutate('DELETE', '/api/accounts/' + id, undefined, '账户已删除')),
   expNew: () => expModal(), expEdit: id => { closeModal(); expModal(id); }, expView: id => expView(id),
-  expApprove: id => { const o = byId(db.expenses, id); confirmBox(`批准 ${o.applicant} 的报销 ${money(o.amount)}（${o.no}）吗？批准后等财务付款。`, () => mutate('POST', `/api/expenses/${id}/approve`, {}, '已批准'), {title:'批准报销', danger:false, okText:'批准'}); },
+  expApprove: id => {
+    const o = byId(db.expenses, id); if (!o) return; closeModal();
+    formModal({title:'批准报销 · ' + o.no, okText:'批准', fields:[{n:'comment', l:'审批意见（选填）', span:1}],
+      onSubmit:v => mutate('POST', `/api/expenses/${id}/approve`, v, '审批已提交')});
+  },
+  advNew: () => advModal(null), advEdit: id => advModal(id), advView: id => advView(id),
+  advApprove: id => { const a = byId(db.advances, id); confirmBox(`批准 ${a.applicant} 的备用金 ${money(a.amount)}（${a.no}）吗？`, () => mutate('POST', `/api/advances/${id}/approve`, {}, '已批准'), {title:'批准备用金', danger:false, okText:'批准'}); },
+  advReject: id => advReject(id), advPay: id => advPay(id), advReturn: id => advReturn(id),
+  advVoid: id => { const a = byId(db.advances, id); confirmBox(`确定作废备用金 ${a.no} 吗？`, () => mutate('POST', `/api/advances/${id}/void`, {}, '已作废')); },
   expReject: id => expReject(id), expPay: id => expPay(id), expVoid: id => expVoid(id),
   expUnpay: id => { const o = byId(db.expenses, id); confirmBox(`撤销 ${o.no} 的付款吗？收支流水里这笔报销的支出会删掉，账户余额恢复，报销单回到「已批准」。`, () => mutate('POST', `/api/expenses/${id}/unpay`, {}, '已撤销付款'), {title:'撤销付款', okText:'撤销付款'}); },
   expPrint: id => { const o = byId(db.expenses, id); if (o) printFrame(o.no, `<div class="page">${expSlip(o)}${printFoot('out', 0)}</div>`, prefs.paper || 'a4'); },
@@ -5178,6 +5386,18 @@ const A = {
   savePrefs: () => { db.settings.theme = $('#sTheme').value; prefs.side = $('#sSide').value; db.settings.pageSize = +$('#sPs').value; savePrefs(); applyTheme(); toast('偏好已保存'); render(); },
   saveStats: on => mutate('PUT', '/api/settings', {stats:on}, on ? '已开启匿名使用统计' : '已关闭匿名使用统计'),
   saveApprove: () => mutate('PUT', '/api/settings', {docApprove:{in:$('#apIn').checked, out:$('#apOut').checked}}, '审核设置已保存'),
+  saveExpFlow: async () => {
+    const heads = {};
+    String($('#efHeads').value || '').split(/\r?\n/).forEach(line => {
+      const i = line.indexOf('=');
+      if (i > 0) { const d = line.slice(0, i).trim(), who = line.slice(i + 1).split(/[,，]/).map(x => x.trim()).filter(Boolean); if (d && who.length) heads[d] = who; }
+    });
+    const splitNames = s => String(s || '').split(/[,，\s]+/).map(x => x.trim()).filter(Boolean);
+    try {
+      await api('PUT', '/api/settings/expense-flow', { deptHeads: heads, finance: splitNames($('#efFinance').value), gm: splitNames($('#efGm').value), gmThreshold: +$('#efThreshold').value || 0 });
+      await reload(); toast('报销审批流程已保存');
+    } catch (e) { toast(e.message, 'error'); }
+  },
   saveCostMethod: () => mutate('PUT', '/api/settings', {costMethod:$('#costMethod').value}, '成本核算口径已保存'),
   updateCheck: () => updateCheck(),
   apkUpdate: () => { if (NATIVE && NATIVE.checkAppUpdate) NATIVE.checkAppUpdate(); else toast('请在安卓客户端里检查客户端更新', 'error'); },

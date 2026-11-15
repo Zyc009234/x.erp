@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.11.0": {
+          "changelog": "新增报销付款回单、备用金领用/多报销单冲抵、报销会签（部门负责人→财务→可选总经理，含审批意见和流程状态）、人事身份证号与生日提醒（默认7天，可切7/15/30，本月生日列表）；云服务支持换机恢复。",
+          "updated_at": "2026-11-16T07:44:17+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.11.0.fpk",
+              "sha256": "051db5658ec2cd7e03b6613610fc77cf2b1b8bb6077ed03583c5f661292c76af",
+              "size": 697251
+            }
+          }
+        },
         "2.10.1": {
           "changelog": "云服务套餐（10 元起）：云备份 + 远程访问。新增远程访问隧道，不用公网 IP 也能在外面打开 ERP；不购买不影响基础功能。",
           "updated_at": "2026-11-15T17:12:46+08:00",
@@ -53,17 +64,6 @@
               "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.0.fpk",
               "sha256": "630cb346a2624d4b6de2ac404e62c1d6daac6b9473e5f1ec2bb39d61f1b989a8",
               "size": 684583
-            }
-          }
-        },
-        "2.9.7": {
-          "changelog": "打赏弹窗文案调整：制作不易麻烦给个赏钱。其余功能与 2.9.6 一致。",
-          "updated_at": "2026-11-15T12:10:32+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.7.fpk",
-              "sha256": "43ee780b12568e2fbc33d7110761edcfd6c54540e18b07096a2a816d531bbcaf",
-              "size": 677917
             }
           }
         }

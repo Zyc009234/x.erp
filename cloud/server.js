@@ -29,9 +29,9 @@ const MAX_UPLOAD = 200 * MB;
 fs.mkdirSync(BLOB_DIR, { recursive: true });
 
 const PLANS = {
-  basic: { name: '基础版', quota: 1 * GB, days: 365, max: 7, price: 10 },
-  plus: { name: '标准版', quota: 5 * GB, days: 365, max: 15, price: 20 },
-  pro: { name: '专业版', quota: 10 * GB, days: 365, max: 30, price: 30 },
+  basic: { name: '基础版', quota: 1 * GB, days: 30, max: 7, price: 2 },
+  plus: { name: '标准版', quota: 5 * GB, days: 30, max: 15, price: 3 },
+  pro: { name: '专业版', quota: 10 * GB, days: 30, max: 30, price: 5 },
 };
 
 const db = new DatabaseSync(DB_FILE);
@@ -220,7 +220,7 @@ function sanitizeName(name) {
 }
 function accountBackupPath(account, id) { return path.join(BLOB_DIR, account, id + '.bin'); }
 
-function activate(code, device, name) {
+function activate(code, device, name, transfer = false) {
   code = String(code || '').trim().toUpperCase();
   device = String(device || '').trim();
   if (!/^[0-9a-f]{32}$/i.test(device)) throw Object.assign(new Error('设备标识不正确'), { status: 400 });
@@ -229,15 +229,24 @@ function activate(code, device, name) {
   const p = PLANS[c.plan];
   if (!p) throw Object.assign(new Error('授权码套餐无效'), { status: 400 });
   let acc = db.prepare('SELECT * FROM accounts WHERE device = ?').get(device);
+  let owner = c.used_by ? db.prepare('SELECT * FROM accounts WHERE id = ?').get(c.used_by) : null;
+  if (owner && owner.device !== device && !transfer) throw Object.assign(new Error('这个授权码已经绑定其他设备；如果是换机，请勾选“换机恢复”'), { status: 409 });
   const ts = now();
   const token = crypto.randomBytes(32).toString('hex');
-  const slug = acc?.slug || crypto.randomBytes(5).toString('hex');
-  const tunnelSecret = acc?.tunnel_hash ? null : crypto.randomBytes(24).toString('hex');
+  const baseAcc = owner && owner.device !== device ? owner : acc;
+  const slug = baseAcc?.slug || crypto.randomBytes(5).toString('hex');
+  const tunnelSecret = owner && owner.device !== device ? crypto.randomBytes(24).toString('hex') : (acc?.tunnel_hash ? null : crypto.randomBytes(24).toString('hex'));
   const tunnelHash = tunnelSecret ? crypto.createHash('sha256').update(tunnelSecret).digest('hex') : acc.tunnel_hash;
   db.exec('BEGIN IMMEDIATE');
   try {
-    if (c.used_by && (!acc || c.used_by !== acc.id)) throw Object.assign(new Error('这个授权码已经被其他设备使用'), { status: 409 });
-    if (!acc) {
+    if (owner && owner.device !== device) {
+      if (!transfer) throw Object.assign(new Error('这个授权码已经绑定其他设备；如果是换机，请勾选“换机恢复”'), { status: 409 });
+      db.prepare('UPDATE accounts SET device = ?, token_hash = ?, name = COALESCE(?, name), last_seen = ?, slug = COALESCE(slug, ?), tunnel_hash = ? WHERE id = ?')
+        .run(device, tokenHash(token), String(name || '').slice(0, 60) || null, ts, slug, tunnelHash, owner.id);
+      acc = db.prepare('SELECT * FROM accounts WHERE id = ?').get(owner.id);
+      const oldTunnel = tunnels.get(owner.id);
+      if (oldTunnel) { try { oldTunnel.socket.destroy(); } catch (e) {} tunnels.delete(owner.id); }
+    } else if (!acc) {
       const id = 'acc_' + crypto.randomBytes(12).toString('hex');
       db.prepare('INSERT INTO accounts (id, token_hash, device, name, plan, quota, expires, created, last_seen, note, slug, tunnel_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
         .run(id, tokenHash(token), device, String(name || '').slice(0, 60) || null, c.plan, c.quota, ts + c.days * 86400, ts, ts, c.note || null, slug, tunnelHash);
@@ -263,6 +272,7 @@ function activate(code, device, name) {
     },
     slug: a.slug,
     tunnelSecret,
+    transferred: !!(owner && owner.device !== device),
   };
 }
 
@@ -355,11 +365,11 @@ ${flash ? `<div class=flash>${esc(flash)}</div>` : ''}
 }
 
 function buyPage() {
-  const cards = Object.entries(PLANS).map(([k, p]) => `<div class=plan><h3>${p.name}</h3><div class=price>¥${p.price}<small>/年</small></div><ul><li>${fmtBytes(p.quota)} 加密云备份空间</li><li>保留最近 ${p.max} 份备份</li><li>远程访问（独立域名）</li><li>NAS 故障可下载恢复</li><li>服务器只存密文</li></ul><button onclick="buy('${k}')">购买</button></div>`).join('');
+  const cards = Object.entries(PLANS).map(([k, p]) => `<div class=plan><h3>${p.name}</h3><div class=price>¥${p.price}<small>/月</small></div><ul><li>${fmtBytes(p.quota)} 加密云备份空间</li><li>保留最近 ${p.max} 份备份</li><li>远程访问（独立域名）</li><li>NAS 故障可下载恢复</li><li>服务器只存密文</li></ul><button onclick="buy('${k}')">购买</button></div>`).join('');
   return `<!doctype html><html lang=zh-CN><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>x.erp 云服务</title>
 <style>body{font:15px/1.7 system-ui,"Microsoft YaHei";margin:0;background:#0f172a;color:#e2e8f0}main{max-width:960px;margin:0 auto;padding:48px 16px}h1{font-size:30px;margin:0 0 8px}p.sub{color:#94a3b8;margin:0 0 18px}.contact{margin:0 0 24px}.contact input{width:100%;max-width:360px;padding:10px 12px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font:inherit}.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.plan{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:22px}.plan h3{margin:0 0 6px;font-size:18px}.price{font-size:30px;font-weight:700;margin-bottom:14px}.price small{font-size:13px;color:#94a3b8;font-weight:400}.plan ul{padding-left:18px;color:#cbd5e1;font-size:13px}.plan button{width:100%;padding:10px;border:0;border-radius:10px;background:#6366f1;color:#fff;font:inherit;cursor:pointer}.note{margin-top:26px;color:#94a3b8;font-size:13px}#msg{margin-top:18px;padding:14px;border-radius:10px;background:#1e293b;display:none;white-space:pre-wrap}#msg.show{display:block}</style></head>
 <body><main><h1>x.erp 云服务</h1><p class=sub>加密云备份 + 远程访问。数据在本机加密后上传，服务器看不到你的业务数据；在外面也能打开自己的 ERP。</p><div class=contact><input id=contact placeholder="微信 / 手机号（选填，方便补发授权码）"></div><div id=paystate style="color:#94a3b8;font-size:13px;margin:-14px 0 20px">正在检查收款助手…</div><div class=plans>${cards}</div><div id=msg></div>
-<p class=note>购买后授权码会显示在本页，也会稍后发到你留下的联系方式。授权码在 x.erp「云服务」页面输入即可开通，10 元起含云备份和远程访问。</p>
+<p class=note>购买后授权码会显示在本页，也会稍后发到你留下的联系方式。授权码在 x.erp「云服务」页面输入即可开通，2 元/月起含云备份和远程访问。</p>
 <script>
 async function pollOrder(no,keep){
   const box=document.getElementById('msg');box.className='show';
@@ -510,7 +520,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && p === '/api/activate') {
       const b = await jsonBody(req);
-      return json(res, 200, activate(b.code, b.device, b.name));
+      return json(res, 200, activate(b.code, b.device, b.name, b.transfer === true));
     }
     if (req.method === 'GET' && p === '/api/status') {
       const a = accountOf(req);
@@ -586,7 +596,7 @@ const server = http.createServer(async (req, res) => {
       const amount = Math.round(+b.amount || 0);
       let matched = null;
       if (amount > 0) {
-        const o = db.prepare("SELECT * FROM orders WHERE status = 'pending' AND channel = 'relay' AND amount = ? AND created > ? ORDER BY created ASC LIMIT 1").get(amount, now() - 1800);
+        const o = db.prepare("SELECT * FROM orders WHERE status = 'pending' AND amount = ? AND created > ? AND channel IN ('relay', 'manual') ORDER BY CASE WHEN channel = 'relay' THEN 0 ELSE 1 END, created DESC LIMIT 1").get(amount, now() - 1800);
         if (o) {
           const code = createCode(o.plan, '收款助手 ' + relay.name, o.id);
           db.prepare('UPDATE orders SET status = ?, paid = ?, code = ? WHERE id = ?').run('paid', now(), code, o.id);
@@ -725,10 +735,10 @@ server.on('upgrade', (req, socket, head) => {
   tunnels.set(a.id, { socket });
   console.log(new Date().toISOString(), 'tunnel connected', a.id, a.slug);
   socket.on('error', () => {});
-  socket.on('close', () => {
+  socket.on('close', (code, reason) => {
     if (tunnels.get(a.id)?.socket === socket) {
       tunnels.delete(a.id);
-      console.log(new Date().toISOString(), 'tunnel closed', a.id);
+      console.log(new Date().toISOString(), 'tunnel closed', a.id, code, String(reason || ''));
     }
   });
   wsRead(socket, text => {

@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.10.1';
+const VERSION = '2.11.0';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -111,8 +111,8 @@ const fail = (msg, status) => { throw new HttpError(msg, status); };
 function audit(ctx, action, detail = '') { S.audit.run(new Date().toISOString(), ctx.user ? ctx.user.name : '-', action, String(detail).slice(0, 300), ctx.ip || ''); }
 
 /* ================= 业务常量 ================= */
-const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials', 'carriers', 'shipments', 'shipBills', 'shipLabels', 'accounts', 'acctTransfers', 'expenses', 'partyPayments', 'projects'];
-const DATED = ['sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs', 'shipments', 'shipBills', 'acctTransfers', 'expenses', 'partyPayments'];
+const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials', 'carriers', 'shipments', 'shipBills', 'shipLabels', 'accounts', 'acctTransfers', 'expenses', 'advances', 'partyPayments', 'projects'];
+const DATED = ['sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs', 'shipments', 'shipBills', 'acctTransfers', 'expenses', 'advances', 'partyPayments'];
 const CATS = ['电子产品', '办公用品', '家居用品', '食品饮料'];
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
 const METHODS = ['银行转账', '现金', '支付宝', '微信', '承兑汇票'];
@@ -133,7 +133,7 @@ const ENTITY = {
   suppliers: { name: '供应商', required: { name: '供应商名称' },
     fields: { name: ['s'], contact: ['s'], phone: ['s'], email: ['s'], category: ['s'], address: ['s'], remark: ['s'] } },
   employees: { name: '员工', required: { name: '姓名' },
-    fields: { no: ['s'], name: ['s'], gender: ['s'], dept: ['s'], position: ['s'], phone: ['s'], salary: ['n', '月薪'], joinDate: ['s'], status: ['s'] } }
+    fields: { no: ['s'], name: ['s'], gender: ['s'], dept: ['s'], position: ['s'], phone: ['s'], idCard: ['s'], salary: ['n', '月薪'], joinDate: ['s'], status: ['s'] } }
 };
 const DOC_TYPES = { in: ['采购入库', '生产入库', '组装入库', '拆卸入库', '退货入库', '其他入库'], out: ['领料出库', '组装出库', '销售出库', '拆卸出库', '报损出库', '其他出库'] };
 const DOC = { in: { col: 'stockDocs', prefix: 'RK', title: '入库单' }, out: { col: 'stockDocs', prefix: 'CK', title: '出库单' } };
@@ -772,6 +772,8 @@ function saveEntity(ctx, col, id) {
       let n = 1001 + nos.size; while (nos.has('E' + n)) n++;
       r.no = 'E' + n;
     }
+    if (col === 'employees' && r.idCard && !/^\d{15}$|^\d{17}[\dX]$/i.test(String(r.idCard).trim())) fail('身份证号格式不正确，应为 15 位或 18 位');
+    if (col === 'employees' && r.idCard) r.idCard = String(r.idCard).trim().toUpperCase();
     if (!rec) { r.id = uid(); r.createdAt = today(); }
     const init = !rec && col === 'products' ? r.stock : 0;
     if (!rec && col === 'products') { r.stock = 0; r.wh = { [DEFAULT_WH]: 0 }; }
@@ -2296,7 +2298,8 @@ function visibleData(ctx) {
     finance: any('finance', 'sales', 'purchase', 'reports'), partyPayments: any('finance', 'parties', 'sales', 'purchase'), projects: P.has('inv.view') || any('sales', 'purchase'), employees: P.has('hr'),
     warehouses: true, transferDocs: P.has('inv.view'), batches: any('inv.view', 'prod.view'), serials: P.has('inv.view'),
     carriers: any('ship.view', 'ship.edit', 'ship.rate'), shipments: any('ship.view', 'ship.edit'), shipBills: P.has('ship.view'), shipLabels: false,
-    accounts: any('finance', 'sales', 'purchase', 'ship.bill', 'expense'), acctTransfers: P.has('finance'), expenses: any('expense', 'exp.approve', 'finance')
+    accounts: any('finance', 'sales', 'purchase', 'ship.bill', 'expense'), acctTransfers: P.has('finance'), expenses: any('expense', 'exp.approve', 'finance'),
+    advances: any('expense', 'exp.approve', 'finance')
   };
   const byDate = (a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || ''));
   const data = {};
@@ -2307,6 +2310,7 @@ function visibleData(ctx) {
   }
   if (!P.has('bom')) data.products = data.products.map(({ bom, ...p }) => p);
   if (!expAll(P)) data.expenses = data.expenses.filter(o => o.creatorId === ctx.user.id);
+  if (!expAll(P)) data.advances = data.advances.filter(a => a.creatorId === ctx.user.id);
   data.shipBills = data.shipBills.map(({ rows, ...b }) => b);  // 账单明细可能上万行，打开账单时再单独取
   // 电子面单密码不下发，只告诉前端有没有设置
   data.carriers = data.carriers.map(c => c.eo ? { ...c, eo: { ...c.eo, customerPwd: '', pwdSet: !!c.eo.customerPwd } } : c);
@@ -2356,6 +2360,7 @@ function deleteFinance(ctx, id) {
 }
 /* ---------- 报销：员工提交 → 审批（批准 / 驳回）→ 财务付款（按类别记支出流水，从资金账户扣）；付款可撤销 ---------- */
 const EXP = { col: 'expenses', prefix: 'BX', title: '报销单' };
+const ADV = { col: 'advances', prefix: 'JY', title: '备用金' };
 const EXP_CATS = ['差旅', '交通费', '餐费', '住宿费', '办公费', '招待费', '通讯费', '其他支出'];
 const EXP_IMG_MAX = 9;
 const expAll = P => P.has('finance') || P.has('exp.approve');  // 能看全部报销单
@@ -2377,13 +2382,46 @@ function cleanExpense(b) {
   if (lines.length > 30) fail('报销明细最多 30 行');
   const date = isDate(b.date) ? b.date : today();
   if (date > today()) fail('报销日期不能晚于今天');
+  const amount = round2(sum(lines, l => l.amount));
+  const advanceId = str(b.advanceId, 64);
+  let advanceOffset = 0;
+  if (advanceId) {
+    const a = get('advances', advanceId) || fail('备用金单不存在', 404);
+    if (!['已发放', '部分核销'].includes(a.status)) fail('这张备用金还没有发放或已经核销完');
+    if (a.applicant && str(b.applicant, 32) && a.applicant !== str(b.applicant, 32)) fail('备用金领用人和报销人不一致');
+    advanceOffset = round2(Number(b.advanceOffset || 0));
+    if (!(advanceOffset > 0)) fail('请填写冲抵备用金的金额');
+    if (advanceOffset > amount + 0.001) fail('冲抵金额不能超过报销金额');
+    if (advanceOffset > advRemaining(a) + 0.001) fail(`这张备用金只剩 ${advRemaining(a).toFixed(2)} 可冲抵`);
+  }
   return { date, applicant: str(b.applicant, 32) || fail('请填写报销人'), dept: str(b.dept, 32), reason: str(b.reason, 300) || fail('请填写报销事由'),
-    lines, amount: round2(sum(lines, l => l.amount)) };
+    lines, amount, advanceId: advanceId || '', advanceOffset };
+}
+function buildExpenseApproval(v, user) {
+  const flow = getMeta('settings', {}).expenseFlow || {};
+  const namesOf = x => (Array.isArray(x) ? x : String(x || '').split(/[,，\s]+/)).map(s => String(s).trim()).filter(Boolean);
+  const step = (name, who) => {
+    const names = [...new Set(namesOf(who))].filter(n => n !== user.username);
+    return names.length ? { name, approvers: names, mode: 'all', status: '待审批', acted: [] } : null;
+  };
+  const steps = [];
+  const head = step('部门负责人', flow.deptHeads && flow.deptHeads[v.dept]);
+  if (head) steps.push(head);
+  const fin = step('财务', flow.finance);
+  if (fin) steps.push(fin);
+  const threshold = Number(flow.gmThreshold) || 0;
+  if (!threshold || v.amount >= threshold) {
+    const gm = step('总经理', flow.gm);
+    if (gm) steps.push(gm);
+  }
+  if (!steps.length) return { steps: [{ name: '审批', approvers: [], mode: 'any', status: '待审批', acted: [] }], current: 0, fallback: true };
+  return { steps, current: 0 };
 }
 function createExpense(ctx) {
   return tx(() => {
     const v = cleanExpense(ctx.body);
-    const o = { id: uid(), no: nextNo(EXP), ...v, status: '待审批', imgs: [], creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), time: hhmm() };
+    const o = { id: uid(), no: nextNo(EXP), ...v, status: '待审批', imgs: [], payImgs: [], approval: buildExpenseApproval(v, ctx.user),
+      creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), time: hhmm() };
     put('expenses', o); audit(ctx, '提交报销', `${o.no} ${o.applicant} ${o.amount}`);
     return o;
   });
@@ -2393,7 +2431,8 @@ function saveExpense(ctx, id) {
     const o = expGet(ctx, id);
     if (!['待审批', '已驳回'].includes(o.status)) fail(`报销单已${o.status.replace('已', '')}，不能再修改${o.status === '已批准' ? '（可以请审批人驳回后再改）' : ''}`);
     if (o.creatorId !== ctx.user.id && !ctx.perms.has('finance')) fail('只能修改自己提交的报销单', 403);
-    Object.assign(o, cleanExpense(ctx.body), { status: '待审批', editor: ctx.user.name, editedAt: new Date().toISOString() });
+    const v = cleanExpense(ctx.body);
+    Object.assign(o, v, { status: '待审批', approval: buildExpenseApproval(v, ctx.user), payImgs: [], editor: ctx.user.name, editedAt: new Date().toISOString() });
     delete o.approver; delete o.approvedAt; delete o.rejectReason;
     put('expenses', o); audit(ctx, '修改报销', `${o.no} ${o.amount}`);
     return o;
@@ -2403,17 +2442,128 @@ function approveExpense(ctx, id, pass) {
   return tx(() => {
     const o = get('expenses', id) || fail('报销单不存在', 404);
     if (o.status !== '待审批') fail(`报销单当前状态为「${o.status}」，不能审批`);
-    if (pass) Object.assign(o, { status: '已批准', approver: ctx.user.name, approvedAt: new Date().toISOString() });
-    else Object.assign(o, { status: '已驳回', approver: ctx.user.name, approvedAt: new Date().toISOString(), rejectReason: str(ctx.body.reason, 200) || fail('请填写驳回原因') });
+    const ap = o.approval;
+    if (!ap || !Array.isArray(ap.steps) || !ap.steps.length) {
+      if (pass) Object.assign(o, { status: '已批准', approver: ctx.user.name, approvedAt: new Date().toISOString() });
+      else Object.assign(o, { status: '已驳回', approver: ctx.user.name, approvedAt: new Date().toISOString(), rejectReason: str(ctx.body.reason, 200) || fail('请填写驳回原因') });
+      put('expenses', o); audit(ctx, pass ? '批准报销' : '驳回报销', o.no + (pass ? '' : ' ' + o.rejectReason));
+      return o;
+    }
+    const step = ap.steps[ap.current] || fail('审批流程已结束');
+    const me = ctx.user.username;
+    const allowed = ctx.user.role === 'admin' || (step.approvers || []).includes(me) || (!(step.approvers || []).length && ctx.perms.has('exp.approve'));
+    if (!allowed) fail('当前审批节点不是你，不能处理', 403);
+    step.acted = Array.isArray(step.acted) ? step.acted : [];
+    if (step.acted.some(x => x.by === me)) fail('这一步你已经处理过了');
+    const comment = str(ctx.body.comment || ctx.body.reason, 300);
+    step.acted.push({ by: me, name: ctx.user.name, at: new Date().toISOString(), pass: !!pass, comment });
+    if (!pass) {
+      Object.assign(o, { status: '已驳回', approver: ctx.user.name, approvedAt: new Date().toISOString(),
+        rejectReason: comment || fail('请填写驳回原因') });
+      step.status = '已驳回';
+    } else {
+      const passed = step.acted.filter(x => x.pass).length;
+      const need = (step.approvers || []).length || 1;
+      const done = step.mode === 'any' ? passed >= 1 : passed >= need;
+      if (!done) step.status = '审批中';
+      else {
+        step.status = '已通过'; ap.current++;
+        if (ap.current >= ap.steps.length) {
+          o.status = '已批准';
+          o.approver = ap.steps.map(s => (s.acted || []).filter(x => x.pass).map(x => x.name).join('、')).filter(Boolean).join(' → ');
+          o.approvedAt = new Date().toISOString();
+        }
+      }
+    }
     put('expenses', o); audit(ctx, pass ? '批准报销' : '驳回报销', o.no + (pass ? '' : ' ' + o.rejectReason));
     return o;
+  });
+}
+const advRemaining = a => round2((a.amount || 0) - (a.used || 0) - (a.returned || 0));
+function advGet(ctx, id) {
+  const a = get('advances', id) || fail('备用金单不存在', 404);
+  if (!expAll(ctx.perms) && a.creatorId !== ctx.user.id) fail('只能查看自己的备用金', 403);
+  return a;
+}
+function cleanAdvance(b) {
+  const date = isDate(b.date) ? b.date : today();
+  if (date > today()) fail('领用日期不能晚于今天');
+  const amount = round2(Number(b.amount));
+  if (!(amount > 0)) fail('备用金金额需大于 0');
+  return { date, applicant: str(b.applicant, 32) || fail('请填写领用人'), dept: str(b.dept, 32),
+    amount, purpose: str(b.purpose, 300) || fail('请填写用途'), note: str(b.note, 300) };
+}
+function createAdvance(ctx) {
+  return tx(() => {
+    const v = cleanAdvance(ctx.body);
+    const a = { id: uid(), no: nextNo(ADV), ...v, status: '待审批', used: 0, returned: 0, expenseIds: [],
+      creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), time: hhmm() };
+    put('advances', a); audit(ctx, '申请备用金', `${a.no} ${a.applicant} ${a.amount}`);
+    return a;
+  });
+}
+function saveAdvance(ctx, id) {
+  return tx(() => {
+    const a = advGet(ctx, id);
+    if (!['待审批', '已驳回'].includes(a.status)) fail(`备用金当前状态为「${a.status}」，不能修改`);
+    if (a.creatorId !== ctx.user.id && !ctx.perms.has('finance')) fail('只能修改自己提交的备用金', 403);
+    Object.assign(a, cleanAdvance(ctx.body), { status: '待审批' });
+    delete a.approver; delete a.approvedAt; delete a.rejectReason;
+    put('advances', a); audit(ctx, '修改备用金', `${a.no} ${a.amount}`);
+    return a;
+  });
+}
+function approveAdvance(ctx, id, pass) {
+  return tx(() => {
+    const a = get('advances', id) || fail('备用金单不存在', 404);
+    if (a.status !== '待审批') fail(`备用金当前状态为「${a.status}」，不能审批`);
+    if (pass) Object.assign(a, { status: '已批准', approver: ctx.user.name, approvedAt: new Date().toISOString() });
+    else Object.assign(a, { status: '已驳回', approver: ctx.user.name, approvedAt: new Date().toISOString(), rejectReason: str(ctx.body.reason, 200) || fail('请填写驳回原因') });
+    put('advances', a); audit(ctx, pass ? '批准备用金' : '驳回备用金', a.no);
+    return a;
+  });
+}
+function payAdvance(ctx, id) {
+  return tx(() => {
+    const a = get('advances', id) || fail('备用金单不存在', 404), b = ctx.body;
+    if (a.status !== '已批准') fail(`备用金当前状态为「${a.status}」，不能发放`);
+    const date = isDate(b.date) ? b.date : today();
+    if (date > today()) fail('发放日期不能晚于今天');
+    const acc = pickAccount(b);
+    Object.assign(a, { status: '已发放', payer: ctx.user.name, paidAt: new Date().toISOString(), payDate: date, account: acc.id });
+    put('advances', a); audit(ctx, '发放备用金', `${a.no} ${a.amount} ${acc.name}`);
+    return a;
+  });
+}
+function returnAdvance(ctx, id) {
+  return tx(() => {
+    const a = get('advances', id) || fail('备用金单不存在', 404);
+    if (!['已发放', '部分核销'].includes(a.status)) fail(`备用金当前状态为「${a.status}」，不能退回`);
+    const amount = round2(Number(ctx.body.amount));
+    if (!(amount > 0)) fail('退回金额需大于 0');
+    if (amount > advRemaining(a) + 0.001) fail('退回金额不能超过未核销余额');
+    a.returned = round2((a.returned || 0) + amount);
+    a.status = advRemaining(a) <= 0.001 ? '已核销' : '部分核销';
+    a.returnedAt = new Date().toISOString();
+    put('advances', a); audit(ctx, '退回备用金', `${a.no} ${amount}`);
+    return a;
+  });
+}
+function voidAdvance(ctx, id) {
+  return tx(() => {
+    const a = advGet(ctx, id);
+    if (a.status === '已作废') fail('备用金单已作废');
+    if (['已发放', '部分核销', '已核销'].includes(a.status)) fail('已发放的备用金不能作废');
+    a.status = '已作废'; a.voidBy = ctx.user.name; a.voidAt = new Date().toISOString();
+    put('advances', a); audit(ctx, '作废备用金', a.no);
+    return a;
   });
 }
 // 付款：同一类别合并成一笔支出流水（科目 = 报销类别），关联单号 = 报销单号；有审批权限的可以从「待审批」直接批准并付款
 function payExpense(ctx, id) {
   return tx(() => {
     const o = get('expenses', id) || fail('报销单不存在', 404), b = ctx.body;
-    if (o.status === '待审批' && ctx.perms.has('exp.approve')) Object.assign(o, { approver: ctx.user.name, approvedAt: new Date().toISOString() });
+    if (o.status === '待审批' && ctx.perms.has('exp.approve') && (!o.approval || !o.approval.steps || !o.approval.steps.length || o.approval.fallback)) Object.assign(o, { approver: ctx.user.name, approvedAt: new Date().toISOString() });
     else if (o.status !== '已批准') fail(o.status === '待审批' ? '报销单还没审批，审批通过后才能付款' : `报销单当前状态为「${o.status}」，不能付款`);
     const date = isDate(b.date) ? b.date : today();
     if (date > today()) fail('付款日期不能晚于今天');
@@ -2421,6 +2571,16 @@ function payExpense(ctx, id) {
     o.lines.forEach(l => { cats[l.category] = round2((cats[l.category] || 0) + l.amount); });
     for (const [category, amount] of Object.entries(cats))
       put('finance', { id: uid(), date, type: 'expense', category, amount, account: a.id, method: a.kind, note: str(`报销 ${o.applicant}：${o.reason}`, 200), ref: o.no, exp: o.id, operator: ctx.user.name });
+    if (o.advanceId && o.advanceOffset > 0) {
+      const adv = get('advances', o.advanceId) || fail('备用金单不存在，不能冲抵');
+      if (!['已发放', '部分核销'].includes(adv.status)) fail('备用金已核销或状态不正确，不能冲抵');
+      if (o.advanceOffset > advRemaining(adv) + 0.001) fail('备用金余额不足，不能冲抵');
+      adv.used = round2((adv.used || 0) + o.advanceOffset);
+      adv.expenseIds = [...new Set([...(adv.expenseIds || []), o.id])];
+      adv.status = advRemaining(adv) <= 0.001 ? '已核销' : '部分核销';
+      put('advances', adv);
+      o.advanceApplied = true;
+    }
     Object.assign(o, { status: '已付款', payer: ctx.user.name, paidAt: new Date().toISOString(), payDate: date, account: a.id });
     put('expenses', o); audit(ctx, '报销付款', `${o.no} ${o.amount} ${a.name}`);
     return o;
@@ -2431,7 +2591,17 @@ function unpayExpense(ctx, id) {
     const o = get('expenses', id) || fail('报销单不存在', 404);
     if (o.status !== '已付款') fail('报销单还没付款');
     list('finance').filter(f => f.exp === o.id).forEach(f => del('finance', f.id));
+    if (o.advanceId && o.advanceApplied) {
+      const adv = get('advances', o.advanceId);
+      if (adv) {
+        adv.used = round2(Math.max(0, (adv.used || 0) - (o.advanceOffset || 0)));
+        adv.expenseIds = (adv.expenseIds || []).filter(x => x !== o.id);
+        adv.status = advRemaining(adv) <= 0.001 ? '已核销' : (adv.used > 0 || adv.returned > 0 ? '部分核销' : '已发放');
+        put('advances', adv);
+      }
+    }
     Object.assign(o, { status: '已批准' }); delete o.payer; delete o.paidAt; delete o.payDate; delete o.account;
+    delete o.advanceApplied;
     put('expenses', o); audit(ctx, '撤销报销付款', `${o.no} ${o.amount}`);
     return o;
   });
@@ -2479,6 +2649,38 @@ function getExpenseImage(ctx, id, k) {
   const o = expGet(ctx, id);
   if (!(o.imgs || []).includes(k)) fail('附件不存在', 404);
   const r = db.prepare('SELECT mime, data FROM images WHERE id = ?').get(`bx_${o.id}_${k}`) || fail('附件不存在', 404);
+  return { [RAW]: { type: r.mime, body: Buffer.from(r.data) } };
+}
+// 付款回单：付款后由财务上传，和发票 / 小票附件分开，打印时单独带出
+function addExpensePayImage(ctx, id) {
+  const m = /^data:image\/[a-z+]+;base64,([A-Za-z0-9+/=]+)$/.exec(String(ctx.body.data || '')) || fail('图片格式不正确');
+  const buf = Buffer.from(m[1], 'base64');
+  if (buf.length > IMG_MAX) fail('图片太大（最大 800 KB），请换一张或压缩后再传');
+  const mime = imgMime(buf) || fail('只支持 JPG、PNG、WebP 图片');
+  return tx(() => {
+    const o = expGet(ctx, id);
+    if (o.status !== '已付款') fail('付款后才能上传付款回单');
+    const imgs = o.payImgs || [];
+    if (imgs.length >= EXP_IMG_MAX) fail(`每张报销单最多 ${EXP_IMG_MAX} 张付款回单`);
+    const k = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    db.prepare('INSERT OR REPLACE INTO images (id, mime, data, updated_at) VALUES (?, ?, ?, ?)').run(`py_${o.id}_${k}`, mime, buf, new Date().toISOString());
+    o.payImgs = [...imgs, k]; put('expenses', o);
+    return { payImgs: o.payImgs };
+  });
+}
+function delExpensePayImage(ctx, id, k) {
+  return tx(() => {
+    const o = expGet(ctx, id);
+    if (!(o.payImgs || []).includes(k)) fail('付款回单不存在', 404);
+    db.prepare('DELETE FROM images WHERE id = ?').run(`py_${o.id}_${k}`);
+    o.payImgs = o.payImgs.filter(x => x !== k); put('expenses', o);
+    return { payImgs: o.payImgs };
+  });
+}
+function getExpensePayImage(ctx, id, k) {
+  const o = expGet(ctx, id);
+  if (!(o.payImgs || []).includes(k)) fail('付款回单不存在', 404);
+  const r = db.prepare('SELECT mime, data FROM images WHERE id = ?').get(`py_${o.id}_${k}`) || fail('付款回单不存在', 404);
   return { [RAW]: { type: r.mime, body: Buffer.from(r.data) } };
 }
 function backup() {
@@ -2706,7 +2908,8 @@ function cloudTunnelStart() {
     if (msg.type === 'req') tunnelForward(msg, ws);
   };
   ws.onerror = () => {};
-  ws.onclose = () => {
+  ws.onclose = ev => {
+    log(`远程访问隧道断开（code ${ev.code}${ev.reason ? '，' + ev.reason : ''}），稍后重连`);
     tunnelOnline = false;
     clearInterval(tunnelPing); tunnelPing = null;
     if (tunnelWs === ws) tunnelWs = null;
@@ -2747,9 +2950,9 @@ route('POST', '/api/login', ctx => login(ctx, ctx.body), { auth: false });
 route('POST', '/api/logout', ctx => { db.prepare('DELETE FROM sessions WHERE token = ?').run(ctx.user.token); });
 // 推送地址带密钥，只给管理员看；快递鸟 AppKey 谁都不下发，只告诉前端设没设、能不能下电子面单
 const publicSettings = ctx => {
-  const { notify, kdn, ...s } = getMeta('settings', {}), k = kdn || {}, ready = !!(k.ebid && k.key);
+  const { notify, kdn, expenseFlow, ...s } = getMeta('settings', {}), k = kdn || {}, ready = !!(k.ebid && k.key);
   const pub = { ready, eorder: ready && kdnSenderOk(k), sandbox: !!k.sandbox, autoTrack: !!k.autoTrack };
-  return ctx.user.role === 'admin' ? { ...s, notify, kdn: { ...pub, ebid: k.ebid || '', keySet: !!k.key, sender: k.sender || {} } } : { ...s, kdn: pub };
+  return ctx.user.role === 'admin' ? { ...s, notify, expenseFlow: expenseFlow || {}, kdn: { ...pub, ebid: k.ebid || '', keySet: !!k.key, sender: k.sender || {} } } : { ...s, kdn: pub };
 };
 route('GET', '/api/data', ctx => ({
   version: VERSION, settings: { ...publicSettings(ctx), modules: enabledModules(), feedbackUnread: fbUnread(), platform: PLAT },
@@ -2772,6 +2975,11 @@ route('PUT', '/api/settings', ctx => {
   if (b.docApprove && typeof b.docApprove === 'object') {
     s.docApprove = { in: !!b.docApprove.in, out: !!b.docApprove.out };
     changes.push('出入库审核：入库单' + (s.docApprove.in ? '需审核' : '不审核') + '，出库单' + (s.docApprove.out ? '需审核' : '不审核'));
+  }
+  if ('birthdayDays' in b) {
+    const n = Math.round(Number(b.birthdayDays));
+    if (!(n >= 1 && n <= 365)) fail('生日提醒天数需在 1 ~ 365 之间');
+    s.birthdayDays = n; changes.push('生日提醒：提前 ' + n + ' 天');
   }
   if ('stats' in b) { s.stats = !!b.stats; changes.push('匿名使用统计：' + (s.stats ? '开启' : '关闭')); }
   let rebuild = false;
@@ -2842,6 +3050,21 @@ route('PUT', '/api/settings/notify', ctx => {
   s.notify = { enabled: !!b.enabled, url, time, skipEmpty: !!b.skipEmpty }; setMeta('settings', s);
   if (hhmm() >= time && getMeta('notifyLast', '') !== today()) setMeta('notifyLast', today());  // 今天的时间已过就从明天开始，不在保存时立刻发
   audit(ctx, '修改设置', '库存提醒推送' + (s.notify.enabled ? '：每天 ' + time : '：关闭'));
+}, { admin: true });
+route('PUT', '/api/settings/expense-flow', ctx => {
+  const b = ctx.body || {}, s = getMeta('settings', {});
+  const names = x => [...new Set((Array.isArray(x) ? x : String(x || '').split(/[,，\s]+/)).map(v => String(v).trim()).filter(Boolean))].slice(0, 20);
+  const heads = {};
+  if (b.deptHeads && typeof b.deptHeads === 'object') {
+    for (const [dept, who] of Object.entries(b.deptHeads)) {
+      const d = str(dept, 32), n = names(who);
+      if (d && n.length) heads[d] = n;
+    }
+  }
+  const flow = { deptHeads: heads, finance: names(b.finance), gm: names(b.gm), gmThreshold: Math.max(0, round2(Number(b.gmThreshold) || 0)) };
+  s.expenseFlow = flow; setMeta('settings', s);
+  audit(ctx, '修改报销审批流程', `财务 ${flow.finance.length} 人，总经理 ${flow.gm.length} 人`);
+  return { ok: true, expenseFlow: flow };
 }, { admin: true });
 route('POST', '/api/settings/notify/test', async ctx => {
   const url = str(ctx.body.url, 500) || (getMeta('settings', {}).notify || {}).url || fail('请填写推送地址');
@@ -3057,6 +3280,16 @@ route('POST', '/api/expenses/:id/void', ctx => voidExpense(ctx, ctx.params.id), 
 route('POST', '/api/expenses/:id/images', ctx => addExpenseImage(ctx, ctx.params.id), { perm: expPerm });
 route('DELETE', '/api/expenses/:id/images/:k', ctx => delExpenseImage(ctx, ctx.params.id, ctx.params.k), { perm: expPerm });
 route('GET', '/api/expenses/:id/images/:k', ctx => getExpenseImage(ctx, ctx.params.id, ctx.params.k), { perm: expPerm });
+route('POST', '/api/expenses/:id/payimages', ctx => addExpensePayImage(ctx, ctx.params.id), { perm: 'finance' });
+route('DELETE', '/api/expenses/:id/payimages/:k', ctx => delExpensePayImage(ctx, ctx.params.id, ctx.params.k), { perm: 'finance' });
+route('GET', '/api/expenses/:id/payimages/:k', ctx => getExpensePayImage(ctx, ctx.params.id, ctx.params.k), { perm: expPerm });
+route('POST', '/api/advances', ctx => createAdvance(ctx), { perm: expPerm });
+route('PUT', '/api/advances/:id', ctx => saveAdvance(ctx, ctx.params.id), { perm: expPerm });
+route('POST', '/api/advances/:id/approve', ctx => approveAdvance(ctx, ctx.params.id, true), { perm: 'exp.approve' });
+route('POST', '/api/advances/:id/reject', ctx => approveAdvance(ctx, ctx.params.id, false), { perm: 'exp.approve' });
+route('POST', '/api/advances/:id/pay', ctx => payAdvance(ctx, ctx.params.id), { perm: 'finance' });
+route('POST', '/api/advances/:id/return', ctx => returnAdvance(ctx, ctx.params.id), { perm: 'finance' });
+route('POST', '/api/advances/:id/void', ctx => voidAdvance(ctx, ctx.params.id), { perm: expPerm });
 
 route('POST', '/api/password', ctx => {
   const { oldPassword, newPassword } = ctx.body;
@@ -3142,7 +3375,7 @@ route('GET', '/api/cloud/status', async ctx => {
 route('POST', '/api/cloud/activate', async ctx => {
   const code = str(ctx.body.code, 40);
   if (!code) fail('请输入授权码');
-  const r = await cloudReq('/activate', { method: 'POST', body: { code, device: config.cloud.device, name: os.hostname() } });
+  const r = await cloudReq('/activate', { method: 'POST', body: { code, device: config.cloud.device, name: os.hostname(), transfer: ctx.body.transfer === true } });
   const d = await r.json();
   config.cloud.token = d.token;
   config.cloud.account = d.account;
