@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.9.7';
+const VERSION = '2.10.0';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -41,6 +41,11 @@ const config = { port: 8686, host: '0.0.0.0', sessionDays: 7 };
 try { Object.assign(config, JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8').replace(/^﻿/, ''))); }
 catch (e) { fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2)); }
 if (arg('port')) config.port = +arg('port');
+config.cloud = Object.assign({
+  device: crypto.randomBytes(16).toString('hex'), token: '', account: null,
+  salt: '', key: '', keyCheck: '', auto: false, lastUpload: '',
+}, config.cloud || {});
+const saveConfig = () => fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
 
 /* ================= 数据库 ================= */
 const db = new DatabaseSync(path.join(DATA_DIR, 'erp.db'));
@@ -2502,6 +2507,149 @@ function autoBackup() {
   } catch (e) { log('自动备份失败：' + e.message); }
 }
 
+/* ================= 云备份（付费云服务；数据在本机加密后上传） ================= */
+const CLOUD_API = (process.env.XERP_CLOUD_URL || 'https://www.zhaoyoucai.xyz/xerp-cloud/api').replace(/\/+$/, '');
+const CLOUD_MAGIC = Buffer.from('XERPCLOUD1');
+const CLOUD_TABLES = ['docs', 'meta', 'users', 'images', 'cost_layers', 'audit'];
+const cloudState = () => ({
+  activated: !!(config.cloud.token && config.cloud.account),
+  account: config.cloud.account || null,
+  local: { hasKey: !!config.cloud.key, salt: !!config.cloud.salt, auto: !!config.cloud.auto, lastUpload: config.cloud.lastUpload || '', device: config.cloud.device },
+});
+async function cloudReq(pathname, { method = 'GET', body, token, raw } = {}) {
+  let r;
+  try {
+    r = await fetch(CLOUD_API + pathname, {
+      method,
+      headers: {
+        ...(token ? { Authorization: 'Bearer ' + token } : {}),
+        ...(body !== undefined ? { 'Content-Type': raw ? 'application/octet-stream' : 'application/json' } : {}),
+      },
+      body: body === undefined ? undefined : (raw ? body : JSON.stringify(body)),
+      signal: AbortSignal.timeout(120e3),
+    });
+  } catch (e) {
+    throw new HttpError('连不上云备份服务，请检查这台设备能不能上网', 502);
+  }
+  if (!r.ok) {
+    let d = {};
+    try { d = await r.json(); } catch (e) {}
+    throw new HttpError(d.error || `云备份服务返回 ${r.status}`, r.status === 401 ? 401 : 400);
+  }
+  return r;
+}
+function cloudKey(pass) {
+  if (config.cloud.key) return Buffer.from(config.cloud.key, 'base64');
+  if (!pass) fail('请输入云备份密码');
+  if (!config.cloud.salt) { config.cloud.salt = crypto.randomBytes(16).toString('hex'); saveConfig(); }
+  return crypto.scryptSync(String(pass), Buffer.from(config.cloud.salt, 'hex'), 32, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+}
+function cloudEncrypt(buf, pass) {
+  if (!config.cloud.salt) { config.cloud.salt = crypto.randomBytes(16).toString('hex'); saveConfig(); }
+  const key = cloudKey(pass), iv = crypto.randomBytes(12);
+  const salt = Buffer.from(config.cloud.salt, 'hex');
+  const c = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const body = Buffer.concat([c.update(buf), c.final()]);
+  return Buffer.concat([CLOUD_MAGIC, Buffer.from([1]), salt, iv, c.getAuthTag(), body]);
+}
+function cloudDecrypt(buf, pass) {
+  if (buf.length < 65 || !buf.subarray(0, 10).equals(CLOUD_MAGIC) || buf[10] !== 1) fail('备份文件格式不正确');
+  const salt = buf.subarray(11, 27), iv = buf.subarray(27, 39), tag = buf.subarray(39, 55), body = buf.subarray(55);
+  const key = config.cloud.key ? Buffer.from(config.cloud.key, 'base64')
+    : crypto.scryptSync(String(pass || fail('请输入这台设备当初设置的云备份密码')), salt, 32, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+  try {
+    const d = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    d.setAuthTag(tag);
+    return Buffer.concat([d.update(body), d.final()]);
+  } catch (e) {
+    fail('备份密码不正确，无法解密');
+  }
+}
+function cloudSnapshot() {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  const f = path.join(BACKUP_DIR, `cloud-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.db`);
+  db.exec(`VACUUM INTO '${f.replace(/'/g, "''")}'`);
+  return f;
+}
+async function cloudBackupNow(pass) {
+  if (!config.cloud.token || !config.cloud.account) fail('还没有开通云备份，请先输入授权码');
+  const snap = cloudSnapshot();
+  try {
+    const plain = fs.readFileSync(snap);
+    const enc = cloudEncrypt(plain, pass);
+    const name = `xerp-${today()}-${new Date().toTimeString().slice(0, 5).replace(':', '')}.db.enc`;
+    const r = await cloudReq('/backup/' + name, { method: 'PUT', token: config.cloud.token, body: enc, raw: true });
+    const d = await r.json();
+    config.cloud.account = d.account;
+    config.cloud.lastUpload = new Date().toISOString();
+    saveConfig();
+    log(`云备份上传完成：${name}（${(enc.length / 1024 / 1024).toFixed(2)} MB）`);
+    return { ok: true, name, size: enc.length, account: d.account, backups: d.backups };
+  } finally {
+    try { fs.unlinkSync(snap); } catch (e) {}
+  }
+}
+async function cloudDownload(id, pass) {
+  if (!config.cloud.token) fail('还没有开通云备份，请先输入授权码');
+  const r = await cloudReq('/backup/' + encodeURIComponent(id), { token: config.cloud.token });
+  const enc = Buffer.from(await r.arrayBuffer());
+  return { plain: cloudDecrypt(enc, pass), size: enc.length };
+}
+async function cloudRestore(id, pass, ctx) {
+  const { plain } = await cloudDownload(id, pass);
+  const tmp = path.join(BACKUP_DIR, `restore-${Date.now()}.db`);
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  fs.writeFileSync(tmp, plain);
+  let src;
+  try {
+    src = new DatabaseSync(tmp);
+    const ok = src.prepare('PRAGMA integrity_check').get();
+    if (!ok || ok.integrity_check !== 'ok') fail('云备份文件已损坏，无法恢复');
+    const has = t => src.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t);
+    if (!has('docs') || !has('users')) fail('这个备份不是 x.erp 数据库，无法恢复');
+    const pre = path.join(BACKUP_DIR, `pre-restore-${Date.now()}.db`);
+    db.exec(`VACUUM INTO '${pre.replace(/'/g, "''")}'`);
+    db.exec(`ATTACH DATABASE '${tmp.replace(/'/g, "''")}' AS cloudrestore`);
+    try {
+      db.exec('BEGIN IMMEDIATE');
+      for (const t of CLOUD_TABLES) {
+        if (!has(t)) continue;
+        const mainCols = db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
+        const srcCols = src.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name);
+        const cols = mainCols.filter(c => srcCols.includes(c));
+        if (!cols.length) continue;
+        db.exec(`DELETE FROM main.${t}`);
+        db.exec(`INSERT INTO main.${t} (${cols.join(',')}) SELECT ${cols.join(',')} FROM cloudrestore.${t}`);
+      }
+      db.exec('DELETE FROM sessions');
+      db.exec('COMMIT');
+    } catch (e) {
+      try { db.exec('ROLLBACK'); } catch (x) {}
+      throw e;
+    } finally {
+      try { db.exec('DETACH DATABASE cloudrestore'); } catch (e) {}
+    }
+    const n = t => { try { return db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n; } catch (e) { return 0; } };
+    log(`云备份恢复完成：商品 ${n('docs')} 条文档，账号 ${n('users')} 个，恢复前本地备份 ${pre}`);
+    return { ok: true, preBackup: pre, docs: n('docs'), users: n('users') };
+  } finally {
+    try { if (src) src.close(); } catch (e) {}
+    try { fs.unlinkSync(tmp); } catch (e) {}
+  }
+}
+let cloudBusy = false;
+async function cloudAutoTick() {
+  if (cloudBusy || !config.cloud.auto || !config.cloud.token || !config.cloud.key) return;
+  try {
+    if (config.cloud.lastUpload && fmtDate(config.cloud.lastUpload) === today()) return;
+    if (new Date().getHours() < 3) return;
+    cloudBusy = true;
+    await cloudBackupNow(null);
+  } catch (e) {
+    log('云备份自动上传失败：' + e.message);
+  } finally { cloudBusy = false; }
+}
+
 /* ================= 初始化 ================= */
 if (!getMeta('initialized', false)) {
   tx(() => { writeAll(seed()); setMeta('settings', { company: '示例科技有限公司' }); setMeta('counters', {}); setMeta('initialized', true); });
@@ -2909,6 +3057,74 @@ route('DELETE', '/api/users/:id', ctx => {
 route('GET', '/api/audit', ctx => db.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT ?').all(Math.min(1000, +ctx.query.get('limit') || 200)), { admin: true });
 route('GET', '/api/backup', ctx => { audit(ctx, '导出备份'); return backup(); }, { admin: true });
 route('POST', '/api/restore', ctx => restore(ctx), { admin: true });
+route('GET', '/api/cloud/status', async ctx => {
+  if (!config.cloud.token) return cloudState();
+  try {
+    const r = await cloudReq('/status', { token: config.cloud.token });
+    const d = await r.json();
+    config.cloud.account = d.account;
+    saveConfig();
+    return { ...cloudState(), backups: d.backups || [] };
+  } catch (e) {
+    if (e.status === 401) { config.cloud.token = ''; config.cloud.account = null; config.cloud.auto = false; saveConfig(); return { ...cloudState(), error: '云备份授权已失效，请重新输入授权码' }; }
+    throw e;
+  }
+}, { admin: true });
+route('POST', '/api/cloud/activate', async ctx => {
+  const code = str(ctx.body.code, 40);
+  if (!code) fail('请输入授权码');
+  const r = await cloudReq('/activate', { method: 'POST', body: { code, device: config.cloud.device, name: os.hostname() } });
+  const d = await r.json();
+  config.cloud.token = d.token;
+  config.cloud.account = d.account;
+  saveConfig();
+  audit(ctx, '开通云备份', `${d.account.planName}，到期 ${fmtDate(new Date(d.account.expires * 1000))}`);
+  return { ...cloudState(), backups: [] };
+}, { admin: true });
+route('POST', '/api/cloud/passphrase', ctx => {
+  const pass = String(ctx.body.pass || '');
+  if (pass.length < 6) fail('备份密码至少 6 位');
+  const salt = crypto.randomBytes(16).toString('hex');
+  const key = crypto.scryptSync(pass, Buffer.from(salt, 'hex'), 32, { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+  const check = crypto.createHash('sha256').update(key).digest('hex');
+  if (config.cloud.keyCheck && config.cloud.keyCheck !== check && config.cloud.account && config.cloud.account.backups > 0)
+    fail('云端已有备份，修改密码会导致旧备份无法解密。请先删除旧备份，或继续使用原来的密码');
+  config.cloud.salt = salt;
+  config.cloud.keyCheck = check;
+  if (ctx.body.remember === false) { delete config.cloud.key; config.cloud.auto = false; }
+  else config.cloud.key = key.toString('base64');
+  saveConfig();
+  audit(ctx, '设置云备份密码', ctx.body.remember === false ? '不记住密码' : '已记住密码');
+  return { ok: true, ...cloudState() };
+}, { admin: true });
+route('POST', '/api/cloud/backup', async ctx => {
+  const d = await cloudBackupNow(ctx.body.pass);
+  audit(ctx, '云备份上传', d.name);
+  return { ...d, ...cloudState() };
+}, { admin: true });
+route('POST', '/api/cloud/download/:id', async ctx => {
+  const d = await cloudDownload(ctx.params.id, ctx.body.pass);
+  return { [RAW]: { type: 'application/octet-stream', body: d.plain } };
+}, { admin: true });
+route('POST', '/api/cloud/restore', async ctx => {
+  const d = await cloudRestore(ctx.params.id || ctx.body.id, ctx.body.pass, ctx);
+  audit(ctx, '从云备份恢复', `文档 ${d.docs} 条`);
+  return d;
+}, { admin: true });
+route('DELETE', '/api/cloud/backups/:id', async ctx => {
+  const r = await cloudReq('/backup/' + encodeURIComponent(ctx.params.id), { method: 'DELETE', token: config.cloud.token });
+  const d = await r.json();
+  config.cloud.account = d.account; saveConfig();
+  audit(ctx, '删除云备份', ctx.params.id);
+  return { ...cloudState(), backups: d.backups || [] };
+}, { admin: true });
+route('POST', '/api/cloud/auto', ctx => {
+  const on = !!ctx.body.enabled;
+  if (on && !config.cloud.key) fail('请先设置并记住备份密码，自动备份需要它');
+  config.cloud.auto = on; saveConfig();
+  audit(ctx, on ? '开启云备份自动上传' : '关闭云备份自动上传');
+  return { ok: true, ...cloudState() };
+}, { admin: true });
 route('POST', '/api/reset-demo', ctx => tx(() => { writeAll(seed()); setMeta('counters', {}); audit(ctx, '重置演示数据'); }), { admin: true });
 // 清空前要再输一次当前账号的登录密码，防止误点或别人用你没锁的电脑清掉数据
 route('POST', '/api/clear', ctx => {
@@ -3053,7 +3269,7 @@ async function notifyTick() {
 // ——这些会把别人锁在门外、往外发请求或打扰作者。数据重置靠部署侧（每小时重启并清空数据目录）。
 const DEMO_BLOCK = [/^POST \/api\/password$/, /^(POST|PUT|DELETE) \/api\/(users|roles)(\/|$)/, /^(PUT|POST) \/api\/settings\/(notify|kdn)(\/|$)/,
   /^POST \/api\/ship\/(eorder|track-all)$/, /^POST \/api\/shipments\/[^/]+\/(track|cancel-eorder)$/, /^POST \/api\/(restore|clear)$/, /^POST \/api\/feedback$/,
-  /^(PUT|DELETE) \/api\/products\/[^/]+\/image$/, /^POST \/api\/expenses\/[^/]+\/images$/];  // 商品图片：公开演示里不让传图，免得有人传不合适的图片给别的访客看
+  /^(PUT|DELETE) \/api\/products\/[^/]+\/image$/, /^POST \/api\/expenses\/[^/]+\/images$/, /^\/api\/cloud\//];  // 商品图片：公开演示里不让传图，免得有人传不合适的图片给别的访客看
 // 在线演示跑在本机 Caddy 后面：只有来自本机的连接才信任 X-Forwarded-For，否则所有访客都是 127.0.0.1，一人输错密码会锁住所有人
 function clientIp(req) {
   const peer = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
@@ -3151,6 +3367,8 @@ server.listen(config.port, listenHost, () => {
   log('访问地址：' + ['127.0.0.1', ...ips].map(ip => `http://${ip}:${config.port}`).join('  '));
   setTimeout(autoBackup, 10e3);
   setInterval(autoBackup, 3600e3);
+  setTimeout(cloudAutoTick, 5 * 60e3);
+  setInterval(cloudAutoTick, 3600e3);
   setInterval(notifyTick, 60e3);
   setInterval(trackTick, 5 * 60e3);
   setTimeout(statsTick, Number(process.env.XERP_STATS_DELAY) || 60e3);

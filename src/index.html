@@ -346,7 +346,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.9.7 · 数据保存在服务器</div>
+    <div class="side-foot">v2.10.0 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -413,6 +413,7 @@ const ICONS = {
   chart:'<path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/>',
   settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
   message:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  cloud:'<path d="M17.5 19a4.5 4.5 0 000-9 6 6 0 00-11.6 1.5A4 4 0 006 19h11.5z"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   download:'<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
@@ -4340,6 +4341,61 @@ function tipModal() {
     <p class="sub-t" style="margin:0">制作不易麻烦给个赏钱。</p>
   </div><div class="m-foot"><button class="btn primary" data-act="closeModal">关闭，进入问题反馈</button></div>`, 'sm');
 }
+/* ================= 页面：云备份（付费云服务） ================= */
+let CLOUD = null, cloudShowPass = false;
+const cloudSize = n => n >= 1024 ** 3 ? (n / 1024 ** 3).toFixed(n % 1024 ** 3 ? 1 : 0) + ' GB' : n >= 1024 ** 2 ? (n / 1024 ** 2).toFixed(n % 1024 ** 2 ? 1 : 0) + ' MB' : Math.ceil(n / 1024) + ' KB';
+const cloudDate = ts => new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false }).slice(0, 16);
+function pageCloud() {
+  $('#view').innerHTML = pageHead('云备份', '数据在本机加密后上传，NAS 故障、丢失或误删都能恢复', `<button class="btn" data-act="cloudRefresh">${ic('refresh')}刷新</button>`) + '<div id="cloudBody"><div class="card"><div class="card-body"><div class="empty">加载中…</div></div></div></div>';
+  cloudLoad();
+}
+async function cloudLoad() {
+  try { CLOUD = await api('GET', '/api/cloud/status'); }
+  catch (e) { if ($('#cloudBody')) $('#cloudBody').innerHTML = `<div class="card"><div class="card-body"><div class="tip-line" style="color:var(--red)">${esc(e.message)}</div></div></div>`; return; }
+  cloudDraw();
+}
+function cloudDraw() {
+  const box = $('#cloudBody'); if (!box || !CLOUD) return;
+  if (!CLOUD.activated) {
+    box.innerHTML = `<div class="grid g-2-1" style="align-items:start">
+      <div class="card"><div class="card-head"><h3>云备份是什么</h3></div><div class="card-body">
+        <div class="setting-row"><div class="sr-group"><b>NAS 坏了也能恢复</b><small>每天自动把数据库备份到云端，换新机器登录后就能恢复</small></div><span class="badge green">加密</span></div>
+        <div class="setting-row"><div class="sr-group"><b>服务器看不到你的数据</b><small>备份在本机用你的密码加密后才上传，云端只存密文</small></div><span class="badge blue">零知识</span></div>
+        <div class="setting-row"><div class="sr-group"><b>容量和有效期由云端控制</b><small>授权码开通，到期或超量会停止上传，不影响本地使用</small></div><span class="badge purple">专业版</span></div>
+        <p class="sub-t" style="margin:14px 0 0">适合没有异地备份、NAS 放在店里或家里的用户。云备份是可选增值服务，不买也不影响现有功能。</p>
+      </div></div>
+      <div class="card"><div class="card-head"><h3>开通 / 续费</h3></div><div class="card-body">
+        ${CLOUD.error ? `<div class="tip-line" style="color:var(--red)">${esc(CLOUD.error)}</div>` : ''}
+        <label class="field"><span>授权码</span><input id="cloudCode" placeholder="XERP-XXXX-XXXX-XXXX" autocomplete="off"></label>
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn primary" data-act="cloudActivate">${ic('check')}开通云备份</button><a class="btn" href="https://www.zhaoyoucai.xyz/xerp-cloud/buy" target="_blank" rel="noopener">${ic('cart')}购买授权码</a></div>
+        <p class="sub-t" style="margin:12px 0 0">付款后授权码会显示在购买页面。输入后立即开通，不需要重启。</p>
+      </div></div>
+    </div>`;
+    return;
+  }
+  const a = CLOUD.account, used = a.used || 0, pct = a.quota ? Math.min(100, used / a.quota * 100) : 0;
+  const backups = CLOUD.backups || [];
+  const rows = backups.map(b => `<tr><td>${esc(cloudDate(b.created))}</td><td>${esc(b.name)}</td><td class="num">${cloudSize(b.size)}</td>
+    <td><div class="ops"><button class="btn sm" data-act="cloudRestore" data-id="${esc(b.id)}">恢复</button><button class="btn sm" data-act="cloudDownload" data-id="${esc(b.id)}">下载</button><button class="btn sm danger-text" data-act="cloudDelete" data-id="${esc(b.id)}">删除</button></div></td></tr>`).join('');
+  box.innerHTML = `
+    ${CLOUD.error ? `<div class="card"><div class="card-body"><div class="tip-line" style="color:var(--red)">${esc(CLOUD.error)}</div></div></div>` : ''}
+    <div class="grid g4" style="margin-bottom:12px">
+      <div class="card"><div class="card-body"><div class="sub-t">当前套餐</div><div style="font-size:20px;font-weight:600">${esc(a.planName)}</div><div class="sub-t">到期 ${esc(cloudDate(a.expires))}</div></div></div>
+      <div class="card"><div class="card-body"><div class="sub-t">云端空间</div><div style="font-size:20px;font-weight:600">${cloudSize(used)} <span class="sub-t" style="font-size:13px">/ ${cloudSize(a.quota)}</span></div><div style="height:6px;background:var(--border);border-radius:4px;margin-top:8px;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:var(--primary)"></i></div></div></div>
+      <div class="card"><div class="card-body"><div class="sub-t">已保存</div><div style="font-size:20px;font-weight:600">${a.backups} <span class="sub-t" style="font-size:13px">份</span></div><div class="sub-t">最多保留 ${a.maxBackups} 份</div></div></div>
+      <div class="card"><div class="card-body"><div class="sub-t">上次上传</div><div style="font-size:16px;font-weight:600;margin-top:4px">${CLOUD.local.lastUpload ? esc(fmtTime(CLOUD.local.lastUpload)) : '还没有上传'}</div><div class="sub-t">${CLOUD.local.auto ? '自动备份已开启' : '自动备份未开启'}</div></div></div>
+    </div>
+    <div class="card" style="margin-bottom:12px"><div class="card-head"><h3>备份密码</h3>${CLOUD.local.hasKey ? `<button class="btn sm" data-act="cloudPassToggle">修改密码</button>` : ''}</div><div class="card-body">
+      ${CLOUD.local.hasKey && !cloudShowPass ? '<p class="sub-t" style="margin:0">已设置并记住密码，备份时不需要再输入。<b>密码丢失后云端备份无法解密</b>，请另外记一份。</p>' : `
+        <label class="field"><span>备份密码（至少 6 位，务必记住）</span><input id="cloudPass" type="password" autocomplete="new-password" placeholder="不会上传，只用来加密备份"></label>
+        <label class="chk" style="margin-top:10px"><input type="checkbox" id="cloudRemember" checked>在这台设备记住密码（自动备份需要）</label>
+        <div style="margin-top:12px"><button class="btn primary" data-act="cloudSetPass">${ic('check')}保存密码</button></div>`}
+    </div></div>
+    <div class="card"><div class="card-head"><h3>云端备份</h3><div style="display:flex;gap:8px;align-items:center"><label class="chk"><input type="checkbox" data-act="cloudAuto" ${CLOUD.local.auto ? 'checked' : ''}>每天自动上传</label><button class="btn primary" data-act="cloudBackup">${ic('upload')}立即备份</button></div></div><div class="card-body">
+      <div class="table-wrap"><table class="tbl"><thead><tr><th>时间</th><th>文件名</th><th class="num">大小</th><th>操作</th></tr></thead><tbody>${rows || '<tr><td colspan="4"><div class="empty">还没有云端备份，点右上角「立即备份」</div></td></tr>'}</tbody></table></div>
+      <p class="sub-t" style="margin:12px 0 0">恢复会覆盖当前全部业务数据，恢复前系统会自动在本地 backups 目录留一份当前数据。</p>
+    </div></div>`;
+}
 function pageFeedback() {
   $('#view').innerHTML = pageHead('问题反馈', '遇到问题或有建议，直接留言给作者；作者的回复会显示在这里', `<button class="btn" data-act="tipOpen">${ic('coin')}打赏作者</button>`) + `
   <div class="grid g-2-1" style="align-items:start">
@@ -4846,11 +4902,12 @@ const NAV = [
   {id:'employees', label:'人事管理', icon:'id', fn:pageEmployees, perm:'hr'},
   {id:'reports', label:'统计报表', icon:'chart', fn:pageReports, perm:'reports'},
   {group:'系统'},
+  {id:'cloud', label:'云备份', icon:'cloud', fn:pageCloud, adminOnly:true, demoHide:true},
   {id:'feedback', label:'问题反馈', icon:'message', fn:pageFeedback, badge:() => db.settings.feedbackUnread || 0},
   {id:'settings', label:'系统设置', icon:'settings', fn:pageSettings}
 ];
 const PAGES = Object.fromEntries(NAV.filter(n => n.id).map(n => [n.id, n]));
-const visiblePage = n => !n.perm || [].concat(n.perm).some(can);
+const visiblePage = n => (!n.adminOnly || isAdmin()) && (!n.demoHide || !window.XERP_DEMO) && (!n.perm || [].concat(n.perm).some(can));
 const current = () => { const p = location.hash.replace('#/', ''); return PAGES[p] && visiblePage(PAGES[p]) ? p : (NAV.find(n => n.id && visiblePage(n)) || PAGES.settings).id; };
 function go(p) { if (location.hash === '#/' + p) render(); else location.hash = '#/' + p; }
 function applyTheme() {
@@ -4980,6 +5037,64 @@ const A = {
   nativeServer: () => NATIVE && NATIVE.changeServer(),
   goBatches: () => { $('#bellDrop').classList.remove('show'); ui.invTab = 'batch'; const st = getState('batches'); st.f = {}; go('inventory'); },
   catManage: () => nlManage('cat'), deptManage: () => nlManage('dept'), nlAdd: k => nlAdd(k), nlRename: v => nlRename(...split(v)), nlDel: v => nlDel(...split(v)), tipOpen: () => tipModal(),
+  cloudRefresh: () => cloudLoad(),
+  cloudActivate: async () => {
+    const code = ($('#cloudCode') || {}).value?.trim();
+    if (!code) return toast('请输入授权码', 'error');
+    try { CLOUD = await api('POST', '/api/cloud/activate', { code }); cloudShowPass = true; cloudDraw(); toast('云备份已开通，请设置备份密码'); }
+    catch (e) { toast(e.message, 'error'); }
+  },
+  cloudSetPass: async () => {
+    const pass = ($('#cloudPass') || {}).value || '';
+    if (pass.length < 6) return toast('备份密码至少 6 位', 'error');
+    try { CLOUD = await api('POST', '/api/cloud/passphrase', { pass, remember: $('#cloudRemember').checked }); cloudShowPass = false; cloudDraw(); toast('备份密码已保存'); }
+    catch (e) { toast(e.message, 'error'); }
+  },
+  cloudPassToggle: () => { cloudShowPass = true; cloudDraw(); },
+  cloudBackup: async () => {
+    const pass = ($('#cloudPass') || {}).value || '';
+    if (!CLOUD.local.hasKey && !pass) return toast('请先设置备份密码', 'error');
+    try {
+      const r = await api('POST', '/api/cloud/backup', { pass });
+      CLOUD = { ...CLOUD, ...r, backups: r.backups || [] };
+      cloudDraw(); toast('已上传 ' + cloudSize(r.size));
+    } catch (e) { toast(e.message, 'error'); }
+  },
+  cloudAuto: async (id, el) => {
+    try {
+      const r = await api('POST', '/api/cloud/auto', { enabled: el.checked });
+      CLOUD = { ...CLOUD, ...r }; cloudDraw();
+      toast(el.checked ? '每天自动上传已开启' : '自动上传已关闭');
+    } catch (e) { el.checked = !el.checked; toast(e.message, 'error'); }
+  },
+  cloudDelete: id => confirmBox('删除这份云端备份？删除后不能再恢复。', async () => {
+    try { const r = await api('DELETE', '/api/cloud/backups/' + id); CLOUD = { ...CLOUD, ...r }; cloudDraw(); toast('已删除'); }
+    catch (e) { toast(e.message, 'error'); }
+  }, { title: '删除云备份', okText: '删除' }),
+  cloudRestore: id => confirmBox('恢复会用这份云备份覆盖当前全部业务数据。恢复前会自动在本地 backups 目录留一份当前数据。确定继续？', async () => {
+    const pass = ($('#cloudPass') || {}).value || '';
+    if (!CLOUD.local.hasKey && !pass) return toast('请输入备份密码', 'error');
+    try {
+      await api('POST', '/api/cloud/restore', { id, pass });
+      toast('恢复完成，请用备份里的管理员账号重新登录', 'info');
+      LS.set('token', null); ME = null;
+      setTimeout(() => location.reload(), 1600);
+    } catch (e) { toast(e.message, 'error'); }
+  }, { title: '从云备份恢复', okText: '覆盖并恢复' }),
+  cloudDownload: async id => {
+    const pass = ($('#cloudPass') || {}).value || '';
+    if (!CLOUD.local.hasKey && !pass) return toast('请输入备份密码', 'error');
+    try {
+      const res = await fetch('/api/cloud/download/' + encodeURIComponent(id), {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + LS.get('token') },
+        body: JSON.stringify({ pass }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || '下载失败'); }
+      const blob = await res.blob(), a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'xerp-' + today() + '.db'; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch (e) { toast(e.message, 'error'); }
+  },
   whManage, whEdit: id => { closeModal(); whEdit(id); }, whDel: id => { closeModal(); whDel(id); },
   transferNew: () => transferModal(), transferView: id => { closeModal(); transferView(id); }, transferPrint: id => transferPrint(id), transferVoid: id => { closeModal(); transferVoid(id); },
   expirySave: () => mutate('PUT', '/api/settings/expiry', {days:+$('#expDays').value}, '临期提醒天数已保存'),

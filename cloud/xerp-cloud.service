@@ -1,0 +1,20 @@
+[Unit]
+Description=x.erp cloud backup (paid add-on)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+StateDirectory=xerp-cloud
+Environment=CLOUD_PORT=8095
+Environment=CLOUD_DIR=/var/lib/xerp-cloud
+Environment=CLOUD_BASE=https://www.zhaoyoucai.xyz/xerp-cloud
+Environment=CLOUD_TOTAL_QUOTA=12884901888
+ExecStart=/usr/local/bin/node /opt/xerp-cloud/server.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
