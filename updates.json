@@ -1,41 +1,40 @@
 {
   "schema": 1,
-  "latest": "2.9.5",
-  "publishedAt": "2026-11-14T17:57:05+08:00",
+  "latest": "2.9.6",
+  "publishedAt": "2026-11-15T11:56:51+08:00",
   "notes": [
-    "修复安卓 WebView 不兼容 CSS inset 导致问题反馈打赏弹窗不显示的问题",
-    "安卓客户端应用内更新、问题反馈打赏弹窗、FIFO 成本、BOM 自动组装 / 拆卸等继续保留。"
+    "打赏后请留下联系方式，我们将优先修改您的任务要求。其余功能与 2.9.5 一致。"
   ],
   "packages": {
     "fnos": {
-      "version": "2.9.5",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.5.fpk",
-      "sha256": "6bf94a921bc32f8ba5a25d801d025c718badeccc1da833d12152d33b988f51ce",
-      "size": 678005,
-      "file": "xerp-2.9.5.fpk",
+      "version": "2.9.6",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.6.fpk",
+      "sha256": "70c8dd5774a36f55a82d2162ffa13c7b991fd2aa13e2a463c0cb2a2a6a3c735e",
+      "size": 678056,
+      "file": "xerp-2.9.6.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.9.5",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.5-windows-x64-setup.exe",
-      "sha256": "9af99a35c3d28ffaba507b202dc1d67153dc8d44ea04169636d1f6c26dd0dc92",
-      "size": 24583383,
-      "file": "xerp-2.9.5-windows-x64-setup.exe",
+      "version": "2.9.6",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.6-windows-x64-setup.exe",
+      "sha256": "d98d5652d62b7d1b47ffbd8b1b6c1db38e2d89279a9acc3cc3d588124518c139",
+      "size": 24584473,
+      "file": "xerp-2.9.6-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.9.5",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.5-android.apk",
-      "sha256": "09ccdcef7dd460abf6f2ed097cecbbf11c8b00ae41091cf7e43c4da958dd344f",
+      "version": "2.9.6",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.6-android.apk",
+      "sha256": "0f11ee47f8035eaf446ca20735a30d7c52642e2c0002e4da927f1f75b85f9c8f",
       "size": 275233,
-      "file": "xerp-2.9.5-android.apk",
+      "file": "xerp-2.9.6-android.apk",
       "kind": "apk",
-      "versionCode": 20905
+      "versionCode": 20906
     },
     "docker": {
-      "version": "2.9.5",
+      "version": "2.9.6",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.9.5"
+      "image": "ghcr.io/zyc009234/xerp:2.9.6"
     }
   }
 }

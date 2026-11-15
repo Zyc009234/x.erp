@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.9.6": {
+          "changelog": "打赏弹窗文案调整：打赏后请留下联系方式，我们将优先修改您的任务要求。其余功能与 2.9.5 一致。",
+          "updated_at": "2026-11-15T11:56:52+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.6.fpk",
+              "sha256": "70c8dd5774a36f55a82d2162ffa13c7b991fd2aa13e2a463c0cb2a2a6a3c735e",
+              "size": 678056
+            }
+          }
+        },
         "2.9.5": {
           "changelog": "根据用户反馈继续改进：1）修复安卓 WebView 不兼容 CSS inset 导致问题反馈打赏弹窗不显示的问题；2）安卓客户端应用内更新、问题反馈打赏弹窗、FIFO 成本、BOM 自动组装 / 拆卸等继续保留。",
           "updated_at": "2026-11-14T17:56:22+08:00",
@@ -53,17 +64,6 @@
               "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.4.fpk",
               "sha256": "4a075b29cd8dd92b4688c6e6b3ba5f90f802dffdab3e8a24f0d83713a9359c02",
               "size": 678042
-            }
-          }
-        },
-        "2.9.3": {
-          "changelog": "根据用户反馈继续改进：1）新增应用内检查更新，只检查版本和下载安装包，下载前必须用户确认，不会自动安装；飞牛 / Windows 显示保存路径和安装步骤，Docker 显示升级命令；2）FIFO 成本、BOM 自动组装 / 拆卸、商品分类父子级等此前功能继续保留。",
-          "updated_at": "2026-11-14T17:01:43+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.3.fpk",
-              "sha256": "14022be8e7b4f45d353b61e643797b11028242d9bb54d6cd0c179306f0890e66",
-              "size": 678056
             }
           }
         }
