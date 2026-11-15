@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.10.1": {
+          "changelog": "云服务套餐（10 元起）：云备份 + 远程访问。新增远程访问隧道，不用公网 IP 也能在外面打开 ERP；不购买不影响基础功能。",
+          "updated_at": "2026-11-15T17:04:41+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.1.fpk",
+              "sha256": "e5e87f138e73e3f07bb36ea293d66d4218dfef289b2eb9f218629f44e0f0e1eb",
+              "size": 686149
+            }
+          }
+        },
         "2.10.0": {
           "changelog": "新增可选「云备份」：授权码开通、本机加密上传、云端保留多份、NAS 故障可一键恢复；不购买不影响基础功能。其余功能与 2.9.7 一致。",
           "updated_at": "2026-11-15T14:36:29+08:00",
@@ -53,17 +64,6 @@
               "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.7.fpk",
               "sha256": "43ee780b12568e2fbc33d7110761edcfd6c54540e18b07096a2a816d531bbcaf",
               "size": 677917
-            }
-          }
-        },
-        "2.9.6": {
-          "changelog": "打赏弹窗文案调整：打赏后请留下联系方式，我们将优先修改您的任务要求。其余功能与 2.9.5 一致。",
-          "updated_at": "2026-11-15T11:56:52+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.9.6.fpk",
-              "sha256": "70c8dd5774a36f55a82d2162ffa13c7b991fd2aa13e2a463c0cb2a2a6a3c735e",
-              "size": 678056
             }
           }
         }

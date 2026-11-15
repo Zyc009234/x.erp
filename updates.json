@@ -1,41 +1,41 @@
 {
   "schema": 1,
-  "latest": "2.10.0",
-  "publishedAt": "2026-11-15T14:36:29+08:00",
+  "latest": "2.10.1",
+  "publishedAt": "2026-11-15T17:04:41+08:00",
   "notes": [
-    "授权码开通、本机加密上传、云端保留多份、NAS 故障可一键恢复",
-    "不购买不影响基础功能。其余功能与 2.9.7 一致。"
+    "云备份 + 远程访问。新增远程访问隧道，不用公网 IP 也能在外面打开 ERP",
+    "不购买不影响基础功能。"
   ],
   "packages": {
     "fnos": {
-      "version": "2.10.0",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.0.fpk",
-      "sha256": "630cb346a2624d4b6de2ac404e62c1d6daac6b9473e5f1ec2bb39d61f1b989a8",
-      "size": 684583,
-      "file": "xerp-2.10.0.fpk",
+      "version": "2.10.1",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.1.fpk",
+      "sha256": "e5e87f138e73e3f07bb36ea293d66d4218dfef289b2eb9f218629f44e0f0e1eb",
+      "size": 686149,
+      "file": "xerp-2.10.1.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.10.0",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.0-windows-x64-setup.exe",
-      "sha256": "5f506270301b357bdbd13c45eddee2f1fb724559a9c62c9700df5f7efe938e88",
-      "size": 24589540,
-      "file": "xerp-2.10.0-windows-x64-setup.exe",
+      "version": "2.10.1",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.1-windows-x64-setup.exe",
+      "sha256": "6ccf2e08170945a92b3425513ba829b829d7a5ea1d9cdd4b59839b6e2ca642a4",
+      "size": 24589789,
+      "file": "xerp-2.10.1-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.10.0",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.0-android.apk",
-      "sha256": "76bd16555ab79938890193e4690a39f3cc7000eacdced2985071c9d03bbd9e94",
+      "version": "2.10.1",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.10.1-android.apk",
+      "sha256": "c0a4aba001a7d3a7c28e3b7ac20bc154eae1ca5c62f3729e69c44b4be365892f",
       "size": 275233,
-      "file": "xerp-2.10.0-android.apk",
+      "file": "xerp-2.10.1-android.apk",
       "kind": "apk",
-      "versionCode": 21000
+      "versionCode": 21001
     },
     "docker": {
-      "version": "2.10.0",
+      "version": "2.10.1",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.10.0"
+      "image": "ghcr.io/zyc009234/xerp:2.10.1"
     }
   }
 }

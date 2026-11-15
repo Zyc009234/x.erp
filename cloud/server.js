@@ -18,6 +18,7 @@ const DIR = process.env.CLOUD_DIR || '/var/lib/xerp-cloud';
 const PORT = +(process.env.CLOUD_PORT || 8095);
 const BASE = (process.env.CLOUD_BASE || 'https://www.zhaoyoucai.xyz/xerp-cloud').replace(/\/+$/, '');
 const TOTAL_QUOTA = +(process.env.CLOUD_TOTAL_QUOTA || 12 * 1024 ** 3);
+const TUNNEL_DOMAIN = process.env.TUNNEL_DOMAIN || 'xerp.zhaoyoucai.xyz';
 const BLOB_DIR = path.join(DIR, 'blobs');
 const DB_FILE = path.join(DIR, 'cloud.db');
 const PW_FILE = path.join(DIR, 'admin.pw');
@@ -65,6 +66,11 @@ db.exec(`
     text TEXT, at INTEGER, matched TEXT
   );
 `);
+for (const col of ['slug', 'tunnel_hash']) {
+  try { db.exec(`ALTER TABLE accounts ADD COLUMN ${col} TEXT`); } catch (e) {}
+}
+const tunnels = new Map();   // account id -> { socket }
+const tunnelPending = new Map(); // request id -> { res, timer }
 
 function now() { return Math.floor(Date.now() / 1000); }
 function json(res, code, obj) {
@@ -225,18 +231,21 @@ function activate(code, device, name) {
   let acc = db.prepare('SELECT * FROM accounts WHERE device = ?').get(device);
   const ts = now();
   const token = crypto.randomBytes(32).toString('hex');
+  const slug = acc?.slug || crypto.randomBytes(5).toString('hex');
+  const tunnelSecret = acc?.tunnel_hash ? null : crypto.randomBytes(24).toString('hex');
+  const tunnelHash = tunnelSecret ? crypto.createHash('sha256').update(tunnelSecret).digest('hex') : acc.tunnel_hash;
   db.exec('BEGIN IMMEDIATE');
   try {
     if (c.used_by && (!acc || c.used_by !== acc.id)) throw Object.assign(new Error('这个授权码已经被其他设备使用'), { status: 409 });
     if (!acc) {
       const id = 'acc_' + crypto.randomBytes(12).toString('hex');
-      db.prepare('INSERT INTO accounts (id, token_hash, device, name, plan, quota, expires, created, last_seen, note) VALUES (?,?,?,?,?,?,?,?,?,?)')
-        .run(id, tokenHash(token), device, String(name || '').slice(0, 60) || null, c.plan, c.quota, ts + c.days * 86400, ts, ts, c.note || null);
+      db.prepare('INSERT INTO accounts (id, token_hash, device, name, plan, quota, expires, created, last_seen, note, slug, tunnel_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+        .run(id, tokenHash(token), device, String(name || '').slice(0, 60) || null, c.plan, c.quota, ts + c.days * 86400, ts, ts, c.note || null, slug, tunnelHash);
       acc = db.prepare('SELECT * FROM accounts WHERE id = ?').get(id);
     } else {
       const base = Math.max(ts, acc.expires || 0);
-      db.prepare('UPDATE accounts SET token_hash = ?, plan = ?, quota = MAX(quota, ?), expires = ?, name = COALESCE(?, name) WHERE id = ?')
-        .run(tokenHash(token), c.plan, c.quota, base + c.days * 86400, String(name || '').slice(0, 60) || null, acc.id);
+      db.prepare('UPDATE accounts SET token_hash = ?, plan = ?, quota = MAX(quota, ?), expires = ?, name = COALESCE(?, name), slug = COALESCE(slug, ?), tunnel_hash = COALESCE(tunnel_hash, ?) WHERE id = ?')
+        .run(tokenHash(token), c.plan, c.quota, base + c.days * 86400, String(name || '').slice(0, 60) || null, slug, tunnelHash, acc.id);
     }
     if (!c.used_by) db.prepare('UPDATE codes SET used_by = ?, used_at = ? WHERE code = ?').run(acc.id, ts, code);
     db.exec('COMMIT');
@@ -252,6 +261,8 @@ function activate(code, device, name) {
       plan: a.plan, planName: PLANS[a.plan].name, quota: a.quota, expires: a.expires,
       used: u.used, backups: u.n, maxBackups: PLANS[a.plan].max, device: a.device, name: a.name,
     },
+    slug: a.slug,
+    tunnelSecret,
   };
 }
 
@@ -264,6 +275,8 @@ function status(a) {
       used: u.used, backups: u.n, maxBackups: PLANS[a.plan]?.max || 10, device: a.device, name: a.name,
     },
     backups: list,
+    remote: { url: a.slug ? `https://${a.slug}.${TUNNEL_DOMAIN}` : null, online: tunnels.has(a.id) },
+    slug: a.slug,
   };
 }
 
@@ -342,11 +355,11 @@ ${flash ? `<div class=flash>${esc(flash)}</div>` : ''}
 }
 
 function buyPage() {
-  const cards = Object.entries(PLANS).map(([k, p]) => `<div class=plan><h3>${p.name}</h3><div class=price>¥${p.price}<small>/年</small></div><ul><li>${fmtBytes(p.quota)} 加密云备份空间</li><li>保留最近 ${p.max} 份备份</li><li>NAS 故障可下载恢复</li><li>服务器只存密文</li></ul><button onclick="buy('${k}')">购买</button></div>`).join('');
-  return `<!doctype html><html lang=zh-CN><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>x.erp 云备份</title>
+  const cards = Object.entries(PLANS).map(([k, p]) => `<div class=plan><h3>${p.name}</h3><div class=price>¥${p.price}<small>/年</small></div><ul><li>${fmtBytes(p.quota)} 加密云备份空间</li><li>保留最近 ${p.max} 份备份</li><li>远程访问（独立域名）</li><li>NAS 故障可下载恢复</li><li>服务器只存密文</li></ul><button onclick="buy('${k}')">购买</button></div>`).join('');
+  return `<!doctype html><html lang=zh-CN><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>x.erp 云服务</title>
 <style>body{font:15px/1.7 system-ui,"Microsoft YaHei";margin:0;background:#0f172a;color:#e2e8f0}main{max-width:960px;margin:0 auto;padding:48px 16px}h1{font-size:30px;margin:0 0 8px}p.sub{color:#94a3b8;margin:0 0 18px}.contact{margin:0 0 24px}.contact input{width:100%;max-width:360px;padding:10px 12px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font:inherit}.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.plan{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:22px}.plan h3{margin:0 0 6px;font-size:18px}.price{font-size:30px;font-weight:700;margin-bottom:14px}.price small{font-size:13px;color:#94a3b8;font-weight:400}.plan ul{padding-left:18px;color:#cbd5e1;font-size:13px}.plan button{width:100%;padding:10px;border:0;border-radius:10px;background:#6366f1;color:#fff;font:inherit;cursor:pointer}.note{margin-top:26px;color:#94a3b8;font-size:13px}#msg{margin-top:18px;padding:14px;border-radius:10px;background:#1e293b;display:none;white-space:pre-wrap}#msg.show{display:block}</style></head>
-<body><main><h1>x.erp 云备份</h1><p class=sub>数据在本机加密后上传，服务器看不到你的业务数据。换机、NAS 故障、误删都能恢复。</p><div class=contact><input id=contact placeholder="微信 / 手机号（选填，方便补发授权码）"></div><div id=paystate style="color:#94a3b8;font-size:13px;margin:-14px 0 20px">正在检查收款助手…</div><div class=plans>${cards}</div><div id=msg></div>
-<p class=note>购买后授权码会显示在本页，也会稍后发到你留下的联系方式。授权码在 x.erp「云备份」页面输入即可开通。</p>
+<body><main><h1>x.erp 云服务</h1><p class=sub>加密云备份 + 远程访问。数据在本机加密后上传，服务器看不到你的业务数据；在外面也能打开自己的 ERP。</p><div class=contact><input id=contact placeholder="微信 / 手机号（选填，方便补发授权码）"></div><div id=paystate style="color:#94a3b8;font-size:13px;margin:-14px 0 20px">正在检查收款助手…</div><div class=plans>${cards}</div><div id=msg></div>
+<p class=note>购买后授权码会显示在本页，也会稍后发到你留下的联系方式。授权码在 x.erp「云服务」页面输入即可开通，10 元起含云备份和远程访问。</p>
 <script>
 async function pollOrder(no,keep){
   const box=document.getElementById('msg');box.className='show';
@@ -379,7 +392,7 @@ async function buy(plan){
       const m=await fetch('api/order/relay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan,contact:(document.getElementById('contact')||{}).value||''})});
       const o=await m.json();
       if(!m.ok) throw new Error(o.error||'创建订单失败');
-      box.innerHTML='订单号 <b>'+o.order+'</b>，应付 <b>¥'+(o.amount/100).toFixed(2)+'</b><br>金额包含随机尾数，请<b>精确支付</b>这个金额。付款后这里会自动显示授权码。<br><img src="https://www.zhaoyoucai.xyz/xerp/img/wechat-pay.jpg" alt="微信收款码" style="width:190px;margin-top:10px;border-radius:10px;background:#fff">';
+      box.innerHTML='订单号 <b>'+o.order+'</b>，应付 <b>¥'+(o.amount/100).toFixed(2)+'</b><br>金额包含随机尾数，请<b>精确支付</b>这个金额。付款后这里会自动显示授权码。<br><img src="https://www.zhaoyoucai.xyz/xerp/img/wechat-pay-20261115.jpg" alt="微信收款码" style="width:190px;margin-top:10px;border-radius:10px;background:#fff">';
       pollOrder(o.order,true);
       return;
     }
@@ -390,7 +403,7 @@ async function buy(plan){
       const m=await fetch('api/order/manual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan,contact:(document.getElementById('contact')||{}).value||''})});
       const o=await m.json();
       if(!m.ok) throw new Error(o.error||'创建订单失败');
-      box.innerHTML='订单号 <b>'+o.order+'</b>，应付 <b>¥'+(o.amount/100).toFixed(2)+'</b><br>请用微信扫码支付，付款后把订单号发给作者；作者确认后这里会自动显示授权码。<br><img src="https://www.zhaoyoucai.xyz/xerp/img/wechat-pay.jpg" alt="微信收款码" style="width:190px;margin-top:10px;border-radius:10px;background:#fff">';
+      box.innerHTML='订单号 <b>'+o.order+'</b>，应付 <b>¥'+(o.amount/100).toFixed(2)+'</b><br>请用微信扫码支付，付款后把订单号发给作者；作者确认后这里会自动显示授权码。<br><img src="https://www.zhaoyoucai.xyz/xerp/img/wechat-pay-20261115.jpg" alt="微信收款码" style="width:190px;margin-top:10px;border-radius:10px;background:#fff">';
       pollOrder(o.order,true);
       return;
     }
@@ -400,11 +413,97 @@ async function buy(plan){
 </script></main></body></html>`;
 }
 
+/* ================= 远程访问隧道（NAS 主动连云，外部访问子域名） ================= */
+function wsAccept(key) {
+  return crypto.createHash('sha1').update(String(key) + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+}
+function wsFrame(payload, opcode = 1) {
+  const len = payload.length;
+  let h;
+  if (len < 126) h = Buffer.from([0x80 | opcode, len]);
+  else if (len < 65536) { h = Buffer.alloc(4); h[0] = 0x80 | opcode; h[1] = 126; h.writeUInt16BE(len, 2); }
+  else { h = Buffer.alloc(10); h[0] = 0x80 | opcode; h[1] = 127; h.writeBigUInt64BE(BigInt(len), 2); }
+  return Buffer.concat([h, payload]);
+}
+function wsSend(socket, obj) {
+  try { socket.write(wsFrame(Buffer.from(JSON.stringify(obj)))); } catch (e) {}
+}
+function wsRead(socket, onMessage) {
+  let buf = Buffer.alloc(0), parts = [], total = 0;
+  socket.on('data', chunk => {
+    buf = Buffer.concat([buf, chunk]);
+    while (buf.length >= 2) {
+      const b0 = buf[0], b1 = buf[1], fin = !!(b0 & 0x80), op = b0 & 0x0f, masked = !!(b1 & 0x80);
+      let len = b1 & 0x7f, off = 2;
+      if (len === 126) { if (buf.length < 4) return; len = buf.readUInt16BE(2); off = 4; }
+      else if (len === 127) {
+        if (buf.length < 10) return;
+        const big = buf.readBigUInt64BE(2);
+        if (big > 30n * 1024n * 1024n) { socket.destroy(); return; }
+        len = Number(big); off = 10;
+      }
+      let mask = null;
+      if (masked) { if (buf.length < off + 4) return; mask = buf.subarray(off, off + 4); off += 4; }
+      if (buf.length < off + len) return;
+      let payload = Buffer.from(buf.subarray(off, off + len));
+      buf = buf.subarray(off + len);
+      if (mask) for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i % 4];
+      if (op === 0x8) { try { socket.end(); } catch (e) {} return; }
+      if (op === 0x9) { try { socket.write(wsFrame(payload, 0xA)); } catch (e) {} continue; }
+      if (op === 0xA) continue;
+      if (op === 0x1 || op === 0x2) {
+        parts = [payload]; total = payload.length;
+        if (fin) { const s = Buffer.concat(parts).toString('utf8'); parts = []; total = 0; onMessage(s); }
+      } else if (op === 0x0) {
+        parts.push(payload); total += payload.length;
+        if (total > 30 * 1024 * 1024) { socket.destroy(); return; }
+        if (fin) { const s = Buffer.concat(parts).toString('utf8'); parts = []; total = 0; onMessage(s); }
+      }
+    }
+  });
+}
+async function remoteProxy(req, res, host) {
+  const slug = host.split('.')[0].toLowerCase();
+  const a = /^[0-9a-f]{10}$/.test(slug) ? db.prepare('SELECT * FROM accounts WHERE slug = ?').get(slug) : null;
+  if (!a) { res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end('<h1>远程地址不存在</h1>'); }
+  if (a.expires < now()) { res.writeHead(402, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end('<h1>远程访问已到期</h1><p>请在 x.erp 里续费。</p>'); }
+  const tun = tunnels.get(a.id);
+  if (!tun) {
+    res.writeHead(502, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end('<h1>远程访问离线</h1><p>NAS 上的 x.erp 没有连上云端。请确认 NAS 开机、x.erp 正在运行、远程访问已开启。</p>');
+  }
+  let reqBody;
+  try { reqBody = await body(req, 25 * 1024 * 1024); }
+  catch (e) { res.writeHead(413); return res.end('请求太大'); }
+  const id = crypto.randomBytes(8).toString('hex');
+  const headers = {};
+  for (const [k, v] of Object.entries(req.headers)) {
+    if (['host', 'connection', 'content-length', 'transfer-encoding', 'upgrade', 'keep-alive'].includes(k)) continue;
+    headers[k] = v;
+  }
+  const item = { res, timer: null };
+  item.timer = setTimeout(() => {
+    tunnelPending.delete(id);
+    if (!res.headersSent) { res.writeHead(504, { 'Content-Type': 'text/html; charset=utf-8' }); res.end('<h1>远程访问超时</h1>'); }
+  }, 30000);
+  tunnelPending.set(id, item);
+  wsSend(tun.socket, { type: 'req', id, method: req.method, path: req.url, headers, body: reqBody.toString('base64') });
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const p = url.pathname;
+  const host = String(req.headers.host || '').split(':')[0].toLowerCase();
   try {
+    if (host.endsWith('.' + TUNNEL_DOMAIN)) return await remoteProxy(req, res, host);
     if (req.method === 'GET' && (p === '/api/ping' || p === '/ping')) return json(res, 200, { ok: true, app: 'XERP-CLOUD', version: 1, plans: Object.keys(PLANS).length });
+    if (req.method === 'GET' && p === '/api/tunnel/ask') {
+      const domain = String(url.searchParams.get('domain') || '').split(':')[0].toLowerCase();
+      const slug = domain.endsWith('.' + TUNNEL_DOMAIN) ? domain.slice(0, -TUNNEL_DOMAIN.length - 1) : '';
+      const a = /^[0-9a-f]{10}$/.test(slug) ? db.prepare('SELECT * FROM accounts WHERE slug = ?').get(slug) : null;
+      res.writeHead(a && a.expires >= now() ? 200 : 403, { 'Content-Type': 'text/plain' });
+      return res.end(a && a.expires >= now() ? 'ok' : 'no');
+    }
     if (req.method === 'GET' && p === '/api/plans') return json(res, 200, { plans: Object.entries(PLANS).map(([k, v]) => ({ key: k, name: v.name, quota: v.quota, days: v.days, max: v.max, price: v.price })), payment: !!process.env.EPAY_URL });
     if (req.method === 'GET' && p === '/api/relay/status') return json(res, 200, relayOnline());
     if (req.method === 'GET' && (p === '/' || p === '/buy')) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(buyPage()); }
@@ -593,6 +692,55 @@ const server = http.createServer(async (req, res) => {
     if (code >= 500) console.error(new Date().toISOString(), e.stack || e.message);
     if (!res.headersSent) fail(res, code, e.message || '服务器错误');
   }
+});
+
+server.on('upgrade', (req, socket, head) => {
+  const u = new URL(req.url, 'http://localhost');
+  if (u.pathname !== '/tunnel') { socket.destroy(); return; }
+  const device = String(u.searchParams.get('device') || '');
+  const secret = String(u.searchParams.get('secret') || '');
+  const a = db.prepare('SELECT * FROM accounts WHERE device = ?').get(device);
+  const hash = crypto.createHash('sha256').update(secret).digest('hex');
+  if (!a || !a.tunnel_hash || a.expires < now() || !safeEqualHex(hash, a.tunnel_hash)) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+  const key = req.headers['sec-websocket-key'];
+  if (!key) { socket.destroy(); return; }
+  socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + wsAccept(key) + '\r\n\r\n');
+  if (head && head.length) socket.unshift(head);
+  const old = tunnels.get(a.id);
+  if (old && old.socket !== socket) { try { old.socket.destroy(); } catch (e) {} }
+  tunnels.set(a.id, { socket });
+  console.log(new Date().toISOString(), 'tunnel connected', a.id, a.slug);
+  socket.on('error', () => {});
+  socket.on('close', () => {
+    if (tunnels.get(a.id)?.socket === socket) {
+      tunnels.delete(a.id);
+      console.log(new Date().toISOString(), 'tunnel closed', a.id);
+    }
+  });
+  wsRead(socket, text => {
+    let msg;
+    try { msg = JSON.parse(text); } catch (e) { return; }
+    if (msg.type === 'ping') { wsSend(socket, { type: 'pong' }); return; }
+    if (msg.type !== 'res') return;
+    const item = tunnelPending.get(msg.id);
+    if (!item) return;
+    tunnelPending.delete(msg.id);
+    clearTimeout(item.timer);
+    const res = item.res;
+    if (res.writableEnded) return;
+    const headers = msg.headers && typeof msg.headers === 'object' ? { ...msg.headers } : {};
+    delete headers['transfer-encoding'];
+    delete headers['content-length'];
+    delete headers['connection'];
+    delete headers['keep-alive'];
+    const buf = Buffer.from(msg.body || '', 'base64');
+    headers['content-length'] = String(buf.length);
+    try { res.writeHead(msg.status || 502, headers); res.end(buf); } catch (e) { try { res.end(); } catch (x) {} }
+  });
 });
 
 server.listen(PORT, '127.0.0.1', () => {

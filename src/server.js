@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.10.0';
+const VERSION = '2.10.1';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -44,6 +44,7 @@ if (arg('port')) config.port = +arg('port');
 config.cloud = Object.assign({
   device: crypto.randomBytes(16).toString('hex'), token: '', account: null,
   salt: '', key: '', keyCheck: '', auto: false, lastUpload: '',
+  tunnelSecret: '', slug: '', remote: false,
 }, config.cloud || {});
 const saveConfig = () => fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
 
@@ -2509,12 +2510,14 @@ function autoBackup() {
 
 /* ================= 云备份（付费云服务；数据在本机加密后上传） ================= */
 const CLOUD_API = (process.env.XERP_CLOUD_URL || 'https://www.zhaoyoucai.xyz/xerp-cloud/api').replace(/\/+$/, '');
+const TUNNEL_DOMAIN = process.env.XERP_TUNNEL_DOMAIN || 'xerp.zhaoyoucai.xyz';
 const CLOUD_MAGIC = Buffer.from('XERPCLOUD1');
 const CLOUD_TABLES = ['docs', 'meta', 'users', 'images', 'cost_layers', 'audit'];
 const cloudState = () => ({
   activated: !!(config.cloud.token && config.cloud.account),
   account: config.cloud.account || null,
   local: { hasKey: !!config.cloud.key, salt: !!config.cloud.salt, auto: !!config.cloud.auto, lastUpload: config.cloud.lastUpload || '', device: config.cloud.device },
+  remote: cloudTunnelState(),
 });
 async function cloudReq(pathname, { method = 'GET', body, token, raw } = {}) {
   let r;
@@ -2648,6 +2651,71 @@ async function cloudAutoTick() {
   } catch (e) {
     log('云备份自动上传失败：' + e.message);
   } finally { cloudBusy = false; }
+}
+
+/* ================= 远程访问：NAS 主动连云，云端子域名反代 ================= */
+let tunnelWs = null, tunnelRetry = null, tunnelPing = null, tunnelOnline = false, tunnelDelay = 5000;
+function cloudTunnelState() {
+  return { enabled: !!config.cloud.remote, online: tunnelOnline, url: config.cloud.slug ? `https://${config.cloud.slug}.${TUNNEL_DOMAIN}` : '' };
+}
+function tunnelForward(msg, ws) {
+  const body = Buffer.from(String(msg.body || ''), 'base64');
+  const headers = { ...(msg.headers || {}) };
+  headers.host = '127.0.0.1:' + config.port;
+  delete headers['accept-encoding'];
+  const r = http.request({ host: '127.0.0.1', port: config.port, path: msg.path || '/', method: msg.method || 'GET', headers }, resp => {
+    const chunks = [];
+    let size = 0;
+    resp.on('data', c => { size += c.length; if (size <= 25 * 1024 * 1024) chunks.push(c); });
+    resp.on('end', () => {
+      if (size > 25 * 1024 * 1024) return;
+      try { ws.send(JSON.stringify({ type: 'res', id: msg.id, status: resp.statusCode, headers: resp.headers, body: Buffer.concat(chunks).toString('base64') })); } catch (e) {}
+    });
+  });
+  r.on('error', () => {
+    try { ws.send(JSON.stringify({ type: 'res', id: msg.id, status: 502, headers: { 'content-type': 'text/plain; charset=utf-8' }, body: Buffer.from('本机 x.erp 服务没有响应').toString('base64') })); } catch (e) {}
+  });
+  r.setTimeout(30000, () => r.destroy());
+  r.end(body);
+}
+function cloudTunnelStop() {
+  clearTimeout(tunnelRetry); tunnelRetry = null;
+  clearInterval(tunnelPing); tunnelPing = null;
+  tunnelOnline = false;
+  try { if (tunnelWs) tunnelWs.close(); } catch (e) {}
+  tunnelWs = null;
+}
+function cloudTunnelStart() {
+  if (!config.cloud.remote || !config.cloud.token || !config.cloud.tunnelSecret) return;
+  if (tunnelWs) return;
+  if (typeof WebSocket !== 'function') { log('当前 Node 不支持 WebSocket，无法启动远程访问'); return; }
+  const url = CLOUD_API.replace(/\/api$/, '').replace(/^http/, 'ws') + '/tunnel?device=' + encodeURIComponent(config.cloud.device) + '&secret=' + encodeURIComponent(config.cloud.tunnelSecret);
+  let ws;
+  try { ws = new WebSocket(url); }
+  catch (e) { log('远程访问连接失败：' + e.message); return; }
+  tunnelWs = ws;
+  ws.onopen = () => {
+    tunnelOnline = true; tunnelDelay = 5000;
+    log('远程访问隧道已连接' + (config.cloud.slug ? '：https://' + config.cloud.slug + '.' + TUNNEL_DOMAIN : ''));
+    clearInterval(tunnelPing);
+    tunnelPing = setInterval(() => { try { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {} }, 30000);
+  };
+  ws.onmessage = ev => {
+    let msg;
+    try { msg = JSON.parse(String(ev.data)); } catch (e) { return; }
+    if (msg.type === 'req') tunnelForward(msg, ws);
+  };
+  ws.onerror = () => {};
+  ws.onclose = () => {
+    tunnelOnline = false;
+    clearInterval(tunnelPing); tunnelPing = null;
+    if (tunnelWs === ws) tunnelWs = null;
+    if (config.cloud.remote) {
+      clearTimeout(tunnelRetry);
+      tunnelRetry = setTimeout(cloudTunnelStart, tunnelDelay);
+      tunnelDelay = Math.min(60000, tunnelDelay * 2);
+    }
+  };
 }
 
 /* ================= 初始化 ================= */
@@ -3063,6 +3131,7 @@ route('GET', '/api/cloud/status', async ctx => {
     const r = await cloudReq('/status', { token: config.cloud.token });
     const d = await r.json();
     config.cloud.account = d.account;
+    if (d.slug) config.cloud.slug = d.slug;
     saveConfig();
     return { ...cloudState(), backups: d.backups || [] };
   } catch (e) {
@@ -3077,9 +3146,13 @@ route('POST', '/api/cloud/activate', async ctx => {
   const d = await r.json();
   config.cloud.token = d.token;
   config.cloud.account = d.account;
+  if (d.slug) config.cloud.slug = d.slug;
+  if (d.tunnelSecret) config.cloud.tunnelSecret = d.tunnelSecret;
+  config.cloud.remote = true;
   saveConfig();
+  cloudTunnelStart();
   audit(ctx, '开通云备份', `${d.account.planName}，到期 ${fmtDate(new Date(d.account.expires * 1000))}`);
-  return { ...cloudState(), backups: [] };
+  return { ...cloudState(), backups: [], tunnelSecret: d.tunnelSecret || undefined };
 }, { admin: true });
 route('POST', '/api/cloud/passphrase', ctx => {
   const pass = String(ctx.body.pass || '');
@@ -3123,6 +3196,15 @@ route('POST', '/api/cloud/auto', ctx => {
   if (on && !config.cloud.key) fail('请先设置并记住备份密码，自动备份需要它');
   config.cloud.auto = on; saveConfig();
   audit(ctx, on ? '开启云备份自动上传' : '关闭云备份自动上传');
+  return { ok: true, ...cloudState() };
+}, { admin: true });
+route('POST', '/api/cloud/remote', ctx => {
+  const on = !!ctx.body.enabled;
+  if (on && !config.cloud.token) fail('还没有开通云服务，请先输入授权码');
+  if (on && !config.cloud.tunnelSecret) fail('缺少远程访问密钥，请重新输入授权码开通');
+  config.cloud.remote = on; saveConfig();
+  if (on) cloudTunnelStart(); else cloudTunnelStop();
+  audit(ctx, on ? '开启远程访问' : '关闭远程访问');
   return { ok: true, ...cloudState() };
 }, { admin: true });
 route('POST', '/api/reset-demo', ctx => tx(() => { writeAll(seed()); setMeta('counters', {}); audit(ctx, '重置演示数据'); }), { admin: true });
@@ -3369,6 +3451,7 @@ server.listen(config.port, listenHost, () => {
   setInterval(autoBackup, 3600e3);
   setTimeout(cloudAutoTick, 5 * 60e3);
   setInterval(cloudAutoTick, 3600e3);
+  setTimeout(cloudTunnelStart, 4e3);
   setInterval(notifyTick, 60e3);
   setInterval(trackTick, 5 * 60e3);
   setTimeout(statsTick, Number(process.env.XERP_STATS_DELAY) || 60e3);
