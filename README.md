@@ -159,6 +159,22 @@ powershell -ExecutionPolicy Bypass -File fnos\build-fnos.ps1
 
 参见 [官方上架文档](https://developer.fnnas.com/docs/quick-started/publish-application/)：目前通过飞牛官网的微信群联系社区主理人，加入“应用中心开发者先锋交流群”后提交 `.fpk`、图标、真实界面截图与测试材料。
 
+
+## 请作者喝杯咖啡
+x.erp 完全免费、核心功能不锁，也不会弹窗要打赏。如果你用它省了时间、省了钱，欢迎自愿支持一下，打赏用于优先修你提的 Bug、优先做你想要的功能。
+| 打赏 | 回报 |
+| --- | --- |
+| 8.88 元 | 请作者喝杯咖啡 |
+| 88 元 | 进交流群 |
+| 288 元 | 一对一帮你部署一次 |
+
+<table>
+  <tr>
+    <td align="center">微信<br><img src="docs/donate-wechat.png" width="200" alt="微信收款码"></td>
+    <td align="center">支付宝<br><img src="docs/donate-alipay.png" width="200" alt="支付宝收款码"></td>
+  </tr>
+</table>
+
 ## 许可证
 
 Copyright (C) 2026 Zyc009234
