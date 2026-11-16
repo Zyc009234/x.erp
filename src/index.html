@@ -290,7 +290,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .chk input{width:16px;height:16px;accent-color:var(--primary)}
 .tpl-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:14px}
 .slip-preview{border:1px solid var(--border);border-radius:10px;padding:18px;background:#fff;color:#000;overflow-x:auto}
-.slip-preview table{border-collapse:collapse;width:100%}
+.slip-preview table{border-collapse:collapse;width:100%;min-width:460px}
 .slip-preview th,.slip-preview td{border:1px solid #333;padding:4px 6px;font-size:1em}
 .slip-preview .s-title{text-align:center}.slip-preview .s-title h1{font-size:1.42em}.slip-preview .s-title h2{font-size:1.25em;letter-spacing:.4em;margin:2px 0 8px}.slip-preview .s-head{font-size:.92em}.slip-preview .s-logo{display:block;max-width:160px;max-height:60px;object-fit:contain;margin:0 auto 4px}
 .slip-preview .s-meta{display:flex;justify-content:space-between;gap:2px 16px;margin:3px 0;flex-wrap:wrap}
@@ -312,11 +312,35 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   .main,.app.collapsed .main{margin-left:0}
   .app.collapsed .sidebar{width:236px}
   .content{padding:16px}.topbar{padding:0 16px}
-  .g2,.g4,.g5{grid-template-columns:1fr}
+  .g2,.g4,.g5{grid-template-columns:repeat(2,minmax(0,1fr))}
   .user div:last-child,.crumb small{display:none}
   .form-grid,.doc-info{grid-template-columns:1fr}.span2{grid-column:auto}
   .search{width:100%}.tb-left{width:100%}
   .line-head{flex-wrap:wrap;justify-content:flex-start}.line-head>b{margin-right:auto}.line-head>.sub-t{order:3;flex-basis:100%;margin:2px 0 0!important}
+}
+@media (max-width:560px){
+  .content{padding:12px}.mb{margin-bottom:10px}
+  .grid.g4,.grid.g5{gap:10px}
+  .kpi{padding:10px 12px;gap:9px;align-items:center}
+  .kpi-ic{width:32px;height:32px;border-radius:9px}
+  .kpi-ic svg.i{width:17px;height:17px}
+  .kpi label{font-size:11.5px;line-height:1.3}
+  .kpi .v{font-size:17px;margin:1px 0}
+  .kpi .trend{font-size:11px}
+  .tbl th{padding:9px 10px;font-size:11.5px}
+  .tbl td{padding:10px;font-size:13px}
+  .table-wrap{position:relative}
+  .tbl th:first-child,.tbl td:first-child{position:sticky;left:0;z-index:1;box-shadow:1px 0 0 var(--border)}
+  .tbl td:first-child{background:var(--panel)}
+  .tbl th:first-child{background:var(--panel2)}
+  .toolbar{padding:12px;gap:8px;flex-direction:column;align-items:stretch}
+  .toolbar .tb-left,.toolbar .tb-right{width:100%;flex-wrap:wrap;gap:8px}
+  .toolbar .search{width:100%;height:34px}
+  .toolbar .select{flex:1 1 calc(50% - 4px);min-width:0;height:34px;font-size:13px;padding:0 6px}
+  .btn{height:34px;padding:0 12px}
+  .card-head{padding:14px 14px 0}
+  .card-body{padding:14px}
+  .native .content{padding-bottom:84px}
 }
 @media print{
   body *{visibility:hidden}
@@ -634,8 +658,14 @@ function toast(msg, type = 'success') {
   $('#toasts').appendChild(el);
   setTimeout(() => { el.style.transition = '.3s'; el.style.opacity = 0; setTimeout(() => el.remove(), 300); }, 2400);
 }
-function openModal(html, size = '') { const m = $('#modal'); m.className = 'modal ' + size; m.innerHTML = html; $('#mask').classList.add('show'); }
-function closeModal() { closePicker(); $('#mask').classList.remove('show'); $('#modal').innerHTML = ''; }
+function openModal(html, size = '') {
+  const m = $('#modal'); m.className = 'modal ' + size; m.innerHTML = html; $('#mask').classList.add('show');
+  const fab = document.getElementById('scanFab'); if (fab) fab.style.display = 'none';
+}
+function closeModal() {
+  closePicker(); $('#mask').classList.remove('show'); $('#modal').innerHTML = '';
+  const fab = document.getElementById('scanFab'); if (fab) fab.style.display = '';
+}
 function modalHead(title) { return `<div class="m-head"><h3>${title}</h3><button class="icon-btn sm" data-act="closeModal">${ic('x')}</button></div>`; }
 function confirmBox(msg, onOk, {title = '确认操作', danger = true, okText = '确定'} = {}) {
   openModal(`<div class="m-body" style="padding-top:26px"><div class="confirm-ic ${danger ? 'c-red' : 'c-primary'}">${ic(danger ? 'alert' : 'info')}</div><h3 style="margin-bottom:6px">${title}</h3><p style="color:var(--muted)">${msg}</p></div>

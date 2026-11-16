@@ -36,12 +36,12 @@
       "releases": {
         "2.11.0": {
           "changelog": "新增报销付款回单、备用金领用/多报销单冲抵、报销会签（部门负责人→财务→可选总经理，含审批意见和流程状态）、人事身份证号与生日提醒（默认7天，可切7/15/30，本月生日列表）；云服务支持换机恢复。",
-          "updated_at": "2026-11-16T07:44:17+08:00",
+          "updated_at": "2026-11-16T17:53:55+08:00",
           "packages": {
             "all": {
               "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.11.0.fpk",
-              "sha256": "051db5658ec2cd7e03b6613610fc77cf2b1b8bb6077ed03583c5f661292c76af",
-              "size": 697251
+              "sha256": "97e562ae99639e5d20430c3f0578207326fbb79bab38fe42ac2fb87bfbf79cf1",
+              "size": 697452
             }
           }
         },

@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.InputType;
 import android.view.View;
@@ -70,6 +71,19 @@ public class MainActivity extends Activity {
         access.setOnClickListener(v -> {
             try { startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")); }
             catch (Exception e) { try { startActivity(new Intent(Settings.ACTION_SETTINGS)); } catch (Exception x) {} }
+        });
+
+        Button battery = button(root, "关闭电池优化");
+        battery.setOnClickListener(v -> {
+            if (Build.VERSION.SDK_INT < 23) { toast("当前系统不需要设置"); return; }
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null && pm.isIgnoringBatteryOptimizations(getPackageName())) { toast("电池优化已经关闭"); return; }
+            try {
+                startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName())));
+            } catch (Exception e) {
+                try { startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)); }
+                catch (Exception x) { toast("请在系统设置里把本应用设为无限制"); }
+            }
         });
 
         Button test = button(root, "发送测试心跳");
@@ -165,8 +179,13 @@ public class MainActivity extends Activity {
         boolean conf = RelayClient.configured(this);
         String enabled = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
         boolean listening = enabled != null && enabled.contains(getPackageName());
+        boolean battery = true;
+        if (Build.VERSION.SDK_INT >= 23) {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            battery = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
+        }
         status.setText("配置：" + (conf ? "已填写" : "未填写") + "\n通知使用权：" + (listening ? "已开启" : "未开启（必须开启才能监听）") +
-                "\n服务器：" + RelayClient.base(this));
+                "\n电池优化：" + (battery ? "已关闭" : "未关闭（息屏可能被系统杀掉）") + "\n服务器：" + RelayClient.base(this));
     }
 
     private EditText field(LinearLayout root, String label, String value, int type) {

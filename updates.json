@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "latest": "2.11.0",
-  "publishedAt": "2026-11-16T07:44:17+08:00",
+  "publishedAt": "2026-11-16T17:53:55+08:00",
   "notes": [
     "新增报销付款回单、备用金领用/多报销单冲抵、报销会签（部门负责人→财务→可选总经理，含审批意见和流程状态）、人事身份证号与生日提醒（默认7天，可切7/15/30，本月生日列表）",
     "云服务支持换机恢复。"
@@ -10,16 +10,16 @@
     "fnos": {
       "version": "2.11.0",
       "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.11.0.fpk",
-      "sha256": "051db5658ec2cd7e03b6613610fc77cf2b1b8bb6077ed03583c5f661292c76af",
-      "size": 697251,
+      "sha256": "97e562ae99639e5d20430c3f0578207326fbb79bab38fe42ac2fb87bfbf79cf1",
+      "size": 697452,
       "file": "xerp-2.11.0.fpk",
       "kind": "fpk"
     },
     "windows": {
       "version": "2.11.0",
       "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.11.0-windows-x64-setup.exe",
-      "sha256": "587b66398e9064ee0d424ebe4baad42da0aec01707e21e4087b2adfc1b8410d1",
-      "size": 24598323,
+      "sha256": "8f5ca68e65eaad1547fb9171487c338808f24327a5f1be8ed2fafd55044a690d",
+      "size": 24599327,
       "file": "xerp-2.11.0-windows-x64-setup.exe",
       "kind": "exe"
     },

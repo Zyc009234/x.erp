@@ -5,8 +5,8 @@ $Root  = Split-Path $PSScriptRoot -Parent
 $And   = $PSScriptRoot
 $B     = Join-Path $And 'build'
 $Dist  = Join-Path $Root 'dist'
-$Version = '1.0.1'
-$VersionCode = 10001
+$Version = '1.0.2'
+$VersionCode = 10002
 function Step($m) { Write-Host "==> $m" -ForegroundColor Cyan }
 function Run($exe) { & $exe @args; if ($LASTEXITCODE -ne 0) { throw "$exe 失败（$LASTEXITCODE）" } }
 
