@@ -17,7 +17,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.11.0';
+const VERSION = '2.12.0';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -1027,9 +1027,59 @@ function partyPaymentCreate(ctx) {
     return pp;
   });
 }
+function partyPaymentBatch(ctx) {
+  const b = ctx.body, type = b.partyType === 'supplier' ? 'supplier' : 'customer';
+  const col = type === 'supplier' ? 'suppliers' : 'customers';
+  const party = get(col, str(b.partyId, 64)) || fail((type === 'supplier' ? '供应商' : '客户') + '不存在', 404);
+  const amount = round2(Number(b.amount));
+  if (!(amount > 0)) fail('金额必须大于 0');
+  const date = isDate(b.date) ? b.date : today();
+  if (date > today()) fail('日期不能晚于今天');
+  const ids = Array.isArray(b.orderIds) ? [...new Set(b.orderIds.map(x => String(x || '')).filter(Boolean))] : [];
+  if (ids.length < 2) fail('合并收款至少要选两张订单');
+  const kind = type === 'supplier' ? 'purchase' : 'sales', C = ORD[kind];
+  const acct = pickAccount(b);
+  return tx(() => {
+    const orders = ids.map(id => get(C.col, id) || fail('订单不存在', 404));
+    for (const o of orders) {
+      if (o[C.partyKey] !== party.id) fail(`订单 ${o.no} 不是这个${C.partyLabel}的`);
+      if (o.status === '已作废') fail(`订单 ${o.no} 已作废，不能登记收付款`);
+    }
+    orders.sort((x, y) => (x.date + (x.createdAt || '')).localeCompare(y.date + (y.createdAt || '')));
+    const dues = orders.map(o => round2(orderTotal(o) - (o[C.paidKey] || 0)));
+    const totalDue = round2(dues.reduce((s, x) => s + x, 0));
+    if (amount > totalDue + 0.001) fail(`这些单最多还能${C.payWord} ${totalDue} 元`);
+    let left = amount;
+    const allocs = [];
+    orders.forEach((o, i) => {
+      if (left <= 0.001 || dues[i] <= 0.001) return;
+      const take = round2(Math.min(left, dues[i]));
+      o[C.paidKey] = round2((o[C.paidKey] || 0) + take);
+      put(C.col, o);
+      allocs.push({ orderId: o.id, no: o.no, amount: take });
+      left = round2(left - take);
+    });
+    const ref = allocs.map(a => a.no).slice(0, 3).join('、') + (allocs.length > 3 ? `等 ${allocs.length} 张` : '');
+    const f = {
+      id: uid(), date, type: type === 'supplier' ? 'expense' : 'income', category: C.fin[1],
+      amount, account: acct.id, method: acct.kind, ref, note: str(b.note, 200),
+      partyType: type, partyId: party.id, partyName: party.name, operator: ctx.user.name,
+    };
+    put('finance', f);
+    const pp = {
+      id: uid(), partyType: type, partyId: party.id, partyName: party.name, amount, date,
+      account: acct.id, method: acct.kind, note: f.note, financeId: f.id, appliedOrders: allocs,
+      creator: ctx.user.name, createdAt: new Date().toISOString(),
+    };
+    if (allocs.length === 1) { pp.appliedOrderId = allocs[0].orderId; pp.appliedOrderNo = allocs[0].no; }
+    put('partyPayments', pp);
+    audit(ctx, type === 'supplier' ? '供应商合并付款' : '客户合并收款', `${party.name} ${amount}（${allocs.length} 张单）`);
+    return pp;
+  });
+}
 function partyPaymentApply(ctx, id) {
   const b = ctx.body, pp = get('partyPayments', id) || fail('往来款记录不存在', 404);
-  if (pp.appliedOrderId) fail('这笔往来款已经核销过了');
+  if (pp.appliedOrderId || (pp.appliedOrders || []).length) fail('这笔往来款已经核销过了');
   const kind = pp.partyType === 'supplier' ? 'purchase' : 'sales', C = ORD[kind];
   return tx(() => {
     const order = get(C.col, str(b.orderId, 64)) || fail('关联订单不存在', 404);
@@ -1048,8 +1098,14 @@ function partyPaymentApply(ctx, id) {
 function partyPaymentDelete(ctx, id) {
   return tx(() => {
     const pp = get('partyPayments', id) || fail('往来款记录不存在', 404);
-    if (pp.appliedOrderId) {
-      const kind = pp.partyType === 'supplier' ? 'purchase' : 'sales', C = ORD[kind], order = get(C.col, pp.appliedOrderId);
+    const kind = pp.partyType === 'supplier' ? 'purchase' : 'sales', C = ORD[kind];
+    if ((pp.appliedOrders || []).length) {
+      for (const a of pp.appliedOrders) {
+        const order = get(C.col, a.orderId);
+        if (order) { order[C.paidKey] = round2(Math.max(0, (order[C.paidKey] || 0) - a.amount)); put(C.col, order); }
+      }
+    } else if (pp.appliedOrderId) {
+      const order = get(C.col, pp.appliedOrderId);
       if (order) { order[C.paidKey] = round2(Math.max(0, (order[C.paidKey] || 0) - pp.amount)); put(C.col, order); }
     }
     del('finance', pp.financeId); del('partyPayments', id);
@@ -3183,6 +3239,7 @@ route('POST', '/api/orders/:kind/:id/:action', ctx => orderAction(ctx, ctx.param
 route('PUT', '/api/orders/:kind/:id/pays/:fid', ctx => editPay(ctx, ctx.params.kind, ctx.params.id, ctx.params.fid, false), orderPerm);
 route('DELETE', '/api/orders/:kind/:id/pays/:fid', ctx => editPay(ctx, ctx.params.kind, ctx.params.id, ctx.params.fid, true), orderPerm);
 route('POST', '/api/party-payments', ctx => partyPaymentCreate(ctx), { perm: 'finance' });
+  route('POST', '/api/party-payments/batch', ctx => partyPaymentBatch(ctx), { perm: 'finance' });
 route('POST', '/api/party-payments/:id/apply', ctx => partyPaymentApply(ctx, ctx.params.id), { perm: 'finance' });
 route('DELETE', '/api/party-payments/:id', ctx => partyPaymentDelete(ctx, ctx.params.id), { perm: 'finance' });
 const pricePerm = { perm: ctx => (PRICE_COL[ctx.params.col] || PRICE_COL.suppliers).perm };

@@ -370,7 +370,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.11.0 · 数据保存在服务器</div>
+    <div class="side-foot">v2.12.0 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -644,7 +644,7 @@ const partyName = (kind, o) => { const C = ORD[kind]; return (byId(db[C.party], 
 const unpaidOf = (kind, o) => +(orderTotal(o) - (o[ORD[kind].paidKey] || 0)).toFixed(2);
 // 往来单位的应收（销售）/ 应付（采购）= 订单未结 - 退货单还没退的款（冲抵、退款都会让它变小）
 const retUnpaid = (kind, pid) => { const R = ORD[kind + 'Return']; return sum(db[R.db].filter(r => r.status !== '已作废' && (!pid || r[R.partyKey] === pid)), r => unpaidOf(kind + 'Return', r)); };
-const unappliedParty = (kind, pid) => sum((db.partyPayments || []).filter(p => p.partyType === (kind === 'sales' ? 'customer' : 'supplier') && p.partyId === pid && !p.appliedOrderId), p => p.amount);
+const unappliedParty = (kind, pid) => sum((db.partyPayments || []).filter(p => p.partyType === (kind === 'sales' ? 'customer' : 'supplier') && p.partyId === pid && !p.appliedOrderId && !(p.appliedOrders || []).length), p => p.amount);
 const partyDue = (kind, pid) => { const C = ORD[kind]; return +(sum(db[C.db].filter(o => o.status !== '已作废' && (!pid || o[C.partyKey] === pid)), o => unpaidOf(kind, o)) - retUnpaid(kind, pid) - unappliedParty(kind, pid)).toFixed(2); };
 const badge = (t, c) => `<span class="badge ${c || STATUS_COLOR[t] || 'gray'}">${esc(t)}</span>`;
 
@@ -3981,7 +3981,7 @@ function partyPaymentView(type, id) {
   if (!party) return;
   const rows = (db.partyPayments || []).filter(p => p.partyType === (isC ? 'customer' : 'supplier') && p.partyId === id).sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
   const open = db[C.db].filter(o => o[C.partyKey] === id && o.status !== '已作废' && unpaidOf(kind, o) > 0.001);
-  const pending = sum(rows.filter(p => !p.appliedOrderId), p => p.amount);
+  const pending = sum(rows.filter(p => !p.appliedOrderId && !(p.appliedOrders || []).length), p => p.amount);
   const due = partyDue(kind, id);
   openModal(`${modalHead((isC ? '客户收款' : '供应商付款') + ' · ' + esc(party.name))}<div class="m-body">
     <div class="grid g4 mb"><div class="card kpi"><label>当前${isC ? '应收' : '应付'}</label><div class="v">${money(due)}</div></div><div class="card kpi"><label>未核销${isC ? '预收' : '预付'}</label><div class="v">${money(pending)}</div></div></div>
@@ -3992,14 +3992,51 @@ function partyPaymentView(type, id) {
       <label class="field span2"><span>关联订单（选填）</span><select id="ppOrder"><option value="">不关联，记未核销往来款</option>${open.map(o => `<option value="${o.id}">${o.no} · ${o.date} · 待${C.payWord} ${money(unpaidOf(kind, o))}</option>`).join('')}</select></label>
       <label class="field span2"><span>备注</span><input id="ppNote" maxlength="200" placeholder="例如：微信转账、银行回单号"></label>
     </div><div style="margin-top:10px;text-align:right"><button class="btn primary" id="ppAdd">${ic('check')}登记${isC ? '收款' : '付款'}</button></div></div></div>
+    ${open.length > 1 ? `<div class="card" style="margin-bottom:14px"><div class="card-head"><h3>合并${isC ? '收款' : '付款'}</h3><span class="sub-t">勾选多张未结清的单，一次${isC ? '收款' : '付款'}自动分摊</span></div><div class="card-body">
+      <div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto" id="ppOpenList">
+        ${open.map(o => `<label class="chk"><input type="checkbox" class="ppck" value="${o.id}" data-due="${unpaidOf(kind, o)}"> ${esc(o.no)} · ${esc(o.date)} · 待${C.payWord} ${money(unpaidOf(kind, o))}</label>`).join('')}
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px;flex-wrap:wrap">
+        <span class="sub-t">已选 <b id="ppSelN">0</b> 张，合计 <b id="ppSelAmt">¥0.00</b></span>
+        <div style="display:flex;gap:8px"><button class="btn" id="ppSelAll">全选</button><button class="btn primary" id="ppMerge">合并${isC ? '收款' : '付款'}</button></div>
+      </div>
+    </div></div>` : ''}
     <div class="line-head"><b>往来记录（${rows.length}）</b><span class="sub-t" style="margin-left:8px">未核销记录可抵扣后续订单</span></div>
-    ${rows.length ? rows.map(p => `<div class="card" style="margin:8px 0"><div class="card-body"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>${money(p.amount)}</b><span class="sub-t">${p.date}</span>${p.appliedOrderId ? badge('已核销 ' + p.appliedOrderNo, 'green') : badge('未核销', 'orange')}<span class="sub-t">${esc(acctName({account:p.account}))}</span><span class="sub-t">${esc(p.note || '')}</span></div><div style="margin-top:8px;text-align:right"><div class="ops">${!p.appliedOrderId && open.length ? `<button class="tbtn" data-act="partyPaymentApply" data-id="${p.id}">核销到订单</button>` : ''}<button class="tbtn danger-text" data-act="partyPaymentDel" data-id="${p.id}">删除</button></div></div></div></div>`).join('') : `<div class="empty">${emptySvg}<p>还没有往来收付款记录</p></div>`}
+    ${rows.length ? rows.map(p => `<div class="card" style="margin:8px 0"><div class="card-body"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>${money(p.amount)}</b><span class="sub-t">${p.date}</span>${(p.appliedOrders || []).length > 1 ? badge('合并核销 ' + p.appliedOrders.length + ' 张', 'green') : p.appliedOrderId ? badge('已核销 ' + p.appliedOrderNo, 'green') : badge('未核销', 'orange')}<span class="sub-t">${esc(acctName({account:p.account}))}</span><span class="sub-t">${esc(p.note || '')}</span></div>${(p.appliedOrders || []).length > 1 ? `<div class="sub-t" style="margin-top:6px">${p.appliedOrders.map(a => esc(a.no) + ' ' + money(a.amount)).join('　')}</div>` : ''}<div style="margin-top:8px;text-align:right"><div class="ops">${!p.appliedOrderId && !(p.appliedOrders || []).length && open.length ? `<button class="tbtn" data-act="partyPaymentApply" data-id="${p.id}">核销到订单</button>` : ''}<button class="tbtn danger-text" data-act="partyPaymentDel" data-id="${p.id}">删除</button></div></div></div></div>`).join('') : `<div class="empty">${emptySvg}<p>还没有往来收付款记录</p></div>`}
   </div><div class="m-foot"><button class="btn" data-act="closeModal">关闭</button></div>`, 'lg');
   $('#ppAdd').onclick = async () => {
     const body = {partyType:isC ? 'customer' : 'supplier', partyId:id, date:$('#ppDate').value, amount:+$('#ppAmount').value, account:$('#ppAccount').value, orderId:$('#ppOrder').value, note:$('#ppNote').value.trim()};
     if (!(body.amount > 0)) return toast('请填写金额', 'error');
     try { await api('POST', '/api/party-payments', body); await reload(); partyPaymentView(type, id); toast(isC ? '收款已登记' : '付款已登记'); }
     catch (e) { toast(e.message, 'error'); }
+  };
+  const updSel = () => {
+    const cks = [...document.querySelectorAll('.ppck')].filter(x => x.checked);
+    if ($('#ppSelN')) $('#ppSelN').textContent = cks.length;
+    if ($('#ppSelAmt')) $('#ppSelAmt').textContent = money(sum(cks, x => +x.dataset.due));
+  };
+  document.querySelectorAll('.ppck').forEach(c => c.onchange = updSel);
+  if ($('#ppSelAll')) $('#ppSelAll').onclick = () => {
+    const all = [...document.querySelectorAll('.ppck')], on = all.every(x => x.checked);
+    all.forEach(x => x.checked = !on); updSel();
+  };
+  if ($('#ppMerge')) $('#ppMerge').onclick = () => {
+    const ids = [...document.querySelectorAll('.ppck')].filter(x => x.checked).map(x => x.value);
+    if (ids.length < 2) return toast('至少勾选两张订单', 'error');
+    const picked = ids.map(oid => open.find(o => o.id === oid)).filter(Boolean);
+    const total = sum(picked, o => unpaidOf(kind, o));
+    formModal({ title: `合并${isC ? '收款' : '付款'} · ${ids.length} 张单`, fields: [
+      { n: 'date', l: '日期', type: 'date', def: today() },
+      { n: 'amount', l: `本次${isC ? '收款' : '付款'}金额（最多 ${money(total)}）`, type: 'number', def: total, req: 1 },
+      { n: 'account', l: '资金账户', type: 'select', opts: acctOpts() },
+      { n: 'note', l: '备注（选填）', span: 2 },
+    ], onSubmit: async v => {
+      try {
+        const r = await api('POST', '/api/party-payments/batch', { partyType: isC ? 'customer' : 'supplier', partyId: id, orderIds: ids, date: v.date, amount: v.amount, account: v.account, note: v.note });
+        await reload(); partyPaymentView(type, id);
+        toast(`已合并核销 ${(r.appliedOrders || []).length} 张单`);
+      } catch (e) { toast(e.message, 'error'); }
+    }});
   };
 }
 
@@ -4171,6 +4208,25 @@ function maskIdCard(id) {
   const s = String(id || '');
   return s.length >= 10 ? s.slice(0, 6) + '********' + s.slice(-4) : s;
 }
+const EMP_HEAD = {
+  no: ['工号', '编号', '员工编号'], name: ['姓名', '名字'], gender: ['性别'], dept: ['部门'],
+  position: ['职位', '岗位'], phone: ['手机号', '手机', '电话'], idCard: ['身份证号', '身份证'],
+  salary: ['月薪', '工资', '基本工资'], joinDate: ['入职日期', '入职时间'], status: ['状态'],
+};
+function empTpl() {
+  loadXLSX().then(X => {
+    const head = ['工号', '姓名', '性别', '部门', '职位', '手机号', '身份证号', '月薪', '入职日期', '状态'];
+    const demo = [
+      ['E2001', '张三', '男', '销售部', '销售专员', '13800000000', '110101199001011234', '6000', today(), '在职'],
+      ['', '李四', '女', '财务部', '会计', '13900000000', '', '7000', today(), '试用期'],
+    ];
+    const ws = X.utils.aoa_to_sheet([head, ...demo]), wb = X.utils.book_new();
+    X.utils.book_append_sheet(wb, ws, '员工');
+    const name = '员工导入模板.xlsx';
+    if (NATIVE) saveFile(name, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', X.write(wb, {type:'array', bookType:'xlsx'}));
+    else X.writeFile(wb, name);
+  }).catch(e => toast(e.message, 'error'));
+}
 function pageEmployees() {
   const on = db.employees.filter(e => e.status !== '离职');
   const filters = [{key:'dept', label:'全部部门', options:[...depts(), ...(db.employees.some(e => !e.dept) ? ['未分配部门'] : [])], test:(e, v) => (e.dept || '未分配部门') === v}, {key:'st', label:'全部状态', options:['在职', '试用期', '离职'], test:(e, v) => e.status === v}];
@@ -4182,7 +4238,7 @@ function pageEmployees() {
     ${kpi('平均月薪', money(on.length ? sum(on, e => e.salary) / on.length : 0), 'chart', 'blue')}
   </div>
   <div class="grid g-2-1">
-    <div class="card">${toolbar('employees', {placeholder:'搜索姓名 / 工号 / 职位', filters, buttons:`<button class="btn" data-act="deptManage">${ic('dashboard')}部门</button><button class="btn" data-act="export" data-id="employees">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="employees">${ic('plus')}新增员工</button>`})}<div id="list-employees"></div></div>
+    <div class="card">${toolbar('employees', {placeholder:'搜索姓名 / 工号 / 职位', filters, buttons:`<button class="btn" data-act="deptManage">${ic('dashboard')}部门</button><button class="btn" data-act="empImport">${ic('upload')}导入</button><button class="btn" data-act="export" data-id="employees">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="employees">${ic('plus')}新增员工</button>`})}<div id="list-employees"></div></div>
     <div class="card"><div class="card-head"><h3>部门人数分布</h3></div><div class="card-body"><div class="chart-box"><canvas id="e1"></canvas></div></div></div>
   </div>`;
   mountList('employees', {rows:() => db.employees, search:e => e.no + e.name + e.position + e.phone, filters, columns:[
@@ -4448,7 +4504,7 @@ function cloudDraw() {
   box.innerHTML = `
     ${CLOUD.error ? `<div class="card"><div class="card-body"><div class="tip-line" style="color:var(--red)">${esc(CLOUD.error)}</div></div></div>` : ''}
     <div class="grid g4" style="margin-bottom:12px">
-      <div class="card"><div class="card-body"><div class="sub-t">当前套餐</div><div style="font-size:20px;font-weight:600">${esc(a.planName)}</div><div class="sub-t">到期 ${esc(cloudDate(a.expires))}</div></div></div>
+      <div class="card"><div class="card-body"><div class="sub-t">当前套餐</div><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div style="font-size:20px;font-weight:600">${esc(a.planName)}</div><button class="btn sm" data-act="cloudRenew">续费</button></div><div class="sub-t">到期 ${esc(cloudDate(a.expires))}</div></div></div>
       <div class="card"><div class="card-body"><div class="sub-t">云端空间</div><div style="font-size:20px;font-weight:600">${cloudSize(used)} <span class="sub-t" style="font-size:13px">/ ${cloudSize(a.quota)}</span></div><div style="height:6px;background:var(--border);border-radius:4px;margin-top:8px;overflow:hidden"><i style="display:block;height:100%;width:${pct}%;background:var(--primary)"></i></div></div></div>
       <div class="card"><div class="card-body"><div class="sub-t">已保存</div><div style="font-size:20px;font-weight:600">${a.backups} <span class="sub-t" style="font-size:13px">份</span></div><div class="sub-t">最多保留 ${a.maxBackups} 份</div></div></div>
       <div class="card"><div class="card-body"><div class="sub-t">上次上传</div><div style="font-size:16px;font-weight:600;margin-top:4px">${CLOUD.local.lastUpload ? esc(fmtTime(CLOUD.local.lastUpload)) : '还没有上传'}</div><div class="sub-t">${CLOUD.local.auto ? '自动备份已开启' : '自动备份未开启'}</div></div></div>
@@ -5258,6 +5314,64 @@ const A = {
   ssPrint, ledger:id => { closeModal(); ledger(id); },
   nativeServer: () => NATIVE && NATIVE.changeServer(),
   goBatches: () => { $('#bellDrop').classList.remove('show'); ui.invTab = 'batch'; const st = getState('batches'); st.f = {}; go('inventory'); },
+  empImport: () => {
+    openModal(`${modalHead('导入员工')}<div class="m-body">
+      <p class="sub-t" style="margin:0 0 12px">第一行是表头，<b>姓名</b>必填，其余可选：工号、性别、部门、职位、手机号、身份证号、月薪、入职日期、状态。工号留空自动编号；<b>工号已存在会自动跳过</b>；职位为空按「员工」导入；身份证号会校验格式并自动算生日。</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="eiTpl">${ic('download')}下载模板</button><label class="btn primary">${ic('upload')}选择文件<input type="file" id="eiFile" accept=".xlsx,.xls,.csv" hidden></label></div>
+      <div id="eiRes" style="margin-top:12px"></div>
+    </div><div class="m-foot"><button class="btn" data-act="closeModal">关闭</button></div>`);
+    $('#eiTpl').onclick = empTpl;
+    $('#eiFile').onchange = async e => {
+      const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+      const box = $('#eiRes');
+      box.innerHTML = '<div class="sub-t">正在导入，请稍候…</div>';
+      const norm = s => String(s ?? '').replace(/[\s*＊()（）]/g, '').toLowerCase();
+      try {
+        const aoa = await readSheet(f);
+        const hi = aoa.findIndex(r => r.some(c => ['姓名', '名字'].includes(norm(c))));
+        if (hi < 0) throw new Error('没找到表头：第一行需要有「姓名」列，建议先下载模板');
+        const map = {};
+        aoa[hi].forEach((h, i) => {
+          const n = norm(h);
+          for (const [k, al] of Object.entries(EMP_HEAD)) if (!(k in map) && al.map(norm).includes(n)) map[k] = i;
+        });
+        const rows = aoa.slice(hi + 1).map((r, j) => {
+          const o = { _row: hi + 2 + j };
+          for (const [k, i] of Object.entries(map)) { const v = r[i]; o[k] = typeof v === 'string' ? v.trim() : v; }
+          return o;
+        }).filter(o => Object.entries(o).some(([k, v]) => k !== '_row' && v !== '' && v != null));
+        if (!rows.length) throw new Error('表格里没有数据行');
+        const exist = new Set(db.employees.map(x => String(x.no || '').toUpperCase()).filter(Boolean));
+        let okN = 0, skipN = 0;
+        const errs = [];
+        for (const o of rows) {
+          const name = String(o.name || '').trim();
+          if (!name) { errs.push(`第 ${o._row} 行：没有填姓名`); continue; }
+          const no = String(o.no || '').trim().toUpperCase();
+          if (no && exist.has(no)) { skipN++; continue; }
+          const body = {
+            name,
+            gender: ['男', '女'].includes(o.gender) ? o.gender : '',
+            dept: String(o.dept || '').trim(),
+            position: String(o.position || '').trim() || '员工',
+            phone: String(o.phone || '').trim(),
+            idCard: String(o.idCard || '').trim(),
+            salary: Number(String(o.salary || '').replace(/[^\d.]/g, '')) || 0,
+            joinDate: String(o.joinDate || '').trim() || today(),
+            status: ['在职', '试用期', '离职'].includes(o.status) ? o.status : '在职',
+          };
+          if (no) body.no = no;
+          try { await api('POST', '/api/employees', body); okN++; if (no) exist.add(no); }
+          catch (err) { errs.push(`第 ${o._row} 行 ${name}：${err.message}`); }
+        }
+        await reload(); render();
+        box.innerHTML = `<div class="tip-line" style="background:${errs.length ? 'var(--orange-soft)' : 'var(--green-soft)'}">导入完成：成功 ${okN} 人${skipN ? `，跳过 ${skipN} 人（工号已存在）` : ''}${errs.length ? `，失败 ${errs.length} 行` : ''}。${errs.length ? '<br>' + errs.slice(0, 8).map(esc).join('<br>') + (errs.length > 8 ? '<br>…' : '') : ''}</div>`;
+        toast(`已导入 ${okN} 人`);
+      } catch (err) {
+        box.innerHTML = `<div class="tip-line" style="background:var(--red-soft)">${esc(err.message)}</div>`;
+      }
+    };
+  },
   catManage: () => nlManage('cat'), deptManage: () => nlManage('dept'), nlAdd: k => nlAdd(k), nlRename: v => nlRename(...split(v)), nlDel: v => nlDel(...split(v)), tipOpen: () => tipModal(),
   cloudRefresh: () => cloudLoad(),
   cloudActivate: async () => {
@@ -5271,6 +5385,22 @@ const A = {
     if (pass.length < 6) return toast('备份密码至少 6 位', 'error');
     try { CLOUD = await api('POST', '/api/cloud/passphrase', { pass, remember: $('#cloudRemember').checked }); cloudShowPass = false; cloudDraw(); toast('备份密码已保存'); }
     catch (e) { toast(e.message, 'error'); }
+  },
+  cloudRenew: () => {
+    const a = CLOUD && CLOUD.account;
+    if (!a) return toast('请先开通云服务', 'error');
+    openModal(`${modalHead('续费云服务')}<div class="m-body">
+      <p class="sub-t" style="margin:0 0 12px">当前 ${esc(a.planName)}，到期 ${esc(cloudDate(a.expires))}。续费从原到期日往后顺延，剩余天数不会浪费；套餐到期前就可以续。</p>
+      <label class="field"><span>新的授权码</span><input id="rnCode" placeholder="XERP-XXXX-XXXX-XXXX" autocomplete="off"></label>
+      <p class="sub-t" style="margin:10px 0 0">还没有授权码？<a class="link" href="https://www.zhaoyoucai.xyz/xerp-cloud/buy" target="_blank" rel="noopener">去购买授权码</a>（2 元 / 月起，含云备份 + 远程访问）</p>
+    </div><div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="rnOk">确认续费</button></div>`, 'sm');
+    $('#rnOk').onclick = async () => {
+      const code = ($('#rnCode').value || '').trim();
+      if (!code) return toast('请输入授权码', 'error');
+      $('#rnOk').disabled = true;
+      try { CLOUD = await api('POST', '/api/cloud/activate', { code }); closeModal(); cloudDraw(); toast('续费成功，到期时间已顺延'); }
+      catch (e) { toast(e.message, 'error'); $('#rnOk').disabled = false; }
+    };
   },
   cloudPassToggle: () => { cloudShowPass = true; cloudDraw(); },
   cloudBackup: async () => {

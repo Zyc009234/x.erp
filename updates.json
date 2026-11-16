@@ -1,41 +1,43 @@
 {
   "schema": 1,
-  "latest": "2.11.0",
-  "publishedAt": "2026-11-16T17:53:55+08:00",
+  "latest": "2.12.0",
+  "publishedAt": "2026-11-16T18:39:52+08:00",
   "notes": [
-    "新增报销付款回单、备用金领用/多报销单冲抵、报销会签（部门负责人→财务→可选总经理，含审批意见和流程状态）、人事身份证号与生日提醒（默认7天，可切7/15/30，本月生日列表）",
-    "云服务支持换机恢复。"
+    "云服务到期前可直接续费，续费从原到期日顺延",
+    "人事管理支持批量导入员工（模板 + 工号查重 + 身份证校验）",
+    "客户/供应商支持勾选多张未结清单合并收款，一次收款自动分摊、只记一笔流水",
+    "手机端指标卡、筛选和表格适配优化。"
   ],
   "packages": {
     "fnos": {
-      "version": "2.11.0",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.11.0.fpk",
-      "sha256": "97e562ae99639e5d20430c3f0578207326fbb79bab38fe42ac2fb87bfbf79cf1",
-      "size": 697452,
-      "file": "xerp-2.11.0.fpk",
+      "version": "2.12.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.12.0.fpk",
+      "sha256": "85bbf18e9820300850630a50193b8baedf32336706329a7fba2948ba278da273",
+      "size": 701171,
+      "file": "xerp-2.12.0.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.11.0",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.11.0-windows-x64-setup.exe",
-      "sha256": "8f5ca68e65eaad1547fb9171487c338808f24327a5f1be8ed2fafd55044a690d",
-      "size": 24599327,
-      "file": "xerp-2.11.0-windows-x64-setup.exe",
+      "version": "2.12.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.12.0-windows-x64-setup.exe",
+      "sha256": "20742f9a8f23ad455cf2a8888ac48377c2ecaabc830887e21e4f6eae79c32d18",
+      "size": 24600442,
+      "file": "xerp-2.12.0-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.11.0",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.11.0-android.apk",
-      "sha256": "6d3a047ae2a90b29fbfd60407d20161e816af7a6cbe18ecb6945edea7cefbdba",
+      "version": "2.12.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.12.0-android.apk",
+      "sha256": "52c0130456edc06695b7b11c7d13d90c0e60f3bfc1966ef2b6787908c7e41fe7",
       "size": 275233,
-      "file": "xerp-2.11.0-android.apk",
+      "file": "xerp-2.12.0-android.apk",
       "kind": "apk",
-      "versionCode": 21100
+      "versionCode": 21200
     },
     "docker": {
-      "version": "2.11.0",
+      "version": "2.12.0",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.11.0"
+      "image": "ghcr.io/zyc009234/xerp:2.12.0"
     }
   }
 }
