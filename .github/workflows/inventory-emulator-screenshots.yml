@@ -33,7 +33,7 @@ jobs:
             -loop 1 -framerate 15 -t 3 -i blank.png \
             -loop 1 -framerate 15 -t 35 -i box.png \
             -loop 1 -framerate 15 -t 65 -i blank.png \
-            -filter_complex '[0:v][1:v][2:v][3:v][4:v]concat=n=5:v=1:a=0,scale=420:420:flags=neighbor,pad=640:480:(ow-iw)/2:(oh-ih)/2:white,format=yuv420p[out]' \
+            -filter_complex '[0:v][1:v][2:v][3:v][4:v]concat=n=5:v=1:a=0,format=yuv420p[out]' \
             -map '[out]' -an -c:v libx264 -preset ultrafast -crf 16 -movflags +faststart camera.mp4
           printf '%s\n' '{"host":"127.0.0.1","port":18686}' > test-data/config.json
           XERP_DEMO=1 XERP_STATS_URL='' XERP_FEEDBACK_URL='' node src/server.js --data test-data > evidence/server.log 2>&1 &
