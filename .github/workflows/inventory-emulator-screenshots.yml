@@ -24,7 +24,10 @@ jobs:
         run: |
           mkdir -p evidence test-data
           java -Djava.awt.headless=true -cp android/libs/zxing-core-3.5.3.jar tests/emulator/MakeCodes.java .
-          ffmpeg -hide_banner -loglevel error -y \
+          python3 -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/ffmpeg-python" imageio-ffmpeg==0.6.0
+          export PYTHONPATH="$RUNNER_TEMP/ffmpeg-python"
+          ffmpeg="$(python3 -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')"
+          "$ffmpeg" -hide_banner -loglevel error -y \
             -loop 1 -framerate 15 -t 5 -i blank.png \
             -loop 1 -framerate 15 -t 22 -i single.png \
             -loop 1 -framerate 15 -t 3 -i blank.png \
