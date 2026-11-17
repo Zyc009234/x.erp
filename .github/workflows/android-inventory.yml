@@ -1,0 +1,32 @@
+name: Android inventory scan validation
+on:
+  push:
+    branches: [codex/android-continuous-inventory-scan]
+  pull_request:
+    paths: ['android/**', 'src/index.html', 'tests/inventory-scan.test.mjs', '.github/workflows/android-inventory.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node tests/inventory-scan.test.mjs
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android build dependencies
+        run: sdkmanager "platforms;android-36" "build-tools;36.1.0"
+      - name: Build test APK
+        shell: pwsh
+        run: ./android/build-android.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-inventory-scan-test-apk
+          path: dist/*-android.apk
+          retention-days: 7

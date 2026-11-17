@@ -1945,6 +1945,7 @@ function checkNew() {
 function checkOpen(id) {
   const o = byId(db.checkDocs, id); if (!o) return toast('盘点单不存在或无权查看', 'error');
   const editable = o.status === '盘点中' && can('inv.check'), done = o.status === '已完成', mo = canMoney();
+  const scanSession = uid();
   const counts = Object.fromEntries(o.lines.map(l => [l.productId, l.counted == null ? '' : String(l.counted)]));
   const cnt = pid => counts[pid] === '' ? null : parseQty(prodOf(pid), counts[pid]);
   const curBook = l => { if (done) return l.bookAtPost; const p = byId(db.products, l.productId); return p ? whQty(p, o.wh || META.defaultWh) : l.book; };
@@ -1956,8 +1957,8 @@ function checkOpen(id) {
       ${done ? `<div><span>审核：</span>${esc(o.poster)} ${fmtTime(o.postedAt)}</div>` : ''}${o.remark ? `<div><span>备注：</span>${esc(o.remark)}</div>` : ''}</div>
     <div class="toolbar" style="padding:0 0 10px"><div class="tb-left"><div class="search">${ic('search')}<input id="ckQ" placeholder="编码 / 名称，扫码后回车定位"></div>
       <select class="select" id="ckF"><option value="">全部商品</option><option value="todo">未录入</option><option value="diff">有差异</option></select>
-      ${editable ? `<label class="chk" title="开启后每扫一次，该商品实盘数 +1（扫箱条码 + 一箱的数量），适合边点边扫；安卓客户端会连续打开摄像头"><input type="checkbox" id="ckLoop" ${prefs.ckLoop ? 'checked' : ''}>扫码累加</label>` : ''}</div>
-      <div class="tb-right">${editable ? `<button class="btn sm" id="ckFill" title="把还没录入的商品实盘数填成当前账面数">未录入的按账面填充</button>` : ''}</div></div>
+      ${editable ? `<label class="chk" title="开启后每扫一次，该商品实盘数 +1（扫箱条码 + 一箱的数量），适合边点边扫；安卓客户端可用连续扫码"><input type="checkbox" id="ckLoop" ${prefs.ckLoop ? 'checked' : ''}>扫码累加</label>` : ''}</div>
+      <div class="tb-right">${editable ? `<button class="btn sm" id="ckFill" title="把还没录入的商品实盘数填成当前账面数">未录入的按账面填充</button>` : ''}${editable && NATIVE && NATIVE.scanInventory ? '<button class="btn sm primary" id="ckScan">连续扫码</button>' : ''}</div></div>
     <div class="table-wrap" style="max-height:52vh;overflow:auto"><table class="tbl items"><thead><tr><th>商品</th><th style="width:50px">单位</th><th class="num" style="width:80px">${done ? '审核时账面' : '账面'}</th><th style="width:110px">实盘数量</th><th class="num" style="width:80px">差异</th>${mo ? '<th class="num" style="width:110px">差异金额</th>' : ''}</tr></thead>
     <tbody id="ckRows">${o.lines.map(l => { const p = prodOf(l.productId), changed = !done && curBook(l) !== l.book; return `<tr data-pid="${l.productId}" data-q="${esc((p.sku + ' ' + p.name + ' ' + (p.spec || '')).toLowerCase())}">
       <td><b>${esc(p.name)}</b><div class="sub-t">${esc(p.sku)}${p.spec ? ' · ' + esc(p.spec) : ''}</div></td><td>${esc(p.unit)}</td>
@@ -1990,16 +1991,38 @@ function checkOpen(id) {
   tb.querySelectorAll('tr').forEach(paint); summary();
   $('#ckQ').addEventListener('input', filter); $('#ckF').addEventListener('change', filter);
   if ($('#ckLoop')) $('#ckLoop').onchange = e => { prefs.ckLoop = e.target.checked; LS.set('prefs', prefs); $('#ckQ').focus(); };
+  const addScan = (p, code, inp) => {
+    const add = rateOf(p, unitByCode(p, code)), cur = cnt(p.id);
+    if (cur != null && (!Number.isInteger(cur) || cur < 0)) return {error:'请先修正该商品的实盘数量'};
+    const counted = (cur ?? 0) + add;
+    counts[p.id] = inp.value = String(counted);
+    paint(inp.closest('tr')); summary(); filter();
+    return {name:p.name, unit:p.unit, book:curBook(o.lines.find(l => l.productId === p.id)), counted, add};
+  };
+  if ($('#ckScan')) {
+    $('#ckScan').onclick = () => {
+      const warehouse = whs().find(w => w.id === (o.wh || META.defaultWh));
+      NATIVE.scanInventory(scanSession, warehouse?.name || '已删除仓库');
+    };
+    window.__xerpInventoryScan = (session, code) => {
+      if (session !== scanSession || !tb.isConnected || !$('#mask').classList.contains('show')) return {error:'盘点单已关闭'};
+      const p = findProduct(String(code || '').trim());
+      const inp = p && Array.from(tb.querySelectorAll('input[data-pid]')).find(el => el.dataset.pid === p.id);
+      if (!inp) return {error:'本盘点单中没有该商品'};
+      return addScan(p, code, inp);
+    };
+  }
   $('#ckQ').addEventListener('keydown', e => {
     if (e.key !== 'Enter') return;
     const code = e.target.value.trim(), p = findProduct(code), inp = p && tb.querySelector(`input[data-pid="${p.id}"]`);
     if (!p || !tb.querySelector(`tr[data-pid="${p.id}"]`)) { e.target.value = ''; return toast('本盘点单中没有该商品：' + code, 'error'); }
     if ($('#ckLoop') && $('#ckLoop').checked && inp) {  // 扫码累加：一次 +1，箱条码 + 一箱的数量
-      const add = rateOf(p, unitByCode(p, code)), cur = cnt(p.id);
-      counts[p.id] = String((cur == null || Number.isNaN(cur) ? 0 : cur) + add); inp.value = counts[p.id];
-      const tr = inp.closest('tr'); paint(tr); summary(); tr.scrollIntoView({block:'center'});
+      e.target.value = '';
+      const result = addScan(p, code, inp);
+      if (result.error) return toast(result.error, 'error');
+      const tr = inp.closest('tr'); tr.scrollIntoView({block:'center'});
       tr.style.background = 'var(--primary-soft, rgba(99,102,241,.12))'; setTimeout(() => { tr.style.background = ''; }, 600);
-      toast(`${p.name} +${add}，共 ${counts[p.id]}`, 'info');
+      toast(`${p.name} +${result.add}，共 ${result.counted}`, 'info');
       e.target.value = ''; e.target.focus(); return;
     }
     e.target.value = ''; filter();
