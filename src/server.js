@@ -15,9 +15,11 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const net = require('net');
+const tls = require('tls');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.12.0';
+const VERSION = '2.13.1';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -127,7 +129,7 @@ const ORD = {
 const ENTITY = {
   products: { name: '商品', required: { name: '商品名称' },
     fields: { sku: ['s', '商品编码'], barcode: ['s', '条码'], name: ['s', '商品名称'], spec: ['s'], brand: ['s', '品牌'], category: ['s'], unit: ['s'], cost: ['n', '成本价'], price: ['n', '销售价'], stock: ['n', '期初库存'], safety: ['n', '安全库存'],
-      batch: ['b'], serial: ['b'], shelfDays: ['n', '保质期天数'], weight: ['w', '重量'], size: ['z'], remark: ['s'] } },
+      batch: ['b'], serial: ['b'], dec: ['b'], shelfDays: ['n', '保质期天数'], weight: ['w', '重量'], size: ['z'], remark: ['s'] } },
   customers: { name: '客户', required: { name: '客户名称' },
     fields: { name: ['s'], contact: ['s'], phone: ['s'], email: ['s'], level: ['s'], address: ['s'], remark: ['s'] } },
   suppliers: { name: '供应商', required: { name: '供应商名称' },
@@ -150,7 +152,7 @@ const PERMS = [
   ['inv.view', '查看库存、出入库单与流水', 'inventory'], ['inv.in', '开入库单', 'inventory'], ['inv.out', '开出库单', 'inventory'],
   ['inv.check', '盘点录入（新建盘点单、录实盘数）', 'inventory'], ['inv.checkpost', '盘点审核（确认盘盈盘亏、调整库存）', 'inventory'], ['inv.void', '作废出入库单（冲回库存）', 'inventory'],
   ['inv.approve', '审核出入库单（开启审核后，审核通过才改库存）', 'inventory'],
-  ['inv.print', '打印单据 / 盘点表', 'inventory'], ['inv.export', '导出数据', 'inventory'],
+['inv.print', '打印单据 / 盘点表', 'inventory'], ['tpl.edit', '修改打印模板', 'inventory'], ['inv.export', '导出数据', 'inventory'],
   ['inv.cost', '查看价格与金额', 'inventory'], ['inv.backdate', '单据日期可选非当天（补录）', 'inventory'],
   ['inv.others', '查看 / 处理他人开的单据', 'inventory'], ['inv.transfer', '开调拨单（仓库之间移库）', 'inventory'],
   ['prod.view', '查看商品档案', 'products'], ['prod.edit', '新增 / 编辑商品', 'products'], ['prod.delete', '删除商品', 'products'],
@@ -505,7 +507,7 @@ function fefoOrder(list, kind) {
   const ok = list.filter(b => !expired(b)).sort(fefo), bad = list.filter(expired).sort(fefo);
   return kind === '报损出库' ? [...bad, ...ok] : [...ok, ...bad];
 }
-function takeBatches(p, wh, qty, alloc, kind) {
+function takeBatches(p, wh, qty, alloc, kind, prefer) {
   const out = [];
   if (alloc) {  // 冲回指定批次（作废入库单 / 调拨单）
     for (const a of alloc) {
@@ -519,6 +521,16 @@ function takeBatches(p, wh, qty, alloc, kind) {
     return out;
   }
   let left = qty;
+  // 手动指定批次：先从这个批次扣，不够的再按先到期先出补
+  if (prefer && prefer.id && left > 0) {
+    const b = get('batches', prefer.id);
+    if (b && b.productId === p.id && b.wh === wh && b.qty > 0) {
+      const n = round4(Math.min(left, b.qty));
+      b.qty = round4(b.qty - n); left = round4(left - n);
+      b.qty > 0.0000001 ? put('batches', b) : del('batches', b.id);
+      out.push({ id: b.id, no: b.no, prodDate: b.prodDate || '', expDate: b.expDate || '', qty: n });
+    }
+  }
   for (const b of fefoOrder(batchesOf(p.id, wh), kind)) {
     if (!left) break;
     const n = Math.min(left, b.qty);
@@ -527,7 +539,12 @@ function takeBatches(p, wh, qty, alloc, kind) {
     out.push({ id: b.id, no: b.no, prodDate: b.prodDate || '', expDate: b.expDate || '', qty: n });
   }
   if (left) out.push({ id: '', no: '（无批次）', expDate: '', qty: left });  // 批次账与库存不一致时不阻断出库
-  return out;
+  const merged = [];
+  for (const a of out) {
+    const hit = a.id && merged.find(x => x.id === a.id);
+    if (hit) hit.qty = round4(hit.qty + a.qty); else merged.push({ ...a });
+  }
+  return merged;
 }
 // 开启批次管理：现有各仓库存记为「期初」批次；关闭：清掉该商品的批次记录
 /* ---------- 序列号：启用的商品一件一个号，出入库单 / 调拨单逐件登记，可追溯每一件的来龙去脉 ---------- */
@@ -678,7 +695,7 @@ function rebuildAllCostLayers() { list('products').forEach(rebuildCostLayers); }
  * 启用批次的商品：入库按 batch（{ no, prodDate, expDate }）或 alloc（批次列表，冲回 / 调拨用）入批次；出库按 alloc 冲回指定批次，否则先到期先出
  * 返回 { unit: 计价单价, alloc: 本次涉及的批次 }
  */
-function moveStock(ctx, p, qty, kind, ref = '', note = '', { price, reversePrice, date, wh = DEFAULT_WH, batch, alloc, serials, undo } = {}) {
+function moveStock(ctx, p, qty, kind, ref = '', note = '', { price, reversePrice, date, wh = DEFAULT_WH, batch, alloc, serials, undo, preferBatch } = {}) {
   const before = p.stock || 0, cost0 = p.cost || 0, after = before + qty;
   if (!p.wh) p.wh = { [DEFAULT_WH]: before };
   if (qty < 0 && whQty(p, wh) + qty < 0) fail(`「${p.name}」在${whName(wh)}库存不足（需 ${-qty}，现有 ${whQty(p, wh)}）`);
@@ -705,7 +722,7 @@ function moveStock(ctx, p, qty, kind, ref = '', note = '', { price, reversePrice
   let used;
   if (p.batch && qty) {
     if (qty > 0) used = alloc ? alloc.map(a => addBatch(p, wh, a.qty, a, ref, date)) : [addBatch(p, wh, qty, batch, ref, date)];
-    else used = takeBatches(p, wh, -qty, alloc, kind);
+    else used = takeBatches(p, wh, -qty, alloc, kind, preferBatch);
   }
   put('products', p);
   addLog(ctx, p.id, kind, qty, ref, note, date, { cost: round4(unit), costAfter: p.cost, wh, ...(used ? { batches: used.map(({ no, expDate, qty }) => ({ no, expDate, qty })) } : {}), ...(p.serial && serials ? { serials } : {}) });
@@ -1205,7 +1222,9 @@ function deleteOrder(ctx, kind, id) {
 function adjustStock(ctx, id) {
   const { mode, note } = ctx.body, qty = Number(ctx.body.qty);
   const T = { in: '手工入库', out: '手工出库', check: '盘点调整' }[mode] || fail('不支持的操作');
-  if (!Number.isInteger(qty)) fail('数量必须为整数');
+  const p0 = get('products', id);
+  if (!Number.isInteger(qty) && !(p0 && p0.dec)) fail('数量必须为整数（按重量 / 长度卖的商品请在商品档案里打开「允许小数数量」）');
+  if (p0 && p0.dec && Math.abs(qty - round2(qty)) > 1e-9) fail('数量最多两位小数');
   if (mode !== 'check' && needApprove(mode)) fail(`已开启${DOC[mode].title}审核，请开${DOC[mode].title}`);
   return tx(() => {
     const p = get('products', id) || fail('商品不存在', 404), wh = pickWh(ctx.body.wh), cur = whQty(p, wh);
@@ -1229,7 +1248,7 @@ const lackText = (lack, wh) => `${whName(wh)}库存不足：` + lack.map(x => x.
 function postStockDoc(ctx, o) {
   if (o.dir === 'in' && o.bom) bomConsume(ctx, o);
   o.items.forEach(i => {
-    const m = moveStock(ctx, get('products', i.productId), o.dir === 'in' ? i.qty : -i.qty, o.type, o.no, i.note || o.party, { price: o.dir === 'in' ? i.price : undefined, date: o.date, wh: o.wh, batch: i.batch, serials: i.serials });
+    const m = moveStock(ctx, get('products', i.productId), o.dir === 'in' ? i.qty : -i.qty, o.type, o.no, i.note || o.party, { price: o.dir === 'in' ? i.price : undefined, date: o.date, wh: o.wh, batch: i.batch, serials: i.serials, preferBatch: i.preferBatch });
     if (o.dir === 'out') { i.price = round4(m.unit); if (i.rate) i.uprice = round4(m.unit * i.rate); }
     delete i.batch;
     if (m.alloc) i.batches = m.alloc;
@@ -1261,8 +1280,14 @@ function parseUnitsText(t) {
 }
 // 明细数量按所选单位录入，换算成基本单位：返回 { qty: 基本单位数量, unit, rate, uqty: 录入数量 }
 function unitQty(p, i) {
-  const n = Number(i.qty), name = str(i.unit, 10);
-  if (!Number.isInteger(n) || n <= 0) fail(`「${p.name}」数量必须为正整数`);
+  let n = Number(i.qty), name = str(i.unit, 10);
+  if (!Number.isFinite(n) || n <= 0) fail(`「${p.name}」数量必须大于 0`);
+  if (p.serial && !Number.isInteger(n)) fail(`「${p.name}」启用了序列号，数量必须为整数`);
+  if (p.dec) {
+    const r = round2(n);
+    if (Math.abs(n - r) > 1e-9) fail(`「${p.name}」数量最多两位小数`);
+    n = r;
+  } else if (!Number.isInteger(n)) fail(`「${p.name}」数量必须为正整数（按重量 / 长度卖的商品请在商品档案里打开「允许小数数量」）`);
   if (!name || name === p.unit) return { qty: n };
   const u = (p.units || []).find(x => x.name === name) || fail(`「${p.name}」没有单位「${name}」，请先在商品档案里设置`);
   return { qty: n * u.rate, unit: u.name, rate: u.rate, uqty: n };
@@ -1479,6 +1504,12 @@ function saveStockDoc(ctx, noTx = false) {
       if (dir === 'in' && p.batch) {
         it.batch = { no: str(i.batchNo, 40), prodDate: isDate(i.prodDate) ? i.prodDate : '', expDate: isDate(i.expDate) ? i.expDate : '' };
         if (it.batch.expDate && it.batch.prodDate && it.batch.expDate < it.batch.prodDate) fail(`「${p.name}」有效期早于生产日期`);
+      }
+      const preferId = i.preferBatch && typeof i.preferBatch === 'object' ? i.preferBatch.id : i.preferBatch;
+      if (dir === 'out' && p.batch && preferId) {
+        const b = get('batches', str(preferId, 64)) || fail(`「${p.name}」所选批次不存在，请重新选择`);
+        if (b.productId !== p.id || b.wh !== wh) fail(`「${p.name}」所选批次不在当前仓库`);
+        it.preferBatch = { id: b.id, no: b.no, expDate: b.expDate || '' };
       }
       return it;
     });
@@ -2450,24 +2481,26 @@ function cleanExpense(b) {
     if (advanceOffset > amount + 0.001) fail('冲抵金额不能超过报销金额');
     if (advanceOffset > advRemaining(a) + 0.001) fail(`这张备用金只剩 ${advRemaining(a).toFixed(2)} 可冲抵`);
   }
+  const cc = [...new Set((Array.isArray(b.cc) ? b.cc : String(b.cc || '').split(/[,，\s]+/)).map(x => String(x).trim()).filter(Boolean))].slice(0, 10);
   return { date, applicant: str(b.applicant, 32) || fail('请填写报销人'), dept: str(b.dept, 32), reason: str(b.reason, 300) || fail('请填写报销事由'),
-    lines, amount, advanceId: advanceId || '', advanceOffset };
+    lines, amount, advanceId: advanceId || '', advanceOffset, cc };
 }
 function buildExpenseApproval(v, user) {
   const flow = getMeta('settings', {}).expenseFlow || {};
   const namesOf = x => (Array.isArray(x) ? x : String(x || '').split(/[,，\s]+/)).map(s => String(s).trim()).filter(Boolean);
-  const step = (name, who) => {
+  const modes = flow.modes || {};
+  const step = (name, who, modeKey) => {
     const names = [...new Set(namesOf(who))].filter(n => n !== user.username);
-    return names.length ? { name, approvers: names, mode: 'all', status: '待审批', acted: [] } : null;
+    return names.length ? { name, approvers: names, mode: modes[modeKey] === 'any' ? 'any' : 'all', status: '待审批', acted: [] } : null;
   };
   const steps = [];
-  const head = step('部门负责人', flow.deptHeads && flow.deptHeads[v.dept]);
+  const head = step('部门负责人', flow.deptHeads && flow.deptHeads[v.dept], 'dept');
   if (head) steps.push(head);
-  const fin = step('财务', flow.finance);
+  const fin = step('财务', flow.finance, 'finance');
   if (fin) steps.push(fin);
   const threshold = Number(flow.gmThreshold) || 0;
   if (!threshold || v.amount >= threshold) {
-    const gm = step('总经理', flow.gm);
+    const gm = step('总经理', flow.gm, 'gm');
     if (gm) steps.push(gm);
   }
   if (!steps.length) return { steps: [{ name: '审批', approvers: [], mode: 'any', status: '待审批', acted: [] }], current: 0, fallback: true };
@@ -2485,11 +2518,11 @@ function createExpense(ctx) {
 function saveExpense(ctx, id) {
   return tx(() => {
     const o = expGet(ctx, id);
-    if (!['待审批', '已驳回'].includes(o.status)) fail(`报销单已${o.status.replace('已', '')}，不能再修改${o.status === '已批准' ? '（可以请审批人驳回后再改）' : ''}`);
+    if (!['待审批', '已驳回', '已撤回'].includes(o.status)) fail(`报销单已${o.status.replace('已', '')}，不能再修改${o.status === '已批准' ? '（可以请审批人驳回后再改）' : ''}`);
     if (o.creatorId !== ctx.user.id && !ctx.perms.has('finance')) fail('只能修改自己提交的报销单', 403);
     const v = cleanExpense(ctx.body);
     Object.assign(o, v, { status: '待审批', approval: buildExpenseApproval(v, ctx.user), payImgs: [], editor: ctx.user.name, editedAt: new Date().toISOString() });
-    delete o.approver; delete o.approvedAt; delete o.rejectReason;
+    delete o.approver; delete o.approvedAt; delete o.rejectReason; delete o.withdrawnAt; delete o.withdrawnBy;
     put('expenses', o); audit(ctx, '修改报销', `${o.no} ${o.amount}`);
     return o;
   });
@@ -2532,6 +2565,80 @@ function approveExpense(ctx, id, pass) {
       }
     }
     put('expenses', o); audit(ctx, pass ? '批准报销' : '驳回报销', o.no + (pass ? '' : ' ' + o.rejectReason));
+    return o;
+  });
+}
+/* ---------- 审批增强：加签 / 转交 / 催办 / 抄送 / 撤回（仿钉钉会签） ---------- */
+function currentApprovalStep(o) {
+  const ap = o.approval;
+  return ap && Array.isArray(ap.steps) && ap.steps.length ? ap.steps[ap.current] || null : null;
+}
+function canApproveStep(ctx, step) {
+  const me = ctx.user.username;
+  return ctx.user.role === 'admin' || (step.approvers || []).includes(me) || (!(step.approvers || []).length && ctx.perms.has('exp.approve'));
+}
+function addExpenseSigner(ctx, id) {
+  return tx(() => {
+    const o = get('expenses', id) || fail('报销单不存在', 404);
+    if (o.status !== '待审批') fail(`报销单当前状态为「${o.status}」，不能加签`);
+    const ap = o.approval, step = currentApprovalStep(o) || fail('审批流程已结束');
+    if (!canApproveStep(ctx, step)) fail('只有当前审批人可以加签', 403);
+    const who = str(ctx.body.who, 32) || fail('请选择加签人');
+    const u = S.userByName.get(who) || fail('没有这个账号');
+    if (who === ctx.user.username) fail('不能加签给自己');
+    if ((step.approvers || []).includes(who)) fail('这个人已经在当前节点里了');
+    const pos = ctx.body.position === 'before' ? 'before' : 'after';
+    const ns = { name: '加签 · ' + u.name, approvers: [who], mode: 'all', status: '待审批', acted: [], added: true };
+    if (pos === 'before') ap.steps.splice(ap.current, 0, ns);
+    else ap.steps.splice(ap.current + 1, 0, ns);
+    (ap.log = ap.log || []).push({ type: 'addsigner', by: ctx.user.name, to: u.name, position: pos, at: new Date().toISOString() });
+    put('expenses', o);
+    audit(ctx, '审批加签', `${o.no} → ${u.name}（${pos === 'before' ? '前加签' : '后加签'}）`);
+    return o;
+  });
+}
+function transferExpense(ctx, id) {
+  return tx(() => {
+    const o = get('expenses', id) || fail('报销单不存在', 404);
+    if (o.status !== '待审批') fail(`报销单当前状态为「${o.status}」，不能转交`);
+    const ap = o.approval, step = currentApprovalStep(o) || fail('审批流程已结束');
+    if (!canApproveStep(ctx, step)) fail('只有当前审批人可以转交', 403);
+    const me = ctx.user.username;
+    if (!(step.approvers || []).includes(me)) fail('当前节点里没有你，不能转交（管理员代审请直接同意/驳回）');
+    if ((step.acted || []).some(x => x.by === me)) fail('这一步你已经处理过了，不能再转交');
+    const to = str(ctx.body.to, 32) || fail('请选择转交人');
+    const u = S.userByName.get(to) || fail('没有这个账号');
+    if (to === me) fail('不能转交给自己');
+    step.approvers = [...new Set((step.approvers || []).filter(x => x !== me).concat(to))];
+    (ap.log = ap.log || []).push({ type: 'transfer', by: ctx.user.name, to: u.name, at: new Date().toISOString() });
+    put('expenses', o);
+    audit(ctx, '审批转交', `${o.no} → ${u.name}`);
+    return o;
+  });
+}
+function urgeExpense(ctx, id) {
+  return tx(() => {
+    const o = get('expenses', id) || fail('报销单不存在', 404);
+    if (o.status !== '待审批') fail('只有审批中的单据可以催办');
+    if (o.creatorId !== ctx.user.id && ctx.user.role !== 'admin') fail('只有提交人可以催办', 403);
+    const ap = o.approval || {};
+    const last = (ap.urges || []).filter(x => x.by === ctx.user.username).pop();
+    if (last && Date.now() - new Date(last.at).getTime() < 10 * 60e3) fail('10 分钟内已经催过了，请稍后再试');
+    (ap.urges = ap.urges || []).push({ by: ctx.user.username, name: ctx.user.name, at: new Date().toISOString() });
+    o.approval = ap;
+    put('expenses', o);
+    audit(ctx, '催办审批', o.no);
+    return o;
+  });
+}
+function withdrawExpense(ctx, id) {
+  return tx(() => {
+    const o = get('expenses', id) || fail('报销单不存在', 404);
+    if (o.creatorId !== ctx.user.id && ctx.user.role !== 'admin') fail('只有提交人可以撤回', 403);
+    if (o.status !== '待审批') fail(`报销单当前状态为「${o.status}」，不能撤回`);
+    Object.assign(o, { status: '已撤回', withdrawnAt: new Date().toISOString(), withdrawnBy: ctx.user.name });
+    put('expenses', o);
+    audit(ctx, '撤回报销', o.no);
     return o;
   });
 }
@@ -3008,7 +3115,8 @@ route('POST', '/api/logout', ctx => { db.prepare('DELETE FROM sessions WHERE tok
 const publicSettings = ctx => {
   const { notify, kdn, expenseFlow, ...s } = getMeta('settings', {}), k = kdn || {}, ready = !!(k.ebid && k.key);
   const pub = { ready, eorder: ready && kdnSenderOk(k), sandbox: !!k.sandbox, autoTrack: !!k.autoTrack };
-  return ctx.user.role === 'admin' ? { ...s, notify, expenseFlow: expenseFlow || {}, kdn: { ...pub, ebid: k.ebid || '', keySet: !!k.key, sender: k.sender || {} } } : { ...s, kdn: pub };
+  const safeNotify = notify ? { ...notify, mail: notify.mail ? { ...notify.mail, pass: '', hasPass: !!notify.mail.pass } : undefined } : notify;
+  return ctx.user.role === 'admin' ? { ...s, notify: safeNotify, expenseFlow: expenseFlow || {}, kdn: { ...pub, ebid: k.ebid || '', keySet: !!k.key, sender: k.sender || {} } } : { ...s, kdn: pub };
 };
 route('GET', '/api/data', ctx => ({
   version: VERSION, settings: { ...publicSettings(ctx), modules: enabledModules(), feedbackUnread: fbUnread(), platform: PLAT },
@@ -3100,12 +3208,37 @@ route('POST', '/api/update/download', async ctx => {
 }, { admin: true });
 
 route('PUT', '/api/settings/notify', ctx => {
-  const b = ctx.body, s = getMeta('settings', {}), url = str(b.url, 500), time = /^([01]\d|2[0-3]):[0-5]\d$/.test(b.time) ? b.time : fail('推送时间格式应为 08:30');
+  const b = ctx.body || {}, s = getMeta('settings', {});
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(b.time) ? b.time : fail('推送时间格式应为 08:30');
+  const wb = b.webhook || {}, url = str(wb.url, 500) || str(b.url, 500) || '';
   if (url) { try { if (!/^https?:$/.test(new URL(url).protocol)) throw 0; } catch (e) { fail('推送地址必须以 http:// 或 https:// 开头'); } }
-  if (b.enabled && !url) fail('请填写推送地址');
-  s.notify = { enabled: !!b.enabled, url, time, skipEmpty: !!b.skipEmpty }; setMeta('settings', s);
+  const oldMail = (s.notify || {}).mail || {};
+  const mb = b.mail || {};
+  const mail = {
+    enabled: !!mb.enabled,
+    host: str(mb.host, 120) || '',
+    port: Math.max(1, Math.min(65535, +mb.port || 465)),
+    secure: mb.secure !== false,
+    user: str(mb.user, 160) || '',
+    pass: str(mb.pass, 300) || oldMail.pass || '',
+    from: str(mb.from, 160) || '',
+    to: str(mb.to, 300) || '',
+  };
+  if (mail.enabled && (!mail.host || !mail.to)) fail('开启邮件通知需要填写 SMTP 服务器和收件人');
+  const events = {};
+  for (const k of Object.keys(NOTIFY_EVENTS)) events[k] = b.events ? !!b.events[k] : k === 'lowStock';
+  if (!Object.values(events).some(Boolean)) fail('至少要选一个提醒内容');
+  const webhook = { enabled: (b.events ? wb.enabled !== false : true) && !!url, url };
+  if (b.enabled && !webhook.enabled && !mail.enabled) fail('请至少开启一个通知通道');
+  s.notify = {
+    enabled: !!b.enabled, time, skipEmpty: b.skipEmpty !== false,
+    overdueDays: Math.max(1, Math.min(365, +b.overdueDays || 30)),
+    events, url, webhook, mail,
+  };
+  setMeta('settings', s);
   if (hhmm() >= time && getMeta('notifyLast', '') !== today()) setMeta('notifyLast', today());  // 今天的时间已过就从明天开始，不在保存时立刻发
-  audit(ctx, '修改设置', '库存提醒推送' + (s.notify.enabled ? '：每天 ' + time : '：关闭'));
+  audit(ctx, '修改设置', '消息通知' + (s.notify.enabled ? '：每天 ' + time : '：关闭'));
+  return { ok: true };
 }, { admin: true });
 route('PUT', '/api/settings/expense-flow', ctx => {
   const b = ctx.body || {}, s = getMeta('settings', {});
@@ -3117,17 +3250,24 @@ route('PUT', '/api/settings/expense-flow', ctx => {
       if (d && n.length) heads[d] = n;
     }
   }
-  const flow = { deptHeads: heads, finance: names(b.finance), gm: names(b.gm), gmThreshold: Math.max(0, round2(Number(b.gmThreshold) || 0)) };
+  const modes = {};
+  for (const k of ['dept', 'finance', 'gm']) modes[k] = (b.modes && b.modes[k]) === 'any' ? 'any' : 'all';
+  const flow = { deptHeads: heads, finance: names(b.finance), gm: names(b.gm), gmThreshold: Math.max(0, round2(Number(b.gmThreshold) || 0)), modes };
   s.expenseFlow = flow; setMeta('settings', s);
   audit(ctx, '修改报销审批流程', `财务 ${flow.finance.length} 人，总经理 ${flow.gm.length} 人`);
   return { ok: true, expenseFlow: flow };
 }, { admin: true });
 route('POST', '/api/settings/notify/test', async ctx => {
-  const url = str(ctx.body.url, 500) || (getMeta('settings', {}).notify || {}).url || fail('请填写推送地址');
-  const m = notifyText();
-  await sendNotify(url, '【测试】' + m.text);
-  audit(ctx, '测试库存提醒推送');
-  return { text: m.text };
+  const b = ctx.body || {}, conf = notifyConf();
+  const hookUrl = str((b.webhook && b.webhook.url) || b.url, 500);
+  if (hookUrl) conf.webhook = { enabled: true, url: hookUrl };
+  if (b.mail) conf.mail = { ...conf.mail, ...b.mail, pass: str(b.mail.pass, 300) || conf.mail.pass };
+  const m = notifyText(conf);
+  const results = await deliverNotify(conf, '【测试】' + m.text);
+  if (!results.length) fail('请先开启一个通知通道（群机器人或邮件）');
+  if (!results.some(x => x.ok)) fail(results.map(x => (x.channel === 'mail' ? '邮件' : '群机器人') + '：' + x.error).join('；'));
+  audit(ctx, '测试消息通知');
+  return { results, text: m.text };
 }, { admin: true });
 route('GET', '/api/settings/notify/preview', () => notifyText(), { admin: true });
 
@@ -3217,12 +3357,43 @@ route('DELETE', '/api/projects/:id', ctx => deleteProject(ctx, ctx.params.id), {
 route('PUT', '/api/settings/print', ctx => {
   const kind = ctx.body.kind;
   if (!PRINT_KINDS[kind]) fail('单据类型不正确');
-  const s = getMeta('settings', {}), all = { ...(s.printTpl || {}) }, t = cleanTpl(ctx.body.tpl);
-  if (t) all[kind] = t; else delete all[kind];
-  s.printTpl = all; setMeta('settings', s);
-  audit(ctx, '修改打印模板', PRINT_KINDS[kind] + (t ? '' : ' 恢复默认'));
-  return all;
-}, { admin: true });
+  const s = getMeta('settings', {}), all = { ...(s.printTpl || {}) };
+  const lists = { ...(s.printTplList || {}) }, actives = { ...(s.printTplActive || {}) };
+  const list = Array.isArray(lists[kind]) ? [...lists[kind]] : [];
+  const id = str(ctx.body.id, 40), name = str(ctx.body.name, 30);
+  const save = () => {
+    lists[kind] = list; s.printTplList = lists; s.printTplActive = actives; s.printTpl = all;
+    setMeta('settings', s);
+    return { ...all, list, active: actives[kind] || '', defaultTpl: all[kind] || null };
+  };
+  if (ctx.body.del) {
+    const i = list.findIndex(x => x.id === ctx.body.del);
+    if (i >= 0) list.splice(i, 1);
+    if (actives[kind] === ctx.body.del) { delete actives[kind]; delete all[kind]; }
+    audit(ctx, '删除打印模板', PRINT_KINDS[kind]);
+    return save();
+  }
+  const t = cleanTpl(ctx.body.tpl);
+  if (ctx.body.create) {
+    if (!name) fail('请填写模板名称');
+    if (list.length >= 10) fail('每种单据最多 10 套模板');
+    const nid = 'tp' + uid();
+    list.push({ id: nid, name, tpl: t || null });
+    actives[kind] = nid;
+    if (t) all[kind] = t; else delete all[kind];
+  } else if (id) {
+    const e = list.find(x => x.id === id) || fail('模板不存在', 404);
+    if (name) e.name = name;
+    e.tpl = t;
+    actives[kind] = id;
+    if (t) all[kind] = t; else delete all[kind];
+  } else {
+    if (t) all[kind] = t; else delete all[kind];
+    delete actives[kind];
+  }
+  audit(ctx, '修改打印模板', PRINT_KINDS[kind] + (name ? '：' + name : ''));
+  return save();
+}, { perm: 'tpl.edit' });
 
 const ENTITY_PERM = { products: { POST: 'prod.edit', PUT: 'prod.edit', DELETE: 'prod.delete' }, customers: 'parties', suppliers: 'parties', employees: 'hr' };
 for (const col of Object.keys(ENTITY)) {
@@ -3331,6 +3502,10 @@ route('POST', '/api/expenses', ctx => createExpense(ctx), { perm: expPerm });
 route('PUT', '/api/expenses/:id', ctx => saveExpense(ctx, ctx.params.id), { perm: expPerm });
 route('POST', '/api/expenses/:id/approve', ctx => approveExpense(ctx, ctx.params.id, true), { perm: 'exp.approve' });
 route('POST', '/api/expenses/:id/reject', ctx => approveExpense(ctx, ctx.params.id, false), { perm: 'exp.approve' });
+  route('POST', '/api/expenses/:id/addsigner', ctx => addExpenseSigner(ctx, ctx.params.id), { perm: 'exp.approve' });
+  route('POST', '/api/expenses/:id/transfer', ctx => transferExpense(ctx, ctx.params.id), { perm: 'exp.approve' });
+  route('POST', '/api/expenses/:id/urge', ctx => urgeExpense(ctx, ctx.params.id), { perm: expPerm });
+  route('POST', '/api/expenses/:id/withdraw', ctx => withdrawExpense(ctx, ctx.params.id), { perm: expPerm });
 route('POST', '/api/expenses/:id/pay', ctx => payExpense(ctx, ctx.params.id), { perm: 'finance' });
 route('POST', '/api/expenses/:id/unpay', ctx => unpayExpense(ctx, ctx.params.id), { perm: 'finance' });
 route('POST', '/api/expenses/:id/void', ctx => voidExpense(ctx, ctx.params.id), { perm: expPerm });
@@ -3358,6 +3533,7 @@ route('POST', '/api/password', ctx => {
   audit(ctx, '修改密码');
 });
 route('GET', '/api/users', () => db.prepare('SELECT * FROM users WHERE disabled = 0 ORDER BY created_at').all().map(publicUser), { admin: true });
+route('GET', '/api/people', () => db.prepare('SELECT username, name FROM users WHERE disabled = 0 ORDER BY created_at').all());
 route('POST', '/api/users', ctx => { createUser(ctx.body); audit(ctx, '新增用户', ctx.body.username); }, { admin: true });
 route('PUT', '/api/users/:id', ctx => {
   const u = S.userById.get(ctx.params.id) || fail('用户不存在', 404), b = ctx.body;
@@ -3509,21 +3685,118 @@ route('POST', '/api/clear', ctx => {
   tx(() => { writeAll({}); setMeta('counters', {}); audit(ctx, '清空业务数据'); });
 }, { admin: true });
 
-/* ================= 消息推送：每天定时把库存预警发到企业微信 / 钉钉 / 飞书群机器人或任意 Webhook ================= */
-function notifyText() {
-  const s = getMeta('settings', {}), days = +s.expiryDays || 30, lines = [];
-  const ps = list('products'), low = ps.filter(p => p.safety > 0 && p.stock < p.safety).sort((a, b) => a.stock - b.stock);
-  const now = new Date(today()), left = b => Math.round((new Date(b.expDate) - now) / 864e5);
-  const exp = list('batches').filter(b => b.qty > 0 && b.expDate && left(b) <= days).sort((a, b) => a.expDate.localeCompare(b.expDate));
-  const pend = list('stockDocs').filter(o => o.status === '待审核');
-  if (low.length) lines.push(`【库存不足】${low.length} 个商品`, ...low.slice(0, 15).map(p => `· ${p.name}：${p.stock}${p.unit || ''}（安全库存 ${p.safety}）`), ...(low.length > 15 ? [`· ……另有 ${low.length - 15} 个`] : []));
-  if (exp.length) {
-    const pn = id => (get('products', id) || {}).name || '已删除商品';
-    lines.push(`【保质期】${exp.filter(b => left(b) < 0).length} 个批次已过期，${exp.filter(b => left(b) >= 0).length} 个批次 ${days} 天内到期`,
-      ...exp.slice(0, 10).map(b => `· ${pn(b.productId)} 批次 ${b.no}：${left(b) < 0 ? '已过期' : left(b) + ' 天后到期'}（${b.expDate}，${b.qty}）`));
+/* ================= 消息通知：库存预警 / 应收逾期 / 生日提醒 / 待审批 / 经营日报，通道支持群机器人与邮件 ================= */
+const NOTIFY_EVENTS = {
+  lowStock: '库存预警',
+  overdue: '应收逾期',
+  birthday: '生日提醒',
+  pendingApproval: '待审批',
+  daily: '经营日报',
+};
+function notifyConf() {
+  const n = getMeta('settings', {}).notify || {};
+  const hasNew = !!n.webhook || !!n.mail || !!n.events;
+  const webhook = { enabled: !!n.url, url: n.url || '', ...(n.webhook || {}) };
+  const mail = { enabled: false, host: '', port: 465, secure: true, user: '', pass: '', from: '', to: '', ...(n.mail || {}) };
+  return {
+    enabled: !!n.enabled,
+    time: /^([01]\d|2[0-3]):[0-5]\d$/.test(n.time) ? n.time : '08:30',
+    skipEmpty: n.skipEmpty !== false,
+    overdueDays: Math.max(1, Math.min(365, +n.overdueDays || 30)),
+    events: { lowStock: true, overdue: false, birthday: false, pendingApproval: false, daily: false, ...(hasNew ? n.events || {} : {}) },
+    webhook,
+    mail,
+  };
+}
+function idBirthdaySrv(id) {
+  const s = String(id || '').trim().toUpperCase();
+  if (!/^\d{17}[\dX]$/.test(s) && !/^\d{15}$/.test(s)) return '';
+  const d = s.length === 18 ? s.slice(6, 14) : '19' + s.slice(6, 12);
+  const y = +d.slice(0, 4), m = +d.slice(4, 6), day = +d.slice(6, 8);
+  return y >= 1900 && m >= 1 && m <= 12 && day >= 1 && day <= 31 ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` : '';
+}
+function notifyText(conf = notifyConf()) {
+  const s = getMeta('settings', {}), ev = conf.events, lines = [], company = s.company || 'x.erp';
+  let count = 0;
+
+  if (ev.lowStock) {
+    const days = +s.expiryDays || 30;
+    const low = list('products').filter(p => p.safety > 0 && p.stock < p.safety).sort((a, b) => a.stock - b.stock);
+    const now = new Date(today()), left = b => Math.round((new Date(b.expDate) - now) / 864e5);
+    const exp = list('batches').filter(b => b.qty > 0 && b.expDate && left(b) <= days).sort((a, b) => a.expDate.localeCompare(b.expDate));
+    const pend = list('stockDocs').filter(o => o.status === '待审核');
+    const part = [];
+    if (low.length) part.push(`【库存不足】${low.length} 个商品`, ...low.slice(0, 10).map(p => `· ${p.name}：${p.stock}${p.unit || ''}（安全库存 ${p.safety}）`), ...(low.length > 10 ? [`· ……另有 ${low.length - 10} 个`] : []));
+    if (exp.length) {
+      const pn = id => (get('products', id) || {}).name || '已删除商品';
+      part.push(`【保质期】${exp.filter(b => left(b) < 0).length} 个批次已过期，${exp.filter(b => left(b) >= 0).length} 个批次 ${days} 天内到期`,
+        ...exp.slice(0, 8).map(b => `· ${pn(b.productId)} 批次 ${b.no}：${left(b) < 0 ? '已过期' : left(b) + ' 天后到期'}（${b.expDate}，${b.qty}）`));
+    }
+    if (pend.length) part.push(`【待审核】${pend.length} 张出入库单等待审核`);
+    if (part.length) { lines.push(...part); count += low.length + exp.length + pend.length; }
   }
-  if (pend.length) lines.push(`【待审核】${pend.length} 张出入库单等待审核`);
-  return { count: low.length + exp.length + pend.length, text: `${s.company || 'x.erp'} 库存提醒 ${today()}\n` + (lines.length ? lines.join('\n') : '今天没有需要处理的库存预警。') };
+
+  if (ev.overdue) {
+    const od = conf.overdueDays, m = new Map();
+    for (const o of list('sales')) {
+      if (o.status === '已作废') continue;
+      const due = round2(orderTotal(o) - (o.received || 0));
+      if (due <= 0.001) continue;
+      const age = Math.round((new Date(today()) - new Date(o.date)) / 864e5);
+      if (age < od) continue;
+      const k = o.customerId;
+      const cur = m.get(k) || { name: (get('customers', k) || {}).name || '已删除客户', amt: 0, n: 0, oldest: 0 };
+      cur.amt = round2(cur.amt + due); cur.n++; cur.oldest = Math.max(cur.oldest, age);
+      m.set(k, cur);
+    }
+    const arr = [...m.values()].sort((a, b) => b.amt - a.amt);
+    if (arr.length) {
+      count += arr.length;
+      lines.push(`【应收逾期】${arr.length} 个客户有超过 ${od} 天未结清的货款，合计 ¥${arr.reduce((x, v) => x + v.amt, 0).toFixed(2)}`,
+        ...arr.slice(0, 8).map(v => `· ${v.name}：¥${v.amt.toFixed(2)}（${v.n} 张单，最长 ${v.oldest} 天）`),
+        ...(arr.length > 8 ? [`· ……另有 ${arr.length - 8} 个`] : []));
+    }
+  }
+
+  if (ev.birthday) {
+    const bd = +s.birthdayDays || 7, out = [], base = new Date(today());
+    for (const e of list('employees')) {
+      if (e.status === '离职') continue;
+      const b = idBirthdaySrv(e.idCard);
+      if (!b) continue;
+      let x = new Date(base.getFullYear(), +b.slice(5, 7) - 1, +b.slice(8, 10));
+      if (x < base) x = new Date(base.getFullYear() + 1, +b.slice(5, 7) - 1, +b.slice(8, 10));
+      const dd = Math.round((x - base) / 864e5);
+      if (dd <= bd) out.push({ name: e.name, dept: e.dept || '', b, dd });
+    }
+    out.sort((a, b) => a.dd - b.dd);
+    if (out.length) {
+      count += out.length;
+      lines.push(`【生日提醒】${out.length} 位员工 ${bd} 天内过生日`, ...out.map(x => `· ${x.name}${x.dept ? '（' + x.dept + '）' : ''} ${x.b.slice(5)} ${x.dd === 0 ? '就是今天' : x.dd + ' 天后'}`));
+    }
+  }
+
+  if (ev.pendingApproval) {
+    const ex = list('expenses').filter(o => o.status === '待审批');
+    const ad = list('advances').filter(o => o.status === '待审批');
+    if (ex.length || ad.length) {
+      count += ex.length + ad.length;
+      lines.push(`【待审批】报销 ${ex.length} 张${ex.length ? `（¥${ex.reduce((x, o) => x + (o.amount || 0), 0).toFixed(2)}）` : ''}，备用金 ${ad.length} 张`);
+    }
+  }
+
+  if (ev.daily) {
+    const tod = today();
+    const sales = list('sales').filter(o => o.status !== '已作废' && o.date === tod);
+    const amt = round2(sales.reduce((x, o) => x + orderTotal(o), 0));
+    const cash = round2(list('finance').filter(f => f.date === tod && f.category === '销售收款').reduce((x, f) => x + f.amount, 0));
+    const receiv = round2(list('sales').filter(o => o.status !== '已作废').reduce((x, o) => x + Math.max(0, orderTotal(o) - (o.received || 0)), 0));
+    const lowN = list('products').filter(p => p.safety > 0 && p.stock < p.safety).length;
+    count += 1;
+    lines.push('【经营日报】', `· 今日销售 ${sales.length} 单，¥${amt.toFixed(2)}`, `· 今日收款 ¥${cash.toFixed(2)}`, `· 待收款合计 ¥${receiv.toFixed(2)}`, `· 缺货商品 ${lowN} 个`);
+  }
+
+  return { count, text: `${company} 经营提醒 ${today()}\n` + (lines.length ? lines.join('\n') : '今天没有需要处理的事项。') };
 }
 // 按地址判断机器人类型，拼对应的消息格式
 async function sendNotify(url, text) {
@@ -3531,7 +3804,7 @@ async function sendNotify(url, text) {
   if (!/^https?:$/.test(u.protocol)) fail('推送地址必须以 http:// 或 https:// 开头');
   const feishu = /feishu\.cn|larksuite\.com/.test(u.hostname);
   const body = /qyapi\.weixin\.qq\.com|dingtalk\.com/.test(u.hostname) ? { msgtype: 'text', text: { content: text } }
-    : feishu ? { msg_type: 'text', content: { text } } : { title: 'x.erp 库存提醒', text, message: text };
+    : feishu ? { msg_type: 'text', content: { text } } : { title: 'x.erp 经营提醒', text, message: text };
   let r;
   try { r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) }); }
   catch (e) { fail('推送失败：连不上推送地址（' + (e.cause && e.cause.code || e.message) + '）'); }
@@ -3539,6 +3812,94 @@ async function sendNotify(url, text) {
   if (!r.ok) fail(`推送失败：对方返回 HTTP ${r.status} ${t.slice(0, 200)}`);
   let j = null; try { j = JSON.parse(t); } catch (e) {}
   if (j && ((j.errcode && j.errcode !== 0) || (feishu && j.code && j.code !== 0))) fail('推送失败：' + (j.errmsg || j.msg || t.slice(0, 200)));
+}
+/* ---------- 邮件通道：内置最小 SMTP 客户端（默认 465 SSL），不依赖第三方库 ---------- */
+function smtpTalk(host, port, secure) {
+  return new Promise((resolve, reject) => {
+    const sock = secure ? tls.connect({ host, port, servername: host }) : net.connect({ host, port });
+    let buf = '', cur = [], done = [], waiters = [], dead = null, settled = false;
+    const push = r => { const w = waiters.shift(); if (w) w.res(r); else done.push(r); };
+    const die = e => { dead = dead || e; while (waiters.length) waiters.shift().rej(dead); };
+    sock.setEncoding('utf8');
+    sock.setTimeout(20000);
+    sock.on('data', d => {
+      buf += d;
+      for (;;) {
+        const i = buf.indexOf('\n'); if (i < 0) break;
+        const line = buf.slice(0, i).replace(/\r$/, ''); buf = buf.slice(i + 1);
+        cur.push(line);
+        if (/^\d{3}(?: |$)/.test(line)) { const r = cur.join('\n'); cur = []; push(r); }
+      }
+    });
+    sock.on('error', e => { die(e); if (!settled) { settled = true; reject(e); } });
+    sock.on('timeout', () => { const e = new Error('连接邮件服务器超时'); die(e); if (!settled) { settled = true; reject(e); } });
+    const api = {
+      read: () => done.length ? Promise.resolve(done.shift()) : dead ? Promise.reject(dead) : new Promise((res, rej) => waiters.push({ res, rej })),
+      cmd: line => { sock.write(line + '\r\n'); return api.read(); },
+      write: data => sock.write(data),
+      close: () => { try { sock.end(); } catch (e) {} },
+    };
+    sock.once(secure ? 'secureConnect' : 'connect', () => { settled = true; resolve(api); });
+  });
+}
+async function sendMail(cfg, subject, text) {
+  const host = String(cfg.host || '').trim();
+  if (!host) fail('请填写 SMTP 服务器地址');
+  const to = String(cfg.to || '').split(/[,;，；\s]+/).filter(Boolean);
+  if (!to.length) fail('请填写收件人邮箱');
+  const port = +cfg.port || 465, secure = cfg.secure !== false;
+  let c;
+  try { c = await smtpTalk(host, port, secure); } catch (e) { fail('连不上邮件服务器：' + e.message); }
+  try {
+    let r = await c.read();
+    if (!/^220/.test(r)) fail('邮件服务器拒绝连接：' + r.slice(0, 100));
+    r = await c.cmd('EHLO x.erp');
+    if (!/^250/.test(r)) fail('EHLO 失败：' + r.slice(0, 100));
+    if (cfg.user) {
+      r = await c.cmd('AUTH LOGIN');
+      if (!/^334/.test(r)) fail('邮件服务器不支持账号密码登录');
+      r = await c.cmd(Buffer.from(String(cfg.user)).toString('base64'));
+      if (!/^334/.test(r)) fail('邮箱账号不正确');
+      r = await c.cmd(Buffer.from(String(cfg.pass || '')).toString('base64'));
+      if (!/^235/.test(r)) fail('邮箱授权码不正确（QQ 邮箱要填授权码，不是登录密码）');
+    }
+    const from = String(cfg.from || cfg.user || '').trim();
+    if (!from) fail('请填写发件人邮箱');
+    r = await c.cmd(`MAIL FROM:<${from}>`);
+    if (!/^250/.test(r)) fail('发件人被拒绝：' + r.slice(0, 100));
+    for (const addr of to) {
+      r = await c.cmd(`RCPT TO:<${addr}>`);
+      if (!/^(250|251)/.test(r)) fail('收件人被拒绝（' + addr + '）：' + r.slice(0, 100));
+    }
+    r = await c.cmd('DATA');
+    if (!/^354/.test(r)) fail('服务器不接受邮件正文');
+    const head = [
+      `From: =?UTF-8?B?${Buffer.from('x.erp').toString('base64')}?= <${from}>`,
+      `To: ${to.join(', ')}`,
+      `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
+      `Date: ${new Date().toUTCString()}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+    ].join('\r\n');
+    const body = Buffer.from(text, 'utf8').toString('base64').replace(/(.{76})/g, '$1\r\n');
+    c.write(head + '\r\n\r\n' + body + '\r\n.\r\n');
+    r = await c.read();
+    if (!/^250/.test(r)) fail('邮件被服务器拒收：' + r.slice(0, 100));
+    try { await c.cmd('QUIT'); } catch (e) {}
+  } finally { try { c.close(); } catch (e) {} }
+}
+async function deliverNotify(conf, text) {
+  const out = [], wh = conf.webhook || {}, ml = conf.mail || {};
+  if (wh.enabled && wh.url) {
+    try { await sendNotify(wh.url, text); out.push({ channel: 'webhook', ok: true }); }
+    catch (e) { out.push({ channel: 'webhook', ok: false, error: e.message }); }
+  }
+  if (ml.enabled && ml.host && ml.to) {
+    try { await sendMail(ml, 'x.erp 经营提醒', text); out.push({ channel: 'mail', ok: true }); }
+    catch (e) { out.push({ channel: 'mail', ok: false, error: e.message }); }
+  }
+  return out;
 }
 let notifyBusy = false;
 /* ---------- 问题反馈：用户留言发到作者官网，作者在官网后台回复，这里取回回复 ----------
@@ -3632,13 +3993,19 @@ async function statsTick() {
   } catch (e) {}
 }
 async function notifyTick() {
-  const n = getMeta('settings', {}).notify;
-  if (notifyBusy || !n || !n.enabled || !n.url || hhmm() < (n.time || '08:30') || getMeta('notifyLast', '') === today()) return;
+  const n = notifyConf();
+  if (notifyBusy || !n.enabled || hhmm() < n.time || getMeta('notifyLast', '') === today()) return;
+  if (!(n.webhook.enabled && n.webhook.url) && !(n.mail.enabled && n.mail.host && n.mail.to)) return;
   notifyBusy = true; setMeta('notifyLast', today());
   try {
-    const m = notifyText();
-    if (m.count || !n.skipEmpty) { await sendNotify(n.url, m.text); log('已推送库存提醒'); }
-  } catch (e) { log('库存提醒推送失败：' + e.message); } finally { notifyBusy = false; }
+    const m = notifyText(n);
+    if (!m.count && n.skipEmpty) return;
+    const r = await deliverNotify(n, m.text);
+    const okN = r.filter(x => x.ok).length;
+    if (okN) log('已推送经营提醒（' + okN + ' 个通道）');
+    const bad = r.filter(x => !x.ok);
+    if (bad.length) log('部分通知推送失败：' + bad.map(x => x.channel + ' ' + x.error).join('；'));
+  } catch (e) { log('消息推送失败：' + e.message); } finally { notifyBusy = false; }
 }
 
 /* ================= HTTP 服务 ================= */

@@ -54,6 +54,14 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .native #scanFab{display:flex;position:fixed;right:18px;bottom:22px;z-index:9000;width:56px;height:56px;border-radius:50%;align-items:center;justify-content:center;background:var(--primary);color:#fff;box-shadow:0 6px 20px rgba(79,70,229,.45)}
 .native #scanFab svg.i{width:26px;height:26px}
 .native #scanFab:active{transform:scale(.94)}
+.native #scanFab.in-modal{bottom:96px}
+#printRoot{display:none}
+html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-index:99998;overflow:auto;padding:8px}
+@media print{
+  html.printing body > *:not(#printRoot){display:none!important}
+  html.printing #printRoot{display:block!important;position:static;padding:0;overflow:visible;visibility:visible!important}
+  html.printing #printRoot *{visibility:visible!important}
+}
 .main{flex:1;margin-left:236px;min-width:0;transition:margin .2s}
 .app.collapsed .sidebar{width:72px}
 .app.collapsed .main{margin-left:72px}
@@ -148,6 +156,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
 .o-disc{display:flex;justify-content:flex-end;align-items:center;gap:8px 14px;flex-wrap:wrap;margin-top:14px;font-size:13px;color:var(--muted)}.o-disc b{color:var(--text)}.o-disc input{width:110px;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:var(--panel);margin-left:6px}
 .tbl.items td{padding:8px 10px}.tbl.items th{padding:9px 10px}
 .tbl.items input,.tbl.items select{width:100%;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:var(--panel);outline:none}
+.tbl.items .bcell select{min-width:190px}
 .tbl.items input:focus,.tbl.items select:focus{border-color:var(--primary)}
 /* 手机上表格很窄时，数量 / 单价等输入框保持最小宽度，表格改为左右滑动，不被挤成一两位数 */
 .tbl.items input{min-width:72px}.tbl.items input[type=checkbox]{min-width:0;width:auto}.tbl.items [data-k=price],.tbl.items [data-k=note]{min-width:100px}.tbl.items [data-k=product]{min-width:180px}
@@ -341,7 +350,58 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   .card-head{padding:14px 14px 0}
   .card-body{padding:14px}
   .native .content{padding-bottom:84px}
+  /* 手机弹窗：贴满屏幕的底部弹层，头尾固定、中间滚动，内容整体缩小一档 */
+  .modal-mask{padding:0;align-items:flex-end}
+  .modal,.modal.sm,.modal.lg,.modal.xl{width:100%;max-width:100%;max-height:100vh;max-height:100dvh;border-radius:14px 14px 0 0;display:flex;flex-direction:column;margin:0}
+  .m-head{padding:12px 14px;flex:none}
+  .m-head h3{font-size:15px}
+  .m-body{flex:1 1 auto;max-height:none;overflow:auto;padding:12px;-webkit-overflow-scrolling:touch}
+  .m-foot{padding:10px 12px;flex:none;flex-wrap:wrap;gap:8px}
+  .m-foot .btn{height:36px}
+  .form-grid{gap:10px}
+  .tbl.items th,.tbl.items td{padding:6px 8px;font-size:12.5px}
+  .tbl.items input,.tbl.items select{height:32px}
+  /* 单据正文：手机上按屏宽排，不横向撑出屏幕 */
+  .m-body{overflow-x:hidden}
+  .print-area.doc{font-size:12px}
+  .print-area.doc .tbl{white-space:normal;table-layout:fixed;width:100%}
+  .print-area.doc .tbl th,.print-area.doc .tbl td{padding:5px 4px;font-size:11.5px;word-break:break-word}
+  .print-area.doc h2{font-size:18px}
+  .doc-sum{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;justify-content:initial}
+  .doc-sum b{font-size:14px}
 }
+/* 兜底：有些手机浏览器（尤其 iOS 开了「请求桌面网站」或在微信里）不按 viewport 算宽度，
+   这里用屏幕物理宽度再强制一次手机布局，和上面的 @media 规则等价 */
+html.mobile .sidebar{transform:translateX(-100%)}
+html.mobile .app.open .sidebar{transform:none}
+html.mobile .app.open .backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:35}
+html.mobile .main,html.mobile .app.collapsed .main{margin-left:0}
+html.mobile .app.collapsed .sidebar{width:236px}
+html.mobile .content{padding:16px}
+html.mobile .topbar{padding:0 16px}
+html.mobile .g2,html.mobile .g4,html.mobile .g5{grid-template-columns:repeat(2,minmax(0,1fr))}
+html.mobile .user div:last-child,html.mobile .crumb small{display:none}
+html.mobile .form-grid,html.mobile .doc-info{grid-template-columns:1fr}
+html.mobile .span2{grid-column:auto}
+html.mobile .search{width:100%}
+html.mobile .tb-left{width:100%}
+html.mobile .modal-mask{padding:0;align-items:flex-end}
+html.mobile .modal,html.mobile .modal.sm,html.mobile .modal.lg,html.mobile .modal.xl{width:100%;max-width:100%;max-height:100vh;max-height:100dvh;border-radius:14px 14px 0 0;display:flex;flex-direction:column;margin:0}
+html.mobile .m-head{padding:12px 14px;flex:none}
+html.mobile .m-head h3{font-size:15px}
+html.mobile .m-body{flex:1 1 auto;max-height:none;overflow:auto;padding:12px;-webkit-overflow-scrolling:touch}
+html.mobile .m-foot{padding:10px 12px;flex:none;flex-wrap:wrap;gap:8px}
+html.mobile .m-foot .btn{height:36px}
+html.mobile .form-grid{gap:10px}
+html.mobile .tbl.items th,html.mobile .tbl.items td{padding:6px 8px;font-size:12.5px}
+html.mobile .tbl.items input,html.mobile .tbl.items select{height:32px}
+html.mobile .m-body{overflow-x:hidden}
+html.mobile .print-area.doc{font-size:12px}
+html.mobile .print-area.doc .tbl{white-space:normal;table-layout:fixed;width:100%}
+html.mobile .print-area.doc .tbl th,html.mobile .print-area.doc .tbl td{padding:5px 4px;font-size:11.5px;word-break:break-word}
+html.mobile .print-area.doc h2{font-size:18px}
+html.mobile .doc-sum{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;justify-content:initial}
+html.mobile .doc-sum b{font-size:14px}
 @media print{
   body *{visibility:hidden}
   .print-area,.print-area *{visibility:visible}
@@ -371,7 +431,7 @@ nav{flex:1;overflow-y:auto;padding:4px 12px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.12.0 · 数据保存在服务器</div>
+    <div class="side-foot">v2.13.1 · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -661,11 +721,17 @@ function toast(msg, type = 'success') {
 }
 function openModal(html, size = '') {
   const m = $('#modal'); m.className = 'modal ' + size; m.innerHTML = html; $('#mask').classList.add('show');
-  const fab = document.getElementById('scanFab'); if (fab) fab.style.display = 'none';
+  const fab = document.getElementById('scanFab');
+  if (fab) {
+    const needScan = !!m.querySelector('.tbl.items');
+    fab.style.display = needScan ? '' : 'none';
+    fab.classList.toggle('in-modal', needScan);
+  }
 }
 function closeModal() {
   closePicker(); $('#mask').classList.remove('show'); $('#modal').innerHTML = '';
-  const fab = document.getElementById('scanFab'); if (fab) fab.style.display = '';
+  const fab = document.getElementById('scanFab');
+  if (fab) { fab.style.display = ''; fab.classList.remove('in-modal'); }
 }
 function modalHead(title) { return `<div class="m-head"><h3>${title}</h3><button class="icon-btn sm" data-act="closeModal">${ic('x')}</button></div>`; }
 function confirmBox(msg, onOk, {title = '确认操作', danger = true, okText = '确定'} = {}) {
@@ -852,7 +918,7 @@ const ENT = {
     {n:'unitsText', l:'辅助单位（选填）', ph:'例如 箱=12；盒=6，可按箱开单。箱有自己的条码写成 箱=12/6901234567890', span:1},
     {n:'cost', l:'成本价（元）', type:'number', money:1, ph:'选填，不填按 0'}, {n:'price', l:'销售价（元）', type:'number', money:1, ph:'选填，不填按 0'},
     {n:'stock', l:'期初库存', type:'number', def:0, lockOnEdit:1}, {n:'safety', l:'安全库存', type:'number', def:10},
-    {n:'batch', l:'批次 / 保质期管理', type:'select', opts:[['', '不启用'], ['1', '启用（入库记批次，出库先到期先出）']]}, {n:'shelfDays', l:'保质期（天，选填）', type:'number', ph:'填了可按生产日期自动算有效期'},
+    {n:'batch', l:'批次 / 保质期管理', type:'select', opts:[['', '不启用'], ['1', '启用（入库记批次，出库先到期先出）']]}, {n:'dec', l:'允许小数数量（按重量 / 长度卖的商品）', type:'select', opts:[['', '否（只能整数）'], ['1', '是（最多两位小数）']]}, {n:'shelfDays', l:'保质期（天，选填）', type:'number', ph:'填了可按生产日期自动算有效期'},
     {n:'serial', l:'序列号管理', type:'select', opts:[['', '不启用'], ['1', '启用（一件一个号，出入库逐件登记）']]},
     {n:'weight', l:'重量（kg / 每个基本单位，算运费用）', type:'number', ship:1}, {n:'size', l:'包装尺寸（厘米 长×宽×高，选填，算体积重）', ph:'例如 30×20×15', ship:1},
     {n:'remark', l:'备注', type:'textarea', span:1}]},
@@ -876,7 +942,7 @@ function editEntity(type, id) {
   const fields = cfg.fields.filter(f => (!f.money || seesPrice()) && (!f.ship || shipOn())).map(f => ({...f, disabled:rec && f.lockOnEdit || f.n === 'cost' && costLocked,
     l:f.n === 'cost' ? (rec ? `成本价（元，${costWord}自动计算${costLocked ? '' : '，无库存时可改'}）` : '期初成本价（元）') : f.l}));
   if (type === 'products' && !rec && multiWh()) fields.splice(fields.findIndex(f => f.n === 'stock') + 1, 0, {n:'wh', l:'期初库存放在', type:'select', opts:whs().map(w => [w.id, w.name])});
-  const data = rec ? {...rec, batch:rec.batch ? '1' : '', serial:rec.serial ? '1' : '', unitsText:unitsToText(rec.units)} : {};
+  const data = rec ? {...rec, batch:rec.batch ? '1' : '', serial:rec.serial ? '1' : '', dec:rec.dec ? '1' : '', unitsText:unitsToText(rec.units)} : {};
   formModal({title:(rec ? '编辑' : '新增') + cfg.title, fields, data, onSubmit:v => {
     if (type === 'products') { try { v.units = textToUnits(v.unitsText); } catch (e) { toast(e.message, 'error'); return; } delete v.unitsText; }
     if (type === 'products' && rec && rec.batch && !v.batch && batchesOf(rec.id).length) {
@@ -1360,7 +1426,9 @@ function stockModal(mode, id) {
     {n:'qty', l:`实盘数量${multiWh() ? '' : `（账面 ${p.stock}）`}`, type:'number', req:1},
     {n:'note', l:'备注', type:'textarea', span:1}],
     data:{qty:whQty(p, w0), wh:w0}, onSubmit:v => {
-      if (!Number.isInteger(v.qty) || v.qty < 0) return toast('数量必须为非负整数', 'error');
+    if (!(v.qty >= 0)) return toast('请填写实盘数量', 'error');
+    if (!p.dec && !Number.isInteger(v.qty)) return toast('这个商品只能按整数盘点（需要小数请在商品档案里打开「允许小数数量」）', 'error');
+    if (p.dec && Math.abs(v.qty - Math.round(v.qty * 100) / 100) > 1e-9) return toast('数量最多两位小数', 'error');
       return mutate('POST', '/api/stock/' + p.id, {mode:'check', qty:v.qty, note:v.note, wh:v.wh || META.defaultWh}, r => r.delta === 0 ? '库存无变化' : '盘点调整成功：' + (r.delta > 0 ? '+' : '') + r.delta);
     }});
   const sel = $('#mform [name=wh]');
@@ -1626,7 +1694,13 @@ function docModal(dir, productId, type0, src) {
     }
     return out.map(b => `<span class="badge ${expState(b)[1]} plain" style="margin:1px">${esc(b.no)}${b.expDate ? ' 至' + b.expDate : ''} ×${b.qty}</span>`).join('') + (need > 0 ? '<span class="neg">批次不足</span>' : '');
   };
-  const batchCell = (p, it, i) => !batchCol ? '' : `<td class="bcell">${!p || !p.batch ? '<span class="sub-t">-</span>' : dir === 'out' ? fefoPreview(p, i)
+  const outBatchSel = (p, it, i) => {
+    const list = fefoOrder(batchesOf(p.id, draft.wh), $('#dType').value);
+    if (!list.length) return '<span class="sub-t">没有可用批次</span>';
+    const cur = it.preferBatch && it.preferBatch.id ? it.preferBatch.id : (it.preferBatch || '');
+    return `<select class="select" style="width:100%;height:32px" data-i="${i}" data-k="preferBatch"><option value="">自动（先到期先出）</option>${list.map(b => `<option value="${esc(b.id)}" ${cur === b.id ? 'selected' : ''}>${esc(b.no)}${b.expDate ? ' 至' + b.expDate : ''} · 余 ${b.qty}</option>`).join('')}</select>`;
+  };
+  const batchCell = (p, it, i) => !batchCol ? '' : `<td class="bcell">${!p || !p.batch ? '<span class="sub-t">-</span>' : dir === 'out' ? outBatchSel(p, it, i)
     : `<div style="display:flex;gap:4px"><input data-i="${i}" data-k="batchNo" value="${esc(it.batchNo)}" placeholder="批号（留空自动）" style="min-width:90px">
        <input type="date" data-i="${i}" data-k="prodDate" value="${it.prodDate}" title="生产日期">
        <input type="date" data-i="${i}" data-k="expDate" value="${it.expDate}" title="有效期至${p.shelfDays ? '（留空按保质期 ' + p.shelfDays + ' 天自动算）' : ''}"></div>`}</td>`;
@@ -1635,7 +1709,7 @@ function docModal(dir, productId, type0, src) {
       <td><input class="item-in" list="dProdList" data-i="${i}" data-k="product" value="${p ? esc(prodLabel(p)) : ''}" placeholder="编码 / 条码 / 名称"></td>
       <td>${unitSel(p, it.unit, i)}</td>
       <td class="num scell ${p && dir === 'out' && have < baseQ(it) ? 'neg' : ''}" title="${p ? esc(stockText(p, have)) : ''}">${p ? inUnit(have, p, it.unit) : ''}</td>
-      <td><input type="number" min="1" step="1" data-i="${i}" data-k="qty" value="${it.qty}"></td>
+      <td><input type="number" min="${p && p.dec ? '0.01' : '1'}" step="${p && p.dec ? '0.01' : '1'}" data-i="${i}" data-k="qty" value="${it.qty}"></td>
       ${mo ? (dir === 'in' ? `<td><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"></td>` : `<td class="num sub-t" title="${db.settings.costMethod === 'fifo' ? '库存按先进先出成本出库' : '库存按移动加权成本出库'}">${p ? money(p.cost * rateOf(p, it.unit)) : ''}</td><td><input type="number" min="0" step="0.01" data-i="${i}" data-k="sale" value="${it.sale}" placeholder="${p && p.price ? '售价 ' + +(p.price * rateOf(p, it.unit)).toFixed(2) : '不填按成本'}"></td>`) + `<td class="num sub">${money(lineAmt(it))}</td>` : ''}
       ${batchCell(p, it, i)}
       ${snCol ? `<td class="sncell">${snCell(p, it, i, dir, draft.wh, baseQ(it))}</td>` : ''}
@@ -1650,7 +1724,7 @@ function docModal(dir, productId, type0, src) {
     const unit = unitByCode(p, v) || p.unit;
     const dup = draft.items.findIndex((x, k) => k !== i && x.productId === p.id && (x.unit || p.unit) === unit);
     if (dup >= 0) { draft.items[dup].qty = (+draft.items[dup].qty || 0) + (+draft.items[i].qty || 1); draft.items[i] = blank(); renderItems(true); if (!quiet) toast(p.name + ' 已在明细中，数量 +1', 'info'); return true; }
-    Object.assign(draft.items[i], {productId:p.id, unit, price:p.cost != null ? +(p.cost * rateOf(p, unit)).toFixed(4) : '', sale:''});
+    Object.assign(draft.items[i], {productId:p.id, unit, price:p.cost != null ? +(p.cost * rateOf(p, unit)).toFixed(4) : '', sale:'', preferBatch:''});
     if (i === draft.items.length - 1) draft.items.push(blank());
     renderItems(true);
     return true;
@@ -1658,6 +1732,7 @@ function docModal(dir, productId, type0, src) {
   tb.addEventListener('change', e => {
     const t = e.target, i = +t.dataset.i;
     if (t.dataset.k === 'product') pickOnce(t, pick);
+    if (t.dataset.k === 'preferBatch') { draft.items[i].preferBatch = t.value; return; }
     if (t.dataset.k === 'unit') { const it = draft.items[i], p = byId(db.products, it.productId), r0 = rateOf(p, it.unit); it.unit = t.value; if (it.price !== '') it.price = +(it.price / r0 * rateOf(p, it.unit)).toFixed(4); if (it.sale !== '') it.sale = +(it.sale / r0 * rateOf(p, it.unit)).toFixed(4); renderItems(); }
   });
   tb.addEventListener('keydown', e => { const t = e.target; if (e.key === 'Enter' && t.dataset.k === 'product') { e.preventDefault(); pickOnce(t, pick); } });
@@ -1669,11 +1744,10 @@ function docModal(dir, productId, type0, src) {
       draft.items[i][k] = k === 'note' ? t.value : t.value === '' ? '' : +t.value;
       const s = t.closest('tr').querySelector('.sub'); if (s) s.textContent = money(lineAmt(draft.items[i]));
       updTotal();
-      // 出库数量变了：原地刷新库存提示与批次预览，不重绘整表（以免打断输入）
+      // 出库数量变了：原地刷新库存提示，不重绘整表（以免打断输入）
       if (dir === 'out' && k === 'qty') tb.querySelectorAll('tr').forEach((tr, n) => {
         const it = draft.items[n], p = it && it.productId && byId(db.products, it.productId); if (!p) return;
         tr.querySelector('.scell').classList.toggle('neg', whQty(p, draft.wh) < baseQ(it));
-        const bc = tr.querySelector('.bcell'); if (bc && p.batch) bc.innerHTML = fefoPreview(p, n);
       });
     }
   });
@@ -1708,7 +1782,7 @@ function docModal(dir, productId, type0, src) {
     if (badDate) return toast(`「${byId(db.products, badDate.productId).name}」有效期早于生产日期`, 'error');
     const shipNext = $('#dShipNext') && $('#dShipNext').checked, carrierId = draft.carrierId;
     const body = {dir, type:$('#dType').value, ...(dir === 'in' && $('#dType').value === '生产入库' && $('#dUseBom') && $('#dUseBom').checked ? {bom:true} : {}), wh:draft.wh, date:$('#dDate').value, party:$('#dParty').value.trim(), handler:$('#dHandler').value.trim(), project:$('#dProject').value.trim(), remark:$('#dRemark').value.trim(),
-      address:$('#dAddr') ? $('#dAddr').value.trim() : '', items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:mo ? i.price : undefined, ...(mo && dir === 'out' && i.sale !== '' ? {sale:i.sale} : {}), note:i.note, batchNo:i.batchNo, prodDate:i.prodDate, expDate:i.expDate, ...(byId(db.products, i.productId).serial ? {serials:snList(i.serials)} : {})}))};
+      address:$('#dAddr') ? $('#dAddr').value.trim() : '', items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:mo ? i.price : undefined, ...(mo && dir === 'out' && i.sale !== '' ? {sale:i.sale} : {}), note:i.note, batchNo:i.batchNo, prodDate:i.prodDate, expDate:i.expDate, ...(dir === 'out' && i.preferBatch ? {preferBatch:{id:i.preferBatch}} : {}), ...(byId(db.products, i.productId).serial ? {serials:snList(i.serials)} : {})}))};
     $('#dSave').disabled = true; if ($('#dSavePrint')) $('#dSavePrint').disabled = true;
     const r = await mutate('POST', '/api/stockdocs', body, r => docTitle(dir) + (r.status === '待审核' ? '已提交审核：' : '已保存：') + r.no);
     if (!r) { $('#dSave').disabled = false; if ($('#dSavePrint')) $('#dSavePrint').disabled = false; return; }
@@ -1828,12 +1902,34 @@ function printFrame(title, body, paperKey) {
   .s-meta{display:flex;justify-content:space-between;flex-wrap:wrap;gap:2px 16px;margin:2px 0}.s-sign{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 16px;margin-top:12px}.s-foot{margin-top:8px;font-size:.92em}
   .r{text-align:right}.c{text-align:center}.slip-wrap{position:relative}.page{page-break-after:always}.page:last-child{page-break-after:auto}
   .slip-stamp{position:absolute;right:30px;top:10px;border:3px solid #000;font-size:22px;font-weight:800;padding:2px 14px;transform:rotate(-12deg);letter-spacing:.3em}
-  .foot{margin-top:6px;font-size:10px;color:#444;text-align:right}`;
+  .foot{margin-top:6px;font-size:10px;color:#444;text-align:right}
+  img{max-width:100%;height:auto}`;
+  // 打印文档不要 viewport：让它按纸张宽度排版，手机浏览器只负责缩放预览
   printHtml(title, `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${css}</style></head><body>${body}</body></html>`);
 }
 // 打印一份完整的 HTML：浏览器里用隐藏 iframe；安卓客户端里交给系统打印
 function printHtml(title, html) {
   if (NATIVE) return NATIVE.print(title, html);
+  // 手机浏览器：iOS 上新开窗口写 document 常常是空白页，改成在当前页面铺一层打印内容再调系统打印
+  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+    let box = document.getElementById('printRoot');
+    if (!box) { box = document.createElement('div'); box.id = 'printRoot'; document.body.appendChild(box); }
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const css = [...doc.querySelectorAll('style')].map(s => s.textContent).join('\n');
+    box.innerHTML = `<style>${css}</style><div class="print-doc">${doc.body.innerHTML}</div>`;
+    document.documentElement.classList.add('printing');
+    const cleanup = () => {
+      document.documentElement.classList.remove('printing');
+      const b = document.getElementById('printRoot'); if (b) b.remove();
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(() => {
+      try { window.print(); } catch (e) { toast('调起打印失败：' + e.message, 'error'); }
+      setTimeout(cleanup, 5000);
+    }, 300);
+    return;
+  }
   const f = document.createElement('iframe');
   f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
   document.body.appendChild(f);
@@ -2475,7 +2571,7 @@ function transferModal() {
     tb.innerHTML = draft.items.map((it, i) => { const p = it.productId && byId(db.products, it.productId); return `<tr>
       <td><input list="tProdList" data-i="${i}" data-k="product" value="${p ? esc(prodLabel(p)) : ''}" placeholder="编码 / 条码 / 名称"></td><td>${unitSel(p, it.unit, i)}</td>
       <td class="num ${p && whQty(p, draft.from) < baseQ(it) ? 'neg' : ''}">${p ? whQty(p, draft.from) : ''}</td><td class="num sub-t">${p ? whQty(p, draft.to) : ''}</td>
-      <td><input type="number" min="1" step="1" data-i="${i}" data-k="qty" value="${it.qty}"></td>${snCol ? `<td>${snCell(p, it, i, 'out', draft.from, baseQ(it))}</td>` : ''}<td><input data-i="${i}" data-k="note" value="${esc(it.note)}"></td>
+      <td><input type="number" min="${p && p.dec ? '0.01' : '1'}" step="${p && p.dec ? '0.01' : '1'}" data-i="${i}" data-k="qty" value="${it.qty}"></td>${snCol ? `<td>${snCell(p, it, i, 'out', draft.from, baseQ(it))}</td>` : ''}<td><input data-i="${i}" data-k="note" value="${esc(it.note)}"></td>
       <td><button class="icon-btn sm" data-del="${i}">${ic('trash')}</button></td></tr>`; }).join('');
     $('#tQty').textContent = num(sum(draft.items.filter(i => i.productId), i => +i.qty || 0));
     if (focusLast) { const ins = tb.querySelectorAll('[data-k=product]'); ins[ins.length - 1].focus(); }
@@ -3053,7 +3149,7 @@ function orderModal(kind, id, srcId0) {
       <td><input class="item-in" list="oProdList" data-i="${i}" data-k="product" value="${p ? esc(prodLabel(p)) : ''}" placeholder="编码 / 条码 / 名称"></td>
       <td>${unitSel(p, it.unit, i)}</td>
       <td class="num" title="${p ? esc(stockText(p, p.stock)) : ''}">${p ? inUnit(p.stock, p, it.unit) : ''}${p && left ? `<div class="sub-t">可退 ${inUnit(left[p.id] || 0, p, it.unit)}</div>` : ''}</td>
-      <td><input type="number" min="1" step="1" data-i="${i}" data-k="qty" value="${it.qty}"></td>
+      <td><input type="number" min="${p && p.dec ? '0.01' : '1'}" step="${p && p.dec ? '0.01' : '1'}" data-i="${i}" data-k="qty" value="${it.qty}"></td>
       <td><div class="pwrap"><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"><span class="spm">${p ? spMark(p, it) : ''}</span></div></td>
       <td><input type="number" min="0" step="0.01" data-i="${i}" data-k="lineDiscount" value="${it.lineDiscount}" placeholder="0.00" title="本行优惠金额"></td>
       <td class="num sub">${money(sub(it))}</td>
@@ -4598,9 +4694,44 @@ async function updateCheck() {
   catch (e) { box.innerHTML = `<div class="tip-line" style="color:var(--red)">${esc(e.message)}</div>`; }
   finally { if (b) { b.disabled = false; b.innerHTML = ic('refresh') + '检查更新'; } }
 }
+function notifyCard(st) {
+  const nf = st.notify || {};
+  const ev = { lowStock: true, overdue: false, birthday: false, pendingApproval: false, daily: false, ...(nf.events || {}) };
+  const wh = { enabled: !!nf.url, url: nf.url || '', ...(nf.webhook || {}) };
+  const ml = { enabled: false, host: '', port: 465, user: '', from: '', to: '', hasPass: false, ...(nf.mail || {}) };
+  const LABEL = { lowStock: '库存预警', overdue: '应收逾期', birthday: '生日提醒', pendingApproval: '待审批', daily: '经营日报' };
+  return `<div class="card" style="margin-top:16px"><div class="card-head"><h3>消息通知</h3><span class="sub-t">每天定时推送到群机器人和邮箱</span></div><div class="card-body">
+    <p class="sub-t" style="margin-bottom:10px">每天早上把要处理的事推给老板、财务或仓管。群机器人支持企业微信、钉钉、飞书，也能填任意接收 JSON 的地址；邮件支持 QQ / 163 / 企业邮箱。需要服务器能连外网。</p>
+    <div class="form-grid">
+      <label class="field"><span>每天推送时间</span><input type="time" id="nfTime" value="${esc(nf.time || '08:30')}"></label>
+      <label class="field"><span>应收逾期天数</span><input type="number" id="nfOd" min="1" max="365" value="${esc(nf.overdueDays || 30)}"></label>
+      <div class="field span2"><span>推送内容</span><div style="display:flex;gap:8px 18px;flex-wrap:wrap;padding-top:6px">
+        ${Object.keys(LABEL).map(k => `<label class="chk"><input type="checkbox" id="nfEv_${k}" ${ev[k] ? 'checked' : ''}>${LABEL[k]}</label>`).join('')}
+      </div></div>
+    </div>
+    <div class="setting-row" style="margin-top:10px"><div class="sr-group"><b>群机器人（Webhook）</b><small>企业微信 / 钉钉 / 飞书群机器人，或任意接收 JSON 的地址</small></div><label class="chk"><input type="checkbox" id="nfWhOn" ${wh.enabled ? 'checked' : ''}>启用</label></div>
+    <input id="nfUrl" class="select" style="width:100%;height:36px" value="${esc(wh.url || '')}" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...">
+    <div class="setting-row" style="margin-top:14px"><div class="sr-group"><b>邮件</b><small>QQ 邮箱：smtp.qq.com，端口 465，密码填「授权码」；收件人多个用逗号分隔</small></div><label class="chk"><input type="checkbox" id="nfMailOn" ${ml.enabled ? 'checked' : ''}>启用</label></div>
+    <div class="form-grid">
+      <label class="field"><span>SMTP 服务器</span><input id="nfHost" value="${esc(ml.host || '')}" placeholder="smtp.qq.com"></label>
+      <label class="field"><span>端口（SSL）</span><input type="number" id="nfPort" value="${esc(ml.port || 465)}"></label>
+      <label class="field"><span>邮箱账号</span><input id="nfUser" value="${esc(ml.user || '')}" placeholder="you@qq.com"></label>
+      <label class="field"><span>授权码${ml.hasPass ? '（已保存，留空不修改）' : ''}</span><input id="nfPass" type="password" autocomplete="new-password" placeholder="${ml.hasPass ? '已保存' : 'QQ 邮箱授权码'}"></label>
+      <label class="field"><span>发件邮箱</span><input id="nfFrom" value="${esc(ml.from || ml.user || '')}" placeholder="you@qq.com"></label>
+      <label class="field"><span>收件人（逗号分隔）</span><input id="nfTo" value="${esc(ml.to || '')}" placeholder="boss@company.com"></label>
+    </div>
+    <div class="tip-line" style="margin-top:10px">短信通道需要短信服务商账号（签名和模板要审核），下一步单独接入；现在先用群机器人和邮件，完全免费。</div>
+    <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;align-items:center">
+      <label class="chk" style="margin-right:auto"><input type="checkbox" id="nfOn" ${nf.enabled ? 'checked' : ''}>开启每日推送</label>
+      <label class="chk" style="margin-right:auto"><input type="checkbox" id="nfSkip" ${nf.skipEmpty !== false ? 'checked' : ''}>没有内容时不推送</label>
+      <button class="btn" data-act="notifyPreview">预览内容</button><button class="btn" data-act="notifyTest">发送测试</button><button class="btn primary" data-act="notifySave">${ic('check')}保存设置</button>
+    </div>
+  </div></div>`;
+}
 function pageSettings() {
   const items = [['general', '常规设置']];
-  if (isAdmin()) items.push(['print', '打印模板'], ['users', '用户管理'], ['roles', '角色管理'], ['data', '数据管理'], ['audit', '操作日志']);
+  if (isAdmin() || can('tpl.edit')) items.push(['print', '打印模板']);
+  if (isAdmin()) items.push(['users', '用户管理'], ['roles', '角色管理'], ['data', '数据管理'], ['audit', '操作日志']);
   if (!items.some(i => i[0] === ui.setTab)) ui.setTab = 'general';
   const st = db.settings;
   const platLabel = st.platform === 'fnos' ? '飞牛 fnOS' : st.platform === 'win32' ? 'Windows' : st.platform === 'docker' ? 'Docker' : (st.platform || '未知平台');
@@ -4636,14 +4767,7 @@ function pageSettings() {
       <div class="setting-row"><div class="sr-group"><b>商品分类</b><small>新增、改名、删除商品分类；改名会同步修改该分类下的商品（商品管理页的「分类」按钮也能进）</small></div><button class="btn" data-act="catManage">${ic('box')}管理分类</button></div>
       ${(st.modules || []).includes('hr') ? `<div class="setting-row"><div class="sr-group"><b>部门</b><small>新增、改名、删除员工部门；改名会同步修改该部门下的员工（人事管理页的「部门」按钮也能进）</small></div><button class="btn" data-act="deptManage">${ic('dashboard')}管理部门</button></div>` : ''}
     </div></div>
-    <div class="card" style="margin-top:16px"><div class="card-head"><h3>库存提醒推送</h3></div><div class="card-body">
-      <p class="sub-t" style="margin-bottom:10px">每天定时把库存不足、临期 / 过期批次和待审核单据发到群里。支持企业微信、钉钉、飞书群机器人的 Webhook 地址，也可以填任意接收 JSON 的地址（如 Home Assistant 的 Webhook）。钉钉机器人如果设了「自定义关键词」，请加上「库存」。需要服务器能连外网。</p>
-      <div class="form-grid">
-        <label class="field span2"><span>推送地址（Webhook）</span><input id="nfUrl" value="${esc((st.notify || {}).url || '')}" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."></label>
-        <label class="field"><span>每天推送时间</span><input type="time" id="nfTime" value="${esc((st.notify || {}).time || '08:30')}"></label>
-        <div class="field"><span>选项</span><div style="display:flex;gap:14px;flex-wrap:wrap;padding-top:8px"><label class="chk"><input type="checkbox" id="nfOn" ${(st.notify || {}).enabled ? 'checked' : ''}>开启每日推送</label><label class="chk"><input type="checkbox" id="nfSkip" ${(st.notify || {}).skipEmpty ? 'checked' : ''}>没有预警时不推送</label></div></div></div>
-      <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="btn" data-act="notifyPreview">预览内容</button><button class="btn" data-act="notifyTest">发送测试</button><button class="btn primary" data-act="notifySave">${ic('check')}保存推送设置</button></div>
-    </div></div>
+    ${notifyCard(st)}
     ${shipOn() ? kdnCard(st.kdn || {}) : ''}
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>出入库审核</h3></div><div class="card-body">
       <p class="sub-t" style="margin-bottom:10px">开启后，新开的单据先是「待审核」，由有「审核出入库单」权限的账号审核通过后才改库存；驳回的单据不影响库存，制单人可以修改后重新开单。已经开好的单据不受影响。</p>
@@ -4651,12 +4775,15 @@ function pageSettings() {
       <div style="margin-top:14px;text-align:right"><button class="btn primary" data-act="saveApprove">${ic('check')}保存审核设置</button></div>
     </div></div>
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>报销审批流程</h3><span class="sub-t">按部门负责人 → 财务 → 总经理</span></div><div class="card-body">
-      <p class="sub-t" style="margin-bottom:10px">部门负责人每行一个：<code>销售部=张三</code>，多个会签人用逗号分隔；财务、总经理可填多个用户名。节点有多人时必须全部同意才进入下一步；申请人本人会自动跳过自己的节点。留空则按原来的单级审批。</p>
+      <p class="sub-t" style="margin-bottom:10px">部门负责人每行一个：<code>销售部=张三</code>，多个审批人用逗号分隔；财务、总经理可填多个用户名。每个节点可以选「会签」（全部同意才通过）或「或签」（任一人同意就通过）；申请人本人会自动跳过自己的节点。留空则按原来的单级审批。</p>
       <div class="form-grid">
         <label class="field span2"><span>部门负责人（每行：部门=用户名）</span><textarea id="efHeads" rows="4" placeholder="销售部=zhangsan&#10;仓库=wangwu">${esc(Object.entries((st.expenseFlow || {}).deptHeads || {}).map(([d, u]) => d + '=' + [].concat(u).join(',')).join('\n'))}</textarea></label>
         <label class="field"><span>财务审批人（逗号分隔）</span><input id="efFinance" value="${esc([].concat((st.expenseFlow || {}).finance || []).join(', '))}"></label>
         <label class="field"><span>总经理审批人（逗号分隔）</span><input id="efGm" value="${esc([].concat((st.expenseFlow || {}).gm || []).join(', '))}"></label>
         <label class="field"><span>总经理起点金额（元，0=每单都要）</span><input type="number" min="0" step="0.01" id="efThreshold" value="${esc((st.expenseFlow || {}).gmThreshold || 0)}"></label>
+        <label class="field"><span>部门负责人节点</span><select id="efModeDept"><option value="all" ${((st.expenseFlow || {}).modes || {}).dept !== 'any' ? 'selected' : ''}>会签（全部同意）</option><option value="any" ${((st.expenseFlow || {}).modes || {}).dept === 'any' ? 'selected' : ''}>或签（一人同意）</option></select></label>
+        <label class="field"><span>财务节点</span><select id="efModeFinance"><option value="all" ${((st.expenseFlow || {}).modes || {}).finance !== 'any' ? 'selected' : ''}>会签（全部同意）</option><option value="any" ${((st.expenseFlow || {}).modes || {}).finance === 'any' ? 'selected' : ''}>或签（一人同意）</option></select></label>
+        <label class="field"><span>总经理节点</span><select id="efModeGm"><option value="all" ${((st.expenseFlow || {}).modes || {}).gm !== 'any' ? 'selected' : ''}>会签（全部同意）</option><option value="any" ${((st.expenseFlow || {}).modes || {}).gm === 'any' ? 'selected' : ''}>或签（一人同意）</option></select></label>
       </div>
       <div style="margin-top:14px;text-align:right"><button class="btn primary" data-act="saveExpFlow">${ic('check')}保存审批流程</button></div>
     </div></div>
@@ -4724,10 +4851,19 @@ function sampleDoc(kind) {
 function printTplPage(body) {
   const kind = SLIP_KINDS[ui.tplKind] ? ui.tplKind : 'out', K = SLIP_KINDS[kind], t = slipTpl(kind), cols = t.cols, sample = sampleDoc(kind);
   const saved = db.settings.printTpl || {};
+  const tplList = (db.settings.printTplList || {})[kind] || [];
+  const activeId = (db.settings.printTplActive || {})[kind] || '';
+  const activeName = (tplList.find(x => x.id === activeId) || {}).name || '';
   let logoSrc = t.logo || '';
   body.innerHTML = `<div class="tp-grid">
   <div class="card"><div class="card-body tp-form">
     <label class="field"><span>单据</span><select id="tpKind">${Object.entries(SLIP_KINDS).map(([k, v]) => `<option value="${k}" ${k === kind ? 'selected' : ''}>${v.name}${saved[k] ? '（已自定义）' : ''}</option>`).join('')}</select></label>
+    <div class="field span2"><span>模板</span><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select id="tpPick" class="select" style="min-width:180px"><option value="">默认模板</option>${tplList.map(x => `<option value="${x.id}" ${x.id === activeId ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+      <button class="btn sm" id="tpNew">${ic('plus')}新建模板</button>
+      ${activeId ? '<button class="btn sm danger-text" id="tpDel">删除此模板</button>' : ''}
+      <span class="sub-t">每种单据最多 10 套，打印时用当前选中的这套</span>
+    </div></div>
     <label class="field"><span>单据标题</span><input id="tpTitle" maxlength="20" value="${esc(t.title)}" placeholder="${K.name}（例如改成「送货单」）"></label>
     <label class="field"><span>打印纸张</span><select id="tpPaper"><option value="">跟随打印窗口（默认 A4 纵向）</option>${Object.entries(PAPERS).map(([k, v]) => `<option value="${k}" ${t.paper === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></label>
     <label class="field"><span>打印字体</span><select id="tpFont"><option value="song" ${t.font === 'song' ? 'selected' : ''}>宋体（默认）</option><option value="hei" ${t.font === 'hei' ? 'selected' : ''}>微软雅黑</option><option value="kai" ${t.font === 'kai' ? 'selected' : ''}>楷体</option></select></label>
@@ -4740,7 +4876,7 @@ function printTplPage(body) {
     <label class="field"><span>底部说明（可多行）</span><textarea id="tpFooter" rows="2" maxlength="300" placeholder="例如：货物当面点清，质量问题请于 3 日内联系">${esc(t.footer)}</textarea></label>
     <div style="display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center"><label class="chk">字号 <select id="tpFs" class="select" style="margin-left:6px">${[10, 11, 12, 13, 14, 16].map(n => `<option ${n === +t.fontSize ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       <label class="chk"><input type="checkbox" id="tpUpper" ${t.upper ? 'checked' : ''}>打印金额大写</label><label class="chk"><input type="checkbox" id="tpPrinter" ${t.printer ? 'checked' : ''}>页脚打印人和时间</label></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">${saved[kind] ? '<button class="btn" id="tpReset">恢复默认</button>' : ''}<button class="btn primary" id="tpSave">${ic('check')}保存模板</button></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">${saved[kind] ? '<button class="btn" id="tpReset">恢复默认</button>' : ''}<button class="btn" id="tpTest">${ic('printer')}打印测试样张</button><button class="btn primary" id="tpSave">${ic('check')}保存模板</button></div>
   </div></div>
   <div class="card"><div class="card-head"><h3>预览</h3><span class="sub-t">${sample.no === '示例单号' ? '示例数据' : '用最近一张' + K.name + '预览'}；纸张在打印时选择</span></div><div class="card-body"><div class="slip-preview" id="tpPrev"></div></div></div></div>`;
   const read = () => ({title:$('#tpTitle').value.trim(), header:$('#tpHeader').value.trim(), footer:$('#tpFooter').value.trim(), signs:$('#tpSigns').value.trim(), fontSize:+$('#tpFs').value, paper:$('#tpPaper').value, font:$('#tpFont').value, logo:logoSrc,
@@ -4779,7 +4915,31 @@ function printTplPage(body) {
     [cols[i], cols[i + d]] = [cols[i + d], cols[i]]; drawCols();
   });
   $('#tpKind').onchange = e => { ui.tplKind = e.target.value; render(); };
-  $('#tpSave').onclick = () => mutate('PUT', '/api/settings/print', {kind, tpl:read()}, K.name + '打印模板已保存');
+  $('#tpSave').onclick = () => mutate('PUT', '/api/settings/print', { kind, id: activeId || undefined, name: activeName || undefined, tpl: read() }, K.name + '打印模板已保存');
+  $('#tpTest').onclick = () => {
+    const paper = $('#tpPaper').value || 'a4';
+    printFrame(K.name + ' 测试样张', `<div class="page">${slipRender(kind, sample, { showMoney: true, tpl: read() })}</div>${printFoot(kind)}`, paper);
+  };
+  $('#tpPick').onchange = async e => {
+    const id = e.target.value, it = tplList.find(x => x.id === id);
+    try {
+      await api('PUT', '/api/settings/print', { kind, id: id || undefined, name: it ? it.name : undefined, tpl: it ? it.tpl : null });
+      await reload(); render();
+    } catch (err) { toast(err.message, 'error'); }
+  };
+  $('#tpNew').onclick = () => {
+    const cur = read();
+    formModal({ title: '新建打印模板 · ' + K.name, okText: '创建', fields: [{ n: 'name', l: '模板名称（例如：大客户版、送货单）', req: 1 }], onSubmit: async v => {
+      try {
+        await api('PUT', '/api/settings/print', { kind, create: true, name: v.name, tpl: cur });
+        await reload(); render(); toast('模板已创建');
+      } catch (err) { toast(err.message, 'error'); }
+    }});
+  };
+  if ($('#tpDel')) $('#tpDel').onclick = () => confirmBox(`删除模板「${esc(activeName)}」？打印会回到默认模板。`, async () => {
+    try { await api('PUT', '/api/settings/print', { kind, del: activeId }); await reload(); render(); toast('模板已删除'); }
+    catch (err) { toast(err.message, 'error'); }
+  });
   if ($('#tpReset')) $('#tpReset').onclick = () => confirmBox(K.name + '的打印模板恢复成默认样式？', () => mutate('PUT', '/api/settings/print', {kind, tpl:null}, '已恢复默认'), {title:'恢复默认', danger:false, okText:'恢复'});
   drawCols();
 }
@@ -4835,7 +4995,7 @@ function roleEdit(id, copy) {
 
 /* ================= 外壳：导航 / 主题 / 提醒 / 搜索 ================= */
 /* ---------- 报销管理：员工提交报销单（可附发票照片）→ 审批批准 / 驳回 → 财务付款，按类别自动记支出流水 ---------- */
-const EXP_STATUS = {'待审批':'orange', '已批准':'blue', '已驳回':'red', '已付款':'green', '已作废':'gray'};
+const EXP_STATUS = {'待审批':'orange', '已批准':'blue', '已驳回':'red', '已付款':'green', '已作废':'gray', '已撤回':'gray'};
 const ADV_STATUS = {'待审批':'orange', '已批准':'blue', '已发放':'purple', '部分核销':'orange', '已核销':'green', '已驳回':'red', '已作废':'gray'};
 const advRemainingUI = a => Math.round((((a && a.amount) || 0) - ((a && a.used) || 0) - ((a && a.returned) || 0)) * 100) / 100;
 const expAll = () => can('finance') || can('exp.approve');
@@ -4992,9 +5152,10 @@ function expOps(o) {
   const step = o.approval && o.approval.steps && o.approval.steps[o.approval.current];
   const acted = step && (step.acted || []).some(x => x.by === ME.username);
   const canAct = o.status === '待审批' && can('exp.approve') && !acted && (isAdmin() || !step || !(step.approvers || []).length || step.approvers.includes(ME.username));
-  if (canAct) b.push(tbtn('批准', 'expApprove', o.id, 'primary'), tbtn('驳回', 'expReject', o.id));
+  if (canAct) b.push(tbtn('批准', 'expApprove', o.id, 'primary'), tbtn('驳回', 'expReject', o.id), tbtn('加签', 'expAddSigner', o.id), tbtn('转交', 'expTransfer', o.id));
+  if (o.status === '待审批' && (mine || can('finance'))) b.push(tbtn('催办', 'expUrge', o.id), tbtn('撤回', 'expWithdraw', o.id));
   if (o.status === '已批准' && can('finance')) b.push(tbtn('付款', 'expPay', o.id, 'primary'));
-  if (['待审批', '已驳回'].includes(o.status) && (mine || can('finance'))) b.push(tbtn('编辑', 'expEdit', o.id));
+  if (['待审批', '已驳回', '已撤回'].includes(o.status) && (mine || can('finance'))) b.push(tbtn('编辑', 'expEdit', o.id));
   if (o.status === '已付款' && can('finance')) b.push(tbtn('撤销付款', 'expUnpay', o.id));
   if (o.status !== '已作废' && o.status !== '已付款' && (mine && ['待审批', '已驳回'].includes(o.status) || expAll())) b.push(tbtn('作废', 'expVoid', o.id, 'danger-text'));
   return b;
@@ -5016,6 +5177,7 @@ function expModal(id) {
       <label class="field"><span>事由 <i>*</i></span><input id="xReason" maxlength="300" placeholder="例如：11 月 5 日去柳州拜访客户" value="${esc(o ? o.reason : '')}"></label>
       <label class="field"><span>冲抵备用金（可选）</span><select id="xAdv"><option value="">不冲抵</option></select></label>
       <label class="field"><span>冲抵金额（元）</span><input type="number" min="0" step="0.01" id="xAdvAmt" value="${o && o.advanceOffset ? o.advanceOffset : ''}" placeholder="选择备用金后填写"></label>
+      <label class="field span2"><span>抄送（选填，用户名用逗号分隔）</span><input id="xCC" maxlength="200" placeholder="例如：boss, caiwu，抄送人能看到这张单和审批进度" value="${esc([].concat((o && o.cc) || []).join(', '))}"></label>
       <p class="sub-t span2" id="xAdvHint" style="margin:-4px 0 4px">备用金冲抵只抵扣余额，不重复生成付款流水；不冲抵就留空。</p>
     </div>
     <div class="line-head"><b>报销明细</b><span class="sub-t" style="margin-left:10px;margin-right:auto">类别可以选，也可以直接输入；付款后每个类别记一笔支出</span><button class="btn sm" id="xAdd">${ic('plus')}添加一行</button></div>
@@ -5077,7 +5239,7 @@ function expModal(id) {
     if (!ls.length) return toast('请至少填写一行报销明细', 'error');
     const bad = ls.findIndex(l => !String(l.category).trim() || !(+l.amount > 0));
     if (bad >= 0) return toast(`第 ${bad + 1} 行请填写类别和金额`, 'error');
-    const body = {applicant:$('#xWho').value.trim(), dept:$('#xDept').value.trim(), date:$('#xDate').value, reason:$('#xReason').value.trim(), lines:ls.map(l => ({category:String(l.category).trim(), amount:+l.amount, note:l.note || ''})),
+    const body = {applicant:$('#xWho').value.trim(), dept:$('#xDept').value.trim(), date:$('#xDate').value, reason:$('#xReason').value.trim(), cc:$('#xCC').value.trim(), lines:ls.map(l => ({category:String(l.category).trim(), amount:+l.amount, note:l.note || ''})),
       advanceId:$('#xAdv').value, advanceOffset:+$('#xAdvAmt').value || 0};
     $('#xSave').disabled = true;
     try {
@@ -5123,19 +5285,23 @@ function expView(id) {
   const log = [`${esc(o.creator)} 于 ${fmtTime(o.createdAt)} 提交`, o.editedAt && `${esc(o.editor)} 于 ${fmtTime(o.editedAt)} 修改`,
     o.approvedAt && (o.status === '已驳回' ? `<span class="neg">${esc(o.approver)} 于 ${fmtTime(o.approvedAt)} 驳回：${esc(o.rejectReason || '')}</span>` : `${esc(o.approver)} 于 ${fmtTime(o.approvedAt)} 批准`),
     o.paidAt && `${esc(o.payer)} 于 ${fmtTime(o.paidAt)} 付款（${o.payDate} · ${esc(acctName(o))}）`,
+    o.withdrawnAt && `${esc(o.withdrawnBy)} 于 ${fmtTime(o.withdrawnAt)} 撤回`,
     o.voidAt && `<span class="neg">${esc(o.voidBy)} 于 ${fmtTime(o.voidAt)} 作废${o.voidReason ? '：' + esc(o.voidReason) : ''}</span>`].filter(Boolean);
   const ap = o.approval;
-  const approvalHtml = ap && Array.isArray(ap.steps) && ap.steps.length ? `<div class="line-head" style="margin-top:14px"><b>审批流程</b><span class="sub-t" style="margin-left:10px">每个节点会签人全部同意后进入下一步</span></div>
+  const approvalHtml = ap && Array.isArray(ap.steps) && ap.steps.length ? `<div class="line-head" style="margin-top:14px"><b>审批流程</b><span class="sub-t" style="margin-left:10px">会签节点需全部同意，或签节点任一人同意即可</span></div>
     <div style="display:flex;flex-direction:column;gap:8px">${ap.steps.map((s, i) => {
       const on = i === ap.current && o.status === '待审批', ok = s.status === '已通过' || i < ap.current, no = s.status === '已驳回';
       const people = (s.approvers || []).map(x => esc(x)).join('、') || '有审批权限的人';
       const acts = (s.acted || []).map(x => `<div class="sub-t">${esc(x.name)} ${x.pass ? '同意' : '驳回'}${x.comment ? '：' + esc(x.comment) : ''} · ${fmtTime(x.at)}</div>`).join('');
       return `<div style="padding:9px 12px;border:1px solid ${on ? 'var(--primary)' : 'var(--border)'};border-radius:10px;background:${on ? 'var(--primary-soft)' : 'var(--panel2)'}">
-        <b>${i + 1}. ${esc(s.name)}</b> <span class="sub-t" style="margin-left:8px">${ok ? '已通过' : no ? '已驳回' : on ? '进行中' : '待审批'} · ${people}</span>${acts}</div>`;
-    }).join('')}</div>` : '';
+        <b>${i + 1}. ${esc(s.name)}</b> <span class="badge ${s.mode === 'any' ? 'blue plain' : 'purple plain'}" style="margin-left:6px">${s.mode === 'any' ? '或签' : '会签'}</span> <span class="sub-t" style="margin-left:8px">${ok ? '已通过' : no ? '已驳回' : on ? '进行中' : '待审批'} · ${people}</span>${acts}</div>`;
+    }).join('')}</div>
+    ${(ap.log || []).map(x => `<div class="sub-t" style="margin-top:6px">· ${esc(x.by)} ${x.type === 'transfer' ? '转交给 ' + esc(x.to) : '加签 ' + esc(x.to) + '（' + (x.position === 'before' ? '前加签' : '后加签') + '）'} · ${fmtTime(x.at)}</div>`).join('')}
+    ${(ap.urges || []).length ? `<div class="sub-t" style="margin-top:6px">· 已催办 ${ap.urges.length} 次，最后一次 ${esc(ap.urges[ap.urges.length - 1].name)} · ${fmtTime(ap.urges[ap.urges.length - 1].at)}</div>` : ''}` : '';
   const payImgs = o.payImgs || [];
   openModal(`${modalHead('报销单 · ' + o.no + ' ' + badge(o.status, EXP_STATUS[o.status]))}<div class="m-body">
     <div class="slip-preview">${expSlip(o)}</div>
+    ${(o.cc || []).length ? `<p class="sub-t" style="margin:10px 0 0">抄送：${o.cc.map(esc).join('、')}</p>` : ''}
     ${(o.imgs || []).length ? `<div class="line-head" style="margin-top:14px"><b>附件</b><span class="sub-t" style="margin-left:10px">点图片看大图</span></div><div class="exp-imgs" id="xvImgs">${o.imgs.map(k => `<div class="exp-img"><img data-ximg="${o.id}/${k}" alt="" data-big="1"></div>`).join('')}</div>` : ''}
     ${o.status === '已付款' || can('finance') ? `<div class="line-head" style="margin-top:14px"><b>付款回单</b><span class="sub-t" style="margin-left:10px;margin-right:auto">财务付款后上传，打印 / 导出备查</span>${o.status === '已付款' && can('finance') ? `<label class="btn sm">${ic('upload')}上传<input type="file" id="xPayFile" accept="image/*" hidden></label>` : ''}</div>
       <div class="exp-imgs" id="xvPayImgs">${payImgs.length ? payImgs.map(k => `<div class="exp-img"><img data-pximg="${o.id}/${k}" alt=""><button class="icon-btn sm" data-rmpay="${k}" title="删除">${ic('x')}</button></div>`).join('') : '<span class="sub-t">还没有付款回单</span>'}</div>` : ''}
@@ -5159,6 +5325,39 @@ function expPay(id) {
 function expReject(id) {
   const o = byId(db.expenses, id); closeModal();
   formModal({title:'驳回报销单 · ' + o.no, okText:'确认驳回', fields:[{n:'reason', l:'驳回原因（报销人能看到）', req:1, span:1}], onSubmit:v => mutate('POST', `/api/expenses/${id}/reject`, v, '已驳回')});
+}
+let PEOPLE = null;
+async function loadPeople() {
+  if (PEOPLE) return PEOPLE;
+  try { PEOPLE = await api('GET', '/api/people'); } catch (e) { PEOPLE = []; }
+  return PEOPLE;
+}
+async function expAddSigner(id) {
+  const o = byId(db.expenses, id); if (!o) return;
+  const people = (await loadPeople()).filter(p => p.username !== ME.username);
+  if (!people.length) return toast('没有可加签的账号', 'error');
+  closeModal();
+  formModal({ title: '加签 · ' + o.no, okText: '确认加签', fields: [
+    { n: 'who', l: '加签给谁', type: 'select', opts: people.map(p => [p.username, p.name + '（' + p.username + '）']), req: 1 },
+    { n: 'position', l: '加签方式', type: 'select', opts: [['after', '后加签（当前审批人通过后再由他审）'], ['before', '前加签（他先审，再回到当前审批人）']], def: 'after' },
+  ], onSubmit: async v => {
+    try { await api('POST', `/api/expenses/${id}/addsigner`, v); await reload(); closeModal(); expView(id); toast('已加签'); }
+    catch (e) { toast(e.message, 'error'); }
+  }});
+}
+async function expTransfer(id) {
+  const o = byId(db.expenses, id); if (!o) return;
+  const me = ME.username;
+  const people = (await loadPeople()).filter(p => p.username !== me);
+  if (!people.length) return toast('没有可转交的账号', 'error');
+  closeModal();
+  formModal({ title: '转交审批 · ' + o.no, okText: '确认转交', fields: [
+    { n: 'to', l: '转交给谁', type: 'select', opts: people.map(p => [p.username, p.name + '（' + p.username + '）']), req: 1 },
+    { n: 'note', l: '说明（选填）', span: 2 },
+  ], onSubmit: async v => {
+    try { await api('POST', `/api/expenses/${id}/transfer`, v); await reload(); closeModal(); expView(id); toast('已转交'); }
+    catch (e) { toast(e.message, 'error'); }
+  }});
 }
 function expVoid(id) {
   const o = byId(db.expenses, id); closeModal();
@@ -5296,11 +5495,45 @@ const A = {
   shipCalc, billImport: () => { closeModal(); billImport(); }, billView: id => { closeModal(); billView(id); },
   carrierEdit: id => carrierEdit(id),
   carrierDel: id => { const c = byId(db.carriers, id); confirmBox(`删除快递公司「${esc(c.name)}」和它的报价？已有运单的快递不能删除，可以改成停用。`, () => mutate('DELETE', '/api/carriers/' + id, undefined, '已删除')); },
-  notifySave: () => mutate('PUT', '/api/settings/notify', {enabled:$('#nfOn').checked, url:$('#nfUrl').value.trim(), time:$('#nfTime').value || '08:30', skipEmpty:$('#nfSkip').checked}, '推送设置已保存'),
+  notifySave: () => {
+    const events = {};
+    ['lowStock', 'overdue', 'birthday', 'pendingApproval', 'daily'].forEach(k => { events[k] = $('#nfEv_' + k).checked; });
+    return mutate('PUT', '/api/settings/notify', {
+      enabled: $('#nfOn').checked,
+      time: $('#nfTime').value || '08:30',
+      skipEmpty: $('#nfSkip').checked,
+      overdueDays: +$('#nfOd').value || 30,
+      events,
+      webhook: { enabled: $('#nfWhOn').checked, url: $('#nfUrl').value.trim() },
+      mail: {
+        enabled: $('#nfMailOn').checked,
+        host: $('#nfHost').value.trim(),
+        port: +$('#nfPort').value || 465,
+        secure: true,
+        user: $('#nfUser').value.trim(),
+        pass: $('#nfPass').value,
+        from: $('#nfFrom').value.trim(),
+        to: $('#nfTo').value.trim(),
+      },
+    }, '通知设置已保存');
+  },
   notifyTest: async () => {
-    const url = $('#nfUrl').value.trim(); if (!url) return toast('请先填写推送地址', 'error');
+    const url = $('#nfUrl').value.trim(), mailOn = $('#nfMailOn').checked && $('#nfHost').value.trim();
+    if (!url && !mailOn) return toast('请先填写群机器人地址，或开启邮件并填好服务器', 'error');
     busy(true);
-    try { await api('POST', '/api/settings/notify/test', {url}); toast('测试消息已发送，请到群里查看'); } catch (e) { toast(e.message, 'error'); } finally { busy(false); }
+    try {
+      const r = await api('POST', '/api/settings/notify/test', {
+        webhook: { url },
+        mail: {
+          enabled: $('#nfMailOn').checked, host: $('#nfHost').value.trim(), port: +$('#nfPort').value || 465, secure: true,
+          user: $('#nfUser').value.trim(), pass: $('#nfPass').value, from: $('#nfFrom').value.trim(), to: $('#nfTo').value.trim(),
+        },
+      });
+      const okList = (r.results || []).filter(x => x.ok).map(x => x.channel === 'mail' ? '邮件' : '群机器人');
+      const bad = (r.results || []).filter(x => !x.ok);
+      if (!okList.length) toast(bad.map(x => (x.channel === 'mail' ? '邮件' : '群机器人') + '：' + x.error).join('；'), 'error');
+      else toast('测试已发送：' + okList.join('、') + (bad.length ? '（' + bad.length + ' 个通道失败）' : ''));
+    } catch (e) { toast(e.message, 'error'); } finally { busy(false); }
   },
   notifyPreview: async () => {
     try { const r = await api('GET', '/api/settings/notify/preview'); openModal(`${modalHead('今天会推送的内容')}<div class="m-body"><pre style="white-space:pre-wrap;font:13px/1.7 inherit">${esc(r.text)}</pre></div>`); } catch (e) { toast(e.message, 'error'); }
@@ -5520,6 +5753,15 @@ const A = {
   advReject: id => advReject(id), advPay: id => advPay(id), advReturn: id => advReturn(id),
   advVoid: id => { const a = byId(db.advances, id); confirmBox(`确定作废备用金 ${a.no} 吗？`, () => mutate('POST', `/api/advances/${id}/void`, {}, '已作废')); },
   expReject: id => expReject(id), expPay: id => expPay(id), expVoid: id => expVoid(id),
+  expAddSigner: id => expAddSigner(id), expTransfer: id => expTransfer(id),
+  expUrge: async id => {
+    try { await api('POST', `/api/expenses/${id}/urge`, {}); await reload(); closeModal(); expView(id); toast('已催办，审批人会看到催办记录'); }
+    catch (e) { toast(e.message, 'error'); }
+  },
+  expWithdraw: id => confirmBox('撤回后这张单回到你手里，可以改完重新提交。确定撤回吗？', async () => {
+    try { await api('POST', `/api/expenses/${id}/withdraw`, {}); await reload(); closeModal(); render(); toast('已撤回，可修改后重新提交'); }
+    catch (e) { toast(e.message, 'error'); }
+  }),
   expUnpay: id => { const o = byId(db.expenses, id); confirmBox(`撤销 ${o.no} 的付款吗？收支流水里这笔报销的支出会删掉，账户余额恢复，报销单回到「已批准」。`, () => mutate('POST', `/api/expenses/${id}/unpay`, {}, '已撤销付款'), {title:'撤销付款', okText:'撤销付款'}); },
   expPrint: id => { const o = byId(db.expenses, id); if (o) printFrame(o.no, `<div class="page">${expSlip(o)}${printFoot('out', 0)}</div>`, prefs.paper || 'a4'); },
   ppRange: v => { [ui.ppFrom, ui.ppTo] = split(v); render(); }, ppDetail: n => ppDetail(n),
@@ -5555,7 +5797,11 @@ const A = {
     });
     const splitNames = s => String(s || '').split(/[,，\s]+/).map(x => x.trim()).filter(Boolean);
     try {
-      await api('PUT', '/api/settings/expense-flow', { deptHeads: heads, finance: splitNames($('#efFinance').value), gm: splitNames($('#efGm').value), gmThreshold: +$('#efThreshold').value || 0 });
+      await api('PUT', '/api/settings/expense-flow', {
+        deptHeads: heads, finance: splitNames($('#efFinance').value), gm: splitNames($('#efGm').value),
+        gmThreshold: +$('#efThreshold').value || 0,
+        modes: { dept: $('#efModeDept').value, finance: $('#efModeFinance').value, gm: $('#efModeGm').value },
+      });
       await reload(); toast('报销审批流程已保存');
     } catch (e) { toast(e.message, 'error'); }
   },
@@ -5628,6 +5874,15 @@ $('#importFile').addEventListener('change', e => {
 });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (db.settings.theme === 'auto') { applyTheme(); render(); } });
 window.addEventListener('hashchange', render);
+
+// 手机布局兜底：用屏幕物理宽度判断，避免浏览器不按 viewport 算宽度时仍显示桌面版
+const syncMobile = () => {
+  const w = Math.min(screen.width || 9999, innerWidth || 9999);
+  document.documentElement.classList.toggle('mobile', w <= 768);
+};
+syncMobile();
+window.addEventListener('resize', syncMobile);
+window.addEventListener('orientationchange', () => setTimeout(syncMobile, 300));
 
 /* ================= 安卓客户端：扫码按钮 / 返回键 / 切换服务器 ================= */
 if (NATIVE) {

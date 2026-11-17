@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 2.12.0
+version               = 2.13.1
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 云服务到期前可直接续费，续费从原到期日顺延；人事管理支持批量导入员工（模板 + 工号查重 + 身份证校验）；客户/供应商支持勾选多张未结清单合并收款，一次收款自动分摊、只记一笔流水；手机端指标卡、筛选和表格适配优化。
+changelog             = 报销审批增强（钉钉式会签）：每个节点可选会签或或签；支持加签（前加签/后加签）、转交、催办（10 分钟限一次）、抄送，提交人可在审批中撤回并修改后重新提交；审批时间线记录以上操作。
