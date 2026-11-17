@@ -37,6 +37,16 @@
       "version": "2.13.1",
       "kind": "docker",
       "image": "ghcr.io/zyc009234/xerp:2.13.1"
+    },
+    "androidNative": {
+      "packageName": "com.xerp.nativepreview",
+      "version": "2.13.1.2",
+      "versionCode": 2130102,
+      "url": "https://raw.githubusercontent.com/Zyc009234/x.erp/7dd42eb60908feb3a66305b99471c5e1eeca30fe/releases/xerp-2.13.1.2-android-native-preview.apk",
+      "sha256": "9cc5a502c05ab005b1c35f77817c08d1ce69acd862f0bb817a69be3299beeb3b",
+      "size": 320321,
+      "file": "xerp-2.13.1.2-android-native-preview.apk",
+      "kind": "apk"
     }
   }
 }
