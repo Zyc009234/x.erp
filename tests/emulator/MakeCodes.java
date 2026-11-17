@@ -17,12 +17,11 @@ class MakeCodes {
             g.fillRect(0, 0, 640, 480);
             if (!codes[i].isEmpty()) {
                 BitMatrix qr = new MultiFormatWriter().encode(codes[i], BarcodeFormat.QR_CODE, 120, 120);
-                for (int centerY : new int[]{60, 180, 300, 420}) {
-                    for (int centerX : new int[]{80, 240, 400, 560}) {
-                        for (int y = 0; y < qr.getHeight(); y++) {
-                            for (int x = 0; x < qr.getWidth(); x++) {
-                                if (qr.get(x, y)) img.setRGB(centerX + x - 60, centerY + y - 60, 0xff000000);
-                            }
+                int[][] centers = {{320, 58}, {320, 422}, {130, 240}, {320, 240}, {510, 240}};
+                for (int[] center : centers) {
+                    for (int y = 0; y < qr.getHeight(); y++) {
+                        for (int x = 0; x < qr.getWidth(); x++) {
+                            if (qr.get(x, y)) img.setRGB(center[0] + x - 60, center[1] + y - 60, 0xff000000);
                         }
                     }
                 }
