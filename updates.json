@@ -40,12 +40,12 @@
     },
     "androidNative": {
       "packageName": "com.xerp.nativepreview",
-      "version": "2.13.1.3",
-      "versionCode": 2130103,
-      "url": "https://raw.githubusercontent.com/Zyc009234/x.erp/410c586c7ca1e3ec229d21bde4c8d8259cb7c22f/releases/xerp-2.13.1.3-android-native-preview.apk",
-      "sha256": "ddf97d57a418e6e2da9fe1844c17203c97554e42cfeeac3c497fe69740e3ca3a",
-      "size": 320321,
-      "file": "xerp-2.13.1.3-android-native-preview.apk",
+      "version": "2.13.1.4",
+      "versionCode": 2130104,
+      "url": "https://raw.githubusercontent.com/Zyc009234/x.erp/3be3b25de8fbd2c3c2bb66f0b7cf89a8e37854d4/releases/xerp-2.13.1.4-android-native-preview.apk",
+      "sha256": "3d0d11493a81407e86180e44a8b604e317dd855da6fb2d92dca5e14180c9ec75",
+      "size": 324417,
+      "file": "xerp-2.13.1.4-android-native-preview.apk",
       "kind": "apk"
     }
   }
