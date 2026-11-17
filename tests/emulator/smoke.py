@@ -88,14 +88,18 @@ def server_count():
 
 
 def run():
+    shell('settings', 'put', 'global', 'hide_error_dialogs', '1')
+    shell('wm', 'size', '720x1600')
+    shell('wm', 'density', '300')
+    shell('wm', 'dismiss-keyguard')
+    time.sleep(3)
     apk = next(Path('emulator-apk').rglob('*.apk'))
     print(adb('install', '-g', str(apk)).decode().strip())
     print('Android API:', shell('getprop', 'ro.build.version.sdk').strip())
     print('Forwarding the isolated test service over ADB')
     adb('reverse', 'tcp:18686', 'tcp:18686')
     assert api('/api/ping')['app'] == 'XERP'
-    shell('input', 'keyevent', '82')
-    shell('am', 'start', '-W', '-n', PACKAGE + '/.MainActivity')
+    shell('am', 'start', '-W', '-S', '-n', PACKAGE + '/.MainActivity')
     tap(wait_node(lambda node: node.get('class') == 'android.widget.EditText'))
     shell('input', 'text', '127.0.0.1:18686')
     shell('input', 'keyevent', '4')
