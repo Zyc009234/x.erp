@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.hardware.Camera;
@@ -29,6 +30,7 @@ import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.view.WindowInsets;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -187,6 +189,13 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         LinearLayout.LayoutParams finishLayout = new LinearLayout.LayoutParams(-1, dp(48));
         finishLayout.topMargin = dp(12);
         panel.addView(inventoryButton("完成扫码", ACCENT, v -> finish()), finishLayout);
+        if (Build.VERSION.SDK_INT >= 35) {
+            page.setOnApplyWindowInsetsListener((view, insets) -> {
+                Insets safe = insets.getInsets(WindowInsets.Type.navigationBars() | WindowInsets.Type.displayCutout());
+                view.setPadding(safe.left, safe.top, safe.right, safe.bottom);
+                return insets;
+            });
+        }
         setContentView(page);
     }
 
