@@ -35,12 +35,12 @@
     "docker": {
       "version": "2.13.3",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:latest",
+      "image": "ghcr.io/zyc009234/xerp:2.13.3",
       "offline": [
         "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.3-docker-amd64.tar.gz",
         "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.3-docker-arm64.tar.gz"
       ],
-      "note": "GHCR 的 2.13.3 镜像暂未推送，可先下载离线包 docker load"
+      "note": "也可以下载离线包 docker load"
     },
     "androidNative": {
       "packageName": "com.xerp.nativepreview",
