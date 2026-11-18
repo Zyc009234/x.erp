@@ -28,6 +28,10 @@ const MAX_UPLOAD = 200 * MB;
 
 fs.mkdirSync(BLOB_DIR, { recursive: true });
 
+// 二维码/订单有效期 5 分钟；匹配和作废多给 60 秒宽限，防止到账通知晚到
+const ORDER_TTL = 300;
+const MATCH_TTL = 360;
+
 const PLANS = {
   basic: { name: '基础版', quota: 1 * GB, days: 30, max: 7, price: 2 },
   plus: { name: '标准版', quota: 5 * GB, days: 30, max: 15, price: 3 },
@@ -211,7 +215,7 @@ function verifyRelay(b) {
   return r;
 }
 function uniqueAmount(base) {
-  const used = new Set(db.prepare("SELECT amount FROM orders WHERE status = 'pending' AND channel = 'relay' AND created > ?").all(now() - 1800).map(r => r.amount));
+  const used = new Set(db.prepare("SELECT amount FROM orders WHERE status = 'pending' AND channel = 'relay' AND created > ?").all(now() - MATCH_TTL).map(r => r.amount));
   for (let i = 1; i <= 99; i++) if (!used.has(base + i)) return base + i;
   return base;
 }
@@ -368,33 +372,76 @@ function buyPage() {
   const cards = Object.entries(PLANS).map(([k, p]) => `<div class=plan><h3>${p.name}</h3><div class=price>¥${p.price}<small>/月</small></div><ul><li>${fmtBytes(p.quota)} 加密云备份空间</li><li>保留最近 ${p.max} 份备份</li><li>远程访问（独立域名）</li><li>NAS 故障可下载恢复</li><li>服务器只存密文</li></ul><button onclick="buy('${k}')">购买</button></div>`).join('');
   return `<!doctype html><html lang=zh-CN><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>x.erp 云服务</title>
 <style>body{font:15px/1.7 system-ui,"Microsoft YaHei";margin:0;background:#0f172a;color:#e2e8f0}main{max-width:960px;margin:0 auto;padding:48px 16px}h1{font-size:30px;margin:0 0 8px}p.sub{color:#94a3b8;margin:0 0 18px}.contact{margin:0 0 24px}.contact input{width:100%;max-width:360px;padding:10px 12px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font:inherit}.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.plan{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:22px}.plan h3{margin:0 0 6px;font-size:18px}.price{font-size:30px;font-weight:700;margin-bottom:14px}.price small{font-size:13px;color:#94a3b8;font-weight:400}.plan ul{padding-left:18px;color:#cbd5e1;font-size:13px}.plan button{width:100%;padding:10px;border:0;border-radius:10px;background:#6366f1;color:#fff;font:inherit;cursor:pointer}.note{margin-top:26px;color:#94a3b8;font-size:13px}#msg{margin-top:18px;padding:14px;border-radius:10px;background:#1e293b;display:none;white-space:pre-wrap}#msg.show{display:block}</style></head>
-<body><main><h1>x.erp 云服务</h1><p class=sub>加密云备份 + 远程访问。数据在本机加密后上传，服务器看不到你的业务数据；在外面也能打开自己的 ERP。</p><div class=contact><input id=contact placeholder="微信 / 手机号（选填，方便补发授权码）"></div><div id=paystate style="color:#94a3b8;font-size:13px;margin:-14px 0 20px">正在检查收款助手…</div><div class=plans>${cards}</div><div id=msg></div>
-<p class=note>购买后授权码会显示在本页，也会稍后发到你留下的联系方式。授权码在 x.erp「云服务」页面输入即可开通，2 元/月起含云备份和远程访问。</p>
+<body><main><h1>x.erp 云服务</h1><p class=sub>加密云备份 + 远程访问。数据在本机加密后上传，服务器看不到你的业务数据；在外面也能打开自己的 ERP。</p><div class=contact><input id=contact placeholder="微信 / 手机号（选填，方便补发授权码）"></div><div id=paystate style="color:#94a3b8;font-size:13px;margin:-14px 0 20px">正在检查收款助手…</div><div class=plans>${cards}</div><div id=msg></div><div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><input id=qno placeholder="订单号（R 或 M 开头）" autocomplete=off style="flex:1;min-width:200px;padding:10px 12px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font:inherit"><button onclick="queryOrder()" style="padding:10px 16px;border:0;border-radius:10px;background:#334155;color:#fff;font:inherit;cursor:pointer">查询授权码</button></div>
+<p class=note>订单二维码 5 分钟内有效，超时直接作废，需要重新下单。授权码会显示在本页，请截图保存；关掉页面或换了设备也没关系，凭订单号在下面随时查回来，订单号会记在这台浏览器里。授权码在 x.erp「云服务」页面输入即可开通，2 元/月起含云备份和远程访问。</p>
+<p style="text-align:center;margin-top:26px;font-size:13px;color:#94a3b8"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" style="color:inherit">冀ICP备2025136401号-2</a></p>
 <script>
-async function pollOrder(no,keep){
-  const box=document.getElementById('msg');box.className='show';
-  if(!keep) box.textContent='订单 '+no+' 等待支付…';
-  for(let i=0;i<200;i++){
-    try{
-      const r=await fetch('api/order/'+encodeURIComponent(no));
-      const d=await r.json();
-      if(d.status==='paid'&&d.code){box.innerHTML='支付成功，授权码：<b style="font-size:20px">'+d.code+'</b><br>打开 x.erp →「云备份」输入即可开通。';return;}
-    }catch(e){}
-    await new Promise(r=>setTimeout(r,3000));
-  }
-  box.textContent='还没有收到支付结果。如果已经付款，请联系作者补发授权码。';
+var LS='xerp_cloud_order',curOrder='',curPaid=false,curTries=0,TTL=300;
+function fmtTime(ts){var d=new Date(ts*1000);var p=function(n){return (n<10?'0':'')+n};return p(d.getHours())+':'+p(d.getMinutes());}
+var store={get:function(){try{return localStorage.getItem(LS)||''}catch(e){return ''}},set:function(v){try{localStorage.setItem(LS,v)}catch(e){}},del:function(){try{localStorage.removeItem(LS)}catch(e){}}};
+function boxEl(){return document.getElementById('msg');}
+function showBox(t){var b=boxEl();b.className='show';b.textContent=t;}
+function showHtml(t){var b=boxEl();b.className='show';b.innerHTML=t;}
+function showCode(code,no){
+  showHtml('支付成功，授权码：<b style="font-size:20px">'+code+'</b><br>订单号 '+no+'<br>打开 x.erp →「云服务」输入即可开通。请截图保存，关掉页面后凭订单号也能查回来。');
+}
+async function orderInfo(no){
+  var r=await fetch('api/order/'+encodeURIComponent(no));
+  var d=await r.json();
+  if(!r.ok) throw new Error(d.error==='订单不存在'?('订单 '+no+' 不存在，请检查订单号'):(d.error||('订单 '+no+' 不存在')));
+  return d;
+}
+async function checkOnce(){
+  if(!curOrder||curPaid) return;
+  try{
+    var d=await orderInfo(curOrder);
+    if(d.status==='paid'&&d.code){curPaid=true;showCode(d.code,curOrder);}
+    else if(d.status==='void'){curOrder='';showBox('订单已过期作废（超过 5 分钟未付款）。二维码已失效，请重新选择套餐下单。');}
+  }catch(e){if(e.message&&e.message.indexOf('不存在')>=0) showBox(e.message);}
+}
+function pollOrder(no,keep){
+  no=String(no||'').trim().toUpperCase();
+  if(!no){showBox('订单号不能为空');return;}
+  curOrder=no;curPaid=false;curTries=0;store.set(no);
+  var qi=document.getElementById('qno');if(qi) qi.value=no;
+  try{history.replaceState(null,'','?order='+no);}catch(e){}
+  if(!keep) showBox('正在查询订单 '+no+' …');
+  else if(!boxEl().textContent.trim()) showBox('订单 '+no+' 等待支付…');
+  checkOnce();
+}
+setInterval(function(){if(!document.hidden&&curOrder&&!curPaid){curTries++;if(curTries>100){curOrder='';showBox('订单已过期（5 分钟内未付款）。二维码已失效，请重新下单；如果刚刚已经付款，把订单号填到下面查询。');return;}checkOnce();}},3000);
+document.addEventListener('visibilitychange',function(){if(!document.hidden) checkOnce();});
+async function queryOrder(){
+  var qi=document.getElementById('qno');
+  var no=String((qi&&qi.value)||'').trim().toUpperCase();
+  if(!no){showBox('请先填订单号（R 或 M 开头）');return;}
+  showBox('正在查询…');
+  try{
+    var d=await orderInfo(no);
+    pollOrder(no,true);
+    if(d.status==='paid'&&d.code){curPaid=true;showCode(d.code,no);}
+    else if(d.status==='void') showBox('订单 '+no+' 已过期作废（超过 5 分钟未付款），二维码已失效，请重新下单。');
+    else showBox('订单 '+no+' 还没有付款记录（等待支付）。付款后这里会自动显示授权码。');
+  }catch(e){showBox(e.message);}
 }
 let relayOnline=false;
-(async()=>{
+async function refreshStatus(){
   try{
-    const r=await fetch('api/relay/status');const d=await r.json();
+    const r=await fetch('api/relay/status',{cache:'no-store'});const d=await r.json();
     relayOnline=!!d.online;
     const el=document.getElementById('paystate');
-    if(el) el.textContent=relayOnline?'收款助手在线：付款后自动发授权码':'收款助手离线：将生成订单号，由作者确认后发码';
+    if(el){
+      el.textContent=relayOnline?'收款助手在线：付款后自动发授权码':'收款助手离线：先别付款！等这里变回「在线」再买，付款后才能自动发码';
+      el.style.color=relayOnline?'#94a3b8':'#f87171';
+      el.style.fontWeight=relayOnline?'400':'700';
+    }
   }catch(e){}
-})();
-const orderNo=new URLSearchParams(location.search).get('order');
-if(orderNo) pollOrder(orderNo);
+}
+refreshStatus();
+setInterval(refreshStatus,10000);
+document.addEventListener('visibilitychange',function(){if(!document.hidden) refreshStatus();});
+const orderNo=new URLSearchParams(location.search).get('order')||store.get();
+if(orderNo){var qi0=document.getElementById('qno');if(qi0) qi0.value=String(orderNo).toUpperCase();pollOrder(orderNo,true);}
 async function buy(plan){
   const box=document.getElementById('msg');box.className='show';box.textContent='正在创建订单…';
   try{
@@ -402,7 +449,7 @@ async function buy(plan){
       const m=await fetch('api/order/relay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan,contact:(document.getElementById('contact')||{}).value||''})});
       const o=await m.json();
       if(!m.ok) throw new Error(o.error||'创建订单失败');
-      box.innerHTML='订单号 <b>'+o.order+'</b>，应付 <b>¥'+(o.amount/100).toFixed(2)+'</b><br>金额包含随机尾数，请<b>精确支付</b>这个金额。付款后这里会自动显示授权码。<br><img src="https://www.zhaoyoucai.xyz/xerp/img/wechat-pay-20261115.jpg" alt="微信收款码" style="width:190px;margin-top:10px;border-radius:10px;background:#fff">';
+      box.innerHTML='订单号 <b>'+o.order+'</b>，应付 <b>¥'+(o.amount/100).toFixed(2)+'</b><br>请在 <b>'+fmtTime(o.expires||Date.now()/1000+TTL)+'</b> 前付款，二维码 5 分钟内有效，超时订单直接作废。<br>金额包含随机尾数，请<b>精确支付</b>这个金额，付款后这里会自动显示授权码。<br><img src="https://www.zhaoyoucai.xyz/xerp/img/wechat-pay-20261115.jpg" alt="微信收款码" style="width:190px;margin-top:10px;border-radius:10px;background:#fff">';
       pollOrder(o.order,true);
       return;
     }
@@ -410,15 +457,21 @@ async function buy(plan){
     const d=await r.json();
     if(!r.ok) throw new Error(d.error||'创建订单失败');
     if(d.disabled){
+      if(!relayOnline&&!confirm('收款助手当前离线：现在付款不能自动发码，要等作者人工确认（可能需要等一会儿）。\\n\\n确定现在下单吗？不着急的话，等上面变回「在线」再买最稳。')) {showBox('已取消。等收款助手恢复在线再买，付款后会自动出码。');return;}
       const m=await fetch('api/order/manual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan,contact:(document.getElementById('contact')||{}).value||''})});
       const o=await m.json();
       if(!m.ok) throw new Error(o.error||'创建订单失败');
-      box.innerHTML='订单号 <b>'+o.order+'</b>，应付 <b>¥'+(o.amount/100).toFixed(2)+'</b><br>请用微信扫码支付，付款后把订单号发给作者；作者确认后这里会自动显示授权码。<br><img src="https://www.zhaoyoucai.xyz/xerp/img/wechat-pay-20261115.jpg" alt="微信收款码" style="width:190px;margin-top:10px;border-radius:10px;background:#fff">';
+      box.innerHTML='订单号 <b>'+o.order+'</b>，应付 <b>¥'+(o.amount/100).toFixed(2)+'</b><br>请在 <b>'+fmtTime(o.expires||Date.now()/1000+TTL)+'</b> 前付款，订单 5 分钟内有效，超时作废。<br>请用微信扫码支付，付款后把订单号发给作者；作者确认后这里会自动显示授权码。<br><img src="https://www.zhaoyoucai.xyz/xerp/img/wechat-pay-20261115.jpg" alt="微信收款码" style="width:190px;margin-top:10px;border-radius:10px;background:#fff">';
       pollOrder(o.order,true);
       return;
     }
     location.href=d.url;
-  }catch(e){box.textContent=e.message;}
+  }catch(e){
+    var msg=e.message||'创建订单失败';
+    if(msg.indexOf('离线')>=0) {msg='收款助手暂时离线，请等十几秒再点一次购买；如果已经付款，请在下面输入订单号查询授权码。';refreshStatus();}
+    else msg=msg+'（如果已经付款，请在下面输入订单号查询授权码）';
+    box.textContent=msg;
+  }
 }
 </script></main></body></html>`;
 }
@@ -500,6 +553,16 @@ async function remoteProxy(req, res, host) {
   wsSend(tun.socket, { type: 'req', id, method: req.method, path: req.url, headers, body: reqBody.toString('base64') });
 }
 
+// 超过有效期的待付款订单直接作废，避免旧二维码还能被付款匹配
+function expireOrders() {
+  try {
+    const r = db.prepare("UPDATE orders SET status = 'void' WHERE status = 'pending' AND created < ?").run(now() - MATCH_TTL);
+    if (r.changes) console.log(new Date().toISOString(), 'ORDER expire', r.changes);
+  } catch (e) { console.error(new Date().toISOString(), 'ORDER expire fail', e.message); }
+}
+setInterval(expireOrders, 30000);
+expireOrders();
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const p = url.pathname;
@@ -569,12 +632,16 @@ const server = http.createServer(async (req, res) => {
       const b = await jsonBody(req);
       const plan = PLANS[b.plan];
       if (!plan) return fail(res, 400, '套餐不存在');
-      if (!relayOnline().online) return fail(res, 503, '收款助手离线，请联系作者');
+      if (!relayOnline().online) {
+        console.error(new Date().toISOString(), 'ORDER relay offline, reject plan=' + b.plan + ' contact=' + (b.contact || ''));
+        return fail(res, 503, '收款助手离线，请联系作者');
+      }
       const no = 'R' + Date.now() + crypto.randomBytes(2).toString('hex').toUpperCase();
       const amount = uniqueAmount(plan.price * 100);
       db.prepare('INSERT INTO orders (id, plan, amount, status, created, channel, contact) VALUES (?,?,?,?,?,?,?)')
         .run(no, b.plan, amount, 'pending', now(), 'relay', String(b.contact || '').slice(0, 100) || null);
-      return json(res, 200, { order: no, amount, plan: b.plan, relay: true });
+      console.log(new Date().toISOString(), 'ORDER create', no, b.plan, amount, 'relay');
+      return json(res, 200, { order: no, amount, plan: b.plan, relay: true, expires: now() + ORDER_TTL });
     }
     if (req.method === 'POST' && p === '/api/order/manual') {
       const b = await jsonBody(req);
@@ -583,7 +650,8 @@ const server = http.createServer(async (req, res) => {
       const no = 'M' + Date.now() + crypto.randomBytes(2).toString('hex').toUpperCase();
       db.prepare('INSERT INTO orders (id, plan, amount, status, created, channel, contact) VALUES (?,?,?,?,?,?,?)')
         .run(no, b.plan, plan.price * 100, 'pending', now(), 'manual', String(b.contact || '').slice(0, 100) || null);
-      return json(res, 200, { order: no, amount: plan.price * 100, plan: b.plan });
+      console.log(new Date().toISOString(), 'ORDER create', no, b.plan, plan.price * 100, 'manual');
+      return json(res, 200, { order: no, amount: plan.price * 100, plan: b.plan, expires: now() + ORDER_TTL });
     }
     if (req.method === 'POST' && p === '/api/relay/heartbeat') {
       const b = await jsonBody(req);
@@ -592,11 +660,16 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && p === '/api/relay/notify') {
       const b = await jsonBody(req);
-      const relay = verifyRelay(b);
+      let relay;
+      try { relay = verifyRelay(b); }
+      catch (e) {
+        console.error(new Date().toISOString(), 'RELAY verify fail device=' + b.device + ' source=' + b.source + ' amount=' + b.amount + ' err=' + e.message);
+        throw e;
+      }
       const amount = Math.round(+b.amount || 0);
       let matched = null;
       if (amount > 0) {
-        const o = db.prepare("SELECT * FROM orders WHERE status = 'pending' AND amount = ? AND created > ? AND channel IN ('relay', 'manual') ORDER BY CASE WHEN channel = 'relay' THEN 0 ELSE 1 END, created DESC LIMIT 1").get(amount, now() - 1800);
+        const o = db.prepare("SELECT * FROM orders WHERE status = 'pending' AND amount = ? AND created > ? AND channel IN ('relay', 'manual') ORDER BY CASE WHEN channel = 'relay' THEN 0 ELSE 1 END, created DESC LIMIT 1").get(amount, now() - MATCH_TTL);
         if (o) {
           const code = createCode(o.plan, '收款助手 ' + relay.name, o.id);
           db.prepare('UPDATE orders SET status = ?, paid = ?, code = ? WHERE id = ?').run('paid', now(), code, o.id);
@@ -605,6 +678,7 @@ const server = http.createServer(async (req, res) => {
       }
       db.prepare('INSERT INTO relay_log (relay, amount, source, text, at, matched) VALUES (?,?,?,?,?,?)')
         .run(relay.id, amount, String(b.source || '').slice(0, 20), String(b.text || '').slice(0, 500), now(), matched);
+      console.log(new Date().toISOString(), 'RELAY notify', relay.id, amount, String(b.source || ''), matched ? ('matched ' + matched) : 'no-match');
       return json(res, 200, { ok: true, matched: !!matched, order: matched });
     }
     if (req.method === 'POST' && p === '/api/pay/create') {
@@ -615,12 +689,13 @@ const server = http.createServer(async (req, res) => {
         const no = 'T' + Date.now() + crypto.randomBytes(3).toString('hex');
         db.prepare('INSERT INTO orders (id, plan, amount, status, created, channel, contact) VALUES (?,?,?,?,?,?,?)')
           .run(no, b.plan, plan.price * 100, 'pending', now(), 'mock', String(b.contact || '').slice(0, 100) || null);
-        return json(res, 200, { url: BASE + '/mock-pay?order=' + no, order: no });
+        return json(res, 200, { url: BASE + '/mock-pay?order=' + no, order: no, expires: now() + ORDER_TTL });
       }
       if (!process.env.EPAY_URL || !process.env.EPAY_PID || !process.env.EPAY_KEY) return json(res, 200, { disabled: true });
       const no = 'X' + Date.now() + crypto.randomBytes(3).toString('hex');
       db.prepare('INSERT INTO orders (id, plan, amount, status, created, channel, contact) VALUES (?,?,?,?,?,?,?)')
         .run(no, b.plan, plan.price * 100, 'pending', now(), b.channel || 'wxpay', String(b.contact || '').slice(0, 100) || null);
+      console.log(new Date().toISOString(), 'ORDER create', no, b.plan, plan.price * 100, 'epay');
       const params = {
         pid: process.env.EPAY_PID, type: b.channel || 'wxpay', out_trade_no: no,
         notify_url: BASE + '/api/pay/notify', return_url: BASE + '/buy?order=' + no,
@@ -628,12 +703,12 @@ const server = http.createServer(async (req, res) => {
       };
       const qs = Object.keys(params).sort().map(k => `${k}=${encodeURIComponent(params[k])}`).join('&');
       const sign = crypto.createHash('md5').update(qs + process.env.EPAY_KEY).digest('hex');
-      return json(res, 200, { url: process.env.EPAY_URL + 'submit.php?' + qs + '&sign=' + sign + '&sign_type=MD5', order: no });
+      return json(res, 200, { url: process.env.EPAY_URL + 'submit.php?' + qs + '&sign=' + sign + '&sign_type=MD5', order: no, expires: now() + ORDER_TTL });
     }
     if (req.method === 'GET' && p.startsWith('/api/order/')) {
       const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(p.slice('/api/order/'.length));
       if (!o) return fail(res, 404, '订单不存在');
-      return json(res, 200, { status: o.status, code: o.code || null, plan: o.plan, amount: o.amount });
+      return json(res, 200, { status: o.status, code: o.code || null, plan: o.plan, amount: o.amount, created: o.created, expires: o.created + ORDER_TTL });
     }
     if (req.method === 'GET' && p === '/mock-pay') {
       const no = url.searchParams.get('order') || '';
@@ -710,6 +785,7 @@ const server = http.createServer(async (req, res) => {
   } catch (e) {
     const code = e.status || 500;
     if (code >= 500) console.error(new Date().toISOString(), e.stack || e.message);
+    else if (p.startsWith('/api/')) console.error(new Date().toISOString(), 'API reject', code, req.method, p, e.message);
     if (!res.headersSent) fail(res, code, e.message || '服务器错误');
   }
 });

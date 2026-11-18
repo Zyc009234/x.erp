@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.hardware.Camera;
@@ -15,6 +16,13 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.ResultReceiver;
+import android.os.SystemClock;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.widget.Switch;
+import org.json.JSONException;
+import org.json.JSONObject;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.view.Gravity;
@@ -22,6 +30,7 @@ import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.view.WindowInsets;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -48,7 +57,16 @@ import java.util.Map;
 @SuppressWarnings("deprecation")
 public class ScanActivity extends Activity implements SurfaceHolder.Callback, Camera.PreviewCallback {
     private static final int REQ_CAM = 10;
+    private static final int ACCENT = 0xFF4F46E5;
+    private static final long REARM_MS = 700;
     private Camera camera;
+    private ResultReceiver inventoryReceiver;
+    private String lastCode;
+    private long absentSince = -1;
+    private boolean awaitingResult;
+    private int scanRequest;
+    private TextView scanStatus, productName, bookQuantity, actualQuantity;
+    private Switch continuous;
     private SurfaceView surface;
     private HandlerThread worker;
     private Handler decoder;
@@ -60,6 +78,7 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        inventoryReceiver = getIntent().getParcelableExtra("inventoryReceiver");
         Map<DecodeHintType, Object> hints = new EnumMap<>(DecodeHintType.class);
         hints.put(DecodeHintType.POSSIBLE_FORMATS, Arrays.asList(BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
                 BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93, BarcodeFormat.ITF, BarcodeFormat.CODABAR, BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX));
@@ -72,6 +91,12 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         surface = new SurfaceView(this);
         root.addView(surface, new FrameLayout.LayoutParams(-1, -1));
         root.addView(new Overlay(this), new FrameLayout.LayoutParams(-1, -1));
+
+        if (inventoryReceiver != null) {
+            showInventoryLayout(root);
+            surface.getHolder().addCallback(this);
+            return;
+        }
 
         TextView tip = new TextView(this);
         tip.setText("把条码 / 二维码放进框内，会自动识别");
@@ -95,6 +120,116 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         root.addView(bar, bl);
         setContentView(root);
         surface.getHolder().addCallback(this);
+    }
+
+    private void showInventoryLayout(FrameLayout preview) {
+        LinearLayout page = column();
+        page.setBackgroundColor(Color.WHITE);
+        page.addView(preview, new LinearLayout.LayoutParams(-1, 0, 1));
+
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        top.setBackgroundColor(0x88000000);
+        top.addView(inventoryButton("返回", Color.TRANSPARENT, v -> finish()),
+                new LinearLayout.LayoutParams(dp(64), dp(48)));
+        TextView title = label("扫码盘点", 19, Color.WHITE, true);
+        title.setGravity(Gravity.CENTER);
+        top.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
+        top.addView(inventoryButton("手电筒", Color.TRANSPARENT, v -> toggleTorch()),
+                new LinearLayout.LayoutParams(dp(80), dp(48)));
+        preview.addView(top, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
+
+        TextView tip = label("将条码放入框内", 15, Color.WHITE, false);
+        tip.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams tipLayout = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        tipLayout.bottomMargin = dp(20);
+        preview.addView(tip, tipLayout);
+
+        LinearLayout panel = column();
+        panel.setPadding(dp(18), dp(12), dp(18), dp(16));
+        page.addView(panel, new LinearLayout.LayoutParams(-1, -2));
+        String warehouse = getIntent().getStringExtra("warehouse");
+
+        LinearLayout controls = new LinearLayout(this);
+        controls.setGravity(Gravity.CENTER_VERTICAL);
+        controls.addView(label(warehouse == null ? "仓库" : warehouse, 16, 0xFF111827, true),
+                new LinearLayout.LayoutParams(0, -2, 1));
+        continuous = new Switch(this);
+        continuous.setText("连续扫码  ");
+        continuous.setTextColor(0xFF111827);
+        continuous.setChecked(true);
+        controls.addView(continuous);
+        panel.addView(controls);
+
+        scanStatus = label("等待扫描商品", 14, 0xFF4B5563, false);
+        scanStatus.setPadding(0, dp(8), 0, dp(8));
+        panel.addView(scanStatus);
+
+        LinearLayout details = new LinearLayout(this);
+        details.setGravity(Gravity.CENTER_VERTICAL);
+        details.setPadding(dp(12), dp(8), dp(12), dp(8));
+        details.setBackground(rounded(0xFFF3F4FA));
+        panel.addView(details, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout item = column();
+        productName = label("最近扫描商品", 17, 0xFF111827, true);
+        productName.setMaxLines(2);
+        item.addView(productName);
+        bookQuantity = label("账面库存 —", 13, 0xFF4B5563, false);
+        item.addView(bookQuantity);
+        details.addView(item, new LinearLayout.LayoutParams(0, -2, 1));
+
+        LinearLayout quantity = column();
+        quantity.setGravity(Gravity.END);
+        actualQuantity = label("—", 30, ACCENT, true);
+        quantity.addView(actualQuantity);
+        quantity.addView(label("实盘数量", 13, 0xFF4B5563, false));
+        details.addView(quantity);
+
+        LinearLayout.LayoutParams finishLayout = new LinearLayout.LayoutParams(-1, dp(48));
+        finishLayout.topMargin = dp(12);
+        panel.addView(inventoryButton("完成扫码", ACCENT, v -> finish()), finishLayout);
+        if (Build.VERSION.SDK_INT >= 35) {
+            page.setOnApplyWindowInsetsListener((view, insets) -> {
+                Insets safe = insets.getInsets(WindowInsets.Type.navigationBars() | WindowInsets.Type.displayCutout());
+                view.setPadding(safe.left, safe.top, safe.right, safe.bottom);
+                return insets;
+            });
+        }
+        setContentView(page);
+    }
+
+    private LinearLayout column() {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        return layout;
+    }
+
+    private GradientDrawable rounded(int color) {
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(color);
+        background.setCornerRadius(dp(12));
+        return background;
+    }
+
+    private TextView label(String text, int size, int color, boolean bold) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextSize(size);
+        view.setTextColor(color);
+        if (bold) view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        return view;
+    }
+
+    private Button inventoryButton(String text, int color, View.OnClickListener action) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setTextColor(Color.WHITE);
+        button.setTextSize(15);
+        button.setAllCaps(false);
+        button.setBackground(rounded(color));
+        button.setOnClickListener(action);
+        return button;
     }
 
     private Button button(String text) {
@@ -219,7 +354,17 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
             try {
                 // 传感器画面是横的：一维条码横着拿在竖屏里，对传感器来说是竖的，所以轮流尝试原图和旋转 90° 的图
                 String code = (n % 2 == 0) ? decode(rotate(data, w, h), h, w) : decode(data, w, h);
-                if (code != null && !done) { done = true; runOnUiThread(() -> finishWith(code)); }
+                if (inventoryReceiver != null) {
+                    String detected = code != null ? code
+                            : (n % 2 == 0 ? decode(data, w, h) : decode(rotate(data, w, h), h, w));
+                    long observedAt = SystemClock.elapsedRealtime();
+                    runOnUiThread(() -> {
+                        if (camera == cam && !isFinishing()) inventoryFrame(detected, observedAt);
+                    });
+                } else if (code != null && !done) {
+                    done = true;
+                    runOnUiThread(() -> finishWith(code));
+                }
             } finally { busy = false; }
         });
     }
@@ -245,14 +390,79 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         return out;
     }
 
+    private void inventoryFrame(String code, long observedAt) {
+        if (code == null) {
+            if (absentSince < 0) absentSince = observedAt;
+            if (observedAt - absentSince >= REARM_MS) lastCode = null;
+            return;
+        }
+        absentSince = -1;
+        if (code.equals(lastCode)) {
+            return;
+        }
+        if (awaitingResult) return;
+        lastCode = code;
+        awaitingResult = true;
+        int request = ++scanRequest;
+        showStatus("正在确认条码…", 0xFF4B5563);
+
+        Bundle data = new Bundle();
+        data.putString("code", code);
+        data.putParcelable("reply", new ResultReceiver(new Handler(getMainLooper())) {
+            @Override protected void onReceiveResult(int ignored, Bundle response) {
+                if (isFinishing() || isDestroyed()) return;
+                awaitingResult = false;
+                showInventoryResult(response.getString("result"));
+            }
+        });
+        inventoryReceiver.send(0, data);
+        scanStatus.postDelayed(() -> {
+            if (awaitingResult && request == scanRequest && !isFinishing()) {
+                showStatus("正在等待盘点页确认，可返回盘点单检查", 0xFFB91C1C);
+            }
+        }, 5000);
+    }
+
+    private void showStatus(String text, int color) {
+        scanStatus.setTextColor(color);
+        scanStatus.setText(text);
+    }
+
+    private void showInventoryResult(String result) {
+        try {
+            JSONObject item = new JSONObject(result == null ? "" : result);
+            if (item.has("error")) {
+                showStatus(item.getString("error"), 0xFFB91C1C);
+                return;
+            }
+            String unit = item.getString("unit");
+            productName.setText(item.getString("name"));
+            bookQuantity.setText("账面库存 " + item.getString("book") + " " + unit);
+            actualQuantity.setText(item.getString("counted"));
+            showStatus("扫码成功 · 已累加 " + item.getString("add") + " " + unit, 0xFF047857);
+            signalScan();
+            if (!continuous.isChecked()) finish();
+        } catch (JSONException e) {
+            showStatus("盘点页无法接收扫码结果，请返回后重试", 0xFFB91C1C);
+        }
+    }
+
     private void finishWith(String code) {
-        try { new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80).startTone(ToneGenerator.TONE_PROP_BEEP, 120); } catch (Exception ignored) { }
+        signalScan();
+        setResult(RESULT_OK, new Intent().putExtra("code", code));
+        finish();
+    }
+
+    private void signalScan() {
+        try {
+            ToneGenerator tone = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80);
+            tone.startTone(ToneGenerator.TONE_PROP_BEEP, 120);
+            new Handler(getMainLooper()).postDelayed(tone::release, 180);
+        } catch (Exception ignored) { }
         try {
             Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
             if (v != null) { if (Build.VERSION.SDK_INT >= 26) v.vibrate(VibrationEffect.createOneShot(60, VibrationEffect.DEFAULT_AMPLITUDE)); else v.vibrate(60); }
         } catch (Exception ignored) { }
-        setResult(RESULT_OK, new Intent().putExtra("code", code));
-        finish();
     }
 
     int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }

@@ -1,0 +1,63 @@
+name: Android inventory emulator screenshots
+on:
+  push:
+    branches: [codex/android-inventory-emulator-test]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 44077770829
+          name: android-inventory-scan-test-apk
+          path: emulator-apk
+      - name: Prepare barcode camera feed and test data
+        run: |
+          mkdir -p evidence test-data
+          java -Djava.awt.headless=true -cp android/libs/zxing-core-3.5.3.jar tests/emulator/MakeCodes.java .
+          python3 -m pip install --disable-pip-version-check --target "$RUNNER_TEMP/ffmpeg-python" imageio-ffmpeg==0.6.0
+          export PYTHONPATH="$RUNNER_TEMP/ffmpeg-python"
+          ffmpeg="$(python3 -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')"
+          "$ffmpeg" -hide_banner -loglevel error -y \
+            -loop 1 -framerate 15 -t 5 -i blank.png \
+            -loop 1 -framerate 15 -t 22 -i single.png \
+            -loop 1 -framerate 15 -t 3 -i blank.png \
+            -loop 1 -framerate 15 -t 35 -i box.png \
+            -loop 1 -framerate 15 -t 65 -i blank.png \
+            -filter_complex '[0:v][1:v][2:v][3:v][4:v]concat=n=5:v=1:a=0,format=yuv420p[out]' \
+            -map '[out]' -an -c:v libx264 -preset ultrafast -crf 16 -movflags +faststart camera.mp4
+          printf '%s\n' '{"host":"127.0.0.1","port":18686}' > test-data/config.json
+          XERP_DEMO=1 XERP_STATS_URL='' XERP_FEEDBACK_URL='' node src/server.js --data test-data > evidence/server.log 2>&1 &
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:18686/api/ping >/dev/null; then break; fi
+            sleep 1
+          done
+          node tests/emulator/seed.mjs
+      - name: Give the runner access to KVM
+        run: sudo setfacl -m u:$(whoami):rw /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: default
+          cores: 4
+          ram-size: 4096M
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -noaudio -camera-back videofile:${{ github.workspace }}/camera.mp4 -camera-front none
+          disable-animations: true
+          script: python3 -u tests/emulator/smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: inventory-emulator-evidence
+          path: evidence
+          retention-days: 7

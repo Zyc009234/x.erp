@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.ResultReceiver;
 import android.provider.Settings;
 import android.print.PrintAttributes;
 import android.print.PrintManager;
@@ -601,6 +602,8 @@ public class MainActivity extends Activity {
     }
 
     /* ---------- 页面调用的手机能力 ---------- */
+    private boolean inventoryScanOpen;
+
     class Bridge {
         @JavascriptInterface public String version() { return VERSION; }
         @JavascriptInterface public String server() { return server; }
@@ -608,6 +611,28 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public void scan() {
             ui.post(() -> startActivityForResult(new Intent(MainActivity.this, ScanActivity.class), REQ_SCAN));
+        }
+
+        @JavascriptInterface public void scanInventory(String session, String warehouse) {
+            ui.post(() -> {
+                if (inventoryScanOpen) return;
+                inventoryScanOpen = true;
+                ResultReceiver receiver = new ResultReceiver(ui) {
+                    @Override protected void onReceiveResult(int ignored, Bundle data) {
+                        ResultReceiver reply = data.getParcelable("reply");
+                        if (reply == null) return;
+                        String script = "window.__xerpInventoryScan && window.__xerpInventoryScan("
+                                + JSONObject.quote(session) + "," + JSONObject.quote(data.getString("code")) + ")";
+                        web.evaluateJavascript(script, result -> {
+                            Bundle response = new Bundle();
+                            response.putString("result", result);
+                            reply.send(0, response);
+                        });
+                    }
+                };
+                startActivityForResult(new Intent(MainActivity.this, ScanActivity.class)
+                        .putExtra("inventoryReceiver", receiver).putExtra("warehouse", warehouse), REQ_SCAN);
+            });
         }
 
         @JavascriptInterface public void changeServer() { ui.post(() -> askServer(false)); }
@@ -649,6 +674,7 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
         if (req == REQ_SCAN) {
+            inventoryScanOpen = false;
             if (res == RESULT_OK && data != null) {
                 String code = data.getStringExtra("code");
                 web.evaluateJavascript("window.__xerpScanResult&&window.__xerpScanResult(" + JSONObject.quote(code) + ")", null);

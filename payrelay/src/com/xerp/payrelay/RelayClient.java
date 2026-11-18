@@ -92,4 +92,64 @@ public class RelayClient {
         if (code >= 400) throw new Exception("服务器返回 " + code + " " + resp);
         return resp;
     }
+
+    // 到账回调失败自动重试，最终失败写本地日志并记下最后一次，避免静默丢单
+    public static String postWithRetry(Context c, String path, String source, long amountCents, String text, int attempts) {
+        Exception last = null;
+        for (int i = 1; i <= attempts; i++) {
+            try {
+                return post(c, path, source, amountCents, text);
+            } catch (Exception e) {
+                last = e;
+                trace(c, "第 " + i + "/" + attempts + " 次失败 " + path + " amount=" + amountCents + "：" + e.getMessage());
+                if (i < attempts) {
+                    try { Thread.sleep(i == 1 ? 2000 : 5000); }
+                    catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                }
+            }
+        }
+        String msg = last == null ? "未知错误" : last.getMessage();
+        prefs(c).edit().putString("lastFail",
+                new java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.CHINA).format(new java.util.Date())
+                        + " 金额 " + amountCents + "：" + msg).apply();
+        trace(c, "放弃 " + path + " amount=" + amountCents + " text=" + text + "：" + msg);
+        return null;
+    }
+
+    public static void trace(Context c, String line) {
+        try {
+            java.io.File f = new java.io.File(c.getFilesDir(), "relay.log");
+            if (f.length() > 128 * 1024) {
+                java.io.File old = new java.io.File(c.getFilesDir(), "relay.old.log");
+                if (old.exists()) old.delete();
+                f.renameTo(old);
+            }
+            java.io.FileWriter w = new java.io.FileWriter(f, true);
+            w.write(new java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.CHINA).format(new java.util.Date()) + " " + line + "\n");
+            w.close();
+        } catch (Exception ignored) {}
+    }
+
+    public static String readTrace(Context c, int maxLines) {
+        java.io.BufferedReader r = null;
+        try {
+            java.io.File f = new java.io.File(c.getFilesDir(), "relay.log");
+            if (!f.exists()) return "还没有记录";
+            java.util.ArrayList<String> lines = new java.util.ArrayList<>();
+            r = new java.io.BufferedReader(new java.io.InputStreamReader(new java.io.FileInputStream(f), "UTF-8"));
+            String s;
+            while ((s = r.readLine()) != null) {
+                lines.add(s);
+                if (lines.size() > maxLines * 3) lines.subList(0, lines.size() - maxLines).clear();
+            }
+            int from = Math.max(0, lines.size() - maxLines);
+            StringBuilder sb = new StringBuilder();
+            for (int i = from; i < lines.size(); i++) sb.append(lines.get(i)).append('\n');
+            return sb.length() == 0 ? "还没有记录" : sb.toString();
+        } catch (Exception e) {
+            return "读取失败：" + e.getMessage();
+        } finally {
+            try { if (r != null) r.close(); } catch (Exception ignored) {}
+        }
+    }
 }

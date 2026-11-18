@@ -19,7 +19,7 @@ const net = require('net');
 const tls = require('tls');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.13.1';
+const VERSION = '2.13.2';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 

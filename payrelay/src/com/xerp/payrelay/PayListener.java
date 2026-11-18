@@ -36,7 +36,7 @@ public class PayListener extends NotificationListenerService {
         final long fCents = cents;
         final String fText = all;
         new Thread(() -> {
-            try { RelayClient.post(getApplicationContext(), "/api/relay/notify", fSource, fCents, fText); }
+            try { RelayClient.postWithRetry(getApplicationContext(), "/api/relay/notify", fSource, fCents, fText, 3); }
             catch (Exception ignored) {}
         }).start();
     }

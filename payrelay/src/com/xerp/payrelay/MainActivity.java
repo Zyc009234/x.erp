@@ -1,6 +1,7 @@
 package com.xerp.payrelay;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
@@ -108,6 +109,15 @@ public class MainActivity extends Activity {
             else toast("没有识别到配置，请复制完整二维码文字");
         });
 
+        Button fails = button(root, "查看失败记录");
+        fails.setOnClickListener(v -> {
+            new AlertDialog.Builder(this)
+                    .setTitle("最近的回调失败记录")
+                    .setMessage(RelayClient.readTrace(this, 40))
+                    .setPositiveButton("关闭", null)
+                    .show();
+        });
+
         status = new TextView(this);
         status.setTextSize(14);
         status.setTextColor(0xff334155);
@@ -184,8 +194,10 @@ public class MainActivity extends Activity {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             battery = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
         }
+        String lastFail = RelayClient.prefs(this).getString("lastFail", "");
         status.setText("配置：" + (conf ? "已填写" : "未填写") + "\n通知使用权：" + (listening ? "已开启" : "未开启（必须开启才能监听）") +
-                "\n电池优化：" + (battery ? "已关闭" : "未关闭（息屏可能被系统杀掉）") + "\n服务器：" + RelayClient.base(this));
+                "\n电池优化：" + (battery ? "已关闭" : "未关闭（息屏可能被系统杀掉）") + "\n服务器：" + RelayClient.base(this) +
+                (lastFail.isEmpty() ? "" : "\n最近失败：" + lastFail));
     }
 
     private EditText field(LinearLayout root, String label, String value, int type) {
