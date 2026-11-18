@@ -19,7 +19,7 @@ const net = require('net');
 const tls = require('tls');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.13.2';
+const VERSION = '2.13.3';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -3792,8 +3792,20 @@ function notifyText(conf = notifyConf()) {
     const cash = round2(list('finance').filter(f => f.date === tod && f.category === '销售收款').reduce((x, f) => x + f.amount, 0));
     const receiv = round2(list('sales').filter(o => o.status !== '已作废').reduce((x, o) => x + Math.max(0, orderTotal(o) - (o.received || 0)), 0));
     const lowN = list('products').filter(p => p.safety > 0 && p.stock < p.safety).length;
+    const cost = round2(sum(sales, o => sum(o.items || [], i => (+i.qty || 0) * (+i.cost || 0))));
+    const gp = round2(amt - cost), gpRate = amt > 0 ? (gp / amt * 100) : 0;
+    const tops = new Map();
+    for (const o of sales) for (const i of (o.items || [])) {
+      if (!i || !i.productId) continue;
+      const cur = tops.get(i.productId) || { name: (get('products', i.productId) || {}).name || '已删除商品', qty: 0, amt: 0 };
+      cur.qty = round2(cur.qty + (+i.qty || 0));
+      cur.amt = round2(cur.amt + (+i.qty || 0) * (+i.price || 0) - (+i.lineDiscount || 0));
+      tops.set(i.productId, cur);
+    }
+    const top5 = [...tops.values()].sort((a, b) => b.amt - a.amt).slice(0, 5);
     count += 1;
-    lines.push('【经营日报】', `· 今日销售 ${sales.length} 单，¥${amt.toFixed(2)}`, `· 今日收款 ¥${cash.toFixed(2)}`, `· 待收款合计 ¥${receiv.toFixed(2)}`, `· 缺货商品 ${lowN} 个`);
+    lines.push('【经营日报】', `· 今日销售 ${sales.length} 单，¥${amt.toFixed(2)}`, `· 今日毛利 ¥${gp.toFixed(2)}（${gpRate.toFixed(1)}%）`, `· 今日收款 ¥${cash.toFixed(2)}`, `· 待收款合计 ¥${receiv.toFixed(2)}`, `· 缺货商品 ${lowN} 个`);
+    if (top5.length) lines.push('· 热销商品：' + top5.map((x, n) => `${n + 1}. ${x.name} ×${x.qty} ¥${x.amt.toFixed(2)}`).join('、'));
   }
 
   return { count, text: `${company} 经营提醒 ${today()}\n` + (lines.length ? lines.join('\n') : '今天没有需要处理的事项。') };

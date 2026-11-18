@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.13.3": {
+          "changelog": "经营日报新增今日毛利、毛利率和热销商品前 5；打印模板测试样张按真实打印规则排版（固定张三示例、补空行、页脚不再多出一张纸）。",
+          "updated_at": "2026-11-18T22:55:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.3.fpk",
+              "sha256": "24b9d6ba5bd1370243b12b9f2c2fd7a7f3ec8fc0f39373ee2863b72658e0552d",
+              "size": 713163
+            }
+          }
+        },
         "2.13.2": {
           "changelog": "安卓盘点连续扫码（单品/箱码自动累加，同码不重复）；手机端新增/编辑商品恢复扫码按钮，订单扫码默认落到商品行；iPhone / 手机浏览器打印按纸张宽度排版，不再缩小、不再多空白页。",
           "updated_at": "2026-11-18T19:10:00+08:00",

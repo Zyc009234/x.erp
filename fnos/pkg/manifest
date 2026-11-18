@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 2.13.2
+version               = 2.13.3
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 安卓盘点连续扫码（单品/箱码自动累加，同一条码不重复记）；手机端新增/编辑商品恢复扫码按钮，订单扫码默认落到商品行；iPhone / 手机浏览器打印按纸张宽度排版，不再缩小、不再多空白页，打印内容只含单据本身。
+changelog             = 经营日报新增今日毛利、毛利率和热销商品前 5；打印模板测试样张按真实打印规则排版（固定张三示例、补空行、页脚不再多出一张纸）。

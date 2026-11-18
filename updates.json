@@ -1,47 +1,46 @@
 {
   "schema": 1,
-  "latest": "2.13.2",
-  "publishedAt": "2026-11-18T19:10:00+08:00",
+  "latest": "2.13.3",
+  "publishedAt": "2026-11-18T22:55:00+08:00",
   "notes": [
-    "安卓盘点连续扫码：单品扫一次 +1，箱码按换算率累加，同一条码不重复记",
-    "手机端新增/编辑商品恢复扫码按钮，订单、出入库扫码默认落到商品行",
-    "iPhone / 手机浏览器打印按纸张宽度排版，不再缩小、不再多空白页，打印内容只含单据本身"
+    "经营日报新增今日毛利、毛利率，以及热销商品前 5（按销售额排序）",
+    "打印模板测试样张按真实打印规则排版：固定张三样张、自动补空行、页脚不再多出一张纸"
   ],
   "packages": {
     "fnos": {
-      "version": "2.13.2",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.2.fpk",
-      "sha256": "54b709979d80fd1c854127f2e2e02af784cbfc49868c5fde9c7a4fc67e76a0a8",
-      "size": 712163,
-      "file": "xerp-2.13.2.fpk",
+      "version": "2.13.3",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.3.fpk",
+      "sha256": "24b9d6ba5bd1370243b12b9f2c2fd7a7f3ec8fc0f39373ee2863b72658e0552d",
+      "size": 713163,
+      "file": "xerp-2.13.3.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.13.2",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.2-windows-x64-setup.exe",
-      "sha256": "df60fc620c4d6ef3f6545ddbcb623cfb6db9ecac1556f9a1adac5d4cb2ff67bd",
-      "size": 24607445,
-      "file": "xerp-2.13.2-windows-x64-setup.exe",
+      "version": "2.13.3",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.3-windows-x64-setup.exe",
+      "sha256": "5ef7ff0ecfd511f64aa26bc50f3417d14f4e524184476f96df8599cb5247d57d",
+      "size": 24607127,
+      "file": "xerp-2.13.3-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.13.2",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.2-android.apk",
-      "sha256": "2589dcc901bb1e4625e5f65cdf02fa871aa816ef762854e62f08adcf6c978a28",
+      "version": "2.13.3",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.3-android.apk",
+      "sha256": "7f8131176019ff4034b78cbf7821c8dba7cd787100b7caa92d510f0efaef72d9",
       "size": 295713,
-      "file": "xerp-2.13.2-android.apk",
+      "file": "xerp-2.13.3-android.apk",
       "kind": "apk",
-      "versionCode": 21302
+      "versionCode": 21303
     },
     "docker": {
-      "version": "2.13.2",
+      "version": "2.13.3",
       "kind": "docker",
       "image": "ghcr.io/zyc009234/xerp:latest",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.2-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.2-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.3-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.3-docker-arm64.tar.gz"
       ],
-      "note": "GHCR 的 2.13.2 镜像暂未推送，可先下载离线包 docker load"
+      "note": "GHCR 的 2.13.3 镜像暂未推送，可先下载离线包 docker load"
     },
     "androidNative": {
       "packageName": "com.xerp.nativepreview",

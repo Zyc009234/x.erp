@@ -1854,7 +1854,7 @@ function slipData(kind, o) {
   if (kind === 'transfer') return {meta:{no:o.no, date:o.date, wh:['仓库', whName(o.from) + ' → ' + whName(o.to)], handler:o.handler},
     items:o.items.map(i => row(i, (i.cost || 0) * (i.rate || 1))), creator:o.creator, handler:o.handler, remark:o.remark, voided, stamp};
   if (ORD[kind]) {
-    const C = ORD[kind], party = byId(db[C.party], o[C.partyKey]) || {};
+    const C = ORD[kind], party = o._party || byId(db[C.party], o[C.partyKey]) || {};
     return {meta:{no:o.no, date:o.date, party:[K.party, party.name || ''], contact:[party.contact, party.phone].filter(Boolean).join(' '), address:kind === 'sales' ? (o.address || party.address || '') : (party.address || ''), wh:o.wh && multiWh() ? whName(o.wh) : '', express:kind === 'sales' ? shipText('sales', o.id) : ''},
       items:o.items.map(i => row(i, linePrice(i))), creator:o.creator, handler:'', remark:o.remark, voided:o.status === '已作废' ? '作废：' : '', stamp:o.status === '已作废' ? '作废' : '', discount:o.discount || 0};
   }
@@ -4747,6 +4747,7 @@ function notifyCard(st) {
       <label class="field"><span>应收逾期天数</span><input type="number" id="nfOd" min="1" max="365" value="${esc(nf.overdueDays || 30)}"></label>
       <div class="field span2"><span>推送内容</span><div style="display:flex;gap:8px 18px;flex-wrap:wrap;padding-top:6px">
         ${Object.keys(LABEL).map(k => `<label class="chk"><input type="checkbox" id="nfEv_${k}" ${ev[k] ? 'checked' : ''}>${LABEL[k]}</label>`).join('')}
+        <div class="sub-t" style="width:100%;padding-top:4px">经营日报含：今日销售额、毛利和毛利率、热销商品前 5、今日收款、待收款、缺货商品数</div>
       </div></div>
     </div>
     <div class="setting-row" style="margin-top:10px"><div class="sr-group"><b>群机器人（Webhook）</b><small>企业微信 / 钉钉 / 飞书群机器人，或任意接收 JSON 的地址</small></div><label class="chk"><input type="checkbox" id="nfWhOn" ${wh.enabled ? 'checked' : ''}>启用</label></div>
@@ -4889,7 +4890,9 @@ function sampleDoc(kind) {
   return {...base, dir:kind, type:META.docTypes[kind][0], party:'示例单位'};
 }
 function printTplPage(body) {
-  const kind = SLIP_KINDS[ui.tplKind] ? ui.tplKind : 'out', K = SLIP_KINDS[kind], t = slipTpl(kind), cols = t.cols, sample = sampleDoc(kind);
+  const kind = SLIP_KINDS[ui.tplKind] ? ui.tplKind : 'out', K = SLIP_KINDS[kind], t = slipTpl(kind), cols = t.cols;
+  // 预览和测试打印共用一个固定样张：客户名张三、示例单号、今天日期，避免每次看到的数据都不一样
+  const sample = { ...sampleDoc(kind), no: '示例单号', date: today(), remark: '测试打印样张', party: '张三', _party: { name: '张三', contact: '138 0000 0000', address: '广东省深圳市南山区示例路 1 号' } };
   const saved = db.settings.printTpl || {};
   const tplList = (db.settings.printTplList || {})[kind] || [];
   const activeId = (db.settings.printTplActive || {})[kind] || '';
@@ -4957,8 +4960,13 @@ function printTplPage(body) {
   $('#tpKind').onchange = e => { ui.tplKind = e.target.value; render(); };
   $('#tpSave').onclick = () => mutate('PUT', '/api/settings/print', { kind, id: activeId || undefined, name: activeName || undefined, tpl: read() }, K.name + '打印模板已保存');
   $('#tpTest').onclick = () => {
-    const paper = $('#tpPaper').value || 'a4';
-    printFrame(K.name + ' 测试样张', `<div class="page">${slipRender(kind, sample, { showMoney: true, tpl: read() })}</div>${printFoot(kind)}`, paper);
+    const paper = $('#tpPaper').value || 'a4', tpl = read();
+    // 测试样张按真实打印的规则排版：同一套金额开关、同样补空行
+    const showMoney = canMoney() && prefs.slipMoney !== false;
+    const minRows = (PAPERS[paper] || PAPERS.a4)[2];
+    // 页脚必须放在 .page 里面：.page 后面带强制分页，放外面会单独打出第二张纸
+    const foot = tpl.printer ? `<div class="foot">打印人：${esc(ME.name)} · ${fmtTime(new Date())}</div>` : '';
+    printFrame(K.name + ' 测试样张', `<div class="page">${slipRender(kind, sample, { showMoney, minRows, tpl })}${foot}</div>`, paper);
   };
   $('#tpPick').onchange = async e => {
     const id = e.target.value, it = tplList.find(x => x.id === id);
