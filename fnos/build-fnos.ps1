@@ -24,7 +24,7 @@ Remove-Item (Join-Path $Fnos 'build') -Recurse -Force -ErrorAction SilentlyConti
 New-Item -ItemType Directory -Force -Path $Stage, $Dist | Out-Null
 Copy-Item (Join-Path $Fnos 'pkg\*') $Stage -Recurse -Force
 New-Item -ItemType Directory -Force -Path (Join-Path $Stage 'app\server'), (Join-Path $Stage 'app\ui\images') | Out-Null
-Copy-Item (Join-Path $Root 'src\server.js'), (Join-Path $Root 'src\index.html') (Join-Path $Stage 'app\server')
+Copy-Item (Join-Path $Root 'src\server.js'), (Join-Path $Root 'src\portal.js'), (Join-Path $Root 'src\index.html') (Join-Path $Stage 'app\server')
 Copy-Item (Join-Path $Root 'src\vendor') (Join-Path $Stage 'app\server') -Recurse
 
 # 脚本与配置统一为 LF 换行（Linux 上执行）

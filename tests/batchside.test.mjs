@@ -64,14 +64,14 @@ test('销售出库：按先到期先出扣批次', async () => {
 
 test('销售退货：退回原批次', async () => {
   const ret = await ok(admin, 'POST', '/api/orders/salesReturn', { partyId: custId, date: '2026-11-17', srcId: soId, items: [{ productId: pid, qty: 1, price: 20 }] });
-  const r = await call(admin, 'POST', `/api/orders/salesReturn/${ret.id}/post`, { wh: 'w1' });
+  const r = await call(admin, 'POST', `/api/orders/salesReturn/${ret.id}/post`, { wh: 'w1', note: '退回原批次' });
   assert.equal(r.http, 200, r.error || '');
   assert.equal(await stock(), 8, '退货回库存');
 });
 
 test('采购退货：从批次扣减', async () => {
   const ret = await ok(admin, 'POST', '/api/orders/purchaseReturn', { partyId: supId, date: '2026-11-17', srcId: poId, items: [{ productId: pid, qty: 2, price: 10 }] });
-  const r = await call(admin, 'POST', `/api/orders/purchaseReturn/${ret.id}/post`, { wh: 'w1' });
+  const r = await call(admin, 'POST', `/api/orders/purchaseReturn/${ret.id}/post`, { wh: 'w1', note: '退回供应商' });
   assert.equal(r.http, 200, r.error || '');
   assert.ok(await stock() >= 0);
 });

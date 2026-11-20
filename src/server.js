@@ -19,7 +19,7 @@ const net = require('net');
 const tls = require('tls');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.13.3';
+const VERSION = '2.14.0';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -43,6 +43,7 @@ const config = { port: 8686, host: '0.0.0.0', sessionDays: 7 };
 try { Object.assign(config, JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8').replace(/^﻿/, ''))); }
 catch (e) { fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2)); }
 if (arg('port')) config.port = +arg('port');
+if (arg('host')) config.host = arg('host');
 config.cloud = Object.assign({
   device: crypto.randomBytes(16).toString('hex'), token: '', account: null,
   salt: '', key: '', keyCheck: '', auto: false, lastUpload: '',
@@ -113,8 +114,8 @@ const fail = (msg, status) => { throw new HttpError(msg, status); };
 function audit(ctx, action, detail = '') { S.audit.run(new Date().toISOString(), ctx.user ? ctx.user.name : '-', action, String(detail).slice(0, 300), ctx.ip || ''); }
 
 /* ================= 业务常量 ================= */
-const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials', 'carriers', 'shipments', 'shipBills', 'shipLabels', 'accounts', 'acctTransfers', 'expenses', 'advances', 'partyPayments', 'projects'];
-const DATED = ['sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs', 'shipments', 'shipBills', 'acctTransfers', 'expenses', 'advances', 'partyPayments'];
+const COLS = ['products', 'customers', 'suppliers', 'employees', 'sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'warehouses', 'transferDocs', 'batches', 'serials', 'carriers', 'shipments', 'shipBills', 'shipLabels', 'accounts', 'acctTransfers', 'expenses', 'advances', 'partyPayments', 'projects', 'deliveries'];
+const DATED = ['sales', 'purchases', 'salesReturns', 'purchaseReturns', 'stockLogs', 'stockDocs', 'checkDocs', 'finance', 'transferDocs', 'shipments', 'shipBills', 'acctTransfers', 'expenses', 'advances', 'partyPayments', 'deliveries'];
 const CATS = ['电子产品', '办公用品', '家居用品', '食品饮料'];
 const LEVELS = ['VIP', 'A级', 'B级', 'C级'];
 const METHODS = ['银行转账', '现金', '支付宝', '微信', '承兑汇票'];
@@ -128,14 +129,19 @@ const ORD = {
 };
 const ENTITY = {
   products: { name: '商品', required: { name: '商品名称' },
-    fields: { sku: ['s', '商品编码'], barcode: ['s', '条码'], name: ['s', '商品名称'], spec: ['s'], brand: ['s', '品牌'], category: ['s'], unit: ['s'], cost: ['n', '成本价'], price: ['n', '销售价'], stock: ['n', '期初库存'], safety: ['n', '安全库存'],
-      batch: ['b'], serial: ['b'], dec: ['b'], shelfDays: ['n', '保质期天数'], weight: ['w', '重量'], size: ['z'], remark: ['s'] } },
+    fields: { sku: ['s', '商品编码'], barcode: ['s', '条码'], name: ['s', '商品名称'], spec: ['s'], brand: ['s', '品牌'], category: ['s'], unit: ['s'], buyUnit: ['s', '默认采购单位'], saleUnit: ['s', '默认销售单位'], cost: ['n', '成本价'], price: ['n', '销售价'], stock: ['n', '期初库存'], safety: ['n', '安全库存'],
+      batch: ['b'], serial: ['b'], dec: ['b'], shelfDays: ['n', '保质期天数'], weight: ['w', '重量'], size: ['z'], remark: ['s'],
+      regNo: ['s', '注册证号 / 备案号'], regHolder: ['s', '注册人 / 备案人'], manufacturer: ['s', '生产厂家'], prodLicense: ['s', '生产许可证号'], regExp: ['s', '注册证有效期'], firstStatus: ['s', '首营状态'] } },
   customers: { name: '客户', required: { name: '客户名称' },
-    fields: { name: ['s'], contact: ['s'], phone: ['s'], email: ['s'], level: ['s'], address: ['s'], remark: ['s'] } },
+    fields: { name: ['s'], contact: ['s'], phone: ['s'], email: ['s'], level: ['s'], address: ['s'], remark: ['s'],
+      openingBalance: ['n', '期初应收'], bizLicense: ['s', '营业执照号'], licenseNo: ['s', '经营许可证 / 备案号'], licenseExp: ['s', '许可证有效期'], firstStatus: ['s', '首营状态'] } },
   suppliers: { name: '供应商', required: { name: '供应商名称' },
-    fields: { name: ['s'], contact: ['s'], phone: ['s'], email: ['s'], category: ['s'], address: ['s'], remark: ['s'] } },
+    fields: { name: ['s'], contact: ['s'], phone: ['s'], email: ['s'], category: ['s'], address: ['s'], remark: ['s'],
+      openingBalance: ['n', '期初应付'], bizLicense: ['s', '营业执照号'], licenseNo: ['s', '经营 / 生产许可证号'], licenseExp: ['s', '许可证有效期'], firstStatus: ['s', '首营状态'] } },
   employees: { name: '员工', required: { name: '姓名' },
-    fields: { no: ['s'], name: ['s'], gender: ['s'], dept: ['s'], position: ['s'], phone: ['s'], idCard: ['s'], salary: ['n', '月薪'], joinDate: ['s'], status: ['s'] } }
+    fields: { no: ['s'], name: ['s'], gender: ['s'], dept: ['s'], position: ['s'], phone: ['s'], idCard: ['s'], salary: ['n', '月薪'], joinDate: ['s'], status: ['s'] } },
+  deliveries: { name: '临时送货', required: { driver: '司机 / 送货人' },
+    fields: { date: ['s'], driver: ['s'], phone: ['s'], amount: ['n', '运费'], paid: ['b'], note: ['s'] } }
 };
 const DOC_TYPES = { in: ['采购入库', '生产入库', '组装入库', '拆卸入库', '退货入库', '其他入库'], out: ['领料出库', '组装出库', '销售出库', '拆卸出库', '报损出库', '其他出库'] };
 const DOC = { in: { col: 'stockDocs', prefix: 'RK', title: '入库单' }, out: { col: 'stockDocs', prefix: 'CK', title: '出库单' } };
@@ -143,7 +149,7 @@ const TRANSFER = { col: 'transferDocs', prefix: 'DB', title: '调拨单' };
 const DEFAULT_WH = 'w1';
 
 /* ================= 模块 / 权限 ================= */
-const MODULES = { inventory: '库存管理', products: '商品管理', bom: '生产 / BOM', dashboard: '工作台', sales: '销售管理', purchase: '采购管理', parties: '客户 / 供应商', finance: '财务管理', hr: '人事管理', reports: '统计报表', shipping: '物流运费' };
+const MODULES = { inventory: '库存管理', products: '商品管理', bom: '生产 / BOM', dashboard: '工作台', sales: '销售管理', purchase: '采购管理', parties: '客户 / 供应商', finance: '财务管理', hr: '人事管理', reports: '统计报表', medical: '医疗器械（GSP）', shipping: '物流运费' };
 const DEMO = process.env.XERP_DEMO === '1';  // 在线演示，见 HTTP 服务部分的 DEMO_BLOCK
 // 默认只开库存和商品；在线演示默认全开，方便别人看全部功能
 const DEFAULT_MODULES = DEMO ? Object.keys(MODULES) : ['inventory', 'products'];
@@ -761,6 +767,7 @@ function saveEntity(ctx, col, id) {
     const rec = id ? (get(col, id) || fail(E.name + '不存在', 404)) : null;
     const r = { ...(rec || {}), ...v };
     for (const [k, l] of Object.entries(E.required)) if (!r[k]) fail('请填写' + l);
+    if (r.licenseExp && !isDate(r.licenseExp)) fail('许可证有效期格式应为 YYYY-MM-DD');
     if (col === 'products') {
       if (!r.sku) {
         if (rec) fail('商品编码不能为空');
@@ -768,7 +775,12 @@ function saveEntity(ctx, col, id) {
       }
       const others = list('products').filter(p => p.id !== id);
       if (others.some(p => p.sku === r.sku)) fail('商品编码已存在');
+      if (rec && r.unit && r.unit !== rec.unit && productBaseUnitUsed(rec)) fail('基本单位已经使用过，不能修改；如需调整请新建商品');
       r.units = cleanUnits('units' in ctx.body ? ctx.body.units : (rec && rec.units) || [], r.unit || '个');
+      const unitNames = new Set([r.unit || '个', ...r.units.map(u => u.name)]);
+      for (const [k, label] of [['buyUnit', '默认采购单位'], ['saleUnit', '默认销售单位']]) {
+        if (r[k] && !unitNames.has(r[k])) fail(`${label}「${r[k]}」不在该商品的单位设置里`);
+      }
       const mine = [r.barcode, ...r.units.map(u => u.barcode)].filter(Boolean), used = new Set(others.flatMap(codesOf));
       if (new Set(mine).size < mine.length) fail('条码重复：商品条码和各单位条码不能相同');
       if (mine.some(c => used.has(c))) fail('条码已被其他商品使用');
@@ -776,6 +788,7 @@ function saveEntity(ctx, col, id) {
       r.wh = rec ? rec.wh : undefined;
       r.safety = Math.round(r.safety || 0);
       r.shelfDays = Math.round(r.shelfDays || 0);
+      if (r.regExp && !isDate(r.regExp)) fail('注册证有效期格式应为 YYYY-MM-DD');
       if (rec && rec.stock !== 0) r.cost = rec.cost;  // 有库存时成本由成本口径自动计算
       if (rec && !!rec.batch !== !!r.batch) setBatchMode(r, r.batch);
       if (r.serial && !(rec && rec.serial)) {
@@ -813,6 +826,98 @@ function deleteEntity(ctx, col, id) {
     audit(ctx, '删除' + E.name, rec.name);
   });
 }
+/* ---------- 订单分批执行：发货 / 入库统一生成关联出入库单，订单只记录已执行数量 ---------- */
+function linkedOrderDocs(o, kind, pending = false) {
+  const dir = kind === 'sales' ? 'out' : 'in';
+  return list('stockDocs').filter(d => d.srcOrderId === o.id && d.dir === dir && (d.status === '正常' || pending && d.status === '待审核'));
+}
+function orderFulfilledByProduct(o, kind, pending = false) {
+  const out = {};
+  for (const d of linkedOrderDocs(o, kind, pending)) for (const i of d.items || []) {
+    if (!(i.productId in out)) out[i.productId] = { qty: 0, value: 0, serials: [], batches: [] };
+    out[i.productId].qty += +i.qty || 0;
+    const unitCost = Number.isFinite(+i.cost) ? +i.cost : (+i.price || 0);
+    out[i.productId].value += (+i.qty || 0) * unitCost;
+    if (i.serials) out[i.productId].serials.push(...i.serials);
+    if (i.batches) out[i.productId].batches.push(...i.batches);
+  }
+  return out;
+}
+function orderRemainingByProduct(o, kind, pending = true) {
+  if (!o) return {};
+  if (kind === 'sales' && ['已发货', '已完成'].includes(o.status) || kind === 'purchase' && o.status === '已入库') return {};
+  const had = {};
+  o.items.forEach(i => { had[i.productId] = round4((had[i.productId] || 0) + i.qty); });
+  const done = orderFulfilledByProduct(o, kind, pending), out = {};
+  for (const [pid, qty] of Object.entries(had)) out[pid] = round4(Math.max(0, qty - ((done[pid] || {}).qty || 0)));
+  return out;
+}
+function orderLineRemaining(o, kind) {
+  const left = orderRemainingByProduct(o, kind, true);
+  return o.items.map(i => { const q = round4(Math.min(i.qty, left[i.productId] || 0)); left[i.productId] = round4((left[i.productId] || 0) - q); return q; });
+}
+function syncSourceOrder(ctx, doc) {
+  if (!doc || !doc.srcOrderId) return;
+  const kind = doc.srcOrderKind || (doc.dir === 'out' ? 'sales' : 'purchase'), C = ORD[kind];
+  const o = C && get(C.col, doc.srcOrderId); if (!o || o.status === '已作废') return;
+  const done = orderFulfilledByProduct(o, kind, false);
+  let all = true, changed = false;
+  o.items.forEach(i => {
+    const d = done[i.productId] || {}, take = round4(Math.min(i.qty, d.qty || 0));
+    if (i.fulfilledQty !== take) { i.fulfilledQty = take; changed = true; }
+    if (take > 0 && d.qty > 0) { const c = round4(d.value / d.qty); if (i.cost !== c) { i.cost = c; changed = true; } }
+    if (take > 0 && d.serials && d.serials.length) { const sn = [...new Set(d.serials)]; if (JSON.stringify(i.serials || []) !== JSON.stringify(sn)) { i.serials = sn; changed = true; } }
+    if (take > 0 && d.batches && d.batches.length) { if (JSON.stringify(i.batches || []) !== JSON.stringify(d.batches)) { i.batches = d.batches; changed = true; } }
+    if (take + 0.0001 < i.qty) all = false;
+  });
+  if (kind === 'sales') {
+    if (all && o.status === '待发货') { o.status = '已发货'; changed = true; }
+    else if (!all && o.status === '已发货') { o.status = '待发货'; changed = true; }
+  } else {
+    if (all && o.status === '已审核') { o.status = '已入库'; changed = true; }
+    else if (!all && o.status === '已入库') { o.status = '已审核'; changed = true; }
+  }
+  if (changed) put(C.col, o);
+}
+function validateSourceItems(o, kind, items) {
+  const left = orderRemainingByProduct(o, kind, true), need = {};
+  items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + (+i.qty || 0); });
+  for (const [pid, q] of Object.entries(need)) {
+    const p = get('products', pid);
+    if (q > (left[pid] || 0) + 0.0001) fail(`「${p ? p.name : pid}」本次数量 ${round4(q)} 超过订单未执行数量 ${round4(left[pid] || 0)}`);
+  }
+}
+function createOrderFulfillment(ctx, kind, o, b) {
+  const dir = kind === 'sales' ? 'out' : 'in';
+  if (kind === 'sales' && o.status !== '待发货') fail(`销售单当前状态为「${o.status}」，不能发货`);
+  if (kind === 'purchase' && o.status !== '已审核') fail(`采购单当前状态为「${o.status}」，不能入库`);
+  const remLine = orderLineRemaining(o, kind);
+  const raw = Array.isArray(b.items) && b.items.length ? b.items : o.items.map((i, k) => {
+    if (remLine[k] <= 0) return null;
+    const p = get('products', i.productId); if (!p) return null;
+    const unit = i.unit || p.unit, rate = unit === p.unit ? 1 : ((p.units || []).find(u => u.name === unit) || {}).rate || 1;
+    let qty = remLine[k] / rate;
+    if (!p.dec && !Number.isInteger(qty)) qty = remLine[k];
+    return { line:k, productId:i.productId, unit:Number.isInteger(qty) || p.dec ? unit : p.unit, qty, serials:(b.serials || {})[k] || [], batchNo:((b.batches || {})[i.productId] || {}).no || '', prodDate:((b.batches || {})[i.productId] || {}).prodDate || '', expDate:((b.batches || {})[i.productId] || {}).expDate || '' };
+  }).filter(Boolean);
+  if (!raw.length) fail('没有可执行的商品数量');
+  const items = raw.map(x => {
+    const p = get('products', x.productId) || fail('商品不存在或已删除');
+    const line = Number.isInteger(x.line) ? o.items[x.line] : null;
+    const unit = str(x.unit, 10) || line && line.unit || p.unit;
+    const l = unitQty(p, { qty:x.qty, unit });
+    const baseOrderPrice = line ? (+line.price || 0) : kind === 'sales' ? (p.price || 0) : (p.cost || 0);
+    const unitPrice = round4((line && unit === line.unit && line.uprice != null ? +line.uprice : baseOrderPrice * (l.rate || 1)));
+    return { productId:p.id, unit, qty:l.uqty || l.qty, ...(l.rate ? { rate:l.rate, uqty:l.uqty } : {}),
+      ...(kind === 'sales' ? { sale:unitPrice } : { price:unitPrice }), note:'',
+      ...(x.batchNo ? { batchNo:str(x.batchNo, 40), prodDate:isDate(x.prodDate) ? x.prodDate : '', expDate:isDate(x.expDate) ? x.expDate : '' } : {}),
+      ...(Array.isArray(x.serials) && x.serials.length ? { serials:x.serials } : {}) };
+  });
+  validateSourceItems(o, kind, items.map(i => ({ productId:i.productId, qty:i.qty * (i.rate || 1) })));
+  const party = (get(kind === 'sales' ? 'customers' : 'suppliers', o[kind === 'sales' ? 'customerId' : 'supplierId']) || {}).name || '';
+  return saveStockDoc({ ...ctx, body: { dir, type:kind === 'sales' ? '销售出库' : '采购入库', date:b.date || today(), wh:b.wh, party,
+    handler:o.handler, remark:'来源订单 ' + o.no, items, srcOrderId:o.id, srcOrderKind:kind } }, true);
+}
 function saveOrder(ctx, kind, id, noTx = false) {
   const C = ORD[kind] || fail('接口不存在', 404), b = ctx.body;
   const run = () => {
@@ -826,7 +931,7 @@ function saveOrder(ctx, kind, id, noTx = false) {
       if (!Number.isFinite(price) || price < 0) fail('单价不正确');
       const baseUnitPrice = basePrice(round2(price), l);
       const lineDiscount = round2(Number(i.lineDiscount) || 0);
-      if (lineDiscount < 0 || lineDiscount > round2(l.qty * baseUnitPrice) + 0.001) fail(`「${p.name}」行优惠不能超过行金额`);
+      if (lineDiscount > round2(l.qty * baseUnitPrice) + 0.001) fail(`「${p.name}」小计不能小于 0`);
       // 退货的 cost：销售退货按原单发货成本入库，采购退货按原采购价冲减库存价值；没关联原单按当前成本
       const sl = src && src.items.find(x => x.productId === p.id);
       const cost = !C.src ? p.cost : C.src === 'sales' ? (sl && sl.cost != null ? sl.cost : p.cost) : sl ? sl.price : null;
@@ -846,6 +951,13 @@ function saveOrder(ctx, kind, id, noTx = false) {
     const data = { [C.partyKey]: party, date: b.date, remark: str(b.remark, 500), handler: str(b.handler, 32) || ctx.user.name, items, ...(kind === 'sales' ? { address: str(b.address, 200) } : {}), ...(C.src ? { srcId: src ? src.id : '', srcNo: src ? src.no : '' } : { discount }) };
     if (id) {
       const o = get(C.col, id) || fail('单据不存在', 404);
+      const linkedDocs = kind === 'sales' || kind === 'purchase' ? list('stockDocs').filter(d => d.srcOrderId === id && ['正常', '待审核'].includes(d.status)) : [];
+      if (linkedDocs.length) {
+        const q0 = qtyByProduct(o.items), q1 = qtyByProduct(items);
+        const samePQ = Object.keys(q0).length === Object.keys(q1).length && Object.entries(q0).every(([pid, q]) => Math.abs(q1[pid] - q) < 1e-9);
+        if (!samePQ) fail('这张订单已经生成出入库单，不能直接改商品或数量；请先作废对应的出入库单');
+        if (kind === 'purchase' && items.some((it, k) => Math.abs(it.price - o.items[k].price) > 1e-9)) fail('这张采购单已经入库，不能直接改单价；请先作废入库单');
+      }
       // 采购单审核后、入库前也能改，改完回到待审核重新审核
       const reApprove = kind === 'purchase' && o.status === '已审核';
       // 已发货的销售单（完成前）、已入库的采购单也能改：明细变了就把原来的出入库冲回，按新明细重新出入库
@@ -926,28 +1038,21 @@ function orderAction(ctx, kind, id, action) {
     const need = st => { if (o.status !== st) fail(`单据当前状态为「${o.status}」，无法执行此操作`); };
     if (action === 'ship' && kind === 'sales') {
       need('待发货');
-      const wh = pickWh(b.wh), qty = qtyByProduct(o.items);
-      const lack = Object.entries(qty).map(([pid, q]) => ({ p: get('products', pid), q })).filter(x => !x.p || whQty(x.p, wh) < x.q);
-      if (lack.length) fail(`${whName(wh)}库存不足：` + lack.map(x => x.p ? `${x.p.name}（需 ${x.q}，现有 ${whQty(x.p, wh)}）` : '商品已删除').join('、'));
-      o.items.forEach((i, k) => { const p = get('products', i.productId), sn = lineSerials(b, p, i, k), m = moveStock(ctx, p, -i.qty, '销售出库', o.no, '', { wh, serials: sn }); i.cost = m.unit; if (m.alloc) i.batches = m.alloc; if (sn) i.serials = sn; });
-      o.status = '已发货'; o.shipDate = today(); o.wh = wh;
+      const doc = createOrderFulfillment(ctx, 'sales', o, b);
+      Object.assign(o, get(C.col, id));
+      o.shipDate = doc.date; o.wh = doc.wh;
     } else if (action === 'complete' && kind === 'sales') { need('已发货'); o.status = '已完成'; }
     else if (action === 'approve' && kind === 'purchase') { need('待审核'); o.status = '已审核'; o.approver = ctx.user.name; }
     else if (action === 'unapprove' && kind === 'purchase') { need('已审核'); o.status = '待审核'; o.approver = ''; }
     else if (action === 'inbound' && kind === 'purchase') {
       need('已审核');
-      const wh = pickWh(b.wh), bi = b.batches && typeof b.batches === 'object' ? b.batches : {};
-      o.items.forEach((i, k) => {
-        const p = get('products', i.productId); if (!p) return;
-        const sn = lineSerials(b, p, i, k);
-        const m = moveStock(ctx, p, i.qty, '采购入库', o.no, '', { price: i.price, wh, batch: { no: o.no, ...(bi[p.id] || {}) }, serials: sn });
-        if (m.alloc) i.batches = m.alloc;
-        if (sn) i.serials = sn;
-      });
-      o.status = '已入库'; o.inDate = today(); o.wh = wh;
+      const doc = createOrderFulfillment(ctx, 'purchase', o, b);
+      Object.assign(o, get(C.col, id));
+      o.inDate = doc.date; o.wh = doc.wh;
     } else if (action === 'post' && C.src) {
       need(C.statuses[0]);
       const wh = pickWh(b.wh), bi = b.batches && typeof b.batches === 'object' ? b.batches : {}, pname = (get(C.party, o[C.partyKey]) || {}).name || '';
+      const approveNote = str(b.note, 200) || fail('请填写审核备注');
       if (kind === 'purchaseReturn') { const lack = lackOf(o.items, wh); if (lack.length) fail(lackText(lack, wh)); }
       o.items.forEach((i, k) => {
         const p = get('products', i.productId) || fail('商品不存在或已删除');
@@ -960,6 +1065,8 @@ function orderAction(ctx, kind, id, action) {
         if (sn) i.serials = sn;
       });
       o.status = C.statuses[1]; o.postDate = today(); o.wh = wh;
+      o.approveNote = approveNote;
+      o.approver = ctx.user.name; o.approvedAt = new Date().toISOString();
     } else if (action === 'offset' && C.src) {
       // 冲抵：对方原单还有没结清的款，退货款直接抵掉，不走现金
       if (o.status === '已作废') fail('已作废单据不能冲抵');
@@ -972,6 +1079,7 @@ function orderAction(ctx, kind, id, action) {
     } else if (action === 'cancel') {
       const ok = C.src ? [C.statuses[0]] : kind === 'sales' ? ['待发货'] : ['待审核', '已审核'];
       if (!ok.includes(o.status)) fail(`单据当前状态为「${o.status}」，不能作废`);
+      if ((kind === 'sales' || kind === 'purchase') && list('stockDocs').some(d => d.srcOrderId === id && ['正常', '待审核'].includes(d.status))) fail('这张订单已经生成出入库单，请先作废对应单据');
       if (o[C.paidKey] > 0) fail(`单据已有${C.payWord}记录，不能作废`);
       o.status = '已作废';
     } else if (action === 'pay') {
@@ -984,7 +1092,7 @@ function orderAction(ctx, kind, id, action) {
         amount, account: acct.id, method: acct.kind, ref: o.no, note: str(b.note), operator: ctx.user.name });
     } else fail('不支持的操作', 404);
     put(C.col, o);
-    audit(ctx, { ship: '发货', complete: '完成订单', approve: '审核采购', unapprove: '反审核采购', inbound: '采购入库', post: kind === 'salesReturn' ? '销售退货入库' : '采购退货出库', offset: '退货冲抵', cancel: '作废单据', pay: C.payWord }[action], o.no + (action === 'pay' || action === 'offset' ? ' ' + b.amount : ''));
+    audit(ctx, { ship: '发货', complete: '完成订单', approve: '审核采购', unapprove: '反审核采购', inbound: '采购入库', post: kind === 'salesReturn' ? '销售退货审核入库' : '采购退货审核出库', offset: '退货冲抵', cancel: '作废单据', pay: C.payWord }[action], o.no + (action === 'pay' || action === 'offset' ? ' ' + b.amount : '') + (action === 'post' && b.note ? ' · ' + str(b.note, 200) : ''));
     return o;
   });
 }
@@ -1262,20 +1370,27 @@ function cleanUnits(raw, base) {
   const seen = new Set([base]);
   return raw.map(u => {
     const name = str(u && u.name, 10), rate = Number(u && u.rate), barcode = str(u && u.barcode, 64);
+    const hasPrice = u && u.price !== '' && u.price != null, price = Number(u && u.price);
     if (!name) fail('辅助单位名称不能为空');
     if (seen.has(name)) fail(`单位「${name}」重复（不能和基本单位相同）`);
     if (!Number.isInteger(rate) || rate < 2 || rate > 100000) fail(`「1 ${name} = ? ${base}」的换算数需为 2 ~ 100000 的整数`);
+    if (hasPrice && (!Number.isFinite(price) || price < 0)) fail(`「${name}」的销售价不正确`);
     seen.add(name);
-    return barcode ? { name, rate, barcode } : { name, rate };
+    return { name, rate, ...(barcode ? { barcode } : {}), ...(hasPrice ? { price: round2(price) } : {}) };
   });
+}
+function productBaseUnitUsed(p) {
+  if (!p) return false;
+  return p.stock !== 0 || (p.units || []).length || list('stockLogs').some(l => l.productId === p.id)
+    || ['sales', 'purchases', 'salesReturns', 'purchaseReturns'].some(col => list(col).some(o => (o.items || []).some(i => i.productId === p.id)));
 }
 const codesOf = p => [p.sku, p.barcode, ...(p.units || []).map(u => u.barcode)].filter(Boolean);
 // 「箱=12/条码；盒=6」→ [{ name, rate, barcode }]，和商品档案里的写法一致
 function parseUnitsText(t) {
   return String(t || '').split(/[;；,，\n]+/).map(x => x.trim()).filter(Boolean).map(x => {
-    const m = /^1?\s*([^=＝\s\/／\d][^=＝\s\/／]*)\s*[=＝]\s*(\d+)\s*[^\d\/／]*?(?:[\/／]\s*(\S+))?$/.exec(x);
+    const m = /^1?\s*([^=＝\s\/／\d@＠][^=＝\s\/／@＠]*)\s*[=＝]\s*(\d+)\s*[^\d\/／@＠]*?(?:[\/／]\s*([^@＠]+?))?(?:[@＠]\s*([\d.]+))?$/.exec(x);
     if (!m) fail('辅助单位格式不对：「' + x + '」，应写成 箱=12');
-    return { name: m[1], rate: +m[2], barcode: m[3] || '' };
+    return { name: m[1], rate: +m[2], barcode: (m[3] || '').trim(), ...(m[4] != null ? { price: +m[4] } : {}) };
   });
 }
 // 明细数量按所选单位录入，换算成基本单位：返回 { qty: 基本单位数量, unit, rate, uqty: 录入数量 }
@@ -1514,6 +1629,15 @@ function saveStockDoc(ctx, noTx = false) {
       return it;
     });
     if (!items.length) fail('请至少添加一个商品');
+    const srcKind = b.srcOrderId ? (b.srcOrderKind === 'purchase' || (!b.srcOrderKind && dir === 'in') ? 'purchase' : 'sales') : '';
+    const srcOrder = srcKind ? get(srcKind === 'sales' ? 'sales' : 'purchases', str(b.srcOrderId, 64)) : null;
+    if (b.srcOrderId && !srcOrder) fail('来源订单不存在');
+    if (srcOrder) {
+      if (srcKind === 'sales' && (dir !== 'out' || b.type !== '销售出库' || srcOrder.status !== '待发货')) fail('只有待发货的销售订单可以生成销售出库单');
+      if (srcKind === 'purchase' && (dir !== 'in' || b.type !== '采购入库' || srcOrder.status !== '已审核')) fail('只有已审核的采购订单可以生成采购入库单');
+      validateSourceItems(srcOrder, srcKind, items.map(i => ({ productId:i.productId, qty:i.qty })));
+      if (!str(b.party, 100)) b.party = (get(srcKind === 'sales' ? 'customers' : 'suppliers', srcOrder[srcKind === 'sales' ? 'customerId' : 'supplierId']) || {}).name || '';
+    }
     if (dir === 'out') { const lack = lackOf(items, wh); if (lack.length) fail(lackText(lack, wh)); }
     const sn = items.flatMap(i => i.serials || []);
     if (new Set(sn).size < sn.length) fail('同一张单据里序列号有重复');
@@ -1523,10 +1647,12 @@ function saveStockDoc(ctx, noTx = false) {
     if (useBom && !ctx.perms.has('bom')) fail('没有权限：' + PERM_LABEL.bom + (enabledModules().includes('bom') ? '' : '（「生产 / BOM」模块未启用）'), 403);
     if (useBom && items.some(i => i.serials)) fail('按 BOM 领料的生产入库暂不支持序列号成品，请取消「按 BOM 领料」');
     const o = { id: uid(), no: nextNo(D), dir, type: b.type, ...(useBom ? { bom: true } : {}), wh, date, time: hhmm(), party: str(b.party, 100), handler: str(b.handler, 32), remark: str(b.remark, 500),
+      ...(srcOrder ? { srcOrderId:srcOrder.id, srcOrderNo:srcOrder.no, srcOrderKind:srcKind } : {}),
       ...(str(b.project, 60) ? { project: str(b.project, 60) } : {}),
       ...(dir === 'out' && str(b.address, 200) ? { address: str(b.address, 200) } : {}), items, status: pending ? '待审核' : '正常', creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), printCount: 0 };
     if (!pending) postStockDoc(ctx, o);
     put('stockDocs', o);
+    if (srcOrder) syncSourceOrder(ctx, o);
     audit(ctx, (pending ? '提交' : '新建') + D.title, `${o.no} ${o.type} ${items.length} 项`);
     return o;
   };
@@ -1601,6 +1727,7 @@ function approveStockDoc(ctx, id, pass) {
       Object.assign(o, { status: '正常', approver: ctx.user.name, approvedAt: now });
     } else Object.assign(o, { status: '已驳回', approver: ctx.user.name, approvedAt: now, rejectReason: str(ctx.body.reason, 200) || fail('请填写驳回原因') });
     put('stockDocs', o);
+    syncSourceOrder(ctx, o);
     audit(ctx, (pass ? '审核' : '驳回') + DOC[o.dir].title, o.no + (pass ? '' : ' ' + o.rejectReason));
     return o;
   });
@@ -1614,6 +1741,7 @@ function voidStockDoc(ctx, id) {
       if (!ctx.perms.has('inv.void') && o.creatorId !== ctx.user.id) fail('没有权限：' + PERM_LABEL['inv.void'], 403);
       Object.assign(o, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString(), voidReason: str(ctx.body.reason, 200) });
       put('stockDocs', o);
+      syncSourceOrder(ctx, o);
       voidShipmentsOf('out', o.id);
       audit(ctx, '作废' + DOC[o.dir].title, o.no + (o.voidReason ? ' ' + o.voidReason : ''));
       return o;
@@ -1634,6 +1762,7 @@ function voidStockDoc(ctx, id) {
     if (o.dir === 'in' && o.bom) bomReturn(ctx, o, reason);  // 生产入库：领用的原料退回
     Object.assign(o, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString(), voidReason: reason });
     put('stockDocs', o);
+    syncSourceOrder(ctx, o);
     voidShipmentsOf('out', o.id);
     audit(ctx, '作废' + DOC[o.dir].title, o.no + (reason ? ' ' + reason : ''));
     return o;
@@ -2339,11 +2468,17 @@ function importProducts(ctx) {
       const cost = num('cost', '成本价'), price = num('price', '销售价'), stock = num('stock', '期初库存', true), safety = num('safety', '安全库存', true), weight = num('weight', '重量');
       if ([cost, price, stock, safety, weight].includes(null)) return;
       const fields = {};
-      for (const k of ['name', 'spec', 'brand', 'category', 'unit', 'remark']) if (raw[k] !== undefined && raw[k] !== null && String(raw[k]).trim() !== '') fields[k] = str(raw[k], k === 'remark' ? 500 : 200);
+      for (const k of ['name', 'spec', 'brand', 'category', 'unit', 'buyUnit', 'saleUnit', 'remark']) if (raw[k] !== undefined && raw[k] !== null && String(raw[k]).trim() !== '') fields[k] = str(raw[k], k === 'remark' ? 500 : 200);
       const old = bySku.get(sku);
+      if (old && fields.unit && fields.unit !== old.unit && productBaseUnitUsed(old)) return err('基本单位已经使用过，不能修改');
       if (raw.barcode !== undefined && raw.barcode !== null && String(raw.barcode).trim() !== '') fields.barcode = str(raw.barcode, 64);
       if (raw.units !== undefined && raw.units !== null && String(raw.units).trim() !== '') {
         try { fields.units = cleanUnits(parseUnitsText(raw.units), fields.unit || (old && old.unit) || '个'); } catch (e) { return err(e.message); }
+      }
+      const unitNames = new Set([fields.unit || (old && old.unit) || '个', ...((fields.units || (old && old.units) || []).map(u => u.name))]);
+      for (const [k, label] of [['buyUnit', '默认采购单位'], ['saleUnit', '默认销售单位']]) {
+        const name = fields[k] || (old && old[k]);
+        if (name && !unitNames.has(name)) return err(`${label}「${name}」不在该商品的单位设置里`);
       }
       // 条码（含辅助单位条码）不能和别的商品重复
       const mine = [fields.barcode ?? (old && old.barcode), ...(fields.units || (old && old.units) || []).map(u => u.barcode)].filter(Boolean);
@@ -2386,14 +2521,16 @@ function visibleData(ctx) {
     warehouses: true, transferDocs: P.has('inv.view'), batches: any('inv.view', 'prod.view'), serials: P.has('inv.view'),
     carriers: any('ship.view', 'ship.edit', 'ship.rate'), shipments: any('ship.view', 'ship.edit'), shipBills: P.has('ship.view'), shipLabels: false,
     accounts: any('finance', 'sales', 'purchase', 'ship.bill', 'expense'), acctTransfers: P.has('finance'), expenses: any('expense', 'exp.approve', 'finance'),
-    advances: any('expense', 'exp.approve', 'finance')
+    advances: any('expense', 'exp.approve', 'finance'),
+    deliveries: any('ship.view', 'ship.edit')
   };
   const byDate = (a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || ''));
   const data = {};
   COLS.forEach(c => { data[c] = want[c] ? list(c) : []; if (DATED.includes(c)) data[c].sort(byDate); });
   if (!seesPrice(P)) {
     data.products = data.products.map(({ cost, price, ...p }) => p.bom ? { ...p, bom: p.bom.map(({ price, ...l }) => l) } : p);
-    for (const c of ['customers', 'suppliers']) data[c] = data[c].map(({ prices, ...r }) => r);
+    for (const c of ['customers', 'suppliers']) data[c] = data[c].map(({ prices, openingBalance, ...r }) => r);
+    data.stockDocs = data.stockDocs.map(d => ({ ...d, items: d.items.map(({ price, sale, usale, uprice, ...i }) => i) }));
   }
   if (!P.has('bom')) data.products = data.products.map(({ bom, ...p }) => p);
   if (!expAll(P)) data.expenses = data.expenses.filter(o => o.creatorId === ctx.user.id);
@@ -3086,8 +3223,13 @@ function cloudTunnelStart() {
 
 /* ================= 初始化 ================= */
 if (!getMeta('initialized', false)) {
-  tx(() => { writeAll(seed()); setMeta('settings', { company: '示例科技有限公司' }); setMeta('counters', {}); setMeta('initialized', true); });
-  log('首次启动：已写入演示数据');
+  if (process.env.XERP_NO_DEMO === '1') {
+    tx(() => { writeAll({}); setMeta('settings', { company: process.env.XERP_COMPANY || '我的公司' }); setMeta('counters', {}); setMeta('initialized', true); });
+    log('首次启动：已创建空账套');
+  } else {
+    tx(() => { writeAll(seed()); setMeta('settings', { company: '示例科技有限公司' }); setMeta('counters', {}); setMeta('initialized', true); });
+    log('首次启动：已写入演示数据');
+  }
 }
 tx(ensureWh);  // v1.0.3 升级：补默认仓库与分仓库存
 tx(ensureAccounts);  // v2.0.11 升级：补资金账户，旧流水按收付方式归到对应账户
@@ -3101,6 +3243,7 @@ if (!db.prepare('SELECT COUNT(*) AS n FROM users').get().n) {
   log(pwd === 'admin123' ? '已创建默认管理员账号 admin / admin123' : '已创建管理员账号 admin（密码为安装时设置的密码）');
 }
 try { if (arg('admin-password-file')) fs.unlinkSync(arg('admin-password-file')); } catch (e) {}
+if (argv.includes('--init')) { log('账套初始化完成'); process.exit(0); }
 
 /* ================= 路由 ================= */
 const routes = [];
@@ -3116,7 +3259,7 @@ const publicSettings = ctx => {
   const { notify, kdn, expenseFlow, ...s } = getMeta('settings', {}), k = kdn || {}, ready = !!(k.ebid && k.key);
   const pub = { ready, eorder: ready && kdnSenderOk(k), sandbox: !!k.sandbox, autoTrack: !!k.autoTrack };
   const safeNotify = notify ? { ...notify, mail: notify.mail ? { ...notify.mail, pass: '', hasPass: !!notify.mail.pass } : undefined } : notify;
-  return ctx.user.role === 'admin' ? { ...s, notify: safeNotify, expenseFlow: expenseFlow || {}, kdn: { ...pub, ebid: k.ebid || '', keySet: !!k.key, sender: k.sender || {} } } : { ...s, kdn: pub };
+  return ctx.user.role === 'admin' ? { ...s, backupPath: BACKUP_DIR, notify: safeNotify, expenseFlow: expenseFlow || {}, kdn: { ...pub, ebid: k.ebid || '', keySet: !!k.key, sender: k.sender || {} } } : { ...s, kdn: pub };
 };
 route('GET', '/api/data', ctx => ({
   version: VERSION, settings: { ...publicSettings(ctx), modules: enabledModules(), feedbackUnread: fbUnread(), platform: PLAT },
@@ -3395,13 +3538,50 @@ route('PUT', '/api/settings/print', ctx => {
   return save();
 }, { perm: 'tpl.edit' });
 
-const ENTITY_PERM = { products: { POST: 'prod.edit', PUT: 'prod.edit', DELETE: 'prod.delete' }, customers: 'parties', suppliers: 'parties', employees: 'hr' };
+const ENTITY_PERM = { products: { POST: 'prod.edit', PUT: 'prod.edit', DELETE: 'prod.delete' }, customers: 'parties', suppliers: 'parties', employees: 'hr', deliveries: 'ship.edit' };
 for (const col of Object.keys(ENTITY)) {
   const perm = ctx => typeof ENTITY_PERM[col] === 'string' ? ENTITY_PERM[col] : ENTITY_PERM[col][ctx.method];
   route('POST', `/api/${col}`, ctx => saveEntity(ctx, col, null), { perm });
   route('PUT', `/api/${col}/:id`, ctx => saveEntity(ctx, col, ctx.params.id), { perm });
   route('DELETE', `/api/${col}/:id`, ctx => { const r = deleteEntity(ctx, col, ctx.params.id); if (col === 'products') db.prepare('DELETE FROM images WHERE id = ?').run(ctx.params.id); return r; }, { perm });
 }
+function importParties(ctx) {
+  const type = ctx.body.type === 'suppliers' ? 'suppliers' : 'customers';
+  const rows = Array.isArray(ctx.body.rows) ? ctx.body.rows : fail('没有可导入的数据');
+  if (!rows.length) fail('没有可导入的数据');
+  if (rows.length > 5000) fail('一次最多导入 5000 行');
+  const update = ctx.body.update === true;
+  let created = 0, updated = 0, skipped = 0;
+  const errors = [];
+  return tx(() => {
+    const existing = list(type);
+    rows.forEach((raw, idx) => {
+      const body = {};
+      for (const [k, [t]] of Object.entries(ENTITY[type].fields)) {
+        if (!(k in raw)) continue;
+        let v = raw[k];
+        if (t === 'n') { const n = Number(v); if (!Number.isFinite(n) || n < 0) v = 0; else v = round2(n); }
+        else v = str(v, 500);
+        if (v === '' || v == null) continue;
+        body[k] = v;
+      }
+      const name = str(body.name, 200);
+      if (!name) { skipped++; errors.push(`第 ${idx + 2} 行缺少名称`); return; }
+      if (body.licenseExp && !isDate(body.licenseExp)) { skipped++; errors.push(`第 ${idx + 2} 行许可证有效期格式应为 YYYY-MM-DD`); return; }
+      const hit = existing.find(x => x.name === name || (body.phone && x.phone === body.phone));
+      if (hit) {
+        if (update) { Object.assign(hit, body); put(type, hit); updated++; }
+        else skipped++;
+        return;
+      }
+      const rec = { id: uid(), ...body, createdAt: today() };
+      put(type, rec); existing.push(rec); created++;
+    });
+    audit(ctx, '批量导入' + (type === 'customers' ? '客户' : '供应商'), `新增 ${created}，更新 ${updated}，跳过 ${skipped}`);
+    return { created, updated, skipped, errors: errors.slice(0, 20) };
+  });
+}
+route('POST', '/api/import/parties', ctx => importParties(ctx), { perm: 'parties' });
 const orderPerm = { perm: ctx => (ORD[ctx.params.kind] || ORD.purchase).perm };
 route('POST', '/api/orders/:kind', ctx => saveOrder(ctx, ctx.params.kind, null), orderPerm);
 route('PUT', '/api/orders/:kind/:id', ctx => saveOrder(ctx, ctx.params.kind, ctx.params.id), orderPerm);
@@ -3692,6 +3872,7 @@ const NOTIFY_EVENTS = {
   birthday: '生日提醒',
   pendingApproval: '待审批',
   daily: '经营日报',
+  license: '证照到期',
 };
 function notifyConf() {
   const n = getMeta('settings', {}).notify || {};
@@ -3806,6 +3987,23 @@ function notifyText(conf = notifyConf()) {
     count += 1;
     lines.push('【经营日报】', `· 今日销售 ${sales.length} 单，¥${amt.toFixed(2)}`, `· 今日毛利 ¥${gp.toFixed(2)}（${gpRate.toFixed(1)}%）`, `· 今日收款 ¥${cash.toFixed(2)}`, `· 待收款合计 ¥${receiv.toFixed(2)}`, `· 缺货商品 ${lowN} 个`);
     if (top5.length) lines.push('· 热销商品：' + top5.map((x, n) => `${n + 1}. ${x.name} ×${x.qty} ¥${x.amt.toFixed(2)}`).join('、'));
+  }
+
+  if (ev.license) {
+    const within = 60, base = new Date(today());
+    const rows = list('products').filter(p => p.regExp).map(p => ({ p, left: Math.round((new Date(p.regExp) - base) / 864e5) }))
+      .filter(x => x.left <= within).sort((a, b) => a.left - b.left);
+    const parts = [...list('suppliers').map(x => ({ name: x.name, kind: '供应商', no: x.licenseNo || '', exp: x.licenseExp })),
+      ...list('customers').map(x => ({ name: x.name, kind: '客户', no: x.licenseNo || '', exp: x.licenseExp }))]
+      .filter(x => x.exp).map(x => ({ ...x, left: Math.round((new Date(x.exp) - base) / 864e5) }))
+      .filter(x => x.left <= within).sort((a, b) => a.left - b.left);
+    if (rows.length || parts.length) {
+      count += rows.length + parts.length;
+      lines.push(`【证照到期】${rows.length + parts.length} 个证照即将到期或已过期`);
+      lines.push(...rows.slice(0, 6).map(x => `· 商品 ${x.p.name}：${x.p.regNo || '无注册证号'}，${x.left < 0 ? '已过期 ' + (-x.left) + ' 天' : x.left + ' 天后到期'}（${x.p.regExp}）`));
+      lines.push(...parts.slice(0, 6).map(x => `· ${x.kind} ${x.name}：${x.no || '无许可证号'}，${x.left < 0 ? '已过期 ' + (-x.left) + ' 天' : x.left + ' 天后到期'}（${x.exp}）`));
+      if (rows.length + parts.length > 12) lines.push(`· ……另有 ${rows.length + parts.length - 12} 个`);
+    }
   }
 
   return { count, text: `${company} 经营提醒 ${today()}\n` + (lines.length ? lines.join('\n') : '今天没有需要处理的事项。') };
@@ -3965,7 +4163,7 @@ async function fbPost(path, body) {
 // 取回服务器上的回复、公开状态并入本地记录；作者删掉的留言本地也去掉
 async function fbSync() {
   const remote = await fbPost('/mine', { token: fbToken() }), byFid = new Map(remote.map(x => [x.fid, x]));
-  const list = fbList().filter(f => byFid.has(f.fid)).map(f => { const x = byFid.get(f.fid); return { ...f, reply: x.reply, replied: x.replied, public: x.public }; });
+  const list = fbList().filter(f => byFid.has(f.fid)).map(f => { const x = byFid.get(f.fid); return { ...f, reply: x.reply, replied: x.replied, public: x.public, ...(x.image ? { image:x.image } : {}) }; });
   setMeta('feedback', list); setMeta('fbSynced', Date.now());
   return list;
 }
@@ -3983,10 +4181,12 @@ route('GET', '/api/feedback', async () => {
 });
 route('POST', '/api/feedback', async ctx => {
   const b = ctx.body, text = String(b.text ?? '').trim().slice(0, 2000), nick = str(b.nick, 30), contact = str(b.contact, 100), allowPublic = !!b.allowPublic;
+  const image = String(b.image || '');
   if (!text) fail('请填写留言内容');
-  const r = await fbPost('', { token: fbToken(), v: VERSION, plat: PLAT, nick, contact, text, allowPublic });
+  if (image && (!/^data:image\/(jpeg|png|webp);base64,/i.test(image) || image.length > 1.5e6)) fail('截图格式不正确或太大，请重新截图');
+  const r = await fbPost('', { token: fbToken(), v: VERSION, plat: PLAT, nick, contact, text, allowPublic, ...(image ? { image } : {}) });
   const d = new Date(), list = fbList();
-  list.push({ fid: r.fid, at: today() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()), by: ctx.user.name, nick, contact, text, allowPublic, reply: '', replied: '', public: false, seen: '' });
+  list.push({ fid: r.fid, at: today() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()), by: ctx.user.name, nick, contact, text, ...(image ? { image } : {}), allowPublic, reply: '', replied: '', public: false, seen: '' });
   setMeta('feedback', list.slice(-200));
   audit(ctx, '问题反馈', text.slice(0, 60));
   return { fid: r.fid };
@@ -4136,3 +4336,11 @@ server.listen(config.port, listenHost, () => {
 const shutdown = () => { log('服务端停止'); try { db.close(); } catch (e) {} process.exit(0); };
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+const portalParent = Number(process.env.XERP_PORTAL_PARENT || 0);
+if (portalParent > 0) {
+  const parentCheck = setInterval(() => {
+    try { process.kill(portalParent, 0); }
+    catch (e) { clearInterval(parentCheck); log('网关已退出，账套服务自动停止'); shutdown(); }
+  }, 5000);
+  parentCheck.unref();
+}

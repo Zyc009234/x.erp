@@ -4,7 +4,7 @@
 FROM node:22-alpine
 
 WORKDIR /app
-COPY src/server.js src/index.html ./
+COPY src/server.js src/portal.js src/index.html ./
 COPY src/vendor ./vendor
 
 # XERP_PLAT：匿名统计里标记为 Docker 安装；TZ：单据日期、每日备份按北京时间
@@ -17,4 +17,4 @@ VOLUME /data
 EXPOSE 8686
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD wget -qO- http://127.0.0.1:8686/api/ping >/dev/null || exit 1
 
-CMD ["node", "server.js", "--data", "/data", "--port", "8686"]
+CMD ["node", "portal.js", "--data", "/data", "--port", "8686"]

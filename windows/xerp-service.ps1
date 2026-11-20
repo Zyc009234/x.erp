@@ -42,7 +42,7 @@ if ($Action -eq 'uninstall') {
 Stop-Xerp
 $node = Join-Path $AppDir 'node.exe'
 $pwdFile = Join-Path $DataDir 'admin-password.txt'
-$argLine = '"' + (Join-Path $AppDir 'server.js') + '" --data "' + $DataDir + '" --port ' + $Port + ' --admin-password-file "' + $pwdFile + '"'
+$argLine = '"' + (Join-Path $AppDir 'portal.js') + '" --data "' + $DataDir + '" --port ' + $Port + ' --admin-password-file "' + $pwdFile + '"'
 
 $act = New-ScheduledTaskAction -Execute $node -Argument $argLine -WorkingDirectory $AppDir
 $trg = New-ScheduledTaskTrigger -AtStartup

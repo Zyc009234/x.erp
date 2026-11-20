@@ -34,13 +34,19 @@ a.link:hover{text-decoration:underline}
 .sidebar{width:236px;background:var(--sidebar);color:var(--sidebar-text);display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0;z-index:40;transition:width .2s,transform .2s}
 .brand{display:flex;align-items:center;gap:10px;padding:20px 20px 18px;color:#fff;font-weight:700;font-size:17px;white-space:nowrap;overflow:hidden}
 .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#06b6d4);display:grid;place-items:center;font-weight:800;flex-shrink:0;box-shadow:0 4px 14px rgba(99,102,241,.45)}
-nav{flex:1;overflow-y:auto;padding:4px 12px}
+nav{flex:1;overflow-y:auto;padding:4px 12px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.24) transparent}
+nav::-webkit-scrollbar{width:6px}
+nav::-webkit-scrollbar-track{background:transparent}
+nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);border-radius:3px}
+nav::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.38)}
 .nav-group{font-size:11px;letter-spacing:.08em;padding:16px 10px 6px;color:#64748b;white-space:nowrap}
 .nav-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;margin:2px 0;cursor:pointer;white-space:nowrap;transition:.15s;position:relative}
 .nav-item:hover{background:var(--sidebar-2);color:#e2e8f0}
 .nav-item.on{background:linear-gradient(90deg,rgba(99,102,241,.25),rgba(99,102,241,.08));color:#fff}
 .nav-item.on::before{content:"";position:absolute;left:-12px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:#818cf8}
 .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:11px;border-radius:10px;padding:0 7px;line-height:18px}
+.bulkbar{display:flex;align-items:center;gap:14px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--panel2);flex-wrap:wrap}
+.bulkbar .ops{margin-left:auto}
 .side-foot{padding:14px 20px;font-size:12px;color:#475569;white-space:nowrap;overflow:hidden}
 [data-theme=light][data-side=light]{--sidebar:#ffffff;--sidebar-2:#f1f5f9;--sidebar-text:#475569}
 [data-theme=light][data-side=light] .sidebar{border-right:1px solid var(--border)}
@@ -427,6 +433,7 @@ html.mobile .doc-sum b{font-size:14px}
       <label class="field"><span>服务器地址</span><input id="lServer" placeholder="例如 http://192.168.1.10:8686"></label>
       <div class="srv-state" id="srvState"><i></i><span>未检测</span><a class="link" id="srvTest" style="margin-left:auto;white-space:nowrap">测试连接</a></div>
     </div>
+    <div id="coBox" style="display:none"><label class="field"><span>公司（账套）</span><select id="lCompany"></select></label></div>
     <label class="field"><span>用户名</span><input id="lUser" autocomplete="username"></label>
     <label class="field"><span>密码</span><input id="lPass" type="password" autocomplete="current-password"></label>
     <button class="btn primary" id="lBtn">登 录</button>
@@ -438,7 +445,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-    <div class="side-foot">v2.13.1 · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.14.0</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -446,6 +453,7 @@ html.mobile .doc-sum b{font-size:14px}
       <button class="icon-btn" data-act="toggleSide" title="折叠菜单"><svg class="i" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
       <div class="crumb" id="crumb"></div>
       <div class="top-actions">
+        <button class="btn sm" id="portalCo" style="display:none"></button>
         <div class="gsearch"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="gsearch" placeholder="搜索单号 / 商品 / 客户，回车"></div>
         <div class="conn" id="conn" title="服务器连接状态"><i></i><span>已连接</span></div>
         <button class="icon-btn" data-act="toggleTheme" id="themeBtn" title="切换主题"></button>
@@ -506,6 +514,7 @@ const ICONS = {
   settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
   message:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   cloud:'<path d="M17.5 19a4.5 4.5 0 000-9 6 6 0 00-11.6 1.5A4 4 0 006 19h11.5z"/>',
+  image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   download:'<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
@@ -570,8 +579,8 @@ const LS = {
 };
 const prefs = Object.assign({theme:'light', side:'dark', pageSize:10}, LS.get('prefs', {}));
 const NATIVE = window.XerpApp || null;  // 在 x.erp 安卓客户端里运行时，由客户端注入（扫码、保存文件、打印、切换服务器）
-let db = {settings:{theme:prefs.theme, pageSize:prefs.pageSize}, products:[], customers:[], suppliers:[], employees:[], sales:[], purchases:[], salesReturns:[], purchaseReturns:[], stockLogs:[], stockDocs:[], checkDocs:[], finance:[], partyPayments:[], projects:[], warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[]};
-let ME = null, META = {modules:{}, perms:[], templates:{}, docTypes:{in:[], out:[]}, defaultWh:'w1'}, CLIENT_MODE = false, SERVER_ADDR = '', pending = 0, dataSig = '';
+let db = {settings:{theme:prefs.theme, pageSize:prefs.pageSize}, products:[], customers:[], suppliers:[], employees:[], sales:[], purchases:[], salesReturns:[], purchaseReturns:[], stockLogs:[], stockDocs:[], checkDocs:[], finance:[], partyPayments:[], projects:[], warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[], deliveries:[]};
+let ME = null, META = {modules:{}, perms:[], templates:{}, docTypes:{in:[], out:[]}, defaultWh:'w1'}, CLIENT_MODE = false, SERVER_ADDR = '', pending = 0, dataSig = '', PORTAL = null, PORTAL_COMPANIES = [], PORTAL_COMPANY = null, PORTAL_ADMIN = false;
 /* ---------- 仓库 / 批次 ---------- */
 const whs = () => db.warehouses.length ? [...db.warehouses].sort((a, b) => (b.id === META.defaultWh) - (a.id === META.defaultWh) || String(a.code || '').localeCompare(String(b.code || ''))) : [{id:META.defaultWh, name:'主仓库'}];
 const multiWh = () => db.warehouses.length > 1;
@@ -625,7 +634,7 @@ async function reload() {
   ME = d.user; META = d.meta || META;
   const sig = JSON.stringify(d.data) + JSON.stringify(d.settings) + JSON.stringify(ME.perms);
   const changed = sig !== dataSig; dataSig = sig;
-  db = {warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[], expenses:[], advances:[], partyPayments:[], projects:[], ...d.data, settings:{...d.settings, version:d.version, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
+  db = {warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[], deliveries:[], expenses:[], advances:[], partyPayments:[], projects:[], ...d.data, settings:{...d.settings, version:d.version, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
   return changed;
 }
 // 发起写操作 → 成功后重新拉取数据并刷新界面；失败则提示错误并保持弹窗
@@ -670,6 +679,17 @@ async function doLogin() {
   btn.disabled = true; btn.textContent = '登录中…';
   try {
     if (CLIENT_MODE && !(await testServer())) throw new Error('无法连接服务器，请检查服务器地址');
+    if (PORTAL) {
+      const company = ($('#lCompany') && $('#lCompany').value) || (PORTAL.companies && PORTAL.companies[0] && PORTAL.companies[0].code) || 'default';
+      const p = await api('POST', '/api/portal/login', { company, username:user, password:$('#lPass').value });
+      LS.set('token', p.token); LS.set('lastUser', user);
+      LS.set('portalCompany', JSON.stringify(p.company || null));
+      LS.set('portalCompanies', JSON.stringify(p.companies || []));
+      LS.set('portalAdmin', p.user && p.user.admin ? '1' : '');
+      await enterApp();
+      toast('欢迎回来，' + (ME.name || user));
+      return;
+    }
     const r = await api('POST', '/api/login', {username:user, password:$('#lPass').value});
     LS.set('token', r.token); LS.set('lastUser', user);
     await enterApp();
@@ -681,6 +701,36 @@ async function enterApp() {
   await reload();
   $('#login').classList.remove('show');
   applyTheme(); render();
+  setupPortalUI();
+}
+function setupPortalUI() {
+  const btn = document.getElementById('portalCo');
+  if (!btn) return;
+  if (!PORTAL) { btn.style.display = 'none'; return; }
+  try { PORTAL_COMPANIES = JSON.parse(LS.get('portalCompanies', '[]')); } catch (e) { PORTAL_COMPANIES = []; }
+  try { PORTAL_COMPANY = JSON.parse(LS.get('portalCompany', 'null')); } catch (e) { PORTAL_COMPANY = null; }
+  PORTAL_ADMIN = LS.get('portalAdmin', '') === '1';
+  if (!PORTAL_COMPANY) PORTAL_COMPANY = (PORTAL.companies || [])[0] || null;
+  if (PORTAL_COMPANIES.length > 1) {
+    btn.style.display = '';
+    btn.innerHTML = ic('warehouse') + esc(PORTAL_COMPANY ? PORTAL_COMPANY.name : '切换公司');
+    btn.title = '切换公司（账套）';
+    btn.onclick = openCompanySwitch;
+  } else btn.style.display = 'none';
+}
+function openCompanySwitch() {
+  openModal(modalHead('切换公司') + `<div class="m-body">${PORTAL_COMPANIES.map(c => `<button class="btn" style="width:100%;margin-bottom:8px;justify-content:flex-start" data-sw="${esc(c.code)}">${esc(c.name)}${PORTAL_COMPANY && c.code === PORTAL_COMPANY.code ? ' <span class="badge green">当前</span>' : ''}</button>`).join('')}</div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">取消</button></div>`);
+  document.querySelectorAll('[data-sw]').forEach(b => b.onclick = async () => {
+    try {
+      const r = await api('POST', '/api/portal/switch', { company: b.dataset.sw });
+      LS.set('token', r.token);
+      LS.set('portalCompany', JSON.stringify(r.company));
+      LS.set('portalCompanies', JSON.stringify(r.companies || []));
+      LS.set('portalAdmin', r.user && r.user.admin ? '1' : '');
+      location.reload();
+    } catch (e) { toast(e.message, 'error'); }
+  });
 }
 async function boot() {
   applyTheme();
@@ -695,6 +745,16 @@ async function boot() {
     const beat = () => fetch('/local/heartbeat', {method:'POST'}).catch(() => {});
     beat(); setInterval(beat, 20000);
   } else { $('#srvBox').style.display = 'none'; SERVER_ADDR = location.origin; }
+  try {
+    const pr = await fetch('/api/portal/info');
+    if (pr.ok) {
+      PORTAL = await pr.json();
+      if (PORTAL.multi) {
+        $('#coBox').style.display = '';
+        $('#lCompany').innerHTML = (PORTAL.companies || []).map(c => `<option value="${esc(c.code)}">${esc(c.name)}</option>`).join('');
+      }
+    }
+  } catch (e) {}
   $('#lUser').value = LS.get('lastUser', 'admin');
   if (LS.get('token')) { try { await enterApp(); return; } catch (e) { LS.set('token', null); } }
   showLogin();
@@ -713,7 +773,20 @@ const unpaidOf = (kind, o) => +(orderTotal(o) - (o[ORD[kind].paidKey] || 0)).toF
 // 往来单位的应收（销售）/ 应付（采购）= 订单未结 - 退货单还没退的款（冲抵、退款都会让它变小）
 const retUnpaid = (kind, pid) => { const R = ORD[kind + 'Return']; return sum(db[R.db].filter(r => r.status !== '已作废' && (!pid || r[R.partyKey] === pid)), r => unpaidOf(kind + 'Return', r)); };
 const unappliedParty = (kind, pid) => sum((db.partyPayments || []).filter(p => p.partyType === (kind === 'sales' ? 'customer' : 'supplier') && p.partyId === pid && !p.appliedOrderId && !(p.appliedOrders || []).length), p => p.amount);
-const partyDue = (kind, pid) => { const C = ORD[kind]; return +(sum(db[C.db].filter(o => o.status !== '已作废' && (!pid || o[C.partyKey] === pid)), o => unpaidOf(kind, o)) - retUnpaid(kind, pid) - unappliedParty(kind, pid)).toFixed(2); };
+const partyDue = (kind, pid) => { const C = ORD[kind], party = pid && byId(db[C.party], pid); return +((party ? +party.openingBalance || 0 : 0) + sum(db[C.db].filter(o => o.status !== '已作废' && (!pid || o[C.partyKey] === pid)), o => unpaidOf(kind, o)) - retUnpaid(kind, pid) - unappliedParty(kind, pid)).toFixed(2); };
+const isSalesKind = kind => kind === 'sales' || kind === 'salesReturn';
+const lineDoneQty = (kind, o, i) => {
+  if (i.fulfilledQty != null) return +i.fulfilledQty || 0;
+  return (kind === 'sales' && ['已发货', '已完成'].includes(o.status) || kind === 'purchase' && o.status === '已入库') ? i.qty : 0;
+};
+const lineLeftQty = (kind, o, i) => Math.max(0, +i.qty - lineDoneQty(kind, o, i));
+const orderDisplayStatus = (kind, o) => {
+  const left = (o.items || []).reduce((n, i) => n + lineLeftQty(kind, o, i), 0);
+  const done = (o.items || []).some(i => lineDoneQty(kind, o, i) > 0.0001);
+  if (done && left > 0.0001) return isSalesKind(kind) ? '部分发货' : '部分入库';
+  return o.status;
+};
+const orderHasDocs = o => db.stockDocs.some(d => d.srcOrderId === o.id && ['正常', '待审核'].includes(d.status));
 const badge = (t, c) => `<span class="badge ${c || STATUS_COLOR[t] || 'gray'}">${esc(t)}</span>`;
 
 /* ================= UI 基础 ================= */
@@ -771,9 +844,9 @@ function readForm(fields) {
   }
   return out;
 }
-function formModal({title, fields, data = {}, onSubmit, okText = '保存'}) {
+function formModal({title, fields, data = {}, onSubmit, okText = '保存', size = ''}) {
   openModal(`${modalHead(title)}<form id="mform" class="m-body form-grid" onsubmit="return false">${fields.map(f => fieldHtml(f, data)).join('')}</form>
-  <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="mOk">${okText}</button></div>`);
+  <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="mOk">${okText}</button></div>`, size);
   $('#mOk').onclick = async () => {
     const v = readForm(fields); if (!v) return;
     const b = $('#mOk'); b.disabled = true;
@@ -788,7 +861,7 @@ function exportCSV(name, headers, rows) {
 }
 
 /* ---------- 通用列表 ---------- */
-function getState(key) { return ui[key] || (ui[key] = {q:'', page:1, f:{}, sort:null}); }
+function getState(key) { const st = ui[key] || (ui[key] = {q:'', page:1, f:{}, sort:null}); if (!st.sel) st.sel = new Set(); return st; }
 function toolbar(key, {placeholder = '搜索...', filters = [], buttons = ''} = {}) {
   const st = getState(key);
   return `<div class="toolbar"><div class="tb-left"><div class="search">${ic('search')}<input data-search="${key}" value="${esc(st.q)}" placeholder="${placeholder}"></div>
@@ -809,13 +882,42 @@ function renderList(key) {
   const total = data.length, pages = Math.max(1, Math.ceil(total / ps));
   if (st.page > pages) st.page = pages;
   const rows = data.slice((st.page - 1) * ps, st.page * ps);
-  const head = cfg.columns.map((c, i) => `<th class="${c.cls || ''} ${c.s ? 'sortable' : ''}" ${c.s ? `data-act="sort" data-id="${key}|${i}"` : ''}>${c.t}${st.sort && st.sort.i === i ? (st.sort.dir > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('');
-  const body = rows.length ? rows.map(r => `<tr>${cfg.columns.map(c => `<td class="${c.cls || ''}">${c.r(r)}</td>`).join('')}</tr>`).join('')
-    : `<tr><td colspan="${cfg.columns.length}"><div class="empty">${emptySvg}<p>${cfg.empty || '暂无数据'}</p></div></td></tr>`;
+  const bulk = cfg.bulk, rowId = bulk && (cfg.rowId || (r => r.id));
+  const pageIds = bulk ? rows.map(rowId).filter(Boolean) : [];
+  if (bulk) for (const id of [...st.sel]) if (!data.some(r => rowId(r) === id)) st.sel.delete(id);
+  const head = (bulk ? '<th style="width:36px"><input type="checkbox" data-bulk-all="1"></th>' : '') + cfg.columns.map((c, i) => `<th class="${c.cls || ''} ${c.s ? 'sortable' : ''}" ${c.s ? `data-act="sort" data-id="${key}|${i}"` : ''}>${c.t}${st.sort && st.sort.i === i ? (st.sort.dir > 0 ? ' ↑' : ' ↓') : ''}</th>`).join('');
+  const body = rows.length ? rows.map(r => `<tr>${bulk ? `<td><input type="checkbox" data-bulk-row="1" data-id="${esc(rowId(r))}" ${st.sel.has(rowId(r)) ? 'checked' : ''}></td>` : ''}${cfg.columns.map(c => `<td class="${c.cls || ''}">${c.r(r)}</td>`).join('')}</tr>`).join('')
+    : `<tr><td colspan="${cfg.columns.length + (bulk ? 1 : 0)}"><div class="empty">${emptySvg}<p>${cfg.empty || '暂无数据'}</p></div></td></tr>`;
   let btns = ''; const s0 = Math.max(1, Math.min(st.page - 2, pages - 4)), e0 = Math.min(pages, s0 + 4);
   for (let i = s0; i <= e0; i++) btns += `<button class="pg ${i === st.page ? 'on' : ''}" data-act="page" data-id="${key}|${i}">${i}</button>`;
-  el.innerHTML = `<div class="table-wrap"><table class="tbl ${cfg.compact ? 'compact' : ''}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
+  el.innerHTML = `${bulk ? `<div class="bulkbar"><label class="chk"><input type="checkbox" data-bulk-all="1" ${pageIds.length && pageIds.every(id => st.sel.has(id)) ? 'checked' : ''}>全选本页</label><span>已选 <b>${st.sel.size}</b> 条</span><div class="ops">${(bulk.actions || []).map((a, i) => `<button class="btn sm" data-bulk-act="${i}" ${st.sel.size ? '' : 'disabled'}>${esc(a.label)}</button>`).join('')}${bulk.remove ? `<button class="btn sm danger-text" data-bulk-del="1" ${st.sel.size ? '' : 'disabled'}>批量删除</button>` : ''}</div></div>` : ''}<div class="table-wrap"><table class="tbl ${cfg.compact ? 'compact' : ''}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
   ${cfg.noPager ? '' : `<div class="pager"><span>共 ${total} 条</span><div><button class="pg" data-act="page" data-id="${key}|${st.page - 1}" ${st.page <= 1 ? 'disabled' : ''}>‹</button>${btns}<button class="pg" data-act="page" data-id="${key}|${st.page + 1}" ${st.page >= pages ? 'disabled' : ''}>›</button></div></div>`}`;
+  if (bulk) {
+    const refreshBulk = () => {
+      const n = el.querySelector('.bulkbar b'); if (n) n.textContent = st.sel.size;
+      el.querySelectorAll('[data-bulk-del],[data-bulk-act]').forEach(x => { x.disabled = !st.sel.size; });
+      el.querySelectorAll('[data-bulk-all]').forEach(x => { x.checked = pageIds.length && pageIds.every(id => st.sel.has(id)); });
+    };
+    const markAll = checked => {
+      pageIds.forEach(id => checked ? st.sel.add(id) : st.sel.delete(id));
+      el.querySelectorAll('[data-bulk-row]').forEach(x => { x.checked = checked; });
+      refreshBulk();
+    };
+    el.querySelectorAll('[data-bulk-all]').forEach(x => { x.onchange = () => markAll(x.checked); });
+    el.querySelectorAll('[data-bulk-row]').forEach(x => { x.onchange = () => { x.checked ? st.sel.add(x.dataset.id) : st.sel.delete(x.dataset.id); refreshBulk(); }; });
+    const run = async fn => {
+      const ids = [...st.sel]; if (!ids.length) return;
+      try { await fn(ids); st.sel.clear(); await reload(); render(); } catch (e) { toast(e.message, 'error'); }
+    };
+    if (bulk.remove) {
+      const b = el.querySelector('[data-bulk-del]');
+      if (b) b.onclick = () => confirmBox(`确定批量删除选中的 ${st.sel.size} 条${esc(bulk.label || '记录')}吗？删除后不能恢复。`, () => run(async ids => {
+        for (const id of ids) await api('DELETE', bulk.remove(id));
+        toast(`已删除 ${ids.length} 条`, 'success');
+      }));
+    }
+    el.querySelectorAll('[data-bulk-act]').forEach(b => { b.onclick = () => run(ids => bulk.actions[+b.dataset.bulkAct].run(ids)); });
+  }
 }
 function exportList(key) {
   const cfg = lists[key]; if (!cfg || !cfg.exp) return;
@@ -900,7 +1002,7 @@ function pageDashboard() {
   </div>
   <div class="card"><div class="card-head"><h3>最近销售订单</h3><span class="more" data-act="go" data-id="sales">全部订单 ›</span></div><div class="card-body" style="padding:12px 0 0">
     <div class="table-wrap"><table class="tbl"><thead><tr><th>订单号</th><th>客户</th><th>日期</th><th class="num">金额</th><th>状态</th></tr></thead><tbody>
-    ${db.sales.slice(0, 6).map(o => `<tr><td><a class="link" data-act="orderView" data-id="sales|${o.id}">${o.no}</a></td><td>${esc(partyName('sales', o))}</td><td>${o.date}</td><td class="num">${money(orderTotal(o))}</td><td>${badge(o.status)}</td></tr>`).join('')}
+    ${db.sales.slice(0, 6).map(o => `<tr><td><a class="link" data-act="orderView" data-id="sales|${o.id}">${o.no}</a></td><td>${esc(partyName('sales', o))}</td><td>${o.date}</td><td class="num">${money(orderTotal(o))}</td><td>${badge(orderDisplayStatus('sales', o))}</td></tr>`).join('')}
     </tbody></table></div></div></div>`;
 
   const months = lastMonths(6);
@@ -921,44 +1023,135 @@ function catStats(orders) {
 /* ================= 页面：商品 ================= */
 const ENT = {
   products: {title:'商品', fields:[
-    {n:'sku', l:'商品编码', ph:'留空自动生成，例如 P20261114-001'}, {n:'barcode', l:'条码', ph:'留空则用商品编码'}, {n:'name', l:'商品名称', req:1, span:1}, {n:'spec', l:'规格型号', span:1}, {n:'brand', l:'品牌（选填）', ph:'例如 华为、得力'},
-    {n:'category', l:'商品分类', type:'combo', opts:cats, ph:'可选择或直接输入'}, {n:'unit', l:'基本单位（库存按它记）', type:'combo', opts:units, def:'个'},
-    {n:'unitsText', l:'辅助单位（选填）', ph:'例如 箱=12；盒=6，可按箱开单。箱有自己的条码写成 箱=12/6901234567890', span:1},
+    {n:'sku', l:'商品编码', ph:'留空自动生成，例如 P20261114-001'}, {n:'name', l:'商品名称', req:1, span:1}, {n:'spec', l:'规格型号', span:1}, {n:'brand', l:'品牌（选填）', ph:'例如 华为、得力'},
+    {n:'category', l:'商品分类', type:'combo', opts:cats, ph:'可选择或直接输入'}, {n:'unit', l:'基本单位（库存、成本按它核算）', type:'combo', opts:units, def:'个'},
     {n:'cost', l:'成本价（元）', type:'number', money:1, ph:'选填，不填按 0'}, {n:'price', l:'销售价（元）', type:'number', money:1, ph:'选填，不填按 0'},
     {n:'stock', l:'期初库存', type:'number', def:0, lockOnEdit:1}, {n:'safety', l:'安全库存', type:'number', def:10},
     {n:'batch', l:'批次 / 保质期管理', type:'select', opts:[['', '不启用'], ['1', '启用（入库记批次，出库先到期先出）']]}, {n:'dec', l:'允许小数数量（按重量 / 长度卖的商品）', type:'select', opts:[['', '否（只能整数）'], ['1', '是（最多两位小数）']]}, {n:'shelfDays', l:'保质期（天，选填）', type:'number', ph:'填了可按生产日期自动算有效期'},
     {n:'serial', l:'序列号管理', type:'select', opts:[['', '不启用'], ['1', '启用（一件一个号，出入库逐件登记）']]},
+    {n:'regNo', l:'注册证号 / 备案号（选填，医疗器械等）', ph:'例如 国械注准2026xxxxxxx', span:1, med:1}, {n:'regHolder', l:'注册人 / 备案人（选填）', ph:'例如 某某医疗科技有限公司', med:1},
+    {n:'manufacturer', l:'生产厂家（选填）', span:1, med:1}, {n:'prodLicense', l:'生产许可证号（选填）', ph:'例如 苏食药监械生产许xxxx号', med:1}, {n:'regExp', l:'注册证有效期至（选填）', type:'date', med:1},
+    {n:'firstStatus', l:'首营品种状态', type:'select', opts:[['', '不标记'], ['待审核', '首营待审核'], ['已通过', '首营已审核']], med:1},
     {n:'weight', l:'重量（kg / 每个基本单位，算运费用）', type:'number', ship:1}, {n:'size', l:'包装尺寸（厘米 长×宽×高，选填，算体积重）', ph:'例如 30×20×15', ship:1},
     {n:'remark', l:'备注', type:'textarea', span:1}]},
   customers: {title:'客户', fields:[
     {n:'name', l:'客户名称', req:1, span:1}, {n:'contact', l:'联系人', req:1}, {n:'phone', l:'联系电话', req:1}, {n:'email', l:'邮箱'},
-    {n:'level', l:'客户等级（可选择或直接输入）', type:'combo', opts:() => custLevels(), ph:'如：VIP、批发、零售'}, {n:'address', l:'地址', span:1}, {n:'remark', l:'备注', type:'textarea', span:1}]},
+    {n:'level', l:'客户等级（可选择或直接输入）', type:'combo', opts:() => custLevels(), ph:'如：VIP、批发、零售'}, {n:'openingBalance', l:'期初应收（元，选填）', type:'number', money:1, ph:'接管旧账时填写客户还欠多少'}, {n:'address', l:'地址', span:1}, {n:'remark', l:'备注', type:'textarea', span:1},
+    {n:'bizLicense', l:'营业执照号（选填）', med:1}, {n:'licenseNo', l:'经营许可证 / 备案号（选填）', span:1, med:1}, {n:'licenseExp', l:'许可证有效期至（选填）', type:'date', med:1},
+    {n:'firstStatus', l:'首营企业状态', type:'select', opts:[['', '不标记'], ['待审核', '首营待审核'], ['已通过', '首营已审核']], med:1}]},
   suppliers: {title:'供应商', fields:[
     {n:'name', l:'供应商名称', req:1, span:1}, {n:'contact', l:'联系人', req:1}, {n:'phone', l:'联系电话', req:1}, {n:'email', l:'邮箱'},
-    {n:'category', l:'主营类目（可选择或直接输入）', type:'combo', opts:() => supCats(), ph:'如：钢材、五金、包装材料'}, {n:'address', l:'地址', span:1}, {n:'remark', l:'备注', type:'textarea', span:1}]},
+    {n:'category', l:'主营类目（可选择或直接输入）', type:'combo', opts:() => supCats(), ph:'如：钢材、五金、包装材料'}, {n:'openingBalance', l:'期初应付（元，选填）', type:'number', money:1, ph:'接管旧账时填写还欠供应商多少'}, {n:'address', l:'地址', span:1}, {n:'remark', l:'备注', type:'textarea', span:1},
+    {n:'bizLicense', l:'营业执照号（选填）', med:1}, {n:'licenseNo', l:'生产 / 经营许可证号（选填）', span:1, med:1}, {n:'licenseExp', l:'许可证有效期至（选填）', type:'date', med:1},
+    {n:'firstStatus', l:'首营企业状态', type:'select', opts:[['', '不标记'], ['待审核', '首营待审核'], ['已通过', '首营已审核']], med:1}]},
   employees: {title:'员工', fields:[
     {n:'no', l:'工号', ph:'留空自动生成'}, {n:'name', l:'姓名', req:1}, {n:'gender', l:'性别', type:'select', opts:['男', '女']},
     {n:'dept', l:'部门（可选择或直接输入）', type:'combo', opts:() => depts(), ph:'如：生产部、售后部'}, {n:'position', l:'职位', req:1}, {n:'phone', l:'手机号'},
     {n:'idCard', l:'身份证号（仅人事可见）', ph:'用于生日提醒，列表会脱敏'},
     {n:'salary', l:'月薪（元）', type:'number'}, {n:'joinDate', l:'入职日期', type:'date', def:today()},
-    {n:'status', l:'状态', type:'select', opts:['在职', '试用期', '离职']}]}
+    {n:'status', l:'状态', type:'select', opts:['在职', '试用期', '离职']}]},
+  deliveries: {title:'临时送货', fields:[
+    {n:'date', l:'送货日期', type:'date', def:today()}, {n:'driver', l:'司机 / 送货人', req:1},
+    {n:'phone', l:'联系电话'}, {n:'amount', l:'本次运费（元）', type:'number', money:1, def:0},
+    {n:'paid', l:'付款状态', type:'select', opts:[['', '未付款'], ['1', '已付款']]},
+    {n:'note', l:'备注（路线、货物、结算说明）', type:'textarea', span:1}]}
 };
+const medOn = () => (db.settings.modules || []).includes('medical');
+function mountPackEditor(rec) {
+  let seq = 0;
+  const uid = () => 'pk' + (++seq);
+  const rows = (rec && rec.units ? rec.units : []).map(u => ({ id:uid(), name:u.name || '', rate:u.rate || '', barcode:u.barcode || '', price:u.price ?? '' }));
+  if (!rows.length) rows.push({ id:uid(), name:'', rate:'', barcode:'', price:'' });
+  const baseUnit = rec && rec.unit || '个';
+  let baseBarcode = rec && rec.barcode || '';
+  const buy0 = rec && rec.buyUnit || baseUnit;
+  const sale0 = rec && rec.saleUnit || baseUnit;
+  $('#mform').insertAdjacentHTML('beforeend', `<div class="span2" id="pkBox" style="margin-top:6px;min-width:0">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px"><b>包装规格与条码</b><button class="btn sm" type="button" id="pkAdd">+ 添加包装单位</button><span class="sub-t">库存、成本始终按基本单位核算</span></div>
+    <div class="table-wrap" style="width:100%;max-width:100%;min-width:0;overflow-x:auto"><table class="tbl compact" style="table-layout:fixed;min-width:650px"><colgroup><col style="width:48px"><col style="width:100px"><col style="width:64px"><col><col style="width:78px"><col style="width:104px"><col style="width:34px"></colgroup><thead><tr><th>层级</th><th>单位</th><th>换算</th><th>条码</th><th>售价</th><th>默认</th><th></th></tr></thead><tbody id="pkRows"></tbody></table></div>
+    <p class="sub-t" id="pkHint" style="margin-top:6px"></p></div>`);
+  const draw = () => {
+    const curBaseCode = $('#pkBaseBarcode');
+    if (curBaseCode) baseBarcode = curBaseCode.value;
+    $('#pkRows').innerHTML = `<tr data-base="1"><td><span class="badge blue plain">基本</span></td><td><b id="pkBaseUnit">${esc(baseUnit)}</b></td><td>1</td>
+      <td><input id="pkBaseBarcode" value="${esc(baseBarcode)}" placeholder="最小规格条码"></td><td class="num sub-t">上方基本价</td>
+      <td><span style="display:flex;gap:6px;white-space:nowrap"><label class="chk" title="默认采购单位"><input type="radio" name="pkBuy" value="__base" ${buy0 === baseUnit ? 'checked' : ''}>采</label><label class="chk" title="默认销售单位"><input type="radio" name="pkSale" value="__base" ${sale0 === baseUnit ? 'checked' : ''}>销</label></span></td><td></td></tr>`
+      + rows.map((u, i) => `<tr data-id="${u.id}"><td><span class="badge gray">包装</span></td><td><input data-pk="name" data-i="${i}" value="${esc(u.name)}" placeholder="如 中包装 / 外箱"></td>
+        <td><input data-pk="rate" data-i="${i}" type="number" min="2" step="1" value="${esc(u.rate)}" placeholder="如 10"></td>
+        <td><input data-pk="barcode" data-i="${i}" value="${esc(u.barcode)}" placeholder="该包装的条码"></td>
+        <td><input data-pk="price" data-i="${i}" type="number" min="0" step="0.01" value="${esc(u.price)}" placeholder="按换算"></td>
+        <td><span style="display:flex;gap:6px;white-space:nowrap"><label class="chk" title="默认采购单位"><input type="radio" name="pkBuy" value="${u.id}" ${buy0 === u.name ? 'checked' : ''}>采</label><label class="chk" title="默认销售单位"><input type="radio" name="pkSale" value="${u.id}" ${sale0 === u.name ? 'checked' : ''}>销</label></span></td>
+        <td><button class="icon-btn sm" type="button" data-pkdel="${u.id}" title="删除">${ic('trash')}</button></td></tr>`).join('');
+    sync();
+  };
+  const sync = () => {
+    const b = ($('#mform [name="unit"]')?.value || '个').trim() || '个';
+    $('#pkBaseUnit').textContent = b;
+    const parts = rows.filter(u => u.name && +u.rate > 0).map(u => `1${u.name}=${+u.rate}${b}`);
+    $('#pkHint').textContent = parts.length ? parts.join(' · ') + '。开单、扫码和打印按所选单位显示，库存仍按 ' + b + ' 记。' : '只有基本单位时，开单和扫码都按 ' + b + ' 记。';
+  };
+  draw();
+  $('#mform [name="unit"]').addEventListener('input', sync);
+  $('#mform [name="unit"]').addEventListener('change', sync);
+  $('#pkAdd').onclick = () => { rows.push({ id:uid(), name:'', rate:'', barcode:'', price:'' }); draw(); };
+  $('#pkRows').addEventListener('input', e => {
+    if (e.target.id === 'pkBaseBarcode') { baseBarcode = e.target.value; return; }
+    const k = e.target.dataset.pk, i = +e.target.dataset.i;
+    if (!k || !rows[i]) return;
+    rows[i][k] = e.target.value;
+    sync();
+  });
+  $('#pkRows').addEventListener('click', e => {
+    const b = e.target.closest('[data-pkdel]'); if (!b) return;
+    const i = rows.findIndex(x => x.id === b.dataset.pkdel); if (i >= 0) rows.splice(i, 1);
+    if (!rows.length) rows.push({ id:uid(), name:'', rate:'', barcode:'', price:'' });
+    draw();
+  });
+  return () => {
+    const base = ($('#mform [name="unit"]')?.value || '个').trim() || '个', barcode = $('#pkBaseBarcode').value.trim();
+    const units = [];
+    for (const u of rows) {
+      const name = String(u.name || '').trim(), rate = Number(u.rate), bc = String(u.barcode || '').trim();
+      if (!name && !u.rate && !bc && (u.price === '' || u.price == null)) continue;
+      if (!name) throw new Error('包装单位名称不能为空');
+      if (!Number.isInteger(rate) || rate < 2) throw new Error(`1 ${name} 等于多少 ${base}？请填大于 1 的整数`);
+      const hasPrice = u.price !== '' && u.price != null, price = Number(u.price);
+      if (hasPrice && (!Number.isFinite(price) || price < 0)) throw new Error(`「${name}」的销售价不正确`);
+      units.push({ name, rate, ...(bc ? { barcode:bc } : {}), ...(hasPrice ? { price:+price.toFixed(2) } : {}) });
+    }
+    if (new Set([base, ...units.map(u => u.name)]).size !== units.length + 1) throw new Error('单位名称不能重复');
+    const codes = [barcode, ...units.map(u => u.barcode).filter(Boolean)];
+    if (new Set(codes).size !== codes.length) throw new Error('基本单位和包装单位的条码不能相同');
+    const unitById = id => id === '__base' ? base : (rows.find(u => u.id === id) || {}).name || base;
+    return { barcode, units, buyUnit:unitById($('#pkRows input[name="pkBuy"]:checked')?.value), saleUnit:unitById($('#pkRows input[name="pkSale"]:checked')?.value) };
+  };
+}
 function editEntity(type, id) {
   const cfg = ENT[type], rec = id ? byId(db[type], id) : null;
   const costLocked = type === 'products' && rec && rec.stock !== 0;
+  const unitLocked = type === 'products' && rec && (rec.stock !== 0 || db.stockLogs.some(l => l.productId === id)
+    || [...db.sales, ...db.purchases, ...db.salesReturns, ...db.purchaseReturns].some(o => (o.items || []).some(i => i.productId === id)));
   const costWord = db.settings.costMethod === 'fifo' ? '先进先出' : '移动加权';
-  const fields = cfg.fields.filter(f => (!f.money || seesPrice()) && (!f.ship || shipOn())).map(f => ({...f, disabled:rec && f.lockOnEdit || f.n === 'cost' && costLocked,
-    l:f.n === 'cost' ? (rec ? `成本价（元，${costWord}自动计算${costLocked ? '' : '，无库存时可改'}）` : '期初成本价（元）') : f.l}));
+  const fields = cfg.fields.filter(f => (!f.money || seesPrice()) && (!f.ship || shipOn()) && (!f.med || medOn())).map(f => ({...f, disabled:rec && f.lockOnEdit || f.n === 'cost' && costLocked || f.n === 'unit' && unitLocked,
+    l:f.n === 'cost' ? (rec ? `成本价（元，${costWord}自动计算${costLocked ? '' : '，无库存时可改'}）` : '期初成本价（元）') : f.n === 'unit' ? `基本单位（库存、成本按它核算${unitLocked ? '，已使用后不可修改' : ''}）` : f.l}));
   if (type === 'products' && !rec && multiWh()) fields.splice(fields.findIndex(f => f.n === 'stock') + 1, 0, {n:'wh', l:'期初库存放在', type:'select', opts:whs().map(w => [w.id, w.name])});
-  const data = rec ? {...rec, batch:rec.batch ? '1' : '', serial:rec.serial ? '1' : '', dec:rec.dec ? '1' : '', unitsText:unitsToText(rec.units)} : {};
-  formModal({title:(rec ? '编辑' : '新增') + cfg.title, fields, data, onSubmit:v => {
-    if (type === 'products') { try { v.units = textToUnits(v.unitsText); } catch (e) { toast(e.message, 'error'); return; } delete v.unitsText; }
+  const data = rec ? {...rec, batch:rec.batch ? '1' : '', serial:rec.serial ? '1' : '', dec:rec.dec ? '1' : '', ...(type === 'deliveries' ? { paid: rec.paid ? '1' : '' } : {})} : {};
+  let readPack = null;
+  formModal({title:(rec ? '编辑' : '新增') + cfg.title, fields, data, size:type === 'products' ? 'lg' : '', onSubmit: async v => {
+    if (type === 'products') { try { Object.assign(v, readPack()); } catch (e) { toast(e.message, 'error'); return; } }
     if (type === 'products' && rec && rec.batch && !v.batch && batchesOf(rec.id).length) {
       return new Promise(ok => confirmBox('关闭后会清除该商品现有的批次记录（库存数量不变），之后重新开启会把当时的库存记为「期初」批次。确定关闭？', () => ok(mutate('PUT', '/api/products/' + rec.id, v, '已更新商品')), {title:'关闭批次管理'}));
     }
     const msg = rec ? '已更新' + cfg.title : type === 'products' ? r => '已新增商品 · 编码 ' + r.sku : '已新增' + cfg.title;
-    return mutate(rec ? 'PUT' : 'POST', '/api/' + type + (rec ? '/' + rec.id : ''), v, msg);
+    const r = await mutate(rec ? 'PUT' : 'POST', '/api/' + type + (rec ? '/' + rec.id : ''), v, msg);
+    if (type === 'products' && !rec && r && r.id && can('prod.edit')) imgView(r.id);
+    return r;
   }});
+  if (type === 'products') readPack = mountPackEditor(rec);
+  if (type === 'products' && rec && can('prod.edit')) {
+    $('.m-foot').insertAdjacentHTML('afterbegin', `<button class="btn" id="entImg" style="margin-right:auto">${ic('image')}${rec.img ? '更换图片' : '上传图片'}</button>`);
+    $('#entImg').onclick = () => { closeModal(); imgView(rec.id); };
+  }
 }
 function delEntity(type, id) {
   const rec = byId(db[type], id), cfg = ENT[type];
@@ -973,7 +1166,7 @@ function costAdjust(id) {
   $('#mform').insertAdjacentHTML('afterbegin', `<div class="span2 tip-line" style="background:var(--orange-soft);margin-bottom:12px">当前成本 ${money(p.cost || 0)}，库存 ${num(p.stock)} ${esc(p.unit)}。修正后库存金额会按新成本重算，不会修改库存数量；历史销售成本不会回写。</div>`);
 }
 // 商品行「更多」菜单里的操作
-const prodMoreItems = p => [can('prod.edit') && ['图片', 'imgView', p.id], can('bom') && ['BOM 物料清单', 'bomOpen', p.id], can('bom') && (p.bom || []).length && can('inv.in') && can('inv.out') && ['组装 / 拆卸', 'bomTransform', p.id], isAdmin() && ['修正成本', 'costAdjust', p.id], can('prod.delete') && ['删除', 'del', 'products|' + p.id, 'danger-text']].filter(Boolean);
+const prodMoreItems = p => [can('bom') && ['BOM 物料清单', 'bomOpen', p.id], can('bom') && (p.bom || []).length && can('inv.in') && can('inv.out') && ['组装 / 拆卸', 'bomTransform', p.id], isAdmin() && ['修正成本', 'costAdjust', p.id], can('prod.delete') && ['删除', 'del', 'products|' + p.id, 'danger-text']].filter(Boolean);
 // 小弹出菜单：贴着按钮显示，点任意地方关闭；菜单项本身也是 data-act 按钮
 function popMenu(anchor, items) {
   const old = $('.pop-menu'); if (old) { old.remove(); if (old._anchor === anchor) return; }
@@ -1005,7 +1198,7 @@ function pageProducts() {
     ${kpi('库存预警', lowStock().length, 'alert', 'red')}
   </div>
   <div class="card">${toolbar('products', {placeholder:'搜索编码 / 名称 / 品牌 / 规格', filters, buttons:btns})}<div id="list-products"></div></div>`;
-  mountList('products', {rows:() => db.products, search:p => p.sku + (p.barcode || '') + p.name + (p.brand || '') + (p.spec || '') + p.category, filters, columns:[
+  mountList('products', {rows:() => db.products, search:p => p.sku + (p.barcode || '') + p.name + (p.brand || '') + (p.spec || '') + p.category + (p.regNo || '') + (p.regHolder || '') + (p.manufacturer || ''), filters, columns:[
     {t:'商品编码', r:p => `<span class="sub-t">${esc(p.sku)}</span>${p.barcode ? `<div class="sub-t">${ic('barcode')} ${esc(p.barcode)}</div>` : ''}`, s:p => p.sku},
     {t:'商品名称', r:p => `<div class="pcell">${pimg(p)}<div><b>${esc(p.name)}</b>${p.batch ? ' <span class="badge blue plain">批次</span>' : ''}${can('bom') && (p.bom || []).length ? ` <a class="badge purple plain" data-act="bomOpen" data-id="${p.id}" title="BOM 物料清单">BOM ${p.bom.length}</a>` : ''}${p.spec ? `<div class="sub-t">${esc(p.spec)}</div>` : ''}</div></div>`, s:p => p.name},
     {t:'品牌', r:p => p.brand ? badge(p.brand, 'blue plain') : '<span class="sub-t">-</span>', s:p => p.brand || ''},
@@ -1017,8 +1210,8 @@ function pageProducts() {
       {t:'毛利率', cls:'num', r:p => p.price ? ((p.price - p.cost) / p.price * 100).toFixed(1) + '%' : '-', s:p => p.price ? (p.price - p.cost) / p.price : 0}] : []),
     {t:'库存', cls:'num', r:p => `<b>${num(p.stock)}</b>${stockText(p, p.stock) ? `<div class="sub-t">${esc(stockText(p, p.stock))}</div>` : ''}`, s:p => p.stock},
     {t:'状态', r:p => badge(...stockStatus(p))},
-    {t:'操作', r:p => `<div class="ops">${can('prod.edit') ? tbtn('编辑', 'edit', 'products|' + p.id) : ''}${can('inv.in') ? tbtn('入库', 'stock', 'in|' + p.id) : ''}${prodMoreItems(p).length ? tbtn('更多 ▾', 'prodMore', p.id) : ''}</div>`}
-  ], exp:{name:'商品列表', cols:[['商品编码', p => p.sku], ['商品名称', p => p.name], ['品牌', p => p.brand], ['规格型号', p => p.spec], ['分类', p => p.category], ['单位', p => p.unit], ...(pr ? [['成本价', p => p.cost], ['销售价', p => p.price]] : []), ['库存', p => p.stock], ['安全库存', p => p.safety]]}});
+    {t:'操作', r:p => `<div class="ops">${can('prod.edit') ? `<button class="icon-btn sm" data-act="imgView" data-id="${p.id}" title="商品图片">${ic('image')}</button>` : ''}${can('prod.edit') ? tbtn('编辑', 'edit', 'products|' + p.id) : ''}${can('inv.in') ? tbtn('入库', 'stock', 'in|' + p.id) : ''}${prodMoreItems(p).length ? tbtn('更多 ▾', 'prodMore', p.id) : ''}</div>`}
+  ], bulk:{label:'商品', remove:id => '/api/products/' + id}, exp:{name:'商品列表', cols:[['商品编码', p => p.sku], ['商品名称', p => p.name], ['品牌', p => p.brand], ['规格型号', p => p.spec], ['分类', p => p.category], ['单位', p => p.unit], ['条码', p => p.barcode || ''], ['辅助单位', p => unitsToText(p.units)], ['默认采购单位', p => p.buyUnit || p.unit], ['默认销售单位', p => p.saleUnit || p.unit], ...(db.products.some(p => p.regNo || p.regHolder || p.manufacturer || p.regExp) ? [['注册证号', p => p.regNo || ''], ['注册人', p => p.regHolder || ''], ['生产厂家', p => p.manufacturer || ''], ['生产许可证号', p => p.prodLicense || ''], ['注册证有效期', p => p.regExp || '']] : []), ...(pr ? [['成本价', p => p.cost], ['销售价', p => p.price]] : []), ['库存', p => p.stock], ['安全库存', p => p.safety]]}});
 }
 
 /* ---------- BOM（物料清单）：商品管理里每个商品可设；表头可选、可加自定义列；可导入 Excel；成本按物料逐项累加 ---------- */
@@ -1265,7 +1458,22 @@ const lineUnit = (i, p) => i.unit || (p && p.unit) || '';
 const linePrice = i => i.rate ? (i.uprice ?? (i.price || 0) * i.rate) : (i.price || 0);
 const unitsOf = p => [{name:p.unit, rate:1}, ...(p.units || [])];
 const rateOf = (p, name) => (p && unitsOf(p).find(u => u.name === name) || {rate:1}).rate;
-const unitByCode = (p, v) => ((p.units || []).find(u => u.barcode && u.barcode === String(v || '').trim()) || {}).name || '';
+const unitByCode = (p, v) => {
+  const code = String(v || '').trim();
+  if (!p || !code) return '';
+  if (p.barcode && p.barcode === code) return p.unit;
+  return ((p.units || []).find(u => u.barcode && u.barcode === code) || {}).name || '';
+};
+const unitValid = (p, name) => !!name && unitsOf(p).some(u => u.name === name);
+const defaultUnitFor = (p, kind) => {
+  if (!p) return '';
+  const wanted = kind === 'sales' || kind === 'salesReturn' ? p.saleUnit : kind === 'purchase' || kind === 'purchaseReturn' ? p.buyUnit : '';
+  return unitValid(p, wanted) ? wanted : p.unit;
+};
+const unitSalePrice = (p, name) => {
+  const u = (p && p.units || []).find(x => x.name === name);
+  return u && u.price != null ? +u.price : null;
+};
 // 300 个、1 箱 = 12 个 → 「25箱」；不足一个大单位时不显示
 function stockText(p, q) {
   const u = (p.units || []).reduce((a, b) => (!a || b.rate > a.rate ? b : a), null);
@@ -1292,12 +1500,12 @@ function parseQty(p, t) {
   }
   return total;
 }
-const unitsToText = us => (us || []).map(u => u.name + '=' + u.rate + (u.barcode ? '/' + u.barcode : '')).join('；');
+const unitsToText = us => (us || []).map(u => u.name + '=' + u.rate + (u.barcode ? '/' + u.barcode : '') + (u.price != null ? '@' + u.price : '')).join('；');
 function textToUnits(t) {
   return String(t || '').split(/[;；,，\n]+/).map(x => x.trim()).filter(Boolean).map(x => {
-    const m = /^1?\s*([^=＝\s\/／\d][^=＝\s\/／]*)\s*[=＝]\s*(\d+)\s*[^\d\/／]*?(?:[\/／]\s*(\S+))?$/.exec(x);
+    const m = /^1?\s*([^=＝\s\/／\d@＠][^=＝\s\/／@＠]*)\s*[=＝]\s*(\d+)\s*[^\d\/／@＠]*?(?:[\/／]\s*([^@＠]+?))?(?:[@＠]\s*([\d.]+))?$/.exec(x);
     if (!m) throw new Error('辅助单位格式不对：「' + x + '」，应写成 箱=12');
-    return {name:m[1], rate:+m[2], barcode:m[3] || ''};
+    return {name:m[1], rate:+m[2], barcode:(m[3] || '').trim(), ...(m[4] != null ? {price:+m[4]} : {})};
   });
 }
 const docByNo = no => db.stockDocs.find(o => o.no === no);
@@ -1377,13 +1585,14 @@ function pageInventory() {
       {t:'类型', r:o => badge(o.type, o.dir === 'in' ? 'green' : 'orange') + (multiWh() ? `<div class="sub-t">${esc(whName(o.wh))}</div>` : '')},
       {t:'日期', r:o => `${o.date} <span class="sub-t">${o.time || ''}</span>`, s:o => o.date + o.time},
       {t:'往来单位', r:o => esc(o.party || '-') + (o.project ? `<div class="sub-t">项目：${esc(o.project)}</div>` : '')},
+      ...(db.stockDocs.some(x => x.srcOrderNo) ? [{t:'来源订单', r:o => o.srcOrderNo ? `<a class="link" data-act="orderView" data-id="${esc(o.srcOrderKind || (o.dir === 'out' ? 'sales' : 'purchase'))}|${esc(o.srcOrderId)}">${esc(o.srcOrderNo)}</a>` : '<span class="sub-t">-</span>'}] : []),
       {t:'商品', r:o => esc(prodOf(o.items[0]?.productId).name) + (o.items.length > 1 ? `<span class="sub-t"> 等${o.items.length}项</span>` : '')},
       {t:'数量', cls:'num', r:o => num(docQty(o)), s:docQty},
       ...(mo ? [{t:'金额', cls:'num', r:o => money(docShown(o)) + (o.items.some(i => i.sale != null) ? '<div class="sub-t" title="填了出库单价，按出库单价计">按出库价</div>' : ''), s:docShown}] : []),
       {t:'制单人', r:o => esc(o.creator)},
       {t:'状态', r:o => docBadge(o)},
       {t:'操作', r:o => `<div class="ops">${canDocApprove(o) ? tbtn('审核', 'docView', o.id) : tbtn('查看', 'docView', o.id)}${can('inv.print') ? tbtn('打印', 'docPrint', o.id) : ''}${canDocRedo(o) ? tbtn('重开', 'docRedo', o.id) : ''}${canDocVoid(o) ? tbtn('作废', 'docVoid', o.id, 'danger-text') : ''}</div>`}
-    ], exp:{name:'出入库单', cols:[['单号', o => o.no], ['类型', o => o.type], ['日期', o => o.date], ['单位', o => o.party], ['项目', o => o.project || ''], ['经手人', o => o.handler], ['商品数', o => o.items.length], ['数量', docQty], ...(mo ? [['金额', o => docShown(o).toFixed(2)]] : []), ['制单人', o => o.creator], ['状态', o => o.status], ['备注', o => o.remark]]}, after:projSum});
+    ], bulk:{label:'出入库单', actions:[{label:'批量作废', run:async ids => { for (const id of ids) await api('POST', '/api/stockdocs/' + id + '/void', {}); toast(`已作废 ${ids.length} 张`, 'success'); }}]}, exp:{name:'出入库单', cols:[['单号', o => o.no], ['类型', o => o.type], ['日期', o => o.date], ['单位', o => o.party], ['项目', o => o.project || ''], ['经手人', o => o.handler], ['商品数', o => o.items.length], ['数量', docQty], ...(mo ? [['金额', o => docShown(o).toFixed(2)]] : []), ['制单人', o => o.creator], ['状态', o => o.status], ['备注', o => o.remark]]}, after:projSum});
     // 筛选了某个项目时，显示这个项目的入库 / 出库合计（只算已生效的单据）
     function projSum() {
       const v = getState('docs').f.proj, el = $('#docsSum'); if (!el) return;
@@ -1474,7 +1683,7 @@ async function loadPimg(el) {
 new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) (n.matches('img[data-pimg]') ? [n] : n.querySelectorAll('img[data-pimg]')).forEach(el => { if (!el.dataset.loading) loadPimg(el); }); })
   .observe(document.body, {childList:true, subtree:true});
 // 上传前在浏览器里压缩：长边 800 像素以内、转成 JPG，几十 KB；手机拍的大照片也不会拖慢
-function shrinkImage(file, max = 800) {
+function shrinkImage(file, max = 800, maxLen = 900000) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file), im = new Image();
     im.onload = () => {
@@ -1483,7 +1692,7 @@ function shrinkImage(file, max = 800) {
       c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k));
       const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
       let q = 0.85, d = c.toDataURL('image/jpeg', q);
-      while (d.length > 900000 && q > 0.4) { q -= 0.15; d = c.toDataURL('image/jpeg', q); }
+      while (d.length > maxLen && q > 0.3) { q -= 0.1; d = c.toDataURL('image/jpeg', q); }
       resolve(d);
     };
     im.onerror = () => { URL.revokeObjectURL(url); reject(new Error('无法读取这张图片，请换一张 JPG 或 PNG')); };
@@ -1634,6 +1843,7 @@ function docModal(dir, productId, type0, src) {
   openModal(`${modalHead((src ? '重开' : '新建') + docTitle(dir))}
   <div class="m-body"><div class="form-grid">
     <label class="field"><span>${dir === 'in' ? '入库' : '出库'}类型 <i>*</i></span><select id="dType">${types.map(t => `<option ${t === type0 ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+    <label class="field" id="dSrcField" style="display:none"><span>来源订单（只显示还有未执行数量的单）</span><select id="dSrc"><option value="">不关联订单</option></select></label>
     <label class="field"><span>单据日期${can('inv.backdate') ? '' : '（仅限当天）'}</span><input type="date" id="dDate" value="${today()}" max="${today()}" ${can('inv.backdate') ? '' : 'disabled'}></label>
     <label class="field"><span>${docPartyLabel(dir)}</span><input id="dParty" list="dPartyList" placeholder="可直接输入" value="${esc(src ? src.party : '')}"><datalist id="dPartyList">${parties.map(x => `<option value="${esc(x)}">`).join('')}</datalist></label>
     <label class="field"><span>经手人</span><input id="dHandler" value="${esc(src ? src.handler : ME.name)}"></label>
@@ -1651,6 +1861,33 @@ function docModal(dir, productId, type0, src) {
   ${dir === 'out' && shipOn() && can('ship.edit') ? `<label class="chk" style="margin-top:8px"><input type="checkbox" id="dShipNext" ${type0 === '销售出库' || !type0 && types[0] === '销售出库' ? 'checked' : ''}>保存后登记快递单号</label>` : ''}</div>
   <div class="m-foot">${docApproveOn(dir) ? `<span class="sub-t" style="margin-right:auto">已开启审核：保存后为「待审核」，审核通过才改库存</span>` : ''}<button class="btn" data-act="closeModal">取消</button><button class="btn" id="dSave">${docApproveOn(dir) ? '提交审核' : '保存'}</button>${can('inv.print') ? `<button class="btn primary" id="dSavePrint">${ic('printer')}${docApproveOn(dir) ? '提交并打印' : '保存并打印'}</button>` : ''}</div>`, 'lg');
   const tb = $('#dItems');
+  const srcKind = dir === 'out' ? 'sales' : 'purchase', srcType = dir === 'out' ? '销售出库' : '采购入库';
+  const srcOrders = () => srcKind === 'sales'
+    ? db.sales.filter(o => o.status === '待发货' && o.items.some(i => lineLeftQty('sales', o, i) > 0.0001))
+    : db.purchases.filter(o => o.status === '已审核' && o.items.some(i => lineLeftQty('purchase', o, i) > 0.0001));
+  const drawSource = () => {
+    const field = $('#dSrcField'), sel = $('#dSrc'); if (!field || !sel) return;
+    const use = $('#dType').value === srcType;
+    field.style.display = use && srcOrders().length ? '' : 'none';
+    if (!use || !srcOrders().length) { draft.srcOrderId = ''; draft.srcOrderKind = ''; return; }
+    sel.innerHTML = '<option value="">不关联订单</option>' + srcOrders().map(o => `<option value="${o.id}" ${o.id === draft.srcOrderId ? 'selected' : ''}>${esc(o.no)} · ${esc(partyName(srcKind, o))} · 未执行 ${sum(o.items, i => lineLeftQty(srcKind, o, i))}</option>`).join('');
+  };
+  const fillSource = id => {
+    const o = id && byId(db[srcKind === 'sales' ? 'sales' : 'purchases'], id); draft.srcOrderId = o ? o.id : ''; draft.srcOrderKind = o ? srcKind : '';
+    if (!o) return;
+    $('#dParty').value = partyName(srcKind, o);
+    draft.items = o.items.map(i => {
+      const p = byId(db.products, i.productId), left = lineLeftQty(srcKind, o, i); if (!p || left <= 0) return null;
+      let unit = i.unit || p.unit, rate = rateOf(p, unit), qty = left / rate;
+      if (!p.dec && !Number.isInteger(qty)) { unit = p.unit; rate = 1; qty = left; }
+      return { ...blank(), productId:p.id, unit, qty, price:dir === 'in' ? +((i.uprice ?? i.price * (i.rate || 1))).toFixed(4) : '', sale:dir === 'out' ? +((i.uprice ?? i.price * (i.rate || 1))).toFixed(4) : '', note:'来源订单 ' + o.no };
+    }).filter(Boolean);
+    if (!draft.items.length) draft.items.push(blank());
+    renderItems();
+  };
+  if ($('#dType')) $('#dType').onchange = drawSource;
+  if ($('#dSrc')) $('#dSrc').onchange = e => fillSource(e.target.value);
+  drawSource();
   // 运费估算：地址或明细变了 0.5 秒后向服务端要报价（服务端识别省份、按商品重量算）
   let estTimer = 0, estSeq = 0;
   const estShip = () => {
@@ -1729,7 +1966,8 @@ function docModal(dir, productId, type0, src) {
   const pick = (i, v, quiet) => {
     const p = findProduct(v);
     if (!p) { if (v) toast('未找到商品：' + v, 'error'); draft.items[i].productId = ''; renderItems(); return false; }
-    const unit = unitByCode(p, v) || p.unit;
+    const pref = dir === 'in' && /采购/.test(String(type0 || '')) ? p.buyUnit : dir === 'out' && /销售/.test(String(type0 || '')) ? p.saleUnit : '';
+    const unit = unitByCode(p, v) || (unitValid(p, pref) ? pref : '') || p.unit;
     const dup = draft.items.findIndex((x, k) => k !== i && x.productId === p.id && (x.unit || p.unit) === unit);
     if (dup >= 0) { draft.items[dup].qty = (+draft.items[dup].qty || 0) + (+draft.items[i].qty || 1); draft.items[i] = blank(); renderItems(true); if (!quiet) toast(p.name + ' 已在明细中，数量 +1', 'info'); return true; }
     Object.assign(draft.items[i], {productId:p.id, unit, price:p.cost != null ? +(p.cost * rateOf(p, unit)).toFixed(4) : '', sale:'', preferBatch:''});
@@ -1760,7 +1998,7 @@ function docModal(dir, productId, type0, src) {
     }
   });
   if ($('#dWh')) $('#dWh').onchange = e => { draft.wh = e.target.value; renderItems(); };
-  $('#dType').onchange = () => { if (dir === 'out') renderItems(); bomBox(); if ($('#dShipNext')) $('#dShipNext').checked = $('#dType').value === '销售出库'; };
+  $('#dType').onchange = () => { if (dir === 'out') renderItems(); bomBox(); drawSource(); if ($('#dShipNext')) $('#dShipNext').checked = $('#dType').value === '销售出库'; };
   tb.addEventListener('click', e => {
     const a = e.target.closest('[data-snauto]');
     if (a) {
@@ -1789,7 +2027,7 @@ function docModal(dir, productId, type0, src) {
     const badDate = items.find(i => i.prodDate && i.expDate && i.expDate < i.prodDate);
     if (badDate) return toast(`「${byId(db.products, badDate.productId).name}」有效期早于生产日期`, 'error');
     const shipNext = $('#dShipNext') && $('#dShipNext').checked, carrierId = draft.carrierId;
-    const body = {dir, type:$('#dType').value, ...(dir === 'in' && $('#dType').value === '生产入库' && $('#dUseBom') && $('#dUseBom').checked ? {bom:true} : {}), wh:draft.wh, date:$('#dDate').value, party:$('#dParty').value.trim(), handler:$('#dHandler').value.trim(), project:$('#dProject').value.trim(), remark:$('#dRemark').value.trim(),
+    const body = {dir, type:$('#dType').value, ...(dir === 'in' && $('#dType').value === '生产入库' && $('#dUseBom') && $('#dUseBom').checked ? {bom:true} : {}), ...(draft.srcOrderId ? {srcOrderId:draft.srcOrderId, srcOrderKind:draft.srcOrderKind} : {}), wh:draft.wh, date:$('#dDate').value, party:$('#dParty').value.trim(), handler:$('#dHandler').value.trim(), project:$('#dProject').value.trim(), remark:$('#dRemark').value.trim(),
       address:$('#dAddr') ? $('#dAddr').value.trim() : '', items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:mo ? i.price : undefined, ...(mo && dir === 'out' && i.sale !== '' ? {sale:i.sale} : {}), note:i.note, batchNo:i.batchNo, prodDate:i.prodDate, expDate:i.expDate, ...(dir === 'out' && i.preferBatch ? {preferBatch:{id:i.preferBatch}} : {}), ...(byId(db.products, i.productId).serial ? {serials:snList(i.serials)} : {})}))};
     $('#dSave').disabled = true; if ($('#dSavePrint')) $('#dSavePrint').disabled = true;
     const r = await mutate('POST', '/api/stockdocs', body, r => docTitle(dir) + (r.status === '待审核' ? '已提交审核：' : '已保存：') + r.no);
@@ -1823,7 +2061,7 @@ function rmbUpper(v) {
 const PAPERS = {a4:['A4 纵向', 'A4 portrait', 12], a4l:['A4 横向', 'A4 landscape', 0], half:['二等分 241×140（针式）', '241mm 140mm', 6], a5:['A5 横向', 'A5 landscape', 7]};
 const PRINT_ONLY = {a4l:['A4 横向', 'A4 landscape', 0]};
 /* ---------- 单据打印：入库 / 出库 / 调拨 / 销售 / 采购单共用一套排版，样式在 系统设置 → 打印模板 里调整 ---------- */
-const SLIP_COLS = {idx:'序号', sku:'商品编码', barcode:'条码', name:'商品名称', spec:'规格型号', unit:'单位', qty:'数量', price:'单价', amount:'金额', batch:'批次', note:'备注'};
+const SLIP_COLS = {idx:'序号', sku:'商品编码', barcode:'条码', name:'商品名称', spec:'规格型号', unit:'单位', qty:'数量', price:'单价', amount:'金额', batch:'批次', regNo:'注册证号', regHolder:'注册人', manufacturer:'生产厂家', expiry:'失效日期', note:'备注'};
 const PRINT_FONTS = {song:"'SimSun','Songti SC','Microsoft YaHei',serif", hei:"'Microsoft YaHei','PingFang SC',sans-serif", kai:"'KaiTi','STKaiti',serif"};
 const SLIP_META = {no:'单号', type:'类型', date:'日期', party:'往来单位', contact:'联系人', address:'地址', wh:'仓库', handler:'经手人', express:'快递', project:'项目'};
 const SLIP_KINDS = {
@@ -1848,7 +2086,7 @@ function slipTpl(kind) {
 // 各类单据统一成 { meta, items, creator, handler, remark, voided }
 function slipData(kind, o) {
   const K = SLIP_KINDS[kind];
-  const row = (i, unitPrice) => { const p = prodOf(i.productId); return {p, qty:lineQty(i), unit:lineUnit(i, p), price:unitPrice, amount:i.qty * (kind === 'transfer' ? i.cost || 0 : +i.price || 0) - (kind === 'transfer' ? 0 : (i.lineDiscount || 0)), batch:i.batches ? batchText(i.batches) : '', note:[i.note, snText(i.serials)].filter(Boolean).join('；')}; };
+  const row = (i, unitPrice) => { const p = prodOf(i.productId); return {p, qty:lineQty(i), unit:lineUnit(i, p), price:unitPrice, amount:i.qty * (kind === 'transfer' ? i.cost || 0 : +i.price || 0) - (kind === 'transfer' ? 0 : (i.lineDiscount || 0)), batch:i.batches ? batchText(i.batches) : '', regNo:p.regNo || '', regHolder:p.regHolder || '', manufacturer:p.manufacturer || '', expiry:[...new Set((i.batches || []).map(b => b.expDate).filter(Boolean))].join('、'), note:[i.note, snText(i.serials)].filter(Boolean).join('；')}; };
   const voided = o.status === '已作废' ? ['作废：', o.voidBy, o.voidAt && fmtTime(o.voidAt), o.voidReason].filter(Boolean).join(' ') : '';
   const stamp = {'已作废':'作废', '待审核':'待审核', '已驳回':'驳回'}[o.status] || '';
   if (kind === 'transfer') return {meta:{no:o.no, date:o.date, wh:['仓库', whName(o.from) + ' → ' + whName(o.to)], handler:o.handler},
@@ -1868,11 +2106,16 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
   const blankCol = k => k === 'spec' ? d.items.every(i => !i.p.spec)
     : k === 'barcode' ? d.items.every(i => !i.p.barcode)
     : k === 'batch' ? !hasBatch
+    : k === 'regNo' ? d.items.every(i => !i.regNo)
+    : k === 'regHolder' ? d.items.every(i => !i.regHolder)
+    : k === 'manufacturer' ? d.items.every(i => !i.manufacturer)
+    : k === 'expiry' ? d.items.every(i => !i.expiry)
     : k === 'note' ? d.items.every(i => !i.note && !(batchInNote && i.batch))
     : false;
   const cols = tpl.cols.filter(c => c.on && (showMoney || !['price', 'amount'].includes(c.k)) && !blankCol(c.k));
   const val = (k, it, n) => ({idx:n + 1, sku:esc(it.p.sku), barcode:esc(it.p.barcode || ''), name:esc(it.p.name), spec:esc(it.p.spec || ''), unit:esc(it.unit), qty:it.qty,
-    price:(+it.price || 0).toFixed(2), amount:it.amount.toFixed(2), batch:esc(it.batch), note:esc(batchInNote ? [it.batch && '批次 ' + it.batch, it.note].filter(Boolean).join('；') : it.note)})[k];
+    price:(+it.price || 0).toFixed(2), amount:it.amount.toFixed(2), batch:esc(it.batch), regNo:esc(it.regNo), regHolder:esc(it.regHolder), manufacturer:esc(it.manufacturer), expiry:esc(it.expiry),
+    note:esc(batchInNote ? [it.batch && '批次 ' + it.batch, it.note].filter(Boolean).join('；') : it.note)})[k];
   const colStyle = c => [c.w ? `width:${c.w}mm` : '', `text-align:${c.al || (c.k === 'idx' || c.k === 'unit' ? 'center' : ['qty', 'price', 'amount'].includes(c.k) ? 'right' : 'left')}`].join(';');
   const rows = d.items.map((it, n) => `<tr>${cols.map(c => `<td style="${colStyle(c)}">${val(c.k, it, n)}</td>`).join('')}</tr>`);
   for (let k = rows.length; k < minRows; k++) rows.push(`<tr>${'<td>&nbsp;</td>'.repeat(cols.length)}</tr>`);
@@ -1981,6 +2224,7 @@ function docView(id) {
     : o.approver ? ` · ${esc(o.approver)} 于 ${fmtTime(o.approvedAt)} 审核` : '';
   openModal(`${modalHead(docTitle(o.dir) + ' · ' + o.no + ' ' + docBadge(o))}
   <div class="m-body"><div class="slip-preview" id="slipPrev">${slipHtml(o, {showMoney:mo && prefs.slipMoney !== false})}</div>
+  ${o.srcOrderNo ? `<p class="sub-t" style="margin-top:10px">来源订单：<a class="link" data-act="orderView" data-id="${esc(o.srcOrderKind || (o.dir === 'out' ? 'sales' : 'purchase'))}|${esc(o.srcOrderId)}">${esc(o.srcOrderNo)}</a></p>` : ''}
   <p class="sub-t" style="margin-top:10px">开单时间 ${fmtTime(o.createdAt)} · 已打印 ${o.printCount || 0} 次${o.approver && o.status === '正常' ? appr : ''}</p>${o.status === '正常' ? '' : appr}
   ${o.dir === 'out' ? shipBlock('out', o, o.status !== '已作废') : ''}</div>
   <div class="m-foot" style="flex-wrap:wrap">
@@ -2039,7 +2283,7 @@ function pageCheckDocs() {
     {t:'审核人', r:o => esc(o.poster || '-')},
     {t:'状态', r:o => badge(o.status, CHECK_COLOR[o.status])},
     {t:'操作', r:o => `<div class="ops">${o.status === '盘点中' && can('inv.check') ? tbtn('录入', 'checkOpen', o.id, 'primary') : tbtn('查看', 'checkOpen', o.id)}${can('inv.print') ? tbtn('打印', 'checkPrint', o.id) : ''}${o.status === '盘点中' && can('inv.check') ? tbtn('作废', 'checkVoid', o.id, 'danger-text') : ''}</div>`}
-  ]});
+  ], bulk:can('inv.check') ? {label:'盘点单', actions:[{label:'批量作废', run:async ids => { for (const id of ids) await api('POST', '/api/checkdocs/' + id + '/void', {}); toast(`已作废 ${ids.length} 张`, 'success'); }}]} : undefined});
 }
 function checkNew() {
   formModal({title:'新建盘点单', okText:'开始盘点', data:{wh:ui.invWh && byId(db.warehouses, ui.invWh) ? ui.invWh : META.defaultWh}, fields:[
@@ -2363,7 +2607,7 @@ function statementData(name, from, to, priceBy) {
     // 退货冲减应收 / 应付，退款（现金退回）再加回来；冲抵原单不走现金，两边自然抵平
     const R = ORD[kind + 'Return'], rets = db[R.db].filter(o => o[R.partyKey] === party.id && o.status !== '已作废'), rnos = new Set(rets.map(o => o.no));
     const refunds = db.finance.filter(f => rnos.has(f.ref) && f.category === (kind === 'sales' ? '销售退款' : '采购退款'));
-    const open = sum(orders.filter(o => o.date < from), orderTotal) - sum(pays.filter(f => f.date < from), f => f.amount) - sum(rets.filter(o => o.date < from), orderTotal) + sum(refunds.filter(f => f.date < from), f => f.amount);
+    const open = (+party.openingBalance || 0) + sum(orders.filter(o => o.date < from), orderTotal) - sum(pays.filter(f => f.date < from), f => f.amount) - sum(rets.filter(o => o.date < from), orderTotal) + sum(refunds.filter(f => f.date < from), f => f.amount);
     const inP = x => x.date >= from && x.date <= to;
     const ev = [...orders.filter(inP).map(o => ({date:o.date, no:o.no, text:C.doc, add:orderTotal(o), sub:0})),
       ...pays.filter(inP).map(f => ({date:f.date, no:f.ref, text:C.payWord + '（' + acctName(f) + '）', add:0, sub:f.amount})),
@@ -2468,7 +2712,7 @@ function pageProjects() {
     {t:'入库', cls:'num', r:p => { const s = projectStats(p.name); return `${s.ins.length} 单<div class="sub-t">${num(s.inQty)} 件</div>`; }},
     {t:'出库', cls:'num', r:p => { const s = projectStats(p.name); return `${s.outs.length} 单<div class="sub-t">${num(s.outQty)} 件</div>`; }},
     {t:'操作', r:p => `<div class="ops">${canEdit ? tbtn('编辑', 'projectEdit', p.id) : ''}${canEdit ? tbtn('删除', 'projectDel', p.id, 'danger-text') : ''}</div>`}
-  ]});
+  ], bulk:canEdit ? {label:'项目', remove:id => '/api/projects/' + id} : undefined});
 }
 function projectEdit(id) {
   const p = id ? byId(db.projects || [], id) : null;
@@ -2585,7 +2829,7 @@ function pageTransfers() {
     {t:'制单人', r:o => esc(o.creator)},
     {t:'状态', r:o => badge(o.status, o.status === '正常' ? 'blue' : 'gray')},
     {t:'操作', r:o => `<div class="ops">${tbtn('查看', 'transferView', o.id)}${can('inv.print') ? tbtn('打印', 'transferPrint', o.id) : ''}${can('inv.void') && o.status === '正常' ? tbtn('作废', 'transferVoid', o.id, 'danger-text') : ''}</div>`}
-  ]});
+  ], bulk:can('inv.void') ? {label:'调拨单', actions:[{label:'批量作废', run:async ids => { for (const id of ids) await api('POST', '/api/transfers/' + id + '/void', {}); toast(`已作废 ${ids.length} 张`, 'success'); }}]} : undefined});
 }
 function transferModal() {
   if (!multiWh()) return confirmBox('调拨需要至少两个仓库。现在只有一个仓库，先新增一个？', () => (isAdmin() ? whEdit() : toast('请让管理员在「库存管理 → 仓库」里新增仓库', 'info')), {title:'还没有第二个仓库', danger:false, okText:'新增仓库'});
@@ -2785,7 +3029,7 @@ const LABELS = {l4030:['40×30 毫米（热敏标签）', 40, 30], l5030:['50×3
 function labelHtml(p, f, u) {
   const code = u ? u.barcode : p.barcode || p.sku, spec = [f.spec && p.spec, u && `1${u.name}=${u.rate}${p.unit}`].filter(Boolean).join(' · ');
   return `<div class="lb">${f.company ? `<div class="lb-co">${esc(db.settings.company)}</div>` : ''}<div class="lb-name">${esc(p.name)}</div>
-    ${spec ? `<div class="lb-spec">${esc(spec)}</div>` : ''}${f.price && p.price != null ? `<div class="lb-price">¥${(p.price * (u ? u.rate : 1)).toFixed(2)}<small>/${esc(u ? u.name : p.unit || '')}</small></div>` : ''}
+    ${spec ? `<div class="lb-spec">${esc(spec)}</div>` : ''}${f.price && p.price != null ? `<div class="lb-price">¥${(u && u.price != null ? +u.price : p.price * (u ? u.rate : 1)).toFixed(2)}<small>/${esc(u ? u.name : p.unit || '')}</small></div>` : ''}
     <div class="lb-bar">${barcodeSvg(code) || '<span>条码含不支持的字符</span>'}</div><div class="lb-code">${esc(code)}</div></div>`;
 }
 function labelOpen() {
@@ -2838,10 +3082,13 @@ function printLabels(body) {
 }
 
 /* ---------- Excel 导入商品与期初库存 ---------- */
-const IMPORT_COLS = [['sku', '商品编码', ['编码', 'sku', '货号', '商品编号', '物料编码']], ['name', '商品名称', ['名称', '品名', '物料名称']], ['spec', '规格型号', ['规格', '型号']], ['brand', '品牌', ['厂牌', '生产厂家']],
+const IMPORT_COLS = [['sku', '商品编码', ['编码', 'sku', '货号', '商品编号', '物料编码']], ['name', '商品名称', ['名称', '品名', '物料名称']], ['spec', '规格型号', ['规格', '型号']], ['brand', '品牌', ['厂牌']],
   ['category', '分类', ['商品分类', '类别']], ['unit', '单位', ['计量单位']], ['cost', '成本价', ['成本', '进价', '期初成本', '期初单价']], ['price', '销售价', ['售价', '零售价']],
   ['stock', '期初库存', ['期初数量', '库存', '数量', '库存数量']], ['safety', '安全库存', ['最低库存', '库存下限']], ['remark', '备注', []],
-  ['barcode', '条码', ['商品条码', '条形码']], ['units', '辅助单位', ['多单位', '单位换算']], ['weight', '重量kg', ['重量', '单重', '毛重', '重量公斤', '重量(kg)']]];
+  ['barcode', '条码', ['商品条码', '条形码']], ['units', '辅助单位', ['多单位', '单位换算']], ['weight', '重量kg', ['重量', '单重', '毛重', '重量公斤', '重量(kg)']],
+  ['regNo', '注册证号', ['注册证号', '注册证', '备案号', '备案凭证号']], ['regHolder', '注册人', ['注册人', '注册人名称', '备案人']],
+  ['manufacturer', '生产厂家', ['生产厂家', '生产企业', '生产企业名称']], ['prodLicense', '生产许可证号', ['生产许可证号', '生产许可证']],
+  ['regExp', '注册证有效期', ['注册证有效期', '注册证有效期至', '注册证到期日']], ['buyUnit', '默认采购单位', ['采购单位']], ['saleUnit', '默认销售单位', ['销售单位']]];
 function loadXLSX() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
   return new Promise((ok, bad) => {
@@ -2898,7 +3145,7 @@ function importOpen() {
       <li>下载模板，按列填写（只有「商品编码」必填；新商品还要填「商品名称」）</li>
       <li>编码不存在的行会<b>新建商品</b>，「期初库存」「成本价」作为期初结存入账</li>
       <li>编码已存在的行会<b>更新档案</b>（名称、规格、分类、单位、售价、安全库存、备注、条码、辅助单位），不改动库存数量</li>
-      <li>「辅助单位」写法和商品档案一样，如 <code>箱=24/箱条码；盒=6</code></li>
+      <li>「辅助单位」写法如 <code>中包装=10/中包装条码@32；外箱=100/外箱条码@300</code>，<code>@</code> 后是该单位销售价，留空按基本价自动换算</li>
       <li>支持 .xlsx / .xls / .csv；任何一行出错都不会导入，先预览确认</li></ol>
     <label class="chk" style="margin-top:8px"><input type="checkbox" id="imUpd" checked>编码已存在时更新商品档案（取消则跳过这些行）</label></div>
     <div class="m-foot"><button class="btn" style="margin-right:auto" id="imTpl">${ic('download')}下载模板</button><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="imPick">${ic('upload')}选择文件</button></div>`);
@@ -2943,6 +3190,56 @@ function importPreview(rows, update, fileName) {
 }
 
 /* ---------- 批量导入入库单 / 出库单：同一「单据编号」的多行合成一张单 ---------- */
+const PARTY_COLS = {
+  customers: [['name', '客户名称'], ['contact', '联系人'], ['phone', '电话'], ['email', '邮箱'], ['level', '等级'], ['openingBalance', '期初应收'], ['address', '地址'], ['remark', '备注'], ['bizLicense', '营业执照号'], ['licenseNo', '许可证号'], ['licenseExp', '许可证有效期']],
+  suppliers: [['name', '供应商名称'], ['contact', '联系人'], ['phone', '电话'], ['email', '邮箱'], ['category', '主营类目'], ['openingBalance', '期初应付'], ['address', '地址'], ['remark', '备注'], ['bizLicense', '营业执照号'], ['licenseNo', '许可证号'], ['licenseExp', '许可证有效期']]
+};
+function partyImport(type) {
+  const C = ENT[type], cols = PARTY_COLS[type].filter(([k]) => k !== 'licenseExp' || medOn());
+  let rows = [];
+  const demo = cols.map(([k]) => k === 'name' ? (type === 'customers' ? '示例客户' : '示例供应商') : k === 'contact' ? '张三' : k === 'phone' ? '13800000000' : k === 'licenseExp' ? '2027-06-30' : '');
+  openModal(`${modalHead('批量导入' + C.title)}<div class="m-body">
+    <div class="note blue">按「名称 + 电话」查重，已存在的默认跳过，不会覆盖现有资料。许可证有效期请填 2027-06-30 这种格式。</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="piTpl">${ic('download')}下载模板</button><label class="btn primary">${ic('upload')}选择 Excel / CSV<input type="file" id="piFile" accept=".xlsx,.xls,.csv" hidden></label></div>
+    <div id="piPrev" style="margin-top:12px"></div></div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="piGo" disabled>开始导入</button></div>`);
+  $('#piTpl').onclick = async () => {
+    const XLSX = await loadXLSX();
+    const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet([cols.map(c => c[1]), demo]);
+    XLSX.utils.book_append_sheet(wb, ws, '模板');
+    saveFile(C.title + '导入模板.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', XLSX.write(wb, { bookType: 'xlsx', type: 'array' }));
+  };
+  $('#piFile').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    const XLSX = await loadXLSX();
+    let raw = await f.arrayBuffer();
+    if (/\.csv$/i.test(f.name) || /csv/i.test(f.type || '')) {
+      const b = new Uint8Array(raw);
+      if (!(b[0] === 0xEF && b[1] === 0xBB && b[2] === 0xBF)) {
+        const withBom = new Uint8Array(b.length + 3);
+        withBom.set([0xEF, 0xBB, 0xBF]);
+        withBom.set(b, 3);
+        raw = withBom.buffer;
+      }
+    }
+    const wb = XLSX.read(raw, { type: 'array', cellDates: true });
+    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+    const norm = s => String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, '');
+    const hi = aoa.findIndex(r => Array.isArray(r) && r.some(c => cols.some(([, l]) => norm(c) === norm(l))));
+    if (hi < 0) { $('#piPrev').innerHTML = '<p class="neg">没找到表头，请用下载的模板格式</p>'; $('#piGo').disabled = true; return; }
+    const map = {};
+    aoa[hi].forEach((h, i) => { const col = cols.find(([, l]) => norm(l) === norm(h)); if (col && !(col[0] in map)) map[col[0]] = i; });
+    rows = aoa.slice(hi + 1).filter(r => Array.isArray(r) && r.some(c => String(c == null ? '' : c).trim()))
+      .map(r => { const o = {}; for (const [k] of cols) if (map[k] != null) { let v = r[map[k]]; if (v instanceof Date) v = v.getFullYear() + '-' + String(v.getMonth() + 1).padStart(2, '0') + '-' + String(v.getDate()).padStart(2, '0'); o[k] = String(v == null ? '' : v).trim(); } return o; });
+    $('#piPrev').innerHTML = `<p>识别到 <b>${rows.length}</b> 行，前 5 行预览：</p><div class="table-wrap"><table class="tbl compact"><thead><tr>${cols.map(c => `<th>${esc(c[1])}</th>`).join('')}</tr></thead><tbody>${rows.slice(0, 5).map(r => `<tr>${cols.map(([k]) => `<td>${esc(r[k] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      <label class="chk" style="margin-top:8px"><input type="checkbox" id="piUpd">同名时更新已有资料（默认跳过）</label>`;
+    $('#piGo').disabled = !rows.length;
+  };
+  $('#piGo').onclick = async () => {
+    const update = !!($('#piUpd') && $('#piUpd').checked);
+    await mutate('POST', '/api/import/parties', { type, rows, update }, x => `导入完成：新增 ${x.created}，更新 ${x.updated}，跳过 ${x.skipped}`);
+  };
+}
 const DOC_IMPORT_COLS = [
   ['doc', '单据编号', ['单号', '单据号']], ['date', '日期', ['单据日期']], ['dir', '方向', ['出入库', '类型']], ['type', '业务类型', ['单据类型']],
   ['wh', '仓库', ['仓库名称']], ['party', '往来单位', ['单位', '供应商', '客户']], ['handler', '经手人', ['业务员']], ['project', '项目', []], ['address', '收货地址', ['地址']],
@@ -3008,11 +3305,12 @@ function pageOrders(base) {
   if (ui[tk] === pk) return pagePays(base, tabBar);
   const kind = ui[tk], ret = kind === rk;
   const C = ORD[kind], list = db[C.db], m = monthKey(today());
-  const showGp = base === 'sales' && kind === 'sales' && seesPrice();
+  const showGp = false;  // 成本、毛利只在统计报表看，销售订单列表不展示
   const valid = list.filter(o => o.status !== '已作废'), monthO = valid.filter(o => monthKey(o.date) === m);
   const unpaid = sum(valid, o => unpaidOf(kind, o));
+  const partialStatus = kind === 'sales' ? '部分发货' : kind === 'purchase' ? '部分入库' : '';
   const filters = [
-    {key:'status', label:'全部状态', options:C.statuses, test:(o, v) => o.status === v},
+    {key:'status', label:'全部状态', options:[...C.statuses, ...(partialStatus ? [partialStatus] : [])], test:(o, v) => v === partialStatus ? orderDisplayStatus(kind, o) === v : o.status === v},
     {key:'party', label:'全部' + C.partyLabel, options:db[C.party].map(p => [p.id, p.name]), test:(o, v) => o[C.partyKey] === v},
     {key:'pay', label:C.payWord + '状态', options:['未结清', '已结清'], test:(o, v) => (unpaidOf(kind, o) > 0.001) === (v === '未结清')}
   ];
@@ -3037,9 +3335,9 @@ function pageOrders(base) {
       {t:'毛利率', cls:'num', r:o => o.status === '已作废' || !orderTotal(o) ? '-' : orderGpRate(o).toFixed(1) + '%', s:o => o.status === '已作废' ? 0 : orderGpRate(o)}
     ] : []),
     {t:C.payWord + '进度', r:o => { const t = orderTotal(o), pct = t ? (o[C.paidKey] || 0) / t * 100 : 0; return o.status === '已作废' ? '-' : `<div class="prog"><div class="bar"><i style="width:${pct}%"></i></div><small>${pct.toFixed(0)}%</small></div>`; }},
-    {t:'状态', r:o => badge(o.status)},
+    {t:'状态', r:o => badge(orderDisplayStatus(kind, o))},
     {t:'操作', r:o => `<div class="ops">${orderOps(kind, o)}</div>`}
-  ], exp:{name:C.title, cols:[['单号', o => o.no], [C.partyLabel, o => partyName(kind, o)], ['日期', o => o.date], ['金额', o => orderTotal(o).toFixed(2)], ...(showGp ? [['销售成本', o => orderCost(o).toFixed(2)], ['毛利', o => orderGp(o).toFixed(2)], ['毛利率%', o => orderGpRate(o).toFixed(1)]] : []), ['已' + C.payWord, o => o[C.paidKey] || 0], ['状态', o => o.status], ['备注', o => o.remark]]}});
+  ], bulk:{label:C.title, remove:id => `/api/orders/${kind}/${id}`}, exp:{name:C.title, cols:[['单号', o => o.no], [C.partyLabel, o => partyName(kind, o)], ['日期', o => o.date], ['金额', o => orderTotal(o).toFixed(2)], ...(showGp ? [['销售成本', o => orderCost(o).toFixed(2)], ['毛利', o => orderGp(o).toFixed(2)], ['毛利率%', o => orderGpRate(o).toFixed(1)]] : []), ['已' + C.payWord, o => o[C.paidKey] || 0], ['状态', o => orderDisplayStatus(kind, o)], ['备注', o => o.remark]]}});
 }
 /* ---------- 收款 / 付款记录：单据上登记的每一笔收付款（含退货单退款），按往来单位、账户、月份查询，可导出、打印收付款单 ---------- */
 const PAY_CATS = {sales:[['销售收款', '收款'], ['销售退款', '退款']], purchase:[['采购付款', '付款'], ['采购退款', '退款']]};
@@ -3116,7 +3414,7 @@ function payListPrint(base) {
 function orderOps(kind, o) {
   const C = ORD[kind], id = kind + '|' + o.id, b = [tbtn('查看', 'orderView', id)];
   if (C.src) {
-    if (o.status === C.statuses[0]) b.push(tbtn(kind === 'salesReturn' ? '入库' : '出库', 'post', id, 'primary'), tbtn('编辑', 'orderEdit', id));
+    if (o.status === C.statuses[0]) b.push(tbtn(kind === 'salesReturn' ? '审核入库' : '审核出库', 'post', id, 'primary'), tbtn('编辑', 'orderEdit', id));
     const src = o.srcId && byId(db[ORD[C.src].db], o.srcId);
     if (src && o.status !== '已作废' && unpaidOf(kind, o) > 0.001 && unpaidOf(C.src, src) > 0.001) b.push(tbtn('冲抵', 'offset', id));
   } else if (kind === 'sales') {
@@ -3129,7 +3427,7 @@ function orderOps(kind, o) {
   }
   if (o.status !== '已作废' && unpaidOf(kind, o) > 0.001) b.push(tbtn(C.payWord, 'pay', id));
   if (ORD[kind + 'Return'] && ORD[kind + 'Return'].srcOk.includes(o.status) && can(kind)) b.push(tbtn('退货', 'orderReturn', id));
-  const cancellable = C.src ? o.status === C.statuses[0] : kind === 'sales' ? o.status === '待发货' : ['待审核', '已审核'].includes(o.status);
+  const cancellable = !orderHasDocs(o) && (C.src ? o.status === C.statuses[0] : kind === 'sales' ? o.status === '待发货' : ['待审核', '已审核'].includes(o.status));
   if (cancellable && !(o[C.paidKey] > 0)) b.push(tbtn('作废', 'cancel', id, 'danger-text'));
   if (o.status === '已作废') b.push(tbtn('删除', 'orderDel', id, 'danger-text'));
   return b.join('');
@@ -3164,7 +3462,7 @@ function orderModal(kind, id, srcId0) {
   </div>
   <div class="line-head"><b>${C.src ? '退货明细' : '商品明细'}</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称搜索，支持扫码枪录入后回车</span><button class="btn sm" id="oPick">${ic('search')}选择商品</button><button class="btn sm" id="oAdd">${ic('plus')}添加一行</button></div>
   <datalist id="oProdList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
-  <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:240px">商品</th><th style="width:70px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th><th style="width:130px">${C.src ? '退货单价' : '单价'}</th><th style="width:100px">行优惠</th><th class="num" style="width:120px">小计</th><th style="width:44px"></th></tr></thead><tbody id="oItems"></tbody></table></div>
+  <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:240px">商品</th><th style="width:70px">单位</th><th class="num" style="width:80px">库存</th><th style="width:100px">数量</th><th style="width:130px">${C.src ? '退货单价' : '单价'}</th><th style="width:100px">行调整</th><th class="num" style="width:120px">小计（可改）</th><th style="width:44px"></th></tr></thead><tbody id="oItems"></tbody></table></div>
   <div class="sub-t" style="margin-top:6px">同一商品可以添加多行；赠品行把单价填 0 即可，采购入库成本会按各行金额加权。单价后的 <b style="color:var(--red)">*</b> 表示用的是这个${C.partyLabel}的专属价；灰色 * 表示设了专属价但单价被改过，点一下恢复。</div>
   <label class="field" style="margin-top:16px"><span>备注</span><textarea id="oRemark" rows="2">${esc(o ? o.remark : '')}</textarea></label>
   ${C.src ? '' : `<div class="o-disc"><span>明细合计 <b id="oSub">¥0.00</b></span><label>优惠 / 抹零 <input type="number" id="oDisc" min="0" step="0.01" value="${o && o.discount ? o.discount : ''}" placeholder="0"></label><button class="btn sm" id="oRound" title="先抹掉角分；没有角分就抹掉 10 元以下的零头">抹零</button></div>`}
@@ -3191,8 +3489,8 @@ function orderModal(kind, id, srcId0) {
       <td class="num" title="${p ? esc(stockText(p, p.stock)) : ''}">${p ? inUnit(p.stock, p, it.unit) : ''}${p && left ? `<div class="sub-t">可退 ${inUnit(left[p.id] || 0, p, it.unit)}</div>` : ''}</td>
       <td><input type="number" min="${p && p.dec ? '0.01' : '1'}" step="${p && p.dec ? '0.01' : '1'}" data-i="${i}" data-k="qty" value="${it.qty}"></td>
       <td><div class="pwrap"><input type="number" min="0" step="0.01" data-i="${i}" data-k="price" value="${it.price}"><span class="spm">${p ? spMark(p, it) : ''}</span></div></td>
-      <td><input type="number" min="0" step="0.01" data-i="${i}" data-k="lineDiscount" value="${it.lineDiscount}" placeholder="0.00" title="本行优惠金额"></td>
-      <td class="num sub">${money(sub(it))}</td>
+      <td><input type="number" step="0.01" data-i="${i}" data-k="lineDiscount" value="${it.lineDiscount}" placeholder="0.00" title="正数是优惠，负数表示加价"></td>
+      <td><input type="number" min="0" step="0.01" data-i="${i}" data-k="lineAmount" value="${(+sub(it)).toFixed(2)}" title="可直接修改本行小计，系统自动换算行优惠 / 加价"></td>
       <td><button class="icon-btn sm" data-del="${i}" title="删除">${ic('trash')}</button></td></tr>`; }).join('');
     updTotal();
     if (focusLast) { const ins = tb.querySelectorAll('[data-k=product]'); ins[ins.length - 1].focus(); }
@@ -3201,16 +3499,18 @@ function orderModal(kind, id, srcId0) {
   // 没关联原单时：这个${C.partyLabel}设了专属价就用专属价，否则用商品档案的价格
   const partyNow = () => $('#oParty') ? $('#oParty').value : party0;
   const priceOf = (p, unit, party = partyNow()) => { const s = srcOf(), l = s && s.items.find(x => x.productId === p.id), sp = specialPrice(C.party, party, p.id);
-    return +((l ? l.price : sp != null ? sp : p[C.priceKey] || 0) * rateOf(p, unit)).toFixed(4); };
+    const rate = rateOf(p, unit), own = C.priceKey === 'price' ? unitSalePrice(p, unit) : null;
+    return +(l ? l.price : sp != null ? sp * rate : own != null ? own : (p[C.priceKey] || 0) * rate).toFixed(4); };
   const spMark = (p, it) => { const sp = specialPrice(C.party, partyNow(), p.id); if (sp == null || it.price === '') return '';
-    const v = +(sp * rateOf(p, it.unit)).toFixed(4); return Math.abs(+it.price - v) < 1e-6 ? `<b title="${C.partyLabel}专属价（通用价 ${money((p[C.priceKey] || 0) * rateOf(p, it.unit))}）">*</b>` : `<i title="这个${C.partyLabel}的专属价是 ${money(v)}，点一下填入" data-sp="${v}">*</i>`; };
+    const rate = rateOf(p, it.unit), own = C.priceKey === 'price' ? unitSalePrice(p, it.unit) : null, generic = own != null ? own : (p[C.priceKey] || 0) * rate;
+    const v = +(sp * rate).toFixed(4); return Math.abs(+it.price - v) < 1e-6 ? `<b title="${C.partyLabel}专属价（通用价 ${money(generic)}）">*</b>` : `<i title="这个${C.partyLabel}的专属价是 ${money(v)}，点一下填入" data-sp="${v}">*</i>`; };
   let curParty = party0;
   // 换了${C.partyLabel}：还是按上一个${C.partyLabel}自动带出的单价，改成新${C.partyLabel}的价格；手改过的不动
   const reprice = np => { draft.items.forEach(it => { const p = it.productId && byId(db.products, it.productId); if (p && it.price !== '' && Math.abs(+it.price - priceOf(p, it.unit, curParty)) < 1e-6) it.price = priceOf(p, it.unit, np); }); curParty = np; };
   const pick = (i, v, quiet) => {
     const p = findProduct(v);
     if (!p) { if (v) toast('未找到商品：' + v, 'error'); draft.items[i].productId = ''; renderItems(); return false; }
-    const unit = unitByCode(p, v) || p.unit;
+    const unit = unitByCode(p, v) || defaultUnitFor(p, kind);
     Object.assign(draft.items[i], {productId:p.id, unit, price:priceOf(p, unit)});
     if (i === draft.items.length - 1) draft.items.push(blank());
     renderItems(true);
@@ -3224,7 +3524,22 @@ function orderModal(kind, id, srcId0) {
   tb.addEventListener('keydown', e => { const t = e.target; if (e.key === 'Enter' && t.dataset.k === 'product') { e.preventDefault(); pickOnce(t, pick); } });
   tb.addEventListener('input', e => {
     const t = e.target, i = +t.dataset.i, k = t.dataset.k;
-    if (k === 'qty' || k === 'price' || k === 'lineDiscount') { draft.items[i][k] = t.value === '' ? '' : +t.value; t.closest('tr').querySelector('.sub').textContent = money(sub(draft.items[i])); updTotal(); }
+    if (k === 'qty' || k === 'price' || k === 'lineDiscount') {
+      draft.items[i][k] = t.value === '' ? '' : +t.value;
+      const amt = sub(draft.items[i]);
+      const row = t.closest('tr'), amount = row.querySelector('[data-k="lineAmount"]');
+      if (amount) amount.value = amt.toFixed(2);
+      updTotal();
+    }
+    if (k === 'lineAmount') {
+      const it = draft.items[i], amt = t.value === '' ? null : +t.value, base = (+it.qty || 0) * (+it.price || 0);
+      if (amt != null && Number.isFinite(amt) && amt >= 0) {
+        it.lineDiscount = +(base - amt).toFixed(2);
+        const ld = t.closest('tr').querySelector('[data-k="lineDiscount"]');
+        if (ld) ld.value = it.lineDiscount;
+        updTotal();
+      }
+    }
     if (k === 'price') { const it = draft.items[i], p = byId(db.products, it.productId); t.closest('tr').querySelector('.spm').innerHTML = p ? spMark(p, it) : ''; }
   });
   tb.addEventListener('click', e => { const m = e.target.closest('[data-sp]'); if (m) { const tr = m.closest('tr'), inp = tr.querySelector('[data-k=price]'); draft.items[+inp.dataset.i].price = +m.dataset.sp; renderItems(); return; } const b = e.target.closest('[data-del]'); if (b) { draft.items.splice(+b.dataset.del, 1); if (!draft.items.length) draft.items.push(blank()); renderItems(); } });
@@ -3249,7 +3564,7 @@ function orderModal(kind, id, srcId0) {
     if (!items.length) return toast('请至少添加一个商品', 'error');
     if (items.some(i => !Number.isInteger(+i.qty) || +i.qty <= 0)) return toast('数量必须为正整数', 'error');
     if (items.some(i => +i.price < 0)) return toast('单价不能为负', 'error');
-    if (items.some(i => +i.lineDiscount < 0 || +i.lineDiscount > (+i.qty * +i.price) + 0.001)) return toast('行优惠不能为负，也不能超过本行金额', 'error');
+    if (items.some(i => +i.lineDiscount > (+i.qty * +i.price) + 0.001)) return toast('行小计不能小于 0', 'error');
     if (disc() < 0 || disc() > sum(items, sub) + 0.001) return toast('优惠金额要在 0 到明细合计之间', 'error');
     const body = {partyId:party, date, remark, handler:$('#oHandler').value.trim(), ...(kind === 'sales' ? {address:$('#oAddress') ? $('#oAddress').value.trim() : ''} : {}), ...(C.src ? {srcId:draft.srcId} : {discount:disc()}), items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, price:+i.price || 0, lineDiscount:+i.lineDiscount || 0}))};
     const b = $('#oSave'); b.disabled = true;
@@ -3265,7 +3580,7 @@ function orderView(kind, id) {
   const pays = db.finance.filter(f => f.ref === o.no);
   openModal(`${modalHead(C.title + '详情')}
   <div class="m-body"><div class="print-area doc">
-    <h2>${esc(db.settings.company)}</h2><div class="doc-sub">${C.doc} · ${o.no} &nbsp; ${badge(o.status)}</div>
+    <h2>${esc(db.settings.company)}</h2><div class="doc-sub">${C.doc} · ${o.no} &nbsp; ${badge(orderDisplayStatus(kind, o))}</div>
     <div class="doc-info">
       <div><span>${C.partyLabel}：</span>${esc(party.name || '-')}</div><div><span>单据日期：</span>${o.date}</div>
       <div><span>联系人：</span>${esc(party.contact || '-')} ${esc(party.phone || '')}</div><div><span>${kind.startsWith('sales') ? '业务员' : kind === 'purchase' ? '采购员' : '经手人'}：</span>${esc(o.handler || o.creator || '-')}${o.creator && o.handler && o.creator !== o.handler ? ` <span class="sub-t">（${esc(o.creator)} 开单）</span>` : ''}</div>
@@ -3273,11 +3588,13 @@ function orderView(kind, id) {
       ${o.wh && multiWh() ? `<div><span>${{sales:'发货', purchase:'入库', salesReturn:'退货入库', purchaseReturn:'退货出库'}[kind]}仓库：</span>${esc(whName(o.wh))}</div>` : ''}
       ${C.src ? `<div><span>原单：</span>${o.srcId && byId(db[ORD[C.src].db], o.srcId) ? `<a class="link" data-act="orderView" data-id="${C.src}|${o.srcId}">${esc(o.srcNo)}</a>` : esc(o.srcNo || '未关联')}</div>` : ''}
     </div>
-    <table class="tbl compact"><thead><tr><th>#</th><th>商品</th><th>单位</th><th class="num">数量</th><th class="num">单价</th><th class="num">金额</th></tr></thead><tbody>
-    ${o.items.map((i, n) => { const p = byId(db.products, i.productId) || {name:'已删除商品', unit:''}; return `<tr><td>${n + 1}</td><td>${esc(p.name)}</td><td>${esc(lineUnit(i, p))}</td><td class="num">${lineQty(i)}</td><td class="num">${money(linePrice(i))}</td><td class="num">${money(i.qty * i.price - (i.lineDiscount || 0))}${i.lineDiscount ? `<div class="sub-t">优惠 -${money(i.lineDiscount)}</div>` : ''}</td></tr>`; }).join('')}
+    <table class="tbl compact"><thead><tr><th>#</th><th>商品</th><th>单位</th><th class="num">数量</th>${kind === 'sales' || kind === 'purchase' ? `<th class="num">${kind === 'sales' ? '已发' : '已入'}</th>` : ''}<th class="num">单价</th><th class="num">金额</th></tr></thead><tbody>
+    ${o.items.map((i, n) => { const p = byId(db.products, i.productId) || {name:'已删除商品', unit:''}, done = lineDoneQty(kind, o, i); return `<tr><td>${n + 1}</td><td>${esc(p.name)}</td><td>${esc(lineUnit(i, p))}</td><td class="num">${lineQty(i)}</td>${kind === 'sales' || kind === 'purchase' ? `<td class="num">${done ? `<b>${done}</b>${done < i.qty ? `<div class="sub-t">剩 ${i.qty - done}</div>` : ''}` : '<span class="sub-t">未执行</span>'}</td>` : ''}<td class="num">${money(linePrice(i))}</td><td class="num">${money(i.qty * i.price - (i.lineDiscount || 0))}${i.lineDiscount ? `<div class="sub-t">${i.lineDiscount > 0 ? '优惠 -' : '加价 +'}${money(Math.abs(i.lineDiscount))}</div>` : ''}</td></tr>`; }).join('')}
     </tbody></table>
     <div class="doc-sum">${o.discount ? `<div>明细合计：<b>${money(itemsTotal(o))}</b></div><div>优惠：<b>-${money(o.discount)}</b></div>` : ''}<div>合计：<b>${money(total)}</b></div>${kind === 'sales' && seesPrice() ? `<div>销售成本：<b>${money(orderCost(o))}</b></div><div>毛利：<b class="${orderGp(o) >= 0 ? 'pos' : 'neg'}">${money(orderGp(o))}</b>（${orderGpRate(o).toFixed(1)}%）</div>` : ''}<div>已${C.payWord}：<b class="pos">${money(paid)}</b></div><div>未${C.payWord}：<b class="neg">${money(total - paid)}</b></div></div>
     ${o.remark ? `<p style="margin-top:12px;color:var(--muted)">备注：${esc(o.remark)}</p>` : ''}
+    ${o.approveNote ? `<p style="margin-top:8px;color:var(--muted)">审核备注：${esc(o.approveNote)}${o.approver ? ' · ' + esc(o.approver) : ''}${o.postDate ? ' · ' + esc(o.postDate) : ''}</p>` : ''}
+    ${(() => { const ds = (kind === 'sales' || kind === 'purchase') ? db.stockDocs.filter(d => d.srcOrderId === o.id) : []; return ds.length ? `<h4 style="margin:18px 0 8px">${kind === 'sales' ? '出库单' : '入库单'}</h4><table class="tbl compact"><tbody>${ds.map(d => `<tr><td><a class="link" data-act="docView" data-id="${d.id}">${d.no}</a></td><td>${d.date}</td><td>${badge(d.status)}</td><td class="num">${sum(d.items, x => x.qty)}</td><td style="width:1%"><div class="ops">${tbtn('查看', 'docView', d.id)}</div></td></tr>`).join('')}</tbody></table>` : ''; })()}
     ${pays.length || o.offset ? `<h4 style="margin:18px 0 8px">${C.payWord}记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(acctName(f))}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td><td style="width:1%"><div class="ops">${tbtn('打印', 'payPrint', kind.replace('Return', '') + '|' + f.id)}${can(kind.replace('Return', '')) && o.status !== '已作废' ? tbtn('编辑', 'payEdit', kind + '|' + o.id + '|' + f.id) + tbtn('删除', 'payDel', kind + '|' + o.id + '|' + f.id, 'danger-text') : ''}</div></td></tr>`).join('')}
       ${o.offset ? `<tr><td>-</td><td>退货冲抵</td><td class="num">${money(o.offset)}</td><td class="sub-t">${C.src ? '抵扣原单 ' + esc(o.srcNo) + ' 的欠款' : '由退货单抵扣'}</td></tr>` : ''}</tbody></table>` : ''}
     ${(() => { const R = ORD[kind + 'Return'], rs = R ? db[R.db].filter(r => r.srcId === o.id) : []; return rs.length ? `<h4 style="margin:18px 0 8px">退货记录</h4><table class="tbl compact"><tbody>${rs.map(r => `<tr><td><a class="link" data-act="orderView" data-id="${kind}Return|${r.id}">${r.no}</a></td><td>${r.date}</td><td>${badge(r.status)}</td><td class="num">${money(orderTotal(r))}</td></tr>`).join('')}</tbody></table>` : ''; })()}
@@ -3333,30 +3650,65 @@ function orderStockModal({title, okText, desc, o, dir, wh0, check, onOk}) {
   };
 }
 const needsStockModal = (o, dir) => multiWh() || o.items.some(i => { const p = byId(db.products, i.productId) || {}; return p.serial || dir === 'in' && p.batch; });
+function orderFulfillModal(kind, o) {
+  const isSales = kind === 'sales', dir = isSales ? 'out' : 'in';
+  const lines = o.items.map((i, k) => {
+    const p = byId(db.products, i.productId); if (!p) return null;
+    const left = lineLeftQty(kind, o, i); if (left <= 0.0001) return null;
+    let unit = i.unit || p.unit, rate = rateOf(p, unit), qty = left / rate;
+    if (!p.dec && !Number.isInteger(qty)) { unit = p.unit; rate = 1; qty = left; }
+    return { i, k, p, left, unit, rate, qty };
+  }).filter(Boolean);
+  if (!lines.length) return toast('订单已经全部执行完成', 'info');
+  const defaultWh = isSales
+    ? (whs().find(w => lines.every(x => whQty(x.p, w.id) >= x.left)) || whs().find(w => whQty(x.p, w.id) > 0) || whs()[0] || { id:META.defaultWh }).id
+    : META.defaultWh;
+  const serialCol = lines.some(x => x.p.serial), batchCol = dir === 'in' && lines.some(x => x.p.batch);
+  openModal(`${modalHead((isSales ? '分批发货' : '分批入库') + ' · ' + o.no)}<div class="m-body">
+    <p class="sub-t" style="margin:0 0 10px">${isSales ? '本次发多少就填多少，未发数量留在订单里，可以以后再发。' : '本次到多少就填多少，未到数量留在订单里，可以以后再入库。'}确认后会生成一张关联${isSales ? '销售出库单' : '采购入库单'}，库存只在这里扣减一次。</p>
+    ${multiWh() ? `<label class="field" style="max-width:320px"><span>${isSales ? '发货' : '入库'}仓库</span><select id="ofWh">${whOpts(defaultWh)}</select></label>` : ''}
+    <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:180px">商品</th><th>单位</th><th class="num">订单数量</th><th class="num">已执行</th><th class="num">未执行</th><th style="width:110px">本次数量</th><th class="num">库存</th>${serialCol ? '<th style="min-width:180px">序列号</th>' : ''}${batchCol ? '<th style="min-width:220px">批号 / 生产日期 / 有效期</th>' : ''}</tr></thead><tbody id="ofRows">
+      ${lines.map(x => `<tr data-k="${x.k}"><td><b>${esc(x.p.name)}</b><div class="sub-t">${esc(x.p.sku || '')}</div></td><td>${esc(x.unit)}</td><td class="num">${lineQty(x.i)}</td><td class="num">${inUnit(lineDoneQty(kind, o, x.i), x.p, x.unit)}</td><td class="num">${+(x.left / x.rate).toFixed(4)}</td>
+        <td><input data-of-qty="${x.k}" type="number" min="${x.p.dec ? '0.01' : '1'}" step="${x.p.dec ? '0.01' : '1'}" value="${+x.qty.toFixed(4)}"></td><td class="num of-stock">${inUnit(whQty(x.p, defaultWh), x.p, x.unit)}</td>
+        ${serialCol ? `<td>${x.p.serial ? `<textarea data-of-sn="${x.k}" rows="2" placeholder="每行一个，共 ${x.left} 个"></textarea>` : '-'}</td>` : ''}
+        ${batchCol ? `<td>${x.p.batch ? `<div style="display:flex;gap:4px"><input data-of-bno="${x.k}" value="${esc(o.no)}" placeholder="批号" style="min-width:90px"><input data-of-pd="${x.k}" type="date"><input data-of-ed="${x.k}" type="date"></div>` : '-'}</td>` : ''}
+      </tr>`).join('')}</tbody></table></div></div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="ofOk">${isSales ? '确认发货' : '确认入库'}</button></div>`, 'lg');
+  const whOf = () => $('#ofWh') ? $('#ofWh').value : defaultWh;
+  if ($('#ofWh')) $('#ofWh').onchange = () => { const w = whOf(); document.querySelectorAll('#ofRows tr[data-k]').forEach(tr => { const x = lines.find(y => y.k === +tr.dataset.k); tr.querySelector('.of-stock').textContent = inUnit(whQty(x.p, w), x.p, x.unit); }); };
+  $('#ofOk').onclick = async () => {
+    const wh = whOf(), items = [], need = {};
+    for (const x of lines) {
+      const qty = +document.querySelector(`[data-of-qty="${x.k}"]`).value || 0;
+      if (qty <= 0) continue;
+      const base = +(qty * x.rate).toFixed(4);
+      if (base > x.left + 0.0001) return toast(`「${x.p.name}」本次数量不能超过未执行数量`, 'error');
+      if (!x.p.dec && !Number.isInteger(qty)) return toast(`「${x.p.name}」数量必须为整数`, 'error');
+      const sn = x.p.serial ? snList(document.querySelector(`[data-of-sn="${x.k}"]`)?.value || '') : [];
+      if (x.p.serial && sn.length !== base) return toast(`「${x.p.name}」需要 ${base} 个序列号`, 'error');
+      need[x.p.id] = (need[x.p.id] || 0) + base;
+      items.push({ line:x.k, productId:x.p.id, unit:x.unit, qty, ...(sn.length ? { serials:sn } : {}),
+        ...(x.p.batch && dir === 'in' ? { batchNo:document.querySelector(`[data-of-bno="${x.k}"]`).value.trim(), prodDate:document.querySelector(`[data-of-pd="${x.k}"]`).value, expDate:document.querySelector(`[data-of-ed="${x.k}"]`).value } : {}) });
+    }
+    if (!items.length) return toast('请填写本次数量', 'error');
+    if (isSales) {
+      const lack = Object.entries(need).map(([pid, q]) => ({ p:byId(db.products, pid), q })).filter(x => !x.p || whQty(x.p, wh) < x.q);
+      if (lack.length) return toast((multiWh() ? whName(wh) : '') + '库存不足：' + lack.map(x => x.p ? x.p.name + '（缺 ' + (x.q - whQty(x.p, wh)) + '）' : '商品已删除').join('、'), 'error');
+    }
+    const r = await mutate('POST', `/api/orders/${kind}/${o.id}/${isSales ? 'ship' : 'inbound'}`, { wh, items }, isSales ? '本次发货已提交，库存已按出库单同步' : '本次入库已提交，库存已按入库单同步');
+    if (r) toast(isSales ? '已生成销售出库单' : '已生成采购入库单', 'success');
+  };
+}
 function orderAct(action, kind, id) {
   const C = ORD[kind], o = byId(db[C.db], id), url = `/api/orders/${kind}/${id}`;
   const run = (act, msg, body) => mutate(act === 'delete' ? 'DELETE' : 'POST', act === 'delete' ? url : url + '/' + act, body || {}, msg);
   if (action === 'ship') {
-    const need = {}; o.items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + i.qty; });
-    const lackIn = w => Object.entries(need).map(([pid, q]) => ({p:byId(db.products, pid), q})).filter(x => !x.p || whQty(x.p, w) < x.q);
-    const lackMsg = (w, l) => (multiWh() ? whName(w) : '') + '库存不足：' + l.map(x => (x.p ? x.p.name + '（缺 ' + (x.q - whQty(x.p, w)) + '）' : '商品已删除')).join('、');
-    // 发货成功后接着登记快递单号（启用了物流运费模块时）
-    const then = r => { if (r && shipOn() && can('ship.edit')) shipModal({srcType:'sales', srcId:id}); return r; };
-    const check = w => { const l = lackIn(w); if (l.length) toast(lackMsg(w, l), 'error'); return !l.length; };
-    if (!needsStockModal(o, 'out')) {
-      if (!check(META.defaultWh)) return;
-      return confirmBox(`确认发货 ${o.no}？将扣减对应商品库存。`, () => run('ship', '已发货，库存已扣减').then(then), {danger:false, okText:'确认发货'});
-    }
-    const best = whs().find(w => !lackIn(w.id).length);
-    orderStockModal({title:'发货 · ' + o.no, okText:'确认发货', desc:'确认后按订单明细扣减库存。', o, dir:'out', wh0:(best || whs()[0]).id, check,
-      onOk:(wh, x) => run('ship', (multiWh() ? '已从' + whName(wh) + '发货' : '已发货') + '，库存已扣减', {wh, serials:x.serials}).then(then)});
+    orderFulfillModal('sales', o);
   } else if (action === 'complete') run('complete', '订单已完成');
   else if (action === 'unapprove') confirmBox(`把采购单 ${o.no} 退回待审核？退回后可以修改，改完要重新审核才能入库。`, () => run('unapprove', '已退回待审核'), {danger:false, okText:'反审核'});
   else if (action === 'approve') confirmBox(`审核通过采购单 ${o.no}？`, () => run('approve', '审核通过'), {danger:false, okText:'审核通过'});
   else if (action === 'inbound') {
-    if (!needsStockModal(o, 'in')) return confirmBox(`确认采购单 ${o.no} 全部到货入库？`, () => run('inbound', '已入库，库存已增加'), {danger:false, okText:'确认入库'});
-    orderStockModal({title:'采购入库 · ' + o.no, okText:'确认入库', desc:'确认后采购单全部数量入库。', o, dir:'in', wh0:META.defaultWh,
-      onOk:(wh, x) => run('inbound', '已入库' + (multiWh() ? '到' + whName(wh) : '') + '，库存已增加', {wh, ...x})});
+    orderFulfillModal('purchase', o);
   }
   else if (action === 'post') {
     // 销售退货：货回到仓库；采购退货：货从仓库退给供应商，先查库存
@@ -3364,10 +3716,15 @@ function orderAct(action, kind, id) {
     const lackIn = w => { const need = {}; o.items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + i.qty; }); return isIn ? [] : Object.entries(need).map(([pid, q]) => ({p:byId(db.products, pid), q})).filter(x => !x.p || whQty(x.p, w) < x.q); };
     const lackMsg = (w, l) => (multiWh() ? whName(w) : '') + '库存不足：' + l.map(x => (x.p ? x.p.name + '（缺 ' + (x.q - whQty(x.p, w)) + '）' : '商品已删除')).join('、');
     const check = w => { const l = lackIn(w); if (l.length) toast(lackMsg(w, l), 'error'); return !l.length; };
-    const go = (w, x) => run('post', (multiWh() ? whName(w) : '') + word + '完成，库存已' + (isIn ? '增加' : '扣减'), {wh:w, ...(x || {})});
-    if (!needsStockModal(o, isIn ? 'in' : 'out')) return check(META.defaultWh) && confirmBox(`确认${C.title} ${o.no} ${word}？将${isIn ? '增加' : '扣减'}对应商品库存。`, () => go(META.defaultWh), {danger:false, okText:'确认' + word});
-    const src = o.srcId && byId(db[ORD[C.src].db], o.srcId), w0 = src && src.wh || (isIn ? META.defaultWh : (whs().find(w => !lackIn(w.id).length) || whs()[0]).id);
-    orderStockModal({title:word + ' · ' + o.no, okText:'确认' + word, desc:`确认后${isIn ? '退回的货入库' : '从库存扣减退给供应商的货'}。`, o, dir:isIn ? 'in' : 'out', wh0:w0, check, onOk:go});
+    const doPost = note => {
+      const go = (w, x) => run('post', (multiWh() ? whName(w) : '') + word + '完成，库存已' + (isIn ? '增加' : '扣减'), {wh:w, note, ...(x || {})});
+      if (!needsStockModal(o, isIn ? 'in' : 'out')) { if (!check(META.defaultWh)) return; return confirmBox(`确认${C.title} ${o.no} ${word}？将${isIn ? '增加' : '扣减'}对应商品库存。`, () => go(META.defaultWh), {danger:false, okText:'确认' + word}); }
+      const src = o.srcId && byId(db[ORD[C.src].db], o.srcId), w0 = src && src.wh || (isIn ? META.defaultWh : (whs().find(w => !lackIn(w.id).length) || whs()[0]).id);
+      orderStockModal({title:word + ' · ' + o.no, okText:'确认' + word, desc:`确认后${isIn ? '退回的货入库' : '从库存扣减退给供应商的货'}。`, o, dir:isIn ? 'in' : 'out', wh0:w0, check, onOk:go});
+    };
+    formModal({ title:(isIn ? '审核入库' : '审核出库') + ' · ' + o.no, okText:'下一步',
+      fields:[{ n:'note', l:'审核备注（会记在单据和操作日志里）', type:'textarea', span:1, req:1, def:isIn ? '退货入库' : '退货出库' }],
+      onSubmit:v => { closeModal(); doPost((v.note || '').trim()); } });
   }
   else if (action === 'offset') {
     const S0 = ORD[C.src], src = byId(db[S0.db], o.srcId), max = +Math.min(unpaidOf(kind, o), unpaidOf(C.src, src)).toFixed(2);
@@ -3442,7 +3799,7 @@ function pageShipping() {
     ${kpi('待对账', S.filter(s => s.status === '待对账').length, 'clock', 'orange')}
     ${kpi('申诉中', dis.length, 'alert', 'red', dis.length ? `<div class="trend"><span>争议 ${money(sum(dis, s => s.billFee - s.estFee))}</span></div>` : '')}
   </div>
-  ${tabs('shipTab', [['list', '运单'], ['bills', '快递账单对账'], ['stats', '运费统计'], ['rates', '快递报价']])}
+  ${tabs('shipTab', [['list', '运单'], ['adhoc', '临时送货'], ['bills', '快递账单对账'], ['stats', '运费统计'], ['rates', '快递报价']])}
   <div class="card" id="shipCard"></div>`;
   const card = $('#shipCard'), carOpts = db.carriers.map(c => [c.id, c.name]);
   if (ui.shipTab === 'list') {
@@ -3465,7 +3822,7 @@ function pageShipping() {
       {t:'状态', r:s => badge(s.status, SHIP_STATUS[s.status])},
       ...(kdn().ready || db.shipments.some(s => s.track) ? [{t:'物流', r:s => trackBadge(s) + (s.track && s.track.traces.length ? `<div class="sub-t" style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${esc(s.track.traces.at(-1).station)}">${esc(s.track.traces.at(-1).station)}</div>` : ''), s:s => s.track ? s.track.state : ''}] : []),
       {t:'操作', r:s => `<div class="ops">${shipOps(s)}</div>`}
-    ], exp:{name:'运单', cols:[['快递单号', s => s.trackNo], ['快递', s => carrierLabel(s.carrierId)], ['发货日期', s => s.date], ['来源单据', s => s.srcNo], ['收件人', s => s.party], ['省份', s => s.province], ['地址', s => s.address],
+    ], bulk:can('ship.edit') ? {label:'运单', actions:[{label:'批量作废', run:async ids => { for (const id of ids) await api('POST','/api/shipments/' + id + '/void',{}); toast(`已作废 ${ids.length} 条`, 'success'); }}]} : undefined, exp:{name:'运单', cols:[['快递单号', s => s.trackNo], ['快递', s => carrierLabel(s.carrierId)], ['发货日期', s => s.date], ['来源单据', s => s.srcNo], ['收件人', s => s.party], ['省份', s => s.province], ['地址', s => s.address],
       ['实重kg', s => s.weight], ['计费重量kg', s => s.chargeWeight], ['估算运费', s => s.estFee], ['账单运费', s => s.billFee ?? ''], ['账单号', s => s.billNo || ''], ['状态', s => s.status], ['差异说明', s => s.diffReason || ''], ['备注', s => s.note]]}});
   } else if (ui.shipTab === 'bills') {
     const filters = [{key:'car', label:'全部快递', options:carOpts, test:(b, v) => b.carrierId === v}, {key:'st', label:'全部状态', options:['草稿', '已确认'], test:(b, v) => b.status === v}];
@@ -3481,7 +3838,21 @@ function pageShipping() {
       {t:'对账结果', r:b => Object.entries(BILL_CAT).filter(([k]) => b.counts && b.counts[k]).map(([k, [l, c]]) => badge(l + ' ' + b.counts[k], c + ' plain')).join(' ')},
       {t:'应付', cls:'num', r:b => b.status === '已确认' ? `<b>${money(b.payable)}</b>` : '-'},
       {t:'状态', r:b => badge(b.status, b.status === '草稿' ? 'orange' : 'green')},
-      {t:'操作', r:b => `<div class="ops">${tbtn(b.status === '草稿' && can('ship.bill') ? '对账' : '查看', 'billView', b.id, b.status === '草稿' ? 'primary' : '')}</div>`}]});
+      {t:'操作', r:b => `<div class="ops">${tbtn(b.status === '草稿' && can('ship.bill') ? '对账' : '查看', 'billView', b.id, b.status === '草稿' ? 'primary' : '')}</div>`}], bulk:can('ship.bill') ? {label:'快递账单', remove:id => '/api/shipbills/' + id} : undefined});
+  } else if (ui.shipTab === 'adhoc') {
+    const canEdit = can('ship.edit');
+    card.innerHTML = toolbar('adhoc', { placeholder:'搜索司机 / 电话 / 备注', buttons: (can('ship.view') ? `<button class="btn" data-act="export" data-id="adhoc">${ic('download')}导出</button>` : '') + (canEdit ? `<button class="btn primary" data-act="add" data-id="deliveries">${ic('plus')}新增临时送货</button>` : '') }) + '<div id="list-adhoc"></div>';
+    mountList('adhoc', { rows: () => db.deliveries, search: d => (d.driver || '') + ' ' + (d.phone || '') + ' ' + (d.note || ''), empty: '还没有临时送货记录。临时找车、短途送货，只登记日期、司机、运费和备注就行，不进快递计费。', columns: [
+      {t:'日期', r:d => d.date || '', s:d => d.date || ''},
+      {t:'司机 / 送货人', r:d => `<b>${esc(d.driver || '')}</b>${d.phone ? `<div class="sub-t">${esc(d.phone)}</div>` : ''}`, s:d => d.driver || ''},
+      {t:'运费', cls:'num', r:d => money(d.amount || 0), s:d => d.amount || 0},
+      {t:'付款', r:d => badge(d.paid ? '已付款' : '未付款', d.paid ? 'green' : 'orange')},
+      {t:'备注', r:d => `<span class="sub-t">${esc(d.note || '-')}</span>`},
+      {t:'操作', r:d => `<div class="ops">${canEdit && !d.paid ? `<button class="btn sm" data-act="adhocPay" data-id="${d.id}">标记已付</button>` : ''}${canEdit ? tbtn('编辑', 'edit', 'deliveries|' + d.id) : ''}${canEdit ? tbtn('删除', 'del', 'deliveries|' + d.id, 'danger-text') : ''}</div>`}
+    ], bulk:canEdit ? { label:'临时送货', remove:id => '/api/deliveries/' + id, actions:[{ label:'批量标记已付', run:async ids => {
+      for (const id of ids) { const d = byId(db.deliveries, id); if (d && !d.paid) await api('PUT', '/api/deliveries/' + id, { ...d, paid:true }); }
+      toast(`已标记 ${ids.length} 条为已付款`, 'success');
+    }}] } : undefined, exp:{name:'临时送货', cols:[['日期', d => d.date], ['司机', d => d.driver], ['电话', d => d.phone || ''], ['运费', d => d.amount || 0], ['付款', d => d.paid ? '已付款' : '未付款'], ['备注', d => d.note || '']]}});
   } else if (ui.shipTab === 'stats') shipStats(card, S);
   else {
     card.innerHTML = `<div class="toolbar"><div class="tb-left"><span class="sub-t">每家快递按省份分区报价：可以按重量段（0.5kg / 1kg / 2kg…）或首重 + 续重计价，也可以直接导入快递给的 Excel 报价表</span></div>
@@ -4200,7 +4571,7 @@ function pageParty(type) {
     ${kpi(isC ? '累计销售额' : '累计采购额', moneyK(sum(db[C.db].filter(o => o.status !== '已作废'), orderTotal)), 'coin', 'blue')}
     ${kpi(isC ? '应收合计' : '应付合计', moneyK(partyDue(kind)), 'wallet', 'orange')}
   </div>
-  <div class="card">${toolbar(type, {placeholder:'搜索名称 / 联系人 / 电话', filters, buttons:`${can(kind) ? `<button class="btn" data-act="priceImport" data-id="${type}">${ic('upload')}导入专属价</button>` : ''}<button class="btn" data-act="export" data-id="${type}">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="${type}">${ic('plus')}新增${ENT[type].title}</button>`})}<div id="list-${type}"></div></div>`;
+  <div class="card">${toolbar(type, {placeholder:'搜索名称 / 联系人 / 电话', filters, buttons:`${can('parties') ? `<button class="btn" data-act="partyImport" data-id="${type}">${ic('upload')}导入</button>` : ''}${can(kind) ? `<button class="btn" data-act="priceImport" data-id="${type}">${ic('upload')}导入专属价</button>` : ''}<button class="btn" data-act="export" data-id="${type}">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="${type}">${ic('plus')}新增${ENT[type].title}</button>`})}<div id="list-${type}"></div></div>`;
   mountList(type, {rows:() => db[type], search:r => r.name + r.contact + r.phone, filters, columns:[
     {t:'名称', r:r => `<b>${esc(r.name)}</b><div class="sub-t">${esc(r.address || '')}</div>`, s:r => r.name},
     {t:'联系人', r:r => `${esc(r.contact)}<div class="sub-t">${esc(r.phone)}</div>`},
@@ -4211,7 +4582,7 @@ function pageParty(type) {
     {t:'最近交易', r:r => orders(r.id)[0]?.date || '-'},
     {t:'专属价', cls:'num', r:r => { const n = Object.keys(r.prices || {}).length; return n ? `<a class="link" data-act="priceManage" data-id="${type}|${r.id}">${n} 个商品</a>` : '<span class="sub-t">-</span>'; }, s:r => Object.keys(r.prices || {}).length},
     {t:'操作', r:r => `<div class="ops">${tbtn('订单', 'partyOrders', type + '|' + r.id)}${isC ? tbtn('跟进', 'followup', r.id) : ''}${can('finance') ? tbtn(isC ? '收款' : '付款', 'partyPayment', type + '|' + r.id) : ''}${can(kind) ? tbtn('专属价', 'priceManage', type + '|' + r.id) : ''}${tbtn('编辑', 'edit', type + '|' + r.id)}${tbtn('删除', 'del', type + '|' + r.id, 'danger-text')}</div>`}
-  ], exp:{name:ENT[type].title + '列表', cols:[['名称', r => r.name], ['联系人', r => r.contact], ['电话', r => r.phone], ['邮箱', r => r.email], [isC ? '等级' : '类目', r => isC ? r.level : r.category], ['地址', r => r.address], ['订单数', r => orders(r.id).length], ['累计金额', r => sum(orders(r.id), orderTotal).toFixed(2)]]}});
+  ], bulk:{label:ENT[type].title, remove:id => `/api/${type}/${id}`}, exp:{name:ENT[type].title + '列表', cols:[['名称', r => r.name], ['联系人', r => r.contact], ['电话', r => r.phone], ['邮箱', r => r.email], [isC ? '等级' : '类目', r => isC ? r.level : r.category], ['地址', r => r.address], ['订单数', r => orders(r.id).length], ['累计金额', r => sum(orders(r.id), orderTotal).toFixed(2)]]}});
 }
 
 /* ================= 页面：财务 ================= */
@@ -4246,7 +4617,7 @@ function pageFinance() {
       {t:'关联单据', r:f => f.ref ? `<span class="sub-t">${esc(f.ref)}</span>` : '-'},
       {t:'备注', r:f => esc(f.note || '-')},
       {t:'操作', r:f => f.ref ? '<span class="sub-t">单据生成</span>' : `<div class="ops">${tbtn('编辑', 'finEdit', f.id)}${tbtn('删除', 'finDel', f.id, 'danger-text')}</div>`}
-    ], exp:{name:'收支流水', cols:[['日期', f => f.date], ['类型', f => f.type === 'income' ? '收入' : '支出'], ['科目', f => f.category], ['金额', f => f.amount], ['账户', f => acctName(f)], ['单据', f => f.ref], ['备注', f => f.note]]}});
+    ], bulk:{label:'手动收支流水', remove:id => '/api/finance/' + id}, exp:{name:'收支流水', cols:[['日期', f => f.date], ['类型', f => f.type === 'income' ? '收入' : '支出'], ['科目', f => f.category], ['金额', f => f.amount], ['账户', f => acctName(f)], ['单据', f => f.ref], ['备注', f => f.note]]}});
   } else if (ui.finTab === 'acct') {
     const T = db.acctTransfers || [];
     card.innerHTML = `<div class="card-head"><h3>资金账户</h3><div class="ops"><button class="btn" data-act="acctTransfer">${ic('swap')}账户转账</button><button class="btn primary" data-act="acctEdit">${ic('plus')}新增账户</button></div></div>
@@ -4388,7 +4759,7 @@ function pageEmployees() {
     {t:'入职日期', r:e => esc(e.joinDate), s:e => e.joinDate},
     {t:'状态', r:e => badge(e.status)},
     {t:'操作', r:e => `<div class="ops">${tbtn('编辑', 'edit', 'employees|' + e.id)}${tbtn('删除', 'del', 'employees|' + e.id, 'danger-text')}</div>`}
-  ], exp:{name:'员工名单', cols:[['工号', e => e.no], ['姓名', e => e.name], ['性别', e => e.gender], ['部门', e => e.dept], ['职位', e => e.position], ['手机', e => e.phone], ['身份证号', e => maskIdCard(e.idCard)], ['生日', e => idBirthday(e.idCard)], ['月薪', e => e.salary], ['入职日期', e => e.joinDate], ['状态', e => e.status]]}});
+  ], bulk:{label:'员工', remove:id => '/api/employees/' + id}, exp:{name:'员工名单', cols:[['工号', e => e.no], ['姓名', e => e.name], ['性别', e => e.gender], ['部门', e => e.dept], ['职位', e => e.position], ['手机', e => e.phone], ['身份证号', e => maskIdCard(e.idCard)], ['生日', e => idBirthday(e.idCard)], ['月薪', e => e.salary], ['入职日期', e => e.joinDate], ['状态', e => e.status]]}});
   const dl = [...depts(), '未分配部门'].filter(d => on.some(e => (e.dept || '未分配部门') === d));
   const dc = dl.map(d => on.filter(e => (e.dept || '未分配部门') === d).length);
   chart('e1', {type:'doughnut', data:{labels:dl, datasets:[{data:dc, backgroundColor:dl.map((_, i) => PALETTE[i % PALETTE.length]), borderWidth:0}]}, options:{cutout:'62%'}});
@@ -4605,7 +4976,7 @@ let CLOUD = null, cloudShowPass = false;
 const cloudSize = n => n >= 1024 ** 3 ? (n / 1024 ** 3).toFixed(n % 1024 ** 3 ? 1 : 0) + ' GB' : n >= 1024 ** 2 ? (n / 1024 ** 2).toFixed(n % 1024 ** 2 ? 1 : 0) + ' MB' : Math.ceil(n / 1024) + ' KB';
 const cloudDate = ts => new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false }).slice(0, 16);
 function pageCloud() {
-  $('#view').innerHTML = pageHead('云服务', '加密云备份 + 远程访问，一个套餐全包', `<button class="btn" data-act="cloudRefresh">${ic('refresh')}刷新</button>`) + '<div id="cloudBody"><div class="card"><div class="card-body"><div class="empty">加载中…</div></div></div></div>';
+  $('#view').innerHTML = pageHead('云服务', '加密云备份 + 远程访问，一个套餐全包；扫码付款后自动发授权码，输入即可续期', `<a class="btn" href="https://www.zhaoyoucai.xyz/xerp-cloud/buy" target="_blank" rel="noopener">${ic('coin')}购买 / 续费</a><button class="btn" data-act="cloudRefresh">${ic('refresh')}刷新</button>`) + '<div id="cloudBody"><div class="card"><div class="card-body"><div class="empty">加载中…</div></div></div></div>';
   cloudLoad();
 }
 async function cloudLoad() {
@@ -4666,6 +5037,8 @@ function pageFeedback() {
     <div class="card"><div class="card-head"><h3>我的留言</h3><button class="btn sm" id="fbReload">${ic('refresh')}刷新回复</button></div><div class="card-body" id="fbList"><div class="empty">加载中…</div></div></div>
     <div><div class="card"><div class="card-head"><h3>给作者留言</h3></div><div class="card-body">
       <label class="field"><span>留言内容 <i>*</i></span><textarea id="fbText" rows="6" maxlength="2000" placeholder="遇到了什么问题？在哪个页面、做了什么操作？有截图里的报错文字也可以贴上来。也欢迎提功能建议。"></textarea></label>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap"><label class="btn sm">${ic('upload')}添加截图<input type="file" id="fbShot" accept="image/*" hidden></label><span class="sub-t">也可以直接在留言框里粘贴截图，自动压缩后随留言发送</span></div>
+      <div id="fbShotPrev" style="display:none;margin-top:10px;position:relative"><img style="max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--border)"><button class="btn sm danger-text" id="fbShotDel" style="position:absolute;right:6px;top:6px">移除</button></div>
       <label class="field" style="margin-top:12px"><span>称呼（可选）</span><input id="fbNick" maxlength="30" placeholder="怎么称呼你，公开时显示这个名字"></label>
       <label class="field" style="margin-top:12px"><span>联系方式（可选，只有作者能看到）</span><input id="fbContact" maxlength="100" placeholder="微信 / 手机 / 邮箱，方便作者联系你"></label>
       <label class="chk" style="margin-top:12px"><input type="checkbox" id="fbPub">允许作者把这条留言和回复公开到官网（不含联系方式）</label>
@@ -4674,11 +5047,27 @@ function pageFeedback() {
     </div></div></div>
   </div>`;
   tipModal();
+  let fbShotData = '';
+  const setShot = async f => {
+    if (!f || !/^image\//.test(f.type || '')) return;
+    try {
+      fbShotData = await shrinkImage(f, 1200, 700000);
+      const box = $('#fbShotPrev'); box.style.display = '';
+      box.querySelector('img').src = fbShotData;
+    } catch (e) { toast(e.message || '无法读取截图', 'error'); }
+  };
+  $('#fbShot').onchange = e => setShot(e.target.files[0]);
+  $('#fbText').addEventListener('paste', e => {
+    const f = [...(e.clipboardData?.items || [])].find(x => x.type.startsWith('image/'))?.getAsFile();
+    if (f) { e.preventDefault(); setShot(f); }
+  });
+  $('#fbShotDel').onclick = () => { fbShotData = ''; $('#fbShot').value = ''; $('#fbShotPrev').style.display = 'none'; };
   const draw = r => {
     const box = $('#fbList'); if (!box) return;
     box.innerHTML = (r.error ? `<p class="sub-t" style="margin-bottom:10px;color:var(--orange)">${esc(r.error)}，下面是本机保存的留言</p>` : '') + (r.list.length ? r.list.map(f => `<div class="fb-item">
       <div class="fb-meta"><span>${esc(f.at)}</span><span>${esc(f.by || '')}</span>${badge(f.reply ? '已回复' : '待回复', f.reply ? 'green' : 'orange')}${f.public ? badge('已公开到官网', 'blue plain') : ''}</div>
       <div class="fb-text">${esc(f.text)}</div>
+      ${f.image ? `<img src="${esc(f.image)}" alt="留言截图" style="max-width:100%;max-height:260px;border-radius:8px;border:1px solid var(--border);margin-top:8px">` : ''}
       ${f.reply ? `<div class="fb-reply"><b>作者回复</b><span class="sub-t">${esc(f.replied)}</span><div class="fb-text">${esc(f.reply)}</div></div>` : ''}</div>`).join('')
       : `<div class="empty">${emptySvg}<p>还没有留言。遇到问题或有想要的功能，直接在右边写给作者。</p></div>`);
     db.settings.feedbackUnread = 0;
@@ -4691,8 +5080,8 @@ function pageFeedback() {
     if (!text) return toast('请填写留言内容', 'error');
     const b = $('#fbSend'); b.disabled = true;
     try {
-      await api('POST', '/api/feedback', {text, nick:$('#fbNick').value.trim(), contact:$('#fbContact').value.trim(), allowPublic:$('#fbPub').checked});
-      $('#fbText').value = ''; toast('留言已发送，作者回复后会显示在左边', 'success'); load();
+      await api('POST', '/api/feedback', {text, nick:$('#fbNick').value.trim(), contact:$('#fbContact').value.trim(), allowPublic:$('#fbPub').checked, ...(fbShotData ? {image:fbShotData} : {})});
+      $('#fbText').value = ''; fbShotData = ''; $('#fbShot').value = ''; $('#fbShotPrev').style.display = 'none'; toast('留言已发送，作者回复后会显示在左边', 'success'); load();
     } catch (e) { toast(e.message, 'error'); }
     b.disabled = false;
   };
@@ -4736,10 +5125,10 @@ async function updateCheck() {
 }
 function notifyCard(st) {
   const nf = st.notify || {};
-  const ev = { lowStock: true, overdue: false, birthday: false, pendingApproval: false, daily: false, ...(nf.events || {}) };
+  const ev = { lowStock: true, overdue: false, birthday: false, pendingApproval: false, daily: false, license: false, ...(nf.events || {}) };
   const wh = { enabled: !!nf.url, url: nf.url || '', ...(nf.webhook || {}) };
   const ml = { enabled: false, host: '', port: 465, user: '', from: '', to: '', hasPass: false, ...(nf.mail || {}) };
-  const LABEL = { lowStock: '库存预警', overdue: '应收逾期', birthday: '生日提醒', pendingApproval: '待审批', daily: '经营日报' };
+  const LABEL = { lowStock: '库存预警', overdue: '应收逾期', birthday: '生日提醒', pendingApproval: '待审批', daily: '经营日报', license: '证照到期' };
   return `<div class="card" style="margin-top:16px"><div class="card-head"><h3>消息通知</h3><span class="sub-t">每天定时推送到群机器人和邮箱</span></div><div class="card-body">
     <p class="sub-t" style="margin-bottom:10px">每天早上把要处理的事推给老板、财务或仓管。群机器人支持企业微信、钉钉、飞书，也能填任意接收 JSON 的地址；邮件支持 QQ / 163 / 企业邮箱。需要服务器能连外网。</p>
     <div class="form-grid">
@@ -4747,7 +5136,7 @@ function notifyCard(st) {
       <label class="field"><span>应收逾期天数</span><input type="number" id="nfOd" min="1" max="365" value="${esc(nf.overdueDays || 30)}"></label>
       <div class="field span2"><span>推送内容</span><div style="display:flex;gap:8px 18px;flex-wrap:wrap;padding-top:6px">
         ${Object.keys(LABEL).map(k => `<label class="chk"><input type="checkbox" id="nfEv_${k}" ${ev[k] ? 'checked' : ''}>${LABEL[k]}</label>`).join('')}
-        <div class="sub-t" style="width:100%;padding-top:4px">经营日报含：今日销售额、毛利和毛利率、热销商品前 5、今日收款、待收款、缺货商品数</div>
+        <div class="sub-t" style="width:100%;padding-top:4px">经营日报含：今日销售额、毛利和毛利率、热销商品前 5、今日收款、待收款、缺货商品数；证照到期会提前 60 天提醒商品注册证 / 备案号</div>
       </div></div>
     </div>
     <div class="setting-row" style="margin-top:10px"><div class="sr-group"><b>群机器人（Webhook）</b><small>企业微信 / 钉钉 / 飞书群机器人，或任意接收 JSON 的地址</small></div><label class="chk"><input type="checkbox" id="nfWhOn" ${wh.enabled ? 'checked' : ''}>启用</label></div>
@@ -4769,9 +5158,126 @@ function notifyCard(st) {
     </div>
   </div></div>`;
 }
+function parseUDI(code) {
+  const s = String(code || '').replace(/[\u0000-\u001f]/g, '');
+  let i = 0, di = '', batch = '', exp = '';
+  while (i < s.length) {
+    const ai = s.slice(i, i + 2);
+    if (ai === '01') { di = s.slice(i + 2, i + 16); i += 16; }
+    else if (ai === '17') { const d = s.slice(i + 2, i + 8); if (/^\d{6}$/.test(d)) exp = '20' + d.slice(0, 2) + '-' + d.slice(2, 4) + '-' + d.slice(4, 6); i += 8; }
+    else if (ai === '11') { i += 8; }
+    else if (ai === '10') { batch = s.slice(i + 2).slice(0, 20); i = s.length; }
+    else break;
+  }
+  return (di || exp || batch) ? { di, batch, exp } : null;
+}
+async function companiesPage(body) {
+  body.innerHTML = `<div class="card"><div class="card-head"><h3>公司管理</h3><span class="sub-t">每家公司独立数据库，右上角可切换</span></div><div class="card-body">
+    <div id="coList">加载中…</div>
+    <h4 style="margin:18px 0 10px">新建公司</h4>
+    <div class="form-grid"><label class="field"><span>公司名称</span><input id="coName" placeholder="例如 广州分公司"></label>
+      <label class="field"><span>公司编码（字母 / 数字）</span><input id="coCode" placeholder="例如 gz"></label></div>
+    <div style="text-align:right"><button class="btn primary" id="coAdd">${ic('plus')}新建公司</button></div>
+    <p class="sub-t" style="margin-top:10px">新建后会生成一套独立数据库和备份目录，当前账号自动成为该公司管理员，商品、客户等数据互不影响。</p></div></div>`;
+  try {
+    const r = await api('GET', '/api/portal/companies');
+    $('#coList').innerHTML = `<table class="tbl"><thead><tr><th>名称</th><th>编码</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody>${r.companies.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.code)}</td><td>${badge(c.enabled ? '启用' : '停用', c.enabled ? 'green' : 'gray')}</td><td>${esc((c.created || '').slice(0, 10))}</td><td><button class="btn sm" data-mem="${esc(c.code)}" data-name="${esc(c.name)}">成员</button></td></tr>`).join('')}</tbody></table>`;
+    document.querySelectorAll('[data-mem]').forEach(b => b.onclick = () => companyMembers(b.dataset.mem, b.dataset.name));
+  } catch (e) { $('#coList').innerHTML = `<p class="neg">${esc(e.message)}</p>`; }
+  $('#coAdd').onclick = async () => {
+    const name = $('#coName').value.trim(), code = $('#coCode').value.trim().toLowerCase();
+    if (!name || !code) return toast('请填写公司名称和编码', 'error');
+    try {
+      const x = await api('POST', '/api/portal/companies', { name, code });
+      PORTAL_COMPANIES = x.companies || PORTAL_COMPANIES;
+      LS.set('portalCompanies', JSON.stringify(PORTAL_COMPANIES));
+      if (PORTAL) PORTAL.multi = PORTAL_COMPANIES.length > 1;
+      setupPortalUI();
+      toast('公司已创建，可在顶部切换');
+      companiesPage(body);
+    } catch (e) { toast(e.message, 'error'); }
+  };
+}
+async function companyMembers(code, name) {
+  const draw = async () => {
+    const r = await api('GET', '/api/portal/members?company=' + encodeURIComponent(code));
+    $('#memList').innerHTML = `<table class="tbl"><thead><tr><th>用户名</th><th>姓名</th><th>角色</th><th></th></tr></thead><tbody>${r.members.map(m => `<tr><td>${esc(m.username)}</td><td>${esc(m.name || '')}</td><td>${badge(m.role === 'admin' ? '管理员' : '普通用户', m.role === 'admin' ? 'green' : 'gray')}</td><td><button class="btn sm danger-text" data-del="${esc(m.username)}">移除</button></td></tr>`).join('')}</tbody></table>`;
+    document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+      try { await api('DELETE', '/api/portal/members?company=' + encodeURIComponent(code) + '&username=' + encodeURIComponent(b.dataset.del)); draw(); }
+      catch (e) { toast(e.message, 'error'); }
+    });
+  };
+  openModal(modalHead('成员管理 · ' + name) + `<div class="m-body">
+    <div id="memList">加载中…</div>
+    <h4 style="margin:18px 0 10px">添加成员</h4>
+    <div class="form-grid"><label class="field"><span>用户名</span><input id="memUser"></label><label class="field"><span>姓名</span><input id="memName"></label>
+      <label class="field"><span>角色</span><select id="memRole"><option value="user">普通用户</option><option value="admin">管理员</option></select></label>
+      <label class="field"><span>初始密码（新账号必填）</span><input id="memPass" type="password" placeholder="已有账号不用填"></label></div>
+    <div style="text-align:right"><button class="btn primary" id="memAdd">添加</button></div></div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">关闭</button></div>`);
+  await draw();
+  $('#memAdd').onclick = async () => {
+    try {
+      await api('POST', '/api/portal/members', { company: code, username: $('#memUser').value.trim(), name: $('#memName').value.trim(), role: $('#memRole').value, password: $('#memPass').value });
+      $('#memUser').value = ''; $('#memName').value = ''; $('#memPass').value = '';
+      await draw();
+      toast('成员已添加');
+    } catch (e) { toast(e.message, 'error'); }
+  };
+}
+function gspPage(body) {
+  const leftOf = e => e ? Math.round((new Date(e) - new Date(today())) / 864e5) : null;
+  const stateOf = e => { const l = leftOf(e); return !e ? ['未填', 'gray'] : l < 0 ? ['已过期', 'red'] : l <= 60 ? [l + ' 天后到期', 'orange'] : ['正常', 'green']; };
+  const all = () => [
+    ...db.products.filter(p => p.regNo || p.regExp || p.firstStatus).map(p => ({ t: '商品', tp: 'products', id: p.id, name: p.name, no: p.regNo || '', exp: p.regExp || '', st: p.firstStatus || '', edit: 'products|' + p.id })),
+    ...(db.suppliers || []).filter(s => s.licenseNo || s.licenseExp || s.firstStatus).map(s => ({ t: '供应商', tp: 'suppliers', id: s.id, name: s.name, no: s.licenseNo || '', exp: s.licenseExp || '', st: s.firstStatus || '', edit: 'suppliers|' + s.id })),
+    ...(db.customers || []).filter(s => s.licenseNo || s.licenseExp || s.firstStatus).map(s => ({ t: '客户', tp: 'customers', id: s.id, name: s.name, no: s.licenseNo || '', exp: s.licenseExp || '', st: s.firstStatus || '', edit: 'customers|' + s.id })),
+  ];
+  body.innerHTML = `<div class="card"><div class="card-head"><h3>资质台账</h3><span class="sub-t">商品注册证 / 供应商和客户许可证，到期前 60 天标黄</span></div><div class="card-body">
+    <div style="display:flex;gap:14px;align-items:center;margin-bottom:10px"><label class="chk"><input type="checkbox" id="gspOnlyExp">只看 60 天内到期 / 已过期</label><span class="sub-t" id="gspCount"></span></div>
+    <div id="gspList"></div></div></div>
+    <div class="card"><div class="card-head"><h3>追溯查询</h3><span class="sub-t">输入批号、UDI 码或商品名称，查上下游单据</span></div><div class="card-body">
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><input id="gspQ" class="select" style="flex:1;min-width:240px" placeholder="批号 / UDI（01 开头）/ 商品编码或名称"><button class="btn primary" id="gspTraceBtn">查询</button></div>
+    <div id="gspTrace" style="margin-top:12px"></div></div></div>`;
+  const draw = () => {
+    const only = $('#gspOnlyExp').checked;
+    let list = all().map(x => ({ ...x, left: leftOf(x.exp), state: stateOf(x.exp) }));
+    if (only) list = list.filter(x => x.left != null && x.left <= 60);
+    list.sort((a, b) => (a.left == null ? 1 : 0) - (b.left == null ? 1 : 0) || (a.left || 0) - (b.left || 0));
+    $('#gspCount').textContent = `共 ${list.length} 条`;
+    $('#gspList').innerHTML = list.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>类型</th><th>名称</th><th>证照号</th><th>有效期至</th><th>状态</th><th>首营</th><th style="width:140px">操作</th></tr></thead><tbody>${list.map(x => `<tr>
+      <td>${esc(x.t)}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.no) || '<span class="sub-t">未填</span>'}</td><td>${esc(x.exp) || '<span class="sub-t">未填</span>'}</td>
+      <td>${badge(...x.state)}</td><td>${x.st ? badge(x.st, x.st === '已通过' ? 'green' : 'orange') : '<span class="sub-t">-</span>'}</td>
+      <td><div class="ops">${x.st === '待审核' ? `<button class="btn sm primary" data-act="gspApprove" data-id="${x.tp}|${x.id}">审核通过</button>` : ''}<button class="btn sm" data-act="edit" data-id="${x.edit}">编辑</button></div></td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="sub-t">还没有录入资质信息。到商品、供应商、客户档案里填写注册证 / 许可证即可。</p>';
+  };
+  const trace = () => {
+    const raw = ($('#gspQ').value || '').trim();
+    if (!raw) return toast('请输入批号、UDI 或商品', 'error');
+    const udi = parseUDI(raw), q = (udi && udi.batch) ? udi.batch : raw, ql = q.toLowerCase();
+    const pOf = id => byId(db.products, id) || {};
+    const hit = i => { const p = pOf(i.productId); return ((p.sku || '') + ' ' + (p.name || '')).toLowerCase().includes(ql) || (i.batches || []).some(b => String(b.no || '').toLowerCase().includes(ql)); };
+    const docs = db.stockDocs.filter(o => (o.items || []).some(hit));
+    const orders = [...db.sales.map(o => ({ o, k: '销售单', party: (byId(db.customers, o.customerId) || {}).name || '' })),
+      ...db.purchases.map(o => ({ o, k: '采购单', party: (byId(db.suppliers, o.supplierId) || {}).name || '' }))].filter(x => (x.o.items || []).some(hit));
+    const docRows = docs.flatMap(o => (o.items || []).filter(hit).map(i => {
+      const bs = (i.batches || []).filter(b => !udi || String(b.no || '').toLowerCase().includes(ql));
+      return `<tr><td>${o.date}</td><td>${esc(o.no)}</td><td>${esc(docTitle(o.dir))}</td><td>${esc(o.party || '')}</td><td>${esc(pOf(i.productId).name || '')}</td><td>${bs.length ? bs.map(b => esc(b.no) + (b.expDate ? ' / ' + esc(b.expDate) : '') + ' ×' + b.qty).join('；') : '-'}</td><td class="num">${num(i.qty)}</td></tr>`;
+    }));
+    const orderRows = orders.flatMap(x => (x.o.items || []).filter(hit).map(i => `<tr><td>${x.o.date}</td><td>${esc(x.o.no)}</td><td>${x.k}</td><td>${esc(x.party)}</td><td>${esc(pOf(i.productId).name || '')}</td><td class="num">${num(i.qty)}</td></tr>`));
+    $('#gspTrace').innerHTML = `${udi ? `<div class="note blue">UDI 解析：DI <b>${esc(udi.di || '-')}</b> · 批号 <b>${esc(udi.batch || '-')}</b> · 有效期 <b>${esc(udi.exp || '-')}</b></div>` : ''}
+      <h4 style="margin:6px 0">出入库（${docRows.length}）</h4>${docRows.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>日期</th><th>单号</th><th>类型</th><th>往来单位</th><th>商品</th><th>批次 / 有效期</th><th class="num">数量</th></tr></thead><tbody>${docRows.join('')}</tbody></table></div>` : '<p class="sub-t">没有匹配的出入库记录</p>'}
+      <h4 style="margin:16px 0 6px">销售 / 采购（${orderRows.length}）</h4>${orderRows.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>日期</th><th>单号</th><th>类型</th><th>往来单位</th><th>商品</th><th class="num">数量</th></tr></thead><tbody>${orderRows.join('')}</tbody></table></div>` : '<p class="sub-t">没有匹配的销售 / 采购记录</p>'}`;
+  };
+  draw();
+  $('#gspOnlyExp').onchange = draw;
+  $('#gspTraceBtn').onclick = trace;
+}
 function pageSettings() {
   const items = [['general', '常规设置']];
   if (isAdmin() || can('tpl.edit')) items.push(['print', '打印模板']);
+  if (medOn()) items.push(['gsp', '医疗器械']);
+  if (PORTAL && PORTAL_ADMIN) items.push(['companies', '公司管理']);
   if (isAdmin()) items.push(['users', '用户管理'], ['roles', '角色管理'], ['data', '数据管理'], ['audit', '操作日志']);
   if (!items.some(i => i[0] === ui.setTab)) ui.setTab = 'general';
   const st = db.settings;
@@ -4779,6 +5285,8 @@ function pageSettings() {
   $('#view').innerHTML = pageHead('系统设置', '账户、偏好、用户权限与数据管理') + tabs('setTab', items) + '<div id="setBody"></div>';
   const body = $('#setBody');
   if (ui.setTab === 'print') printTplPage(body);
+  else if (ui.setTab === 'gsp') gspPage(body);
+  else if (ui.setTab === 'companies') companiesPage(body);
   else if (ui.setTab === 'general') {
     body.innerHTML = `<div class="grid g2">
     <div class="card"><div class="card-head"><h3>我的账户</h3></div><div class="card-body">
@@ -4865,7 +5373,7 @@ function pageSettings() {
     body.innerHTML = `<div class="card" style="max-width:820px"><div class="card-body">
       <div class="setting-row"><div class="sr-group"><b>导出备份</b><small>将全部业务数据导出为 JSON 文件保存到本机</small></div><button class="btn" data-act="backup">${ic('download')}导出</button></div>
       <div class="setting-row"><div class="sr-group"><b>导入备份</b><small>从 JSON 备份文件恢复（将覆盖服务器上的全部业务数据，兼容单机版备份）</small></div><button class="btn" data-act="restore">${ic('upload')}导入</button></div>
-      <div class="setting-row"><div class="sr-group"><b>自动备份</b><small>服务端每天自动备份数据库到数据目录下的 backups 文件夹，保留最近 30 天</small></div><span class="badge green">已启用</span></div>
+      <div class="setting-row"><div class="sr-group"><b>自动备份</b><small>服务端每天自动备份数据库，保留最近 30 天。当前目录：<code>${esc(db.settings.backupPath || '数据目录/backups')}</code>${db.settings.platform === 'fnos' ? '；飞牛可在「文件管理 → 应用文件 → x.erp」里找到' : ''}</small></div><span class="badge green">已启用</span></div>
       <div class="setting-row"><div class="sr-group"><b>重置演示数据</b><small>用系统自带示例数据覆盖当前业务数据</small></div><button class="btn" data-act="reset">${ic('refresh')}重置</button></div>
       <div class="setting-row"><div class="sr-group"><b style="color:var(--red)">清空业务数据</b><small>删除所有商品、单据、往来单位等，正式启用前使用（用户账号会保留）</small></div><button class="btn danger" data-act="clearAll">${ic('trash')}清空</button></div>
       <div class="setting-row"><div class="sr-group"><b>数据概况</b><small>商品 ${db.products.length} · 客户 ${db.customers.length} · 供应商 ${db.suppliers.length} · 销售单 ${db.sales.length} · 采购单 ${db.purchases.length} · 流水 ${db.finance.length + db.stockLogs.length} 条</small></div></div>
@@ -5085,7 +5593,7 @@ function pageExpenses() {
       {t:'金额', cls:'num', r:o => `<b>${money(o.amount)}</b>`, s:o => o.amount},
       {t:'状态', r:o => badge(o.status, EXP_STATUS[o.status]), s:o => o.status},
       {t:'操作', r:o => `<div class="ops">${expOps(o).join('')}</div>`}
-    ], exp:{name:'报销单', cols:[['单号', o => o.no], ['日期', o => o.date], ['报销人', o => o.applicant], ['部门', o => o.dept || ''], ['类别', expCatText], ['事由', o => o.reason], ['金额', o => o.amount], ['状态', o => o.status],
+    ], bulk:{label:'报销单', actions:[{label:'批量作废', run:async ids => { for (const id of ids) await api('POST', '/api/expenses/' + id + '/void', {}); toast(`已作废 ${ids.length} 张`, 'success'); }}]}, exp:{name:'报销单', cols:[['单号', o => o.no], ['日期', o => o.date], ['报销人', o => o.applicant], ['部门', o => o.dept || ''], ['类别', expCatText], ['事由', o => o.reason], ['金额', o => o.amount], ['状态', o => o.status],
       ['审批人', o => o.approver || ''], ['付款日期', o => o.payDate || ''], ['付款账户', o => o.account ? acctName(o) : ''], ['明细', o => o.lines.map(l => `${l.category} ${l.amount}${l.note ? '（' + l.note + '）' : ''}`).join('；')], ['提交人', o => o.creator]]}});
   } else {
     if (!ui.expMonth) ui.expMonth = m;
@@ -5133,6 +5641,7 @@ function drawAdvanceCard(card) {
       { t: '状态', r: a => badge(a.status, ADV_STATUS[a.status]), s: a => a.status },
       { t: '操作', r: a => `<div class="ops">${advOps(a).join('')}</div>` }
     ],
+    bulk: { label:'备用金', actions:[{label:'批量作废', run:async ids => { for (const id of ids) await api('POST', '/api/advances/' + id + '/void', {}); toast(`已作废 ${ids.length} 张`, 'success'); }}] },
     exp: { name: '备用金', cols: [['单号', a => a.no], ['日期', a => a.date], ['领用人', a => a.applicant], ['部门', a => a.dept || ''], ['金额', a => a.amount], ['已冲抵', a => a.used || 0], ['已退回', a => a.returned || 0], ['未核销', advRemainingUI], ['状态', a => a.status], ['用途', a => a.purpose]] } });
 }
 function advOps(a) {
@@ -5444,6 +5953,8 @@ function applyTheme() {
 }
 function render() {
   if (!ME) return;
+  const sv = document.getElementById('sideVer');
+  if (sv && db.settings && db.settings.version) sv.textContent = 'v' + db.settings.version;
   charts.forEach(c => c.destroy()); charts = [];
   const p = current(), page = PAGES[p];
   // 分组标题只在组内有可见菜单时显示
@@ -5512,6 +6023,7 @@ const A = {
   tab: v => { const [k, t] = split(v); ui[k] = t; render(); },
   export: exportList,
   add: t => editEntity(t),
+  partyImport: t => partyImport(t),
   edit: v => { const [t, id] = split(v); closeModal(); editEntity(t, id); },
   del: v => delEntity(...split(v)),
   stock: v => { const [m, id] = split(v); $('#bellDrop').classList.remove('show'); stockModal(m, id); },
@@ -5528,6 +6040,7 @@ const A = {
   shipView: id => { closeModal(); shipView(id); },
   shipEdit: id => { closeModal(); shipModal({edit:id}); },
   shipVoid: id => { const s = byId(db.shipments, id); confirmBox(`作废运单 ${esc(s.trackNo)}？作废后不参与对账和运费统计。`, () => mutate('POST', `/api/shipments/${id}/void`, {}, '运单已作废')); },
+  adhocPay: id => { const d = byId(db.deliveries, id); if (d) mutate('PUT', '/api/deliveries/' + id, { ...d, paid: true }, '已标记付款'); },
   shipResolve: id => { closeModal(); shipResolve(id); },
   kdnSave: () => mutate('PUT', '/api/settings/kdn', kdnBody(), '快递鸟设置已保存'),
   kdnTest: async () => {
@@ -5812,6 +6325,7 @@ const A = {
   }),
   expUnpay: id => { const o = byId(db.expenses, id); confirmBox(`撤销 ${o.no} 的付款吗？收支流水里这笔报销的支出会删掉，账户余额恢复，报销单回到「已批准」。`, () => mutate('POST', `/api/expenses/${id}/unpay`, {}, '已撤销付款'), {title:'撤销付款', okText:'撤销付款'}); },
   expPrint: id => { const o = byId(db.expenses, id); if (o) printFrame(o.no, `<div class="page">${expSlip(o)}${printFoot('out', 0)}</div>`, prefs.paper || 'a4'); },
+  gspApprove: v => { const [type, id] = split(v), rec = byId(db[type] || [], id); if (rec) mutate('PUT', '/api/' + type + '/' + id, { ...rec, firstStatus: '已通过' }, '首营已审核'); },
   ppRange: v => { [ui.ppFrom, ui.ppTo] = split(v); render(); }, ppDetail: n => ppDetail(n),
   crRange: v => { [ui.crFrom, ui.crTo] = split(v); render(); },
   crExportCustomers: () => {

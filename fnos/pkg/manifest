@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 2.13.3
+version               = 2.14.0
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 经营日报新增今日毛利、毛利率和热销商品前 5；打印模板测试样张按真实打印规则排版（固定张三示例、补空行、页脚不再多出一张纸）。
+changelog             = 销售分批发货、采购分批入库，发货入库统一生成来源单据并只扣一次库存；新增三级包装单位、每级条码、默认采购销售单位和分单位售价；问题反馈支持截图；客户供应商支持期初应收应付；列表支持全选、批量删除和批量作废；订单行小计可手改，销售列表隐藏成本和毛利，仓管隐藏金额；优化自动备份路径提示和侧栏滚动条。

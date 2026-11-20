@@ -28,7 +28,9 @@ const out = {
     fnos: pkg(`xerp-${ver}.fpk`, 'fpk'),
     windows: pkg(`xerp-${ver}-windows-x64-setup.exe`, 'exe'),
     android: { ...pkg(`xerp-${ver}-android.apk`, 'apk'), versionCode },
-    docker: { version: ver, kind: 'docker', image: `ghcr.io/zyc009234/xerp:${ver}` }
+    docker: { version: ver, kind: 'docker', image: `ghcr.io/zyc009234/xerp:${ver}`,
+      offline: [base + `xerp-${ver}-docker-amd64.tar.gz`, base + `xerp-${ver}-docker-arm64.tar.gz`],
+      note: '也可以下载离线包 docker load' }
   }
 };
 const file = path.join(ROOT, 'dist', 'updates.json');

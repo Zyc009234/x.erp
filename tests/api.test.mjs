@@ -219,6 +219,27 @@ test('多单位：按箱录入换算成基本单位', async () => {
   assert.equal(it.uqty, 2); assert.equal(it.unit, '箱'); assert.equal(it.qty, 24);
 });
 
+test('多单位组：三级包装、每级条码、默认采购/销售单位，基本单位使用后锁定', async () => {
+  const p = await ok(admin, 'POST', '/api/products', {
+    sku: 'UNIT3-1', name: '三级包装商品', unit: '盒', barcode: '6900000777001',
+    buyUnit: '外箱', saleUnit: '中包装',
+    units: [{ name: '中包装', rate: 10, barcode: '6900000777002', price: 32 }, { name: '外箱', rate: 100, barcode: '6900000777003', price: 300 }],
+  });
+  assert.equal(p.unit, '盒'); assert.equal(p.buyUnit, '外箱'); assert.equal(p.saleUnit, '中包装');
+  assert.deepEqual(p.units, [{ name: '中包装', rate: 10, barcode: '6900000777002', price: 32 }, { name: '外箱', rate: 100, barcode: '6900000777003', price: 300 }]);
+  const bad = await call(admin, 'POST', '/api/products', {
+    sku: 'UNIT3-BAD', name: '默认单位错误', unit: '盒', buyUnit: '箱', units: [{ name: '中包装', rate: 10 }],
+  });
+  assert.equal(bad.http, 400); assert.match(bad.error, /默认采购单位/);
+  const r = await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', items: [{ productId: p.id, unit: '外箱', qty: 1, price: 100 }] });
+  assert.equal((await prod(p.id)).stock, 100);
+  assert.equal((await doc(r.id)).items[0].qty, 100);
+  const locked = await call(admin, 'PUT', `/api/products/${p.id}`, { unit: '个' });
+  assert.equal(locked.http, 400); assert.match(locked.error, /基本单位已经使用过/);
+  const impLocked = await call(admin, 'POST', '/api/products/import', { rows: [{ sku: 'UNIT3-1', unit: '个' }] });
+  assert.equal(impLocked.http, 400); assert.match(impLocked.error, /基本单位已经使用过/);
+});
+
 test('盘点单：审核后按差异盘盈盘亏', async () => {
   const p = await newProduct('T005');
   await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', items: [{ productId: p.id, qty: 10, price: 1 }] });
@@ -426,11 +447,11 @@ test('序列号：开启审核时，待审核的入库单审核通过才登记',
 
 /* ---------- Excel 导入：条码与辅助单位 ---------- */
 test('导入：带品牌、条码和辅助单位，条码重复时整批不导入', async () => {
-  const r = await ok(admin, 'POST', '/api/products/import', { rows: [{ sku: 'I001', name: '导入一', brand: '导入品牌', barcode: '690000000001', units: '箱=24/690000000024；盒=6', stock: 48, cost: 1 }] });
+  const r = await ok(admin, 'POST', '/api/products/import', { rows: [{ sku: 'I001', name: '导入一', brand: '导入品牌', barcode: '690000000001', units: '箱=24/690000000024@288；盒=6@45', stock: 48, cost: 1 }] });
   assert.equal(r.created, 1);
   const p = (await data()).products.find(x => x.sku === 'I001');
   assert.equal(p.brand, '导入品牌'); assert.equal(p.barcode, '690000000001'); assert.equal(p.stock, 48);
-  assert.deepEqual(p.units, [{ name: '箱', rate: 24, barcode: '690000000024' }, { name: '盒', rate: 6 }]);
+  assert.deepEqual(p.units, [{ name: '箱', rate: 24, barcode: '690000000024', price: 288 }, { name: '盒', rate: 6, price: 45 }]);
   const bad = await call(admin, 'POST', '/api/products/import', { rows: [{ sku: 'I002', name: '导入二', barcode: '690000000024' }, { sku: 'I003', name: '导入三' }] });
   assert.equal(bad.http, 400); assert.match(bad.error, /已被商品 I001 使用/);
   assert.ok(!(await data()).products.some(x => x.sku === 'I003'), '出错时一行都不导入');
@@ -692,7 +713,9 @@ test('销售退货：关联原单限退数量，按发货成本入库，退款�
   assert.equal(r1.status, '待入库'); assert.equal(r1.srcNo, so.no); assert.ok(r1.no.startsWith('XT'));
   assert.equal((await call(admin, 'POST', '/api/orders/salesReturn', { partyId: cu.id, date: '2026-10-28', srcId: so.id, items: [{ productId: p.id, qty: 3, price: 20 }] })).http, 400, '已退 3，只剩 2 可退');
   assert.equal((await prod(p.id)).stock, 10, '没入库前库存不变');
-  await ok(admin, 'POST', `/api/orders/salesReturn/${r1.id}/post`, {});
+  assert.equal((await call(admin, 'POST', `/api/orders/salesReturn/${r1.id}/post`, {})).http, 400, '审核备注必填');
+  assert.equal((await data()).salesReturns.find(o => o.id === r1.id).status, '待入库', '备注为空时不改库存');
+  await ok(admin, 'POST', `/api/orders/salesReturn/${r1.id}/post`, { note: '客户退货，验收合格' });
   let q = await prod(p.id);
   assert.equal(q.stock, 13);
   assert.equal(q.cost, round4((10 * 11 + 3 * 8) / 13), '按原发货成本 8 入库');
@@ -721,18 +744,58 @@ test('采购退货：按原采购价冲减库存价值，库存不足不能出�
   await inDoc(admin, [{ productId: p.id, qty: 10, price: 10 }]);  // 成本 8
   const r = await ok(admin, 'POST', '/api/orders/purchaseReturn', { partyId: su.id, date: '2026-10-28', srcId: po.id, items: [{ productId: p.id, qty: 4, price: 6 }] });
   assert.equal(r.status, '待出库'); assert.ok(r.no.startsWith('CT'));
-  await ok(admin, 'POST', `/api/orders/purchaseReturn/${r.id}/post`, {});
+  await ok(admin, 'POST', `/api/orders/purchaseReturn/${r.id}/post`, { note: '退回供应商' });
   const q = await prod(p.id);
   assert.equal(q.stock, 16);
   assert.equal(q.cost, round4((20 * 8 - 4 * 6) / 16), '按原采购价 6 冲减');
   assert.equal((await data()).purchaseReturns.find(o => o.id === r.id).status, '已出库');
   // 不关联原单的退货：库存不足时不能出库
   const r2 = await ok(admin, 'POST', '/api/orders/purchaseReturn', { partyId: su.id, date: '2026-10-28', items: [{ productId: p.id, qty: 99, price: 6 }] });
-  assert.equal((await call(admin, 'POST', `/api/orders/purchaseReturn/${r2.id}/post`, {})).http, 400);
+  assert.equal((await call(admin, 'POST', `/api/orders/purchaseReturn/${r2.id}/post`, { note: '退回供应商' })).http, 400);
   await ok(admin, 'POST', `/api/orders/purchaseReturn/${r2.id}/cancel`, {});
   await ok(admin, 'POST', `/api/orders/purchaseReturn/${r.id}/pay`, { amount: 24 });
   const f = (await data()).finance.find(x => x.ref === r.no);
   assert.equal(f.type, 'income'); assert.equal(f.category, '采购退款');
+});
+
+test('订单分批执行：销售分批发货、采购分批入库，库存只通过关联单据变动一次', async () => {
+  await ok(admin, 'PUT', '/api/settings', { docApprove: { in: false, out: false } });
+  const p = await newProduct('SPLIT-1', { cost: 5, price: 10 });
+  await inDoc(admin, [{ productId: p.id, qty: 20, price: 5 }]);
+  const cu = await ok(admin, 'POST', '/api/customers', { name: '分批客户' });
+  const so = await ok(admin, 'POST', '/api/orders/sales', { partyId: cu.id, date: '2026-11-20', items: [{ productId: p.id, qty: 10, price: 10 }] });
+  await ok(admin, 'POST', `/api/orders/sales/${so.id}/ship`, { items: [{ line: 0, productId: p.id, unit: '个', qty: 4 }] });
+  let d = await data(), order = d.sales.find(o => o.id === so.id);
+  assert.equal(order.status, '待发货'); assert.equal(order.items[0].fulfilledQty, 4);
+  assert.equal((await prod(p.id)).stock, 16);
+  let doc = d.stockDocs.find(x => x.srcOrderId === so.id);
+  assert.ok(doc && doc.srcOrderNo === so.no && doc.dir === 'out');
+  assert.equal((await call(admin, 'POST', `/api/orders/sales/${so.id}/ship`, { items: [{ line: 0, productId: p.id, unit: '个', qty: 7 }] })).http, 400, '超过未发数量被拒绝');
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'out', type: '销售出库', party: '分批客户', srcOrderId: so.id, srcOrderKind: 'sales', items: [{ productId: p.id, unit: '个', qty: 2 }] });
+  d = await data(); order = d.sales.find(o => o.id === so.id);
+  assert.equal(order.items[0].fulfilledQty, 6);
+  assert.equal((await prod(p.id)).stock, 14);
+  assert.equal((await call(admin, 'POST', `/api/orders/sales/${so.id}/ship`, { items: [{ line: 0, productId: p.id, unit: '个', qty: 5 }] })).http, 400, '手工出库单也占用未发数量');
+  await ok(admin, 'POST', `/api/orders/sales/${so.id}/ship`, { items: [{ line: 0, productId: p.id, unit: '个', qty: 4 }] });
+  d = await data(); order = d.sales.find(o => o.id === so.id);
+  assert.equal(order.status, '已发货'); assert.equal(order.items[0].fulfilledQty, 10);
+  assert.equal((await prod(p.id)).stock, 10);
+  assert.equal(d.stockDocs.filter(x => x.srcOrderId === so.id && x.status === '正常').length, 3);
+  const su = await ok(admin, 'POST', '/api/suppliers', { name: '分批供应商' });
+  const po = await ok(admin, 'POST', '/api/orders/purchase', { partyId: su.id, date: '2026-11-20', items: [{ productId: p.id, qty: 8, price: 4 }] });
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/approve`, {});
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/inbound`, { items: [{ line: 0, productId: p.id, unit: '个', qty: 3 }] });
+  d = await data(); order = d.purchases.find(o => o.id === po.id);
+  assert.equal(order.status, '已审核'); assert.equal(order.items[0].fulfilledQty, 3);
+  assert.equal((await prod(p.id)).stock, 13);
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', party: '分批供应商', srcOrderId: po.id, srcOrderKind: 'purchase', items: [{ productId: p.id, unit: '个', qty: 2, price: 4 }] });
+  assert.equal((await prod(p.id)).stock, 15);
+  assert.equal((await call(admin, 'POST', `/api/orders/purchase/${po.id}/inbound`, { items: [{ line: 0, productId: p.id, unit: '个', qty: 4 }] })).http, 400, '分批入库也不能超过未入数量');
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/inbound`, { items: [{ line: 0, productId: p.id, unit: '个', qty: 3 }] });
+  d = await data(); order = d.purchases.find(o => o.id === po.id);
+  assert.equal(order.status, '已入库'); assert.equal(order.items[0].fulfilledQty, 8);
+  assert.equal((await prod(p.id)).stock, 18);
+  assert.equal(d.stockDocs.filter(x => x.srcOrderId === po.id && x.status === '正常').length, 3);
 });
 
 test('匿名使用统计：启动后报一次安装编号、版本、平台，不带业务数据；管理员可关闭', async () => {
@@ -748,14 +811,16 @@ test('匿名使用统计：启动后报一次安装编号、版本、平台，�
 
 test('问题反馈：留言转发给作者服务器（带版本号、不带业务数据），取回作者回复', async () => {
   assert.equal((await call(admin, 'POST', '/api/feedback', { text: '  ' })).http, 400, '内容不能为空');
-  await ok(admin, 'POST', '/api/feedback', { text: '导入时报错\n第二行', nick: '老王', contact: 'wx:abc', allowPublic: true });
+  const shot = 'data:image/png;base64,iVBORw0KGgo=';
+  await ok(admin, 'POST', '/api/feedback', { text: '导入时报错\n第二行', nick: '老王', contact: 'wx:abc', allowPublic: true, image: shot });
   assert.equal(fbStore.length, 1);
   const sent = fbStore[0];
   assert.match(sent.token, /^[0-9a-f]{32}$/);
-  assert.deepEqual(Object.keys(sent).filter(k => !['fid', 'reply', 'replied', 'public'].includes(k)).sort(), ['allowPublic', 'contact', 'nick', 'plat', 'text', 'token', 'v']);
+  assert.deepEqual(Object.keys(sent).filter(k => !['fid', 'reply', 'replied', 'public'].includes(k)).sort(), ['allowPublic', 'contact', 'image', 'nick', 'plat', 'text', 'token', 'v']);
   assert.equal(sent.text, '导入时报错\n第二行', '保留换行');
+  assert.equal(sent.image, shot, '截图随留言发送');
   let r = await ok(admin, 'GET', '/api/feedback');
-  assert.equal(r.list.length, 1); assert.equal(r.list[0].reply, ''); assert.equal(r.error, '');
+  assert.equal(r.list.length, 1); assert.equal(r.list[0].reply, ''); assert.equal(r.list[0].image, shot); assert.equal(r.error, '');
   // 作者回复后：未读 1，打开反馈页后清零
   Object.assign(fbStore[0], { reply: '已修复', replied: '2026-11-01 10:00', public: true });
   r = await ok(admin, 'GET', '/api/feedback');
@@ -787,7 +852,7 @@ test('序列号商品：采购入库、销售发货、销售退货都能逐件�
   assert.equal((await serials(p.id)).find(x => x.sn === 'A2').status, '已出库');
   assert.deepEqual((await data()).sales.find(o => o.id === so.id).items[0].serials, ['A2']);
   const rt = await ok(admin, 'POST', '/api/orders/salesReturn', { partyId: cu.id, date: '2026-11-05', srcId: so.id, items: [{ productId: p.id, qty: 1, price: 150 }] });
-  await ok(admin, 'POST', `/api/orders/salesReturn/${rt.id}/post`, { serials: { 0: ['A2'] } });
+  await ok(admin, 'POST', `/api/orders/salesReturn/${rt.id}/post`, { note: '序列号退货入库', serials: { 0: ['A2'] } });
   assert.equal((await serials(p.id)).find(x => x.sn === 'A2').status, '在库');
   assert.equal((await prod(p.id)).stock, 2);
 });
@@ -813,6 +878,9 @@ test('明细行优惠：行金额、订单合计和打印金额都按行优惠�
   assert.equal(o.items.reduce((s, i) => s + i.qty * i.price - (i.lineDiscount || 0), 0), 37);
   const e = await ok(admin, 'PUT', `/api/orders/sales/${o.id}`, { partyId:c.id, date:'2026-11-05', items:[{productId:p.id, qty:2, price:20, lineDiscount:4}] });
   assert.equal(e.items.reduce((s, i) => s + i.qty * i.price - (i.lineDiscount || 0), 0), 36);
+  const up = await ok(admin, 'POST', '/api/orders/sales', { partyId:c.id, date:'2026-11-05', items:[{productId:p.id, qty:2, price:20, lineDiscount:-5}] });
+  assert.equal(up.items[0].lineDiscount, -5, '负行调整表示加价');
+  assert.equal(up.items.reduce((s, i) => s + i.qty * i.price - (i.lineDiscount || 0), 0), 45, '小计可高于数量×单价');
   assert.equal((await call(admin, 'POST', '/api/orders/sales', { partyId:c.id, date:'2026-11-05', items:[{productId:p.id, qty:1, price:20, lineDiscount:21}] })).http, 400);
 });
 
@@ -924,7 +992,7 @@ test('资金账户：老流水按方式归账户，收付款记入所选账户�
   await ok(admin, 'DELETE', '/api/accounts/' + empty.id);
 });
 
-test('采购单：审核后入库前可以反审核、可以修改（改完回到待审核），入库后改单不回到待审核', async () => {
+test('采购单：入库前可反审核修改；入库后必须作废入库单才能改数量或价格', async () => {
   const p = await newProduct('PU12', { cost: 5 });
   const su = await ok(admin, 'POST', '/api/suppliers', { name: '反审核供应商' });
   const po = await ok(admin, 'POST', '/api/orders/purchase', { partyId: su.id, date: '2026-11-05', items: [{ productId: p.id, qty: 2, price: 5 }] });
@@ -938,9 +1006,16 @@ test('采购单：审核后入库前可以反审核、可以修改（改完回�
   assert.equal((await call(admin, 'POST', `/api/orders/purchase/${po.id}/unapprove`)).http, 400, '待审核不能再反审核');
   await ok(admin, 'POST', `/api/orders/purchase/${po.id}/approve`);
   await ok(admin, 'POST', `/api/orders/purchase/${po.id}/inbound`, {});
-  const u2 = await ok(admin, 'PUT', `/api/orders/purchase/${po.id}`, { partyId: su.id, date: '2026-11-05', items: [{ productId: p.id, qty: 1, price: 5 }] });
-  assert.equal(u2.status, '已入库', '入库后也能改（库存按新明细重算），状态不变');
+  const u2 = await ok(admin, 'PUT', `/api/orders/purchase/${po.id}`, { partyId: su.id, date: '2026-11-05', remark: '只改备注', items: [{ productId: p.id, qty: 3, price: 5 }] });
+  assert.equal(u2.status, '已入库', '只改备注不影响库存');
+  assert.equal((await call(admin, 'PUT', `/api/orders/purchase/${po.id}`, { partyId: su.id, date: '2026-11-05', items: [{ productId: p.id, qty: 1, price: 5 }] })).http, 400, '已生成入库单，不能直接改数量');
   assert.equal((await call(admin, 'POST', `/api/orders/purchase/${po.id}/unapprove`)).http, 400, '入库后不能反审核');
+  const linked = (await data()).stockDocs.find(d => d.srcOrderId === po.id);
+  assert.ok(linked, '订单生成了关联入库单');
+  await ok(admin, 'POST', `/api/stockdocs/${linked.id}/void`, {});
+  assert.equal((await prod(p.id)).stock, 0, '作废入库单后库存退回');
+  const edit = await ok(admin, 'PUT', `/api/orders/purchase/${po.id}`, { partyId: su.id, date: '2026-11-05', items: [{ productId: p.id, qty: 1, price: 5 }] });
+  assert.equal(edit.status, '待审核', '作废入库单后可以改，改完重新审核');
 });
 
 test('商品图片：上传后能取回原图、商品上有版本号；校验格式和大小；删图、删商品、备份恢复、清空都跟着走', async () => {
@@ -981,6 +1056,37 @@ test('供应商类目、客户等级可以自己填', async () => {
   assert.equal(su.category, '钢材');
   const cu = await ok(admin, 'POST', '/api/customers', { name: '批发客户', contact: '李', phone: '2', level: '批发' });
   assert.equal(cu.level, '批发');
+});
+
+test('客户供应商期初应收应付可以保存并参与往来余额', async () => {
+  const c = await ok(admin, 'POST', '/api/customers', { name: '期初客户', contact: '张三', phone: '13800000111', openingBalance: 1234.56 });
+  const s = await ok(admin, 'POST', '/api/suppliers', { name: '期初供应商', contact: '李四', phone: '13800000222', openingBalance: 500 });
+  assert.equal(c.openingBalance, 1234.56);
+  assert.equal(s.openingBalance, 500);
+  const d = await data();
+  assert.equal(d.customers.find(x => x.id === c.id).openingBalance, 1234.56);
+  assert.equal(d.suppliers.find(x => x.id === s.id).openingBalance, 500);
+  const e = await ok(admin, 'PUT', `/api/customers/${c.id}`, { ...c, openingBalance: 2000 });
+  assert.equal(e.openingBalance, 2000);
+});
+
+test('仓管员看不到商品成本价和出入库单金额', async () => {
+  const full = await ok(admin, 'GET', '/api/data'), modules = full.settings.modules || [], approve = full.settings.docApprove || { in:false, out:false };
+  try {
+    await ok(admin, 'PUT', '/api/settings', { modules:[...new Set([...modules, 'inventory', 'products'])], docApprove:{ in:false, out:false } });
+    const p = await newProduct('WH-HIDE', { cost: 7, price: 12 });
+    const wh = await newUser('whhide', 'r_wh');
+    const created = await ok(wh, 'POST', '/api/stockdocs', { dir:'in', type:'采购入库', items:[{ productId:p.id, qty:2, price:7 }] });
+    const d = await data(wh);
+    assert.equal(d.products.find(x => x.id === p.id).cost, undefined);
+    assert.equal(d.products.find(x => x.id === p.id).price, undefined);
+    const doc = d.stockDocs.find(x => x.id === created.id);
+    assert.ok(doc);
+    assert.equal(doc.items.find(i => i.productId === p.id).price, undefined, '入库单价不下发');
+    assert.equal(doc.items.find(i => i.productId === p.id).sale, undefined, '出库售价不下发');
+  } finally {
+    await ok(admin, 'PUT', '/api/settings', { modules, docApprove: approve });
+  }
 });
 
 test('同时监听 IPv4 和 IPv6：用 [::1] 也能访问', async t => {
@@ -1075,39 +1181,42 @@ test('出入库单可以填项目，打印模板能勾选项目', async () => {
   await ok(admin, 'PUT', '/api/settings/print', { kind: 'out', tpl: null });
 });
 
-test('已发货的销售单还能改：只改优惠不动库存，改数量按新明细重新出库，完成后不能改', async () => {
+test('销售订单发货统一生成出库单：改优惠不动库存，改数量需先作废出库单，完成后不能改', async () => {
   await ok(admin, 'PUT', '/api/settings', { modules: ['inventory', 'products', 'sales', 'purchase', 'parties', 'finance'] });
-  const p = await newProduct('ED-S1', { price: 20 }), q = await newProduct('ED-S2', { price: 5 });
-  await inDoc(admin, [{ productId: p.id, qty: 10, price: 8 }, { productId: q.id, qty: 10, price: 2 }]);
+  const p = await newProduct('ED-S1', { price: 20 });
+  await inDoc(admin, [{ productId: p.id, qty: 10, price: 8 }]);
   const cu = await ok(admin, 'POST', '/api/customers', { name: '改单客户' });
   const so = await ok(admin, 'POST', '/api/orders/sales', { partyId: cu.id, date: '2026-11-08', items: [{ productId: p.id, qty: 4, price: 20 }] });
   await ok(admin, 'POST', `/api/orders/sales/${so.id}/ship`, {});
+  let doc = (await data()).stockDocs.find(d => d.srcOrderId === so.id);
+  assert.ok(doc, '发货生成关联销售出库单');
+  assert.equal((await prod(p.id)).stock, 6);
   await ok(admin, 'POST', `/api/orders/sales/${so.id}/pay`, { amount: 50, method: '现金' });
-  // 发货后给优惠：库存不动，成本沿用
+  // 出库单已存在时，改优惠不影响库存；改数量必须先作废出库单
   let o = await ok(admin, 'PUT', `/api/orders/sales/${so.id}`, { partyId: cu.id, date: '2026-11-08', discount: 10, items: [{ productId: p.id, qty: 4, price: 20 }] });
   assert.equal(o.status, '已发货'); assert.equal(o.discount, 10); assert.equal(o.items[0].cost, 8);
   assert.equal((await prod(p.id)).stock, 6);
-  assert.equal((await data()).stockLogs.filter(l => l.ref === so.no).length, 1, '只改优惠不产生库存流水');
+  assert.equal((await data()).stockLogs.filter(l => l.ref === doc.no).length, 1, '只改优惠不产生新库存流水');
   assert.equal((await call(admin, 'PUT', `/api/orders/sales/${so.id}`, { partyId: cu.id, date: '2026-11-08', discount: 40, items: [{ productId: p.id, qty: 4, price: 20 }] })).http, 400, '合计不能少于已收的 50');
-  // 改数量、加商品：原出库冲回，按新明细出库
-  o = await ok(admin, 'PUT', `/api/orders/sales/${so.id}`, { partyId: cu.id, date: '2026-11-08', discount: 0, items: [{ productId: p.id, qty: 3, price: 19 }, { productId: q.id, qty: 2, price: 5 }] });
-  assert.equal((await prod(p.id)).stock, 7); assert.equal((await prod(q.id)).stock, 8);
-  assert.equal(o.items[1].cost, 2);
-  const logs = (await data()).stockLogs.filter(l => l.ref === so.no);
-  assert.equal(logs.filter(l => l.kind === '改单冲回').length, 1);
-  assert.equal(logs.filter(l => l.kind === '销售出库').length, 3);
-  assert.equal((await call(admin, 'PUT', `/api/orders/sales/${so.id}`, { partyId: cu.id, date: '2026-11-08', items: [{ productId: p.id, qty: 99, price: 19 }] })).http, 400, '库存不够');
-  assert.equal((await prod(p.id)).stock, 7, '失败时库存回滚');
+  assert.equal((await call(admin, 'PUT', `/api/orders/sales/${so.id}`, { partyId: cu.id, date: '2026-11-08', discount: 0, items: [{ productId: p.id, qty: 3, price: 19 }] })).http, 400, '已生成出库单不能直接改数量');
+  await ok(admin, 'POST', `/api/stockdocs/${doc.id}/void`, {});
+  assert.equal((await prod(p.id)).stock, 10, '作废出库单库存退回');
+  assert.equal((await data()).sales.find(x => x.id === so.id).status, '待发货');
+  o = await ok(admin, 'PUT', `/api/orders/sales/${so.id}`, { partyId: cu.id, date: '2026-11-08', discount: 0, items: [{ productId: p.id, qty: 3, price: 19 }] });
+  assert.equal(o.status, '待发货');
+  await ok(admin, 'POST', `/api/orders/sales/${so.id}/ship`, {});
+  assert.equal((await prod(p.id)).stock, 7);
+  assert.equal((await data()).sales.find(x => x.id === so.id).status, '已发货');
   // 开了退货单就不能再改数量，但还能改优惠
   const r = await ok(admin, 'POST', '/api/orders/salesReturn', { partyId: cu.id, date: '2026-11-08', srcId: so.id, items: [{ productId: p.id, qty: 1, price: 19 }] });
-  assert.equal((await call(admin, 'PUT', `/api/orders/sales/${so.id}`, { partyId: cu.id, date: '2026-11-08', items: [{ productId: p.id, qty: 2, price: 19 }, { productId: q.id, qty: 2, price: 5 }] })).http, 400);
-  await ok(admin, 'PUT', `/api/orders/sales/${so.id}`, { partyId: cu.id, date: '2026-11-08', discount: 2, items: [{ productId: p.id, qty: 3, price: 19 }, { productId: q.id, qty: 2, price: 5 }] });
+  assert.equal((await call(admin, 'PUT', `/api/orders/sales/${so.id}`, { partyId: cu.id, date: '2026-11-08', items: [{ productId: p.id, qty: 2, price: 19 }] })).http, 400);
+  await ok(admin, 'PUT', `/api/orders/sales/${so.id}`, { partyId: cu.id, date: '2026-11-08', discount: 2, items: [{ productId: p.id, qty: 3, price: 19 }] });
   await ok(admin, 'POST', `/api/orders/salesReturn/${r.id}/cancel`, {});
   await ok(admin, 'POST', `/api/orders/sales/${so.id}/complete`, {});
   assert.equal((await call(admin, 'PUT', `/api/orders/sales/${so.id}`, { partyId: cu.id, date: '2026-11-08', items: [{ productId: p.id, qty: 3, price: 19 }] })).http, 400, '已完成不能改');
 });
 
-test('已入库的采购单还能改：改进价重算成本，货已卖出就不能冲回', async () => {
+test('采购入库统一生成入库单：入库后不能直接改数量价格，作废入库单后可改', async () => {
   const p = await newProduct('ED-P1', { price: 30 });
   const su = await ok(admin, 'POST', '/api/suppliers', { name: '改单供应商' });
   const po = await ok(admin, 'POST', '/api/orders/purchase', { partyId: su.id, date: '2026-11-08', items: [{ productId: p.id, qty: 10, price: 10 }] });
@@ -1116,13 +1225,22 @@ test('已入库的采购单还能改：改进价重算成本，货已卖出就�
   assert.equal((await prod(p.id)).cost, 10);
   let o = await ok(admin, 'PUT', `/api/orders/purchase/${po.id}`, { partyId: su.id, date: '2026-11-08', discount: 5, items: [{ productId: p.id, qty: 10, price: 10 }] });
   assert.equal(o.status, '已入库'); assert.equal(o.discount, 5);
-  o = await ok(admin, 'PUT', `/api/orders/purchase/${po.id}`, { partyId: su.id, date: '2026-11-08', items: [{ productId: p.id, qty: 12, price: 9 }] });
-  let x = await prod(p.id);
-  assert.equal(x.stock, 12); assert.equal(x.cost, 9, '按新进价重算成本');
+  assert.equal((await call(admin, 'PUT', `/api/orders/purchase/${po.id}`, { partyId: su.id, date: '2026-11-08', items: [{ productId: p.id, qty: 12, price: 9 }] })).http, 400, '已生成入库单不能直接改数量单价');
   await outDoc(admin, [{ productId: p.id, qty: 5 }]);
-  assert.equal((await call(admin, 'PUT', `/api/orders/purchase/${po.id}`, { partyId: su.id, date: '2026-11-08', items: [{ productId: p.id, qty: 12, price: 8 }] })).http, 400, '卖掉了一部分，冲不回');
+  let x = await prod(p.id);
+  assert.equal(x.stock, 5); assert.equal(x.cost, 10);
+  const doc = (await data()).stockDocs.find(d => d.srcOrderId === po.id);
+  assert.ok(doc, '采购入库生成关联入库单');
+  assert.equal((await call(admin, 'POST', `/api/stockdocs/${doc.id}/void`, {})).http, 400, '货已卖出，入库单不能作废');
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '其他入库', items: [{ productId: p.id, qty: 5, price: 10 }] });
+  await ok(admin, 'POST', `/api/stockdocs/${doc.id}/void`, {});
   x = await prod(p.id);
-  assert.equal(x.stock, 7); assert.equal(x.cost, 9);
+  assert.equal(x.stock, 0, '作废原入库单后，补入的 5 个也已被原单扣回');
+  o = await ok(admin, 'PUT', `/api/orders/purchase/${po.id}`, { partyId: su.id, date: '2026-11-08', items: [{ productId: p.id, qty: 12, price: 9 }] });
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/approve`, {});
+  await ok(admin, 'POST', `/api/orders/purchase/${po.id}/inbound`, {});
+  x = await prod(p.id);
+  assert.equal(x.stock, 12); assert.equal(x.cost, 9);
 });
 
 test('收付款记录可以修改和删除，单据已收同步', async () => {
