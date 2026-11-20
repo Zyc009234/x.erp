@@ -445,7 +445,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.14.0</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.14.1</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -3650,6 +3650,13 @@ function orderStockModal({title, okText, desc, o, dir, wh0, check, onOk}) {
   };
 }
 const needsStockModal = (o, dir) => multiWh() || o.items.some(i => { const p = byId(db.products, i.productId) || {}; return p.serial || dir === 'in' && p.batch; });
+function pickFulfillWh(lines, isSales) {
+  if (!isSales) return META.defaultWh;
+  const all = whs();
+  return (all.find(w => lines.every(x => whQty(x.p, w.id) >= x.left))
+    || all.find(w => lines.some(x => whQty(x.p, w.id) > 0))
+    || all[0] || {id:META.defaultWh}).id;
+}
 function orderFulfillModal(kind, o) {
   const isSales = kind === 'sales', dir = isSales ? 'out' : 'in';
   const lines = o.items.map((i, k) => {
@@ -3660,9 +3667,7 @@ function orderFulfillModal(kind, o) {
     return { i, k, p, left, unit, rate, qty };
   }).filter(Boolean);
   if (!lines.length) return toast('订单已经全部执行完成', 'info');
-  const defaultWh = isSales
-    ? (whs().find(w => lines.every(x => whQty(x.p, w.id) >= x.left)) || whs().find(w => whQty(x.p, w.id) > 0) || whs()[0] || { id:META.defaultWh }).id
-    : META.defaultWh;
+  const defaultWh = pickFulfillWh(lines, isSales);
   const serialCol = lines.some(x => x.p.serial), batchCol = dir === 'in' && lines.some(x => x.p.batch);
   openModal(`${modalHead((isSales ? '分批发货' : '分批入库') + ' · ' + o.no)}<div class="m-body">
     <p class="sub-t" style="margin:0 0 10px">${isSales ? '本次发多少就填多少，未发数量留在订单里，可以以后再发。' : '本次到多少就填多少，未到数量留在订单里，可以以后再入库。'}确认后会生成一张关联${isSales ? '销售出库单' : '采购入库单'}，库存只在这里扣减一次。</p>

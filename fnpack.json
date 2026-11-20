@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.14.1": {
+          "changelog": "修复 2.14.0 多商品订单点「发货 / 入库」没有反应的问题：订单没有单个仓库能一次满足整单库存时，现在会正常弹出窗口并自动选择有库存的仓库；同时包含 2.14.0 的分批发货入库、三级包装单位、期初应收应付、行小计手改、批量操作和反馈截图等功能。",
+          "updated_at": "2026-11-20T21:47:59+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.1.fpk",
+              "sha256": "82a51cebb84d4f36e3c8e31f16394e7101493d4ecf5cff4bdb68065e5e1f8d24",
+              "size": 737273
+            }
+          }
+        },
         "2.14.0": {
           "changelog": "销售分批发货、采购分批入库，发货入库统一生成来源单据并只扣一次库存；新增三级包装单位、每级条码、默认采购销售单位和分单位售价；问题反馈支持截图；客户供应商支持期初应收应付；列表支持全选、批量删除和批量作废；订单行小计可手改，销售列表隐藏成本和毛利，仓管隐藏金额；优化自动备份路径提示和侧栏滚动条。",
           "updated_at": "2026-11-20T20:45:44+08:00",
@@ -53,17 +64,6 @@
               "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.3.fpk",
               "sha256": "24b9d6ba5bd1370243b12b9f2c2fd7a7f3ec8fc0f39373ee2863b72658e0552d",
               "size": 713163
-            }
-          }
-        },
-        "2.13.2": {
-          "changelog": "安卓盘点连续扫码（单品/箱码自动累加，同码不重复）；手机端新增/编辑商品恢复扫码按钮，订单扫码默认落到商品行；iPhone / 手机浏览器打印按纸张宽度排版，不再缩小、不再多空白页。",
-          "updated_at": "2026-11-18T19:10:00+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.2.fpk",
-              "sha256": "54b709979d80fd1c854127f2e2e02af784cbfc49868c5fde9c7a4fc67e76a0a8",
-              "size": 712163
             }
           }
         }

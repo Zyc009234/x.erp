@@ -1,49 +1,44 @@
 {
   "schema": 1,
-  "latest": "2.14.0",
-  "publishedAt": "2026-11-20T20:45:53+08:00",
+  "latest": "2.14.1",
+  "publishedAt": "2026-11-20T21:47:59+08:00",
   "notes": [
-    "销售分批发货、采购分批入库，发货入库统一生成来源单据并只扣一次库存",
-    "新增三级包装单位、每级条码、默认采购销售单位和分单位售价",
-    "问题反馈支持截图",
-    "客户供应商支持期初应收应付",
-    "列表支持全选、批量删除和批量作废",
-    "订单行小计可手改，销售列表隐藏成本和毛利，仓管隐藏金额",
-    "优化自动备份路径提示和侧栏滚动条。"
+    "订单没有单个仓库能一次满足整单库存时，现在会正常弹出窗口并自动选择有库存的仓库",
+    "同时包含 2.14.0 的分批发货入库、三级包装单位、期初应收应付、行小计手改、批量操作和反馈截图等功能。"
   ],
   "packages": {
     "fnos": {
-      "version": "2.14.0",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.0.fpk",
-      "sha256": "d56c3367c7f4f3d3e344eb77cdb65af8ca907ae52a0b0620cc318c1558e544c6",
-      "size": 737361,
-      "file": "xerp-2.14.0.fpk",
+      "version": "2.14.1",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.1.fpk",
+      "sha256": "82a51cebb84d4f36e3c8e31f16394e7101493d4ecf5cff4bdb68065e5e1f8d24",
+      "size": 737273,
+      "file": "xerp-2.14.1.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.14.0",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.0-windows-x64-setup.exe",
-      "sha256": "01eadd0ce26e42e5f6e14d4ff59e658e0d915c638c7494620743612f61f9ca42",
-      "size": 24628349,
-      "file": "xerp-2.14.0-windows-x64-setup.exe",
+      "version": "2.14.1",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.1-windows-x64-setup.exe",
+      "sha256": "0dab7499623c6160d4c4c1aefdac60a1f29c2caf1e4eb9305c94b1f8e5c6a98c",
+      "size": 24629499,
+      "file": "xerp-2.14.1-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.14.0",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.0-android.apk",
-      "sha256": "7b4aa92a33449a6a8eea64654983ffff2280d350e904f97167586890121fd7ea",
+      "version": "2.14.1",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.1-android.apk",
+      "sha256": "93d427f05c441d5cc0426e112a1089325b776179ecf20db993d7d9966e0171fe",
       "size": 295713,
-      "file": "xerp-2.14.0-android.apk",
+      "file": "xerp-2.14.1-android.apk",
       "kind": "apk",
-      "versionCode": 21400
+      "versionCode": 21401
     },
     "docker": {
-      "version": "2.14.0",
+      "version": "2.14.1",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.14.0",
+      "image": "ghcr.io/zyc009234/xerp:2.14.1",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.0-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.0-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.1-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.1-docker-arm64.tar.gz"
       ],
       "note": "也可以下载离线包 docker load"
     }
