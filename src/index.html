@@ -4981,7 +4981,7 @@ let CLOUD = null, cloudShowPass = false;
 const cloudSize = n => n >= 1024 ** 3 ? (n / 1024 ** 3).toFixed(n % 1024 ** 3 ? 1 : 0) + ' GB' : n >= 1024 ** 2 ? (n / 1024 ** 2).toFixed(n % 1024 ** 2 ? 1 : 0) + ' MB' : Math.ceil(n / 1024) + ' KB';
 const cloudDate = ts => new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false }).slice(0, 16);
 function pageCloud() {
-  $('#view').innerHTML = pageHead('云服务', '加密云备份 + 远程访问，一个套餐全包；扫码付款后自动发授权码，输入即可续期', `<a class="btn" href="https://www.zhaoyoucai.xyz/xerp-cloud/buy" target="_blank" rel="noopener">${ic('coin')}购买 / 续费</a><button class="btn" data-act="cloudRefresh">${ic('refresh')}刷新</button>`) + '<div id="cloudBody"><div class="card"><div class="card-body"><div class="empty">加载中…</div></div></div></div>';
+  $('#view').innerHTML = pageHead('云服务', '加密云备份 + 远程访问，一个套餐全包；扫码付款后自动发授权码，输入即可续期', `<a class="btn" href="https://www.zhaoyoucai.xyz/xerp/" target="_blank" rel="noopener">产品官网</a><a class="btn" href="https://www.zhaoyoucai.xyz/xerp-cloud/buy" target="_blank" rel="noopener">${ic('coin')}购买 / 续费</a><button class="btn" data-act="cloudRefresh">${ic('refresh')}刷新</button>`) + '<div id="cloudBody"><div class="card"><div class="card-body"><div class="empty">加载中…</div></div></div></div>';
   cloudLoad();
 }
 async function cloudLoad() {
@@ -5037,7 +5037,7 @@ function cloudDraw() {
     </div></div>`;
 }
 function pageFeedback() {
-  $('#view').innerHTML = pageHead('问题反馈', '遇到问题或有建议，直接留言给作者；作者的回复会显示在这里', `<button class="btn" data-act="tipOpen">${ic('coin')}打赏作者</button>`) + `
+  $('#view').innerHTML = pageHead('问题反馈', '遇到问题或有建议，直接留言给作者；作者的回复会显示在这里', `<a class="btn" href="https://www.zhaoyoucai.xyz/xerp/" target="_blank" rel="noopener">产品官网</a><button class="btn" data-act="tipOpen">${ic('coin')}打赏作者</button>`) + `
   <div class="grid g-2-1" style="align-items:start">
     <div class="card"><div class="card-head"><h3>我的留言</h3><button class="btn sm" id="fbReload">${ic('refresh')}刷新回复</button></div><div class="card-body" id="fbList"><div class="empty">加载中…</div></div></div>
     <div><div class="card"><div class="card-head"><h3>给作者留言</h3></div><div class="card-body">
@@ -5047,7 +5047,7 @@ function pageFeedback() {
       <label class="field" style="margin-top:12px"><span>称呼（可选）</span><input id="fbNick" maxlength="30" placeholder="怎么称呼你，公开时显示这个名字"></label>
       <label class="field" style="margin-top:12px"><span>联系方式（可选，只有作者能看到）</span><input id="fbContact" maxlength="100" placeholder="微信 / 手机 / 邮箱，方便作者联系你"></label>
       <label class="chk" style="margin-top:12px"><input type="checkbox" id="fbPub">允许作者把这条留言和回复公开到官网（不含联系方式）</label>
-      <p class="sub-t" style="margin-top:10px">留言会附带软件版本号和系统类型，不含公司名、商品、单据等业务数据。需要这台设备能上网。</p>
+      <p class="sub-t" style="margin-top:10px">留言会附带软件版本号和系统类型，不含公司名、商品、单据等业务数据。需要这台设备能上网。产品官网：<a class="link" href="https://www.zhaoyoucai.xyz/xerp/" target="_blank" rel="noopener">https://www.zhaoyoucai.xyz/xerp/</a></p>
       <div style="margin-top:14px;text-align:right"><button class="btn primary" id="fbSend">${ic('check')}发送留言</button></div>
     </div></div></div>
   </div>`;
