@@ -35,7 +35,7 @@ jobs:
         shell: powershell
         run: |
           $sdk = @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT, "$env:LOCALAPPDATA\Android\Sdk") | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-          if (-not $sdk) { throw '找不到 Android SDK' }
+          if (-not $sdk) { throw 'Android SDK not found' }
           $need = @()
           if (-not (Test-Path "$sdk\platforms\android-36\android.jar")) { $need += 'platforms;android-36' }
           if (-not (Test-Path "$sdk\build-tools\36.1.0\apksigner.bat")) { $need += 'build-tools;36.1.0' }
@@ -50,7 +50,7 @@ jobs:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
           PROPS_B64: ${{ secrets.ANDROID_KEYSTORE_PROPS_B64 }}
         run: |
-          if (-not $env:KS_B64 -or -not $env:PROPS_B64) { throw '缺少 ANDROID_KEYSTORE_B64 或 ANDROID_KEYSTORE_PROPS_B64 密钥' }
+          if (-not $env:KS_B64 -or -not $env:PROPS_B64) { throw 'Missing ANDROID_KEYSTORE_B64 or ANDROID_KEYSTORE_PROPS_B64 secret' }
           $dir = Join-Path $env:USERPROFILE '.xerp-android'
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
           [IO.File]::WriteAllBytes((Join-Path $dir 'release.jks'), [Convert]::FromBase64String($env:KS_B64))
@@ -67,5 +67,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $apk = Get-ChildItem dist\xerp-*-android.apk | Select-Object -First 1
-          if (-not $apk) { throw '未找到生成的 Android APK' }
+          if (-not $apk) { throw 'Android APK not found' }
           gh release upload "$env:TAG" $apk.FullName --clobber
