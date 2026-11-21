@@ -1,18 +1,18 @@
 {
   "schema": 1,
-  "latest": "2.14.5",
-  "publishedAt": "2026-11-21T12:51:00+08:00",
+  "latest": "2.14.6",
+  "publishedAt": "2026-11-21T15:28:00+08:00",
   "notes": [
-    "「云服务」和「问题反馈」页面新增产品官网入口，方便查看教程与下载新版",
-    "同时包含 2.14.4 的复选框开关修复、IPv6 双栈监听修复、远程隧道 gzip 提速及自定义前缀重名检测"
+    "修复在「用户管理」新增用户、重置密码或修改密码后无法登录的问题（升级后之前新建的账号自动恢复可登录）",
+    "优化问题反馈打赏弹窗文案"
   ],
   "packages": {
     "fnos": {
-      "version": "2.14.5",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.5.fpk",
-      "sha256": "8df5923be1017b808509cc6e4486cfb92b0ce17e0c07c2a7d3bba3bde21326e7",
-      "size": 739120,
-      "file": "xerp-2.14.5.fpk",
+      "version": "2.14.6",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.6.fpk",
+      "sha256": "220f9f8c88c6091a1ad7d1bef0a6f34efe697661fcd35de0653cbaf162200860",
+      "size": 740240,
+      "file": "xerp-2.14.6.fpk",
       "kind": "fpk"
     },
     "windows": {
@@ -33,12 +33,12 @@
       "versionCode": 21405
     },
     "docker": {
-      "version": "2.14.5",
+      "version": "2.14.6",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.14.5",
+      "image": "ghcr.io/zyc009234/xerp:2.14.6",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.5-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.5-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.6-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.6-docker-arm64.tar.gz"
       ],
       "note": "也可以下载离线包 docker load"
     }

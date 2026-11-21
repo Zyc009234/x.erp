@@ -59,11 +59,14 @@ function ensureCompanyUser(c, u, role) {
     let row = db.prepare('SELECT * FROM users WHERE username = ?').get(u.username);
     if (!row) {
       const id = uid('u');
-      const p = hashPwd(rnd(12));
+      const p = (u.salt && u.hash) ? { salt: u.salt, hash: u.hash } : hashPwd(rnd(12));
       const staff = db.prepare("SELECT id FROM roles WHERE id = 'r_staff'").get();
       db.prepare('INSERT INTO users (id, username, name, role, role_id, salt, hash, created_at) VALUES (?,?,?,?,?,?,?,?)')
         .run(id, u.username, u.name || u.username, role === 'admin' ? 'admin' : 'user', role === 'admin' ? null : (staff ? 'r_staff' : null), p.salt, p.hash, new Date().toISOString());
       row = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    } else if (u.salt && u.hash && (row.salt !== u.salt || row.hash !== u.hash)) {
+      db.prepare('UPDATE users SET salt = ?, hash = ? WHERE id = ?').run(u.salt, u.hash, row.id);
+      row.salt = u.salt; row.hash = u.hash;
     }
     if (row.role !== 'admin' && !row.role_id) {
       const staff = db.prepare("SELECT id FROM roles WHERE id = 'r_staff'").get();
@@ -176,10 +179,51 @@ function migrateDefaultUsers(c) {
     if (users.length) log('已迁移全局账号', users.length, '个');
   } finally { db.close(); }
 }
-function proxy(req, res, company, companyToken) {
+function syncCompanyUsers(c, liveMutation = false) {
+  let db;
+  try { db = companyDb(c); } catch (e) { return; }
+  try {
+    const rows = db.prepare('SELECT * FROM users WHERE disabled = 0').all();
+    const keep = new Set();
+    for (const u of rows) {
+      keep.add(u.username);
+      const role = u.role === 'admin' ? 'admin' : 'user';
+      let g = userByName(u.username);
+      if (!g) {
+        const id = uid('gu');
+        reg.prepare('INSERT INTO users (id, username, name, salt, hash, admin, created) VALUES (?,?,?,?,?,?,?)')
+          .run(id, u.username, u.name || u.username, u.salt, u.hash, (c.code === 'default' && role === 'admin') ? 1 : 0, u.created_at || new Date().toISOString());
+        g = { id };
+      } else if (liveMutation) {
+        const changed = g.salt !== u.salt || g.hash !== u.hash;
+        reg.prepare('UPDATE users SET name = ?, salt = ?, hash = ? WHERE id = ?')
+          .run(u.name || g.name || u.username, u.salt, u.hash, g.id);
+        if (changed) {
+          // 密码变化时同步给其他已加入账套（如有）
+        }
+      }
+      reg.prepare('INSERT INTO members (user_id, company_id, role) VALUES (?,?,?) ON CONFLICT(user_id, company_id) DO UPDATE SET role = excluded.role')
+        .run(g.id, c.id, role);
+    }
+    if (liveMutation) {
+      const ms = reg.prepare('SELECT m.user_id, u.username FROM members m JOIN users u ON u.id = m.user_id WHERE m.company_id = ?').all(c.id);
+      for (const m of ms) {
+        if (!keep.has(m.username)) {
+          reg.prepare('DELETE FROM members WHERE user_id = ? AND company_id = ?').run(m.user_id, c.id);
+          reg.prepare('DELETE FROM sessions WHERE user_id = ? AND company_id = ?').run(m.user_id, c.id);
+        }
+      }
+    }
+  } catch (e) { log('同步账套账号失败', c.code, e.message); }
+  finally { db.close(); }
+}
+function proxy(req, res, company, companyToken, onOk) {
   const headers = { ...req.headers, host: '127.0.0.1:' + company.port };
   if (companyToken) headers.authorization = 'Bearer ' + companyToken;
   const pr = http.request({ host: '127.0.0.1', port: company.port, path: req.url, method: req.method, headers }, r => {
+    if (onOk && r.statusCode >= 200 && r.statusCode < 300) {
+      try { onOk(); } catch (e) {}
+    }
     res.writeHead(r.statusCode || 502, r.headers);
     r.pipe(res);
   });
@@ -199,7 +243,9 @@ function loginPayload(user, c) {
 }
 
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://localhost');
+  let url;
+  try { url = new URL(req.url, 'http://localhost'); }
+  catch (e) { res.writeHead(400, { 'Content-Type': 'text/plain' }); return res.end('bad url'); }
   const p = url.pathname;
   try {
     if (p === '/api/portal/info') {
@@ -327,7 +373,8 @@ const server = http.createServer(async (req, res) => {
     if (p.startsWith('/api/')) {
       if (p === '/api/ping') return proxy(req, res, company || ensureDefaultCompany(), null);
       if (!sess || !company) return json(res, 401, { error: '登录已失效，请重新登录' });
-      return proxy(req, res, company, sess.company_token);
+      const syncAuth = req.method !== 'GET' && (p === '/api/users' || p.startsWith('/api/users/') || p === '/api/password');
+      return proxy(req, res, company, sess.company_token, syncAuth ? () => syncCompanyUsers(company, true) : null);
     }
     return proxy(req, res, ensureDefaultCompany(), null);
   } catch (e) {
@@ -354,6 +401,7 @@ async function boot() {
     }
     startCompany(c);
     await waitCompany(c.port);
+    syncCompanyUsers(c, false);
   }
   let listenHost = '::';
   server.on('error', e => {

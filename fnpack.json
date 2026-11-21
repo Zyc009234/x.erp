@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.14.6": {
+          "changelog": "修复在「用户管理」新增用户、重置密码或修改密码后无法登录的问题（多账套网关现自动同步账号与密码，老版本已建账号升级后即可直接登录）；优化问题反馈打赏弹窗文案。",
+          "updated_at": "2026-11-21T15:28:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.6.fpk",
+              "sha256": "220f9f8c88c6091a1ad7d1bef0a6f34efe697661fcd35de0653cbaf162200860",
+              "size": 740240
+            }
+          }
+        },
         "2.14.5": {
           "changelog": "「云服务」和「问题反馈」页面新增产品官网入口，方便查看教程与下载新版；同时包含 2.14.4 的复选框开关修复、IPv6 双栈监听修复、远程隧道 gzip 提速及自定义前缀重名检测。",
           "updated_at": "2026-11-21T12:51:00+08:00",
