@@ -16,21 +16,21 @@
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.14.4",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.4-windows-x64-setup.exe",
-      "sha256": "ded626513add748a7a77e005a690d0fbfaa8a464b99a9922d979358f7e449608",
-      "size": 23829228,
-      "file": "xerp-2.14.4-windows-x64-setup.exe",
+      "version": "2.14.5",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.5-windows-x64-setup.exe",
+      "sha256": "434a0f40f98215a65c003f2e6f76a5afa85f4cbf9f4e87c64f6db74c1af3b764",
+      "size": 23829828,
+      "file": "xerp-2.14.5-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.14.4",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.4-android.apk",
-      "sha256": "8cf238d4572f32e8dfc858aeafbfe9cd0fe2e508de55f90ebc7fc8ec6d914e7f",
+      "version": "2.14.5",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.5-android.apk",
+      "sha256": "491f208ff47df5b5e3975e85c2695bcdafd30f292e72aca4aa469f4c597cb1d3",
       "size": 279329,
-      "file": "xerp-2.14.4-android.apk",
+      "file": "xerp-2.14.5-android.apk",
       "kind": "apk",
-      "versionCode": 21404
+      "versionCode": 21405
     },
     "docker": {
       "version": "2.14.5",
