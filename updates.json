@@ -1,19 +1,18 @@
 {
   "schema": 1,
-  "latest": "2.14.3",
-  "publishedAt": "2026-11-21T12:02:00+08:00",
+  "latest": "2.14.4",
+  "publishedAt": "2026-11-21T12:20:00+08:00",
   "notes": [
-    "修复多账套网关仅监听 IPv4 导致 IPv6 地址无法访问的问题（恢复 IPv4/IPv6 双栈监听）",
-    "云服务远程访问隧道新增 gzip 压缩传输提速",
-    "自定义远程访问地址前缀新增实时重名检测"
+    "修复云服务「远程访问开启」与「每天自动上传」复选框点击后状态和提示相反的问题",
+    "同时包含 2.14.3 的 IPv6 双栈监听修复、远程隧道 gzip 提速及自定义前缀实时重名检测"
   ],
   "packages": {
     "fnos": {
-      "version": "2.14.3",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.3.fpk",
-      "sha256": "b93f04213c0216020ef0df4262e38455665b6e1b1a9d30b27b86f67d2ed42d0b",
-      "size": 739140,
-      "file": "xerp-2.14.3.fpk",
+      "version": "2.14.4",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.4.fpk",
+      "sha256": "763938af1f7b262de9d8e81f74ef779396b4e9ef5ba8978c5a702d80cf3ff827",
+      "size": 739153,
+      "file": "xerp-2.14.4.fpk",
       "kind": "fpk"
     },
     "windows": {
@@ -34,12 +33,12 @@
       "versionCode": 21403
     },
     "docker": {
-      "version": "2.14.3",
+      "version": "2.14.4",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.14.3",
+      "image": "ghcr.io/zyc009234/xerp:2.14.4",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.3-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.3-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.4-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.4-docker-arm64.tar.gz"
       ],
       "note": "也可以下载离线包 docker load"
     }

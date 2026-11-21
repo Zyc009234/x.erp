@@ -134,7 +134,9 @@ async function remoteProxy(req, res, host) {
 }
 
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://localhost');
+  let url;
+  try { url = new URL(req.url, 'http://localhost'); }
+  catch (e) { res.writeHead(400, { 'Content-Type': 'text/plain' }); return res.end('bad url'); }
   const p = url.pathname;
   const host = String(req.headers.host || '').split(':')[0].toLowerCase();
   try {
@@ -164,7 +166,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.on('upgrade', async (req, socket, head) => {
-  const u = new URL(req.url, 'http://localhost');
+  let u;
+  try { u = new URL(req.url, 'http://localhost'); }
+  catch (e) { socket.destroy(); return; }
   if (u.pathname !== '/tunnel') { socket.destroy(); return; }
   const device = String(u.searchParams.get('device') || '');
   const secret = String(u.searchParams.get('secret') || '');

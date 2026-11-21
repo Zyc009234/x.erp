@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 2.14.3
+version               = 2.14.4
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 修复多账套网关仅监听 IPv4 导致 IPv6 地址无法访问的问题（恢复 IPv4/IPv6 双栈监听）；云服务远程访问隧道新增 gzip 压缩传输提速；自定义地址前缀新增实时重名检测。
+changelog             = 修复云服务「远程访问开启」与「每天自动上传」复选框点击后状态和提示相反的问题；同时包含 2.14.3 的 IPv6 双栈监听修复、远程隧道 gzip 提速及自定义前缀实时重名检测。
