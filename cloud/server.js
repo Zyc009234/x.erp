@@ -12,6 +12,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
 const DIR = process.env.CLOUD_DIR || '/var/lib/xerp-cloud';
@@ -927,7 +928,11 @@ server.on('upgrade', (req, socket, head) => {
     delete headers['content-length'];
     delete headers['connection'];
     delete headers['keep-alive'];
-    const buf = Buffer.from(msg.body || '', 'base64');
+    let buf = Buffer.from(msg.body || '', 'base64');
+    if (msg.gz) {
+      try { buf = zlib.gunzipSync(buf); } catch (e) {}
+      delete headers['content-encoding'];
+    }
     headers['content-length'] = String(buf.length);
     try { res.writeHead(msg.status || 502, headers); res.end(buf); } catch (e) { try { res.end(); } catch (x) {} }
   });
