@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.14.5": {
+          "changelog": "「云服务」和「问题反馈」页面新增产品官网入口，方便查看教程与下载新版；同时包含 2.14.4 的复选框开关修复、IPv6 双栈监听修复、远程隧道 gzip 提速及自定义前缀重名检测。",
+          "updated_at": "2026-11-21T12:51:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.5.fpk",
+              "sha256": "8df5923be1017b808509cc6e4486cfb92b0ce17e0c07c2a7d3bba3bde21326e7",
+              "size": 739120
+            }
+          }
+        },
         "2.14.4": {
           "changelog": "修复云服务「远程访问开启」与「每天自动上传」复选框点击后状态和提示相反的问题；同时包含 2.14.3 的 IPv6 双栈监听修复、远程隧道 gzip 提速及自定义前缀实时重名检测。",
           "updated_at": "2026-11-21T12:20:00+08:00",
