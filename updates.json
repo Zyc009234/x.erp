@@ -16,11 +16,11 @@
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.14.1",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.1-windows-x64-setup.exe",
-      "sha256": "0dab7499623c6160d4c4c1aefdac60a1f29c2caf1e4eb9305c94b1f8e5c6a98c",
-      "size": 24629499,
-      "file": "xerp-2.14.1-windows-x64-setup.exe",
+      "version": "2.14.2",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.2-windows-x64-setup.exe",
+      "sha256": "a7e25ca1eb99a049b2351091c3fed6c011e731766a9ec01e37b0546de37c9162",
+      "size": 23825156,
+      "file": "xerp-2.14.2-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
