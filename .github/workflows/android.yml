@@ -1,0 +1,71 @@
+# Android 安装包自动构建与签名：
+# - 推送 v* 标签或手动触发（填 tag 如 v2.14.2）时，在云端 Windows 用正式签名证书打包 xerp-<版本>-android.apk
+# - 自动上传为对应 GitHub Release 的附件
+name: android
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布附件的版本标签（如 v2.14.2，留空只做构建测试）'
+        required: false
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/v') && github.ref_name) || '' }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.ref }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 确保 Android SDK 36 与 build-tools 36.1.0 已安装
+        shell: powershell
+        run: |
+          $sdk = @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT, "$env:LOCALAPPDATA\Android\Sdk") | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $sdk) { throw '找不到 Android SDK' }
+          $need = @()
+          if (-not (Test-Path "$sdk\platforms\android-36\android.jar")) { $need += 'platforms;android-36' }
+          if (-not (Test-Path "$sdk\build-tools\36.1.0\apksigner.bat")) { $need += 'build-tools;36.1.0' }
+          if ($need.Count -gt 0) {
+            $mgr = Join-Path $sdk 'cmdline-tools\latest\bin\sdkmanager.bat'
+            "y`ny`ny`ny`ny`ny`n" | & $mgr @need
+          }
+
+      - name: 还原正式签名证书
+        shell: powershell
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          PROPS_B64: ${{ secrets.ANDROID_KEYSTORE_PROPS_B64 }}
+        run: |
+          if (-not $env:KS_B64 -or -not $env:PROPS_B64) { throw '缺少 ANDROID_KEYSTORE_B64 或 ANDROID_KEYSTORE_PROPS_B64 密钥' }
+          $dir = Join-Path $env:USERPROFILE '.xerp-android'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          [IO.File]::WriteAllBytes((Join-Path $dir 'release.jks'), [Convert]::FromBase64String($env:KS_B64))
+          [IO.File]::WriteAllBytes((Join-Path $dir 'keystore.properties'), [Convert]::FromBase64String($env:PROPS_B64))
+
+      - name: 打包并签名 Android APK
+        shell: powershell
+        run: .\android\build-android.ps1
+
+      - name: 上传安装包到 GitHub Release
+        if: env.TAG != ''
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $apk = Get-ChildItem dist\xerp-*-android.apk | Select-Object -First 1
+          if (-not $apk) { throw '未找到生成的 Android APK' }
+          gh release upload "$env:TAG" $apk.FullName --clobber
