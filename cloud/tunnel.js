@@ -6,12 +6,13 @@
  */
 const http = require('http');
 const crypto = require('crypto');
+const zlib = require('zlib');
 
 const PORT = +(process.env.TUNNEL_PORT || 8095);
 const TUNNEL_DOMAIN = (process.env.TUNNEL_DOMAIN || 'xerp.zhaoyoucai.xyz').toLowerCase();
 const CLOUD_API_ORIGIN = (process.env.CLOUD_API_ORIGIN || 'https://www.zhaoyoucai.xyz/xerp-cloud').replace(/\/+$/, '');
 const INTERNAL_KEY = process.env.TUNNEL_INTERNAL_KEY || '';
-const LOOKUP_TTL_MS = 15000;
+const LOOKUP_TTL_MS = 60000;
 
 const tunnels = new Map();       // account id -> { socket, slug, expires }
 const tunnelPending = new Map(); // request id -> { res, timer }
@@ -205,7 +206,11 @@ server.on('upgrade', async (req, socket, head) => {
     delete headers['content-length'];
     delete headers['connection'];
     delete headers['keep-alive'];
-    const buf = Buffer.from(msg.body || '', 'base64');
+    let buf = Buffer.from(msg.body || '', 'base64');
+    if (msg.gz) {
+      try { buf = zlib.gunzipSync(buf); } catch (e) {}
+      delete headers['content-encoding'];
+    }
     headers['content-length'] = String(buf.length);
     try { res.writeHead(msg.status || 502, headers); res.end(buf); } catch (e) { try { res.end(); } catch (x) {} }
   });

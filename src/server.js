@@ -17,9 +17,10 @@ const os = require('os');
 const crypto = require('crypto');
 const net = require('net');
 const tls = require('tls');
+const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.14.2';
+const VERSION = '2.14.3';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -3180,7 +3181,10 @@ function tunnelForward(msg, ws) {
     resp.on('data', c => { size += c.length; if (size <= 25 * 1024 * 1024) chunks.push(c); });
     resp.on('end', () => {
       if (size > 25 * 1024 * 1024) return;
-      try { ws.send(JSON.stringify({ type: 'res', id: msg.id, status: resp.statusCode, headers: resp.headers, body: Buffer.concat(chunks).toString('base64') })); } catch (e) {}
+      const raw = Buffer.concat(chunks);
+      const useGz = raw.length >= 1024;
+      const payload = useGz ? zlib.gzipSync(raw, { level: 6 }) : raw;
+      try { ws.send(JSON.stringify({ type: 'res', id: msg.id, status: resp.statusCode, headers: resp.headers, gz: useGz || undefined, body: payload.toString('base64') })); } catch (e) {}
     });
   });
   r.on('error', () => {
@@ -3870,6 +3874,13 @@ route('POST', '/api/cloud/remote', async ctx => {
   if (on) cloudTunnelStart(); else cloudTunnelStop();
   audit(ctx, on ? '开启远程访问' : '关闭远程访问');
   return { ok: true, ...cloudState() };
+}, { admin: true });
+route('GET', '/api/cloud/slug/check', async ctx => {
+  if (!config.cloud.token) fail('还没有开通云服务，请先输入授权码');
+  const slug = str(ctx.query.get('slug'), 32).toLowerCase();
+  if (!slug) return { available: false, reason: '请输入自定义前缀' };
+  const r = await cloudReq('/tunnel/slug/check?slug=' + encodeURIComponent(slug), { token: config.cloud.token });
+  return await r.json();
 }, { admin: true });
 route('POST', '/api/cloud/slug', async ctx => {
   if (!config.cloud.token) fail('还没有开通云服务，请先输入授权码');

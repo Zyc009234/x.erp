@@ -642,6 +642,19 @@ const server = http.createServer(async (req, res) => {
         .run(slug, crypto.createHash('sha256').update(tunnelSecret).digest('hex'), a.id);
       return json(res, 200, { slug, tunnelSecret, url: `https://${slug}.${TUNNEL_DOMAIN}` });
     }
+    if (req.method === 'GET' && p === '/api/tunnel/slug/check') {
+      const a = accountOf(req);
+      if (!a) return fail(res, 401, '授权已失效，请重新激活');
+      const slug = String(url.searchParams.get('slug') || '').trim().toLowerCase();
+      if (!SLUG_RE.test(slug) || slug.includes('--')) {
+        return json(res, 200, { available: false, reason: '需为 3–32 位小写字母、数字或连字符(-)，首尾为字母或数字，不能含 --' });
+      }
+      if (RESERVED_SLUGS.has(slug)) return json(res, 200, { available: false, reason: '该前缀为系统保留词，请换一个' });
+      if (slug === a.slug) return json(res, 200, { available: false, reason: '与当前地址相同' });
+      const exists = db.prepare('SELECT id FROM accounts WHERE slug = ? AND id != ?').get(slug, a.id);
+      if (exists) return json(res, 200, { available: false, reason: '该前缀已被其他用户使用，请换一个' });
+      return json(res, 200, { available: true, reason: '前缀可用' });
+    }
     if (req.method === 'POST' && p === '/api/tunnel/slug') {
       const a = accountOf(req);
       if (!a) return fail(res, 401, '授权已失效，请重新激活');

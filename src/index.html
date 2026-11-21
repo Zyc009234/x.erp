@@ -445,7 +445,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.14.2</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.14.3</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -6256,13 +6256,37 @@ const A = {
       <label class="field"><span>自定义前缀</span>
         <div style="display:flex;align-items:center;gap:6px"><input id="slugIn" value="${esc(r.slug || '')}" maxlength="32" autocomplete="off" placeholder="如 myshop" ${locked ? 'disabled' : ''} style="flex:1"><span class="sub-t">.${esc(domain)}</span></div>
       </label>
-      <p class="sub-t" style="margin:8px 0 0">规则：3–32 位小写字母、数字或连字符(-)，首尾须为字母或数字，不能连续使用 --。</p>
-    </div><div class="m-foot"><button class="btn" data-act="closeModal">取消</button>${locked ? '' : '<button class="btn primary" id="slugOk">保存修改</button>'}</div>`, 'sm');
+      <div id="slugTip" class="sub-t" style="margin:6px 0 0;min-height:18px"></div>
+      <p class="sub-t" style="margin:6px 0 0">规则：3–32 位小写字母、数字或连字符(-)，首尾须为字母或数字，不能连续使用 --。</p>
+    </div><div class="m-foot"><button class="btn" data-act="closeModal">取消</button>${locked ? '' : '<button class="btn primary" id="slugOk" disabled>保存修改</button>'}</div>`, 'sm');
     if (!locked) {
-      const btn = $('#slugOk');
+      const inp = $('#slugIn'), tip = $('#slugTip'), btn = $('#slugOk');
+      let tmr = null, seq = 0, lastOk = '';
+      const setTip = (txt, color) => { tip.textContent = txt; tip.style.color = color || ''; };
+      const checkSlug = () => {
+        clearTimeout(tmr);
+        const v = (inp.value || '').trim().toLowerCase();
+        lastOk = ''; btn.disabled = true;
+        if (!v) return setTip('');
+        if (!/^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?$/.test(v) || v.includes('--')) {
+          return setTip('格式不符：需 3–32 位小写字母/数字/-，首尾为字母或数字', 'var(--red)');
+        }
+        if (v === (r.slug || '').toLowerCase()) return setTip('与当前地址相同', '');
+        setTip('正在检查是否重名…', '');
+        const my = ++seq;
+        tmr = setTimeout(async () => {
+          try {
+            const c = await api('GET', '/api/cloud/slug/check?slug=' + encodeURIComponent(v));
+            if (my !== seq) return;
+            if (c.available) { lastOk = v; btn.disabled = false; setTip('✓ ' + (c.reason || '前缀可用'), 'var(--green)'); }
+            else { setTip('✗ ' + (c.reason || '不可用'), 'var(--red)'); }
+          } catch (e) { if (my === seq) setTip(e.message || '检查失败', 'var(--red)'); }
+        }, 350);
+      };
+      inp.oninput = checkSlug;
       btn.onclick = async () => {
-        const slug = ($('#slugIn').value || '').trim().toLowerCase();
-        if (!slug) return toast('请输入自定义前缀', 'error');
+        const slug = (inp.value || '').trim().toLowerCase();
+        if (!slug || slug !== lastOk) return toast('请先输入可用的自定义前缀', 'error');
         btn.disabled = true;
         try {
           const res = await api('POST', '/api/cloud/slug', { slug });

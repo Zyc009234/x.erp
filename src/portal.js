@@ -355,11 +355,17 @@ async function boot() {
     startCompany(c);
     await waitCompany(c.port);
   }
+  let listenHost = '::';
   server.on('error', e => {
+    if (listenHost === '::' && ['EAFNOSUPPORT', 'EADDRNOTAVAIL', 'EINVAL'].includes(e.code)) {
+      log('本机没有启用 IPv6，网关改为只监听 IPv4');
+      listenHost = '0.0.0.0';
+      return server.listen(PORT, listenHost);
+    }
     log(e.code === 'EADDRINUSE' ? `启动失败：网关端口 ${PORT} 已被占用` : '启动失败：' + e.message);
     process.exit(1);
   });
-  server.listen(PORT, '0.0.0.0', () => log('x.erp 网关已启动，端口 ' + PORT + '，账套端口从 ' + BASE_PORT + ' 起'));
+  server.listen(PORT, listenHost, () => log('x.erp 网关已启动（' + (listenHost === '::' ? 'IPv4/IPv6 双栈' : 'IPv4') + '），端口 ' + PORT + '，账套端口从 ' + BASE_PORT + ' 起'));
 }
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) {
   try {

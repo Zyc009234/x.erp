@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.14.3": {
+          "changelog": "修复多账套网关仅监听 IPv4 导致 IPv6 地址无法访问的问题（恢复 IPv4/IPv6 双栈监听）；云服务远程访问隧道新增 gzip 压缩传输提速；自定义地址前缀新增实时重名检测。",
+          "updated_at": "2026-11-21T12:02:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.3.fpk",
+              "sha256": "b93f04213c0216020ef0df4262e38455665b6e1b1a9d30b27b86f67d2ed42d0b",
+              "size": 739140
+            }
+          }
+        },
         "2.14.2": {
           "changelog": "云服务远程访问支持自定义地址前缀（有效云会员每 30 天可修改一次）；远程访问隧道切换至独立高速中转节点，云备份继续留在主云端。",
           "updated_at": "2026-11-21T11:25:00+08:00",
