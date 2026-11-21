@@ -24,13 +24,13 @@
       "kind": "exe"
     },
     "android": {
-      "version": "2.14.1",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.1-android.apk",
-      "sha256": "93d427f05c441d5cc0426e112a1089325b776179ecf20db993d7d9966e0171fe",
-      "size": 295713,
-      "file": "xerp-2.14.1-android.apk",
+      "version": "2.14.2",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.2-android.apk",
+      "sha256": "c956f33fe353a7a6b5abc93d6bfaac1c3177c99714a0311f366b5b0a6265d8be",
+      "size": 279329,
+      "file": "xerp-2.14.2-android.apk",
       "kind": "apk",
-      "versionCode": 21401
+      "versionCode": 21402
     },
     "docker": {
       "version": "2.14.2",
