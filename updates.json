@@ -1,18 +1,18 @@
 {
   "schema": 1,
-  "latest": "2.14.1",
-  "publishedAt": "2026-11-20T21:47:59+08:00",
+  "latest": "2.14.2",
+  "publishedAt": "2026-11-21T11:25:00+08:00",
   "notes": [
-    "订单没有单个仓库能一次满足整单库存时，现在会正常弹出窗口并自动选择有库存的仓库",
-    "同时包含 2.14.0 的分批发货入库、三级包装单位、期初应收应付、行小计手改、批量操作和反馈截图等功能。"
+    "云服务远程访问支持自定义地址前缀（有效云会员每 30 天可修改一次）",
+    "远程访问隧道切换至独立高速中转节点，云备份继续留在主云端"
   ],
   "packages": {
     "fnos": {
-      "version": "2.14.1",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.1.fpk",
-      "sha256": "82a51cebb84d4f36e3c8e31f16394e7101493d4ecf5cff4bdb68065e5e1f8d24",
-      "size": 737273,
-      "file": "xerp-2.14.1.fpk",
+      "version": "2.14.2",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.2.fpk",
+      "sha256": "04d0a4a6a697ed021f5453bbb30f3a51d8cedbb9acf270f05179071ecc1dd490",
+      "size": 738241,
+      "file": "xerp-2.14.2.fpk",
       "kind": "fpk"
     },
     "windows": {
@@ -33,12 +33,12 @@
       "versionCode": 21401
     },
     "docker": {
-      "version": "2.14.1",
+      "version": "2.14.2",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.14.1",
+      "image": "ghcr.io/zyc009234/xerp:2.14.2",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.1-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.1-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.2-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.2-docker-arm64.tar.gz"
       ],
       "note": "也可以下载离线包 docker load"
     }

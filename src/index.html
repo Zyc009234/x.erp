@@ -445,7 +445,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.14.1</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.14.2</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -5023,7 +5023,7 @@ function cloudDraw() {
       <div class="card"><div class="card-body"><div class="sub-t">上次上传</div><div style="font-size:16px;font-weight:600;margin-top:4px">${CLOUD.local.lastUpload ? esc(fmtTime(CLOUD.local.lastUpload)) : '还没有上传'}</div><div class="sub-t">${CLOUD.local.auto ? '自动备份已开启' : '自动备份未开启'}</div></div></div>
     </div>
     <div class="card" style="margin-bottom:12px"><div class="card-head"><h3>远程访问</h3><label class="chk"><input type="checkbox" data-act="cloudRemote" ${CLOUD.remote && CLOUD.remote.enabled ? 'checked' : ''}>开启</label></div><div class="card-body">
-      ${CLOUD.remote && CLOUD.remote.url ? `<p style="margin:0 0 6px">外部地址：<code>${esc(CLOUD.remote.url)}</code> <button class="btn sm" data-act="cloudCopyRemote">复制</button></p><p class="sub-t" style="margin:0">状态：${CLOUD.remote.online ? '<b style="color:var(--green)">已连接</b>' : '正在连接 / 离线'}。在外面用手机或电脑打开这个地址，就能像在局域网一样使用。</p>` : '<p class="sub-t" style="margin:0">请重新输入一次授权码，获取远程访问地址。2 元/月起套餐已包含云备份和远程访问。</p>'}
+      ${CLOUD.remote && CLOUD.remote.url ? `<p style="margin:0 0 6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">外部地址：<code>${esc(CLOUD.remote.url)}</code> <button class="btn sm" data-act="cloudCopyRemote">复制</button> <button class="btn sm" data-act="cloudEditSlug">自定义地址</button></p><p class="sub-t" style="margin:0">状态：${CLOUD.remote.online ? '<b style="color:var(--green)">已连接</b>' : '正在连接 / 离线'}。在外面用手机或电脑打开这个地址，就能像在局域网一样使用。${CLOUD.remote.nextSlugAt && CLOUD.remote.nextSlugAt * 1000 > Date.now() ? ` 下次可修改地址：${esc(cloudDate(CLOUD.remote.nextSlugAt))}。` : ' 云会员每 30 天可自定义一次地址前缀。'}</p>` : '<p class="sub-t" style="margin:0">请重新输入一次授权码，获取远程访问地址。套餐已包含云备份和远程访问。</p>'}
     </div></div>
     <div class="card" style="margin-bottom:12px"><div class="card-head"><h3>备份密码</h3>${CLOUD.local.hasKey ? `<button class="btn sm" data-act="cloudPassToggle">修改密码</button>` : ''}</div><div class="card-body">
       ${CLOUD.local.hasKey && !cloudShowPass ? '<p class="sub-t" style="margin:0">已设置并记住密码，备份时不需要再输入。<b>密码丢失后云端备份无法解密</b>，请另外记一份。</p>' : `
@@ -6244,6 +6244,35 @@ const A = {
       if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(url).then(done).catch(fallback);
       else fallback();
     } catch (e) { fallback(); }
+  },
+  cloudEditSlug: () => {
+    const r = CLOUD.remote || {};
+    const domain = r.domain || 'xerp.zhaoyoucai.xyz';
+    const nextAt = r.nextSlugAt || 0;
+    const locked = nextAt && nextAt * 1000 > Date.now();
+    openModal(`${modalHead('自定义远程访问地址')}<div class="m-body">
+      <p class="sub-t" style="margin:0 0 12px">仅有效云会员可修改，<b>每 30 天可修改一次</b>。修改后原地址将立即失效，请使用新地址访问。</p>
+      ${locked ? `<p style="margin:0 0 12px;color:var(--red)">距离上次修改未满 30 天，下次可修改时间：${esc(cloudDate(nextAt))}</p>` : ''}
+      <label class="field"><span>自定义前缀</span>
+        <div style="display:flex;align-items:center;gap:6px"><input id="slugIn" value="${esc(r.slug || '')}" maxlength="32" autocomplete="off" placeholder="如 myshop" ${locked ? 'disabled' : ''} style="flex:1"><span class="sub-t">.${esc(domain)}</span></div>
+      </label>
+      <p class="sub-t" style="margin:8px 0 0">规则：3–32 位小写字母、数字或连字符(-)，首尾须为字母或数字，不能连续使用 --。</p>
+    </div><div class="m-foot"><button class="btn" data-act="closeModal">取消</button>${locked ? '' : '<button class="btn primary" id="slugOk">保存修改</button>'}</div>`, 'sm');
+    if (!locked) {
+      const btn = $('#slugOk');
+      btn.onclick = async () => {
+        const slug = ($('#slugIn').value || '').trim().toLowerCase();
+        if (!slug) return toast('请输入自定义前缀', 'error');
+        btn.disabled = true;
+        try {
+          const res = await api('POST', '/api/cloud/slug', { slug });
+          CLOUD = { ...CLOUD, ...res };
+          closeModal();
+          cloudDraw();
+          toast('远程地址已更新：' + (res.url || ''));
+        } catch (e) { toast(e.message, 'error'); btn.disabled = false; }
+      };
+    }
   },
   cloudDelete: id => confirmBox('删除这份云端备份？删除后不能再恢复。', async () => {
     try { const r = await api('DELETE', '/api/cloud/backups/' + id); CLOUD = { ...CLOUD, ...r }; cloudDraw(); toast('已删除'); }

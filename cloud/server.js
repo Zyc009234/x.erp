@@ -19,6 +19,7 @@ const PORT = +(process.env.CLOUD_PORT || 8095);
 const BASE = (process.env.CLOUD_BASE || 'https://www.zhaoyoucai.xyz/xerp-cloud').replace(/\/+$/, '');
 const TOTAL_QUOTA = +(process.env.CLOUD_TOTAL_QUOTA || 12 * 1024 ** 3);
 const TUNNEL_DOMAIN = process.env.TUNNEL_DOMAIN || 'xerp.zhaoyoucai.xyz';
+const TUNNEL_INTERNAL_KEY = process.env.TUNNEL_INTERNAL_KEY || '';
 const BLOB_DIR = path.join(DIR, 'blobs');
 const DB_FILE = path.join(DIR, 'cloud.db');
 const PW_FILE = path.join(DIR, 'admin.pw');
@@ -33,9 +34,9 @@ const ORDER_TTL = 300;
 const MATCH_TTL = 360;
 
 const PLANS = {
-  basic: { name: '基础版', quota: 1 * GB, days: 30, max: 7, price: 2 },
-  plus: { name: '标准版', quota: 5 * GB, days: 30, max: 15, price: 3 },
-  pro: { name: '专业版', quota: 10 * GB, days: 30, max: 30, price: 5 },
+  basic: { name: '基础版', quota: 1 * GB, days: 30, max: 7, price: 10 },
+  plus: { name: '标准版', quota: 5 * GB, days: 30, max: 15, price: 30 },
+  pro: { name: '专业版', quota: 10 * GB, days: 30, max: 30, price: 50 },
 };
 
 const db = new DatabaseSync(DB_FILE);
@@ -72,6 +73,21 @@ db.exec(`
 `);
 for (const col of ['slug', 'tunnel_hash']) {
   try { db.exec(`ALTER TABLE accounts ADD COLUMN ${col} TEXT`); } catch (e) {}
+}
+try { db.exec('ALTER TABLE accounts ADD COLUMN slug_updated INTEGER'); } catch (e) {}
+try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_slug ON accounts (slug) WHERE slug IS NOT NULL'); } catch (e) {}
+
+const SLUG_COOLDOWN = 30 * 86400;
+const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?$/;
+const RESERVED_SLUGS = new Set([
+  'www', 'api', 'admin', 'demo', 'cloud', 'mail', 'ftp', 'ssh', 'vpn', 'mesh',
+  'xerp', 'app', 'cdn', 'static', 'assets', 'status', 'pay', 'buy', 'login',
+  'register', 'account', 'accounts', 'root', 'system', 'support', 'help',
+  'docs', 'blog', 'shop', 'test', 'dev', 'staging', 'localhost', 'tunnel',
+  'relay', 'backup', 'backups', 'ns1', 'ns2', 'mx',
+]);
+function isValidSlug(s) {
+  return typeof s === 'string' && SLUG_RE.test(s) && !s.includes('--') && !RESERVED_SLUGS.has(s);
 }
 const tunnels = new Map();   // account id -> { socket }
 const tunnelPending = new Map(); // request id -> { res, timer }
@@ -289,7 +305,12 @@ function status(a) {
       used: u.used, backups: u.n, maxBackups: PLANS[a.plan]?.max || 10, device: a.device, name: a.name,
     },
     backups: list,
-    remote: { url: a.slug ? `https://${a.slug}.${TUNNEL_DOMAIN}` : null, online: tunnels.has(a.id) },
+    remote: {
+      url: a.slug ? `https://${a.slug}.${TUNNEL_DOMAIN}` : null,
+      online: tunnels.has(a.id),
+      slugUpdated: a.slug_updated || 0,
+      nextSlugAt: a.slug_updated ? a.slug_updated + SLUG_COOLDOWN : 0,
+    },
     slug: a.slug,
   };
 }
@@ -373,7 +394,7 @@ function buyPage() {
   return `<!doctype html><html lang=zh-CN><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>x.erp 云服务</title>
 <style>body{font:15px/1.7 system-ui,"Microsoft YaHei";margin:0;background:#0f172a;color:#e2e8f0}main{max-width:960px;margin:0 auto;padding:48px 16px}h1{font-size:30px;margin:0 0 8px}p.sub{color:#94a3b8;margin:0 0 18px}.contact{margin:0 0 24px}.contact input{width:100%;max-width:360px;padding:10px 12px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font:inherit}.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.plan{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:22px}.plan h3{margin:0 0 6px;font-size:18px}.price{font-size:30px;font-weight:700;margin-bottom:14px}.price small{font-size:13px;color:#94a3b8;font-weight:400}.plan ul{padding-left:18px;color:#cbd5e1;font-size:13px}.plan button{width:100%;padding:10px;border:0;border-radius:10px;background:#6366f1;color:#fff;font:inherit;cursor:pointer}.note{margin-top:26px;color:#94a3b8;font-size:13px}#msg{margin-top:18px;padding:14px;border-radius:10px;background:#1e293b;display:none;white-space:pre-wrap}#msg.show{display:block}</style></head>
 <body><main><h1>x.erp 云服务</h1><p class=sub>加密云备份 + 远程访问。数据在本机加密后上传，服务器看不到你的业务数据；在外面也能打开自己的 ERP。</p><div class=contact><input id=contact placeholder="微信 / 手机号（选填，方便补发授权码）"></div><div id=paystate style="color:#94a3b8;font-size:13px;margin:-14px 0 20px">正在检查收款助手…</div><div class=plans>${cards}</div><div id=msg></div><div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><input id=qno placeholder="订单号（R 或 M 开头）" autocomplete=off style="flex:1;min-width:200px;padding:10px 12px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font:inherit"><button onclick="queryOrder()" style="padding:10px 16px;border:0;border-radius:10px;background:#334155;color:#fff;font:inherit;cursor:pointer">查询授权码</button></div>
-<p class=note>订单二维码 5 分钟内有效，超时直接作废，需要重新下单。授权码会显示在本页，请截图保存；关掉页面或换了设备也没关系，凭订单号在下面随时查回来，订单号会记在这台浏览器里。授权码在 x.erp「云服务」页面输入即可开通，2 元/月起含云备份和远程访问。</p>
+<p class=note>订单二维码 5 分钟内有效，超时直接作废，需要重新下单。授权码会显示在本页，请截图保存；关掉页面或换了设备也没关系，凭订单号在下面随时查回来，订单号会记在这台浏览器里。授权码在 x.erp「云服务」页面输入即可开通，10 元/月起含云备份和远程访问。</p>
 <p style="text-align:center;margin-top:26px;font-size:13px;color:#94a3b8"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" style="color:inherit">冀ICP备2025136401号-2</a></p>
 <script>
 var LS='xerp_cloud_order',curOrder='',curPaid=false,curTries=0,TTL=300;
@@ -527,7 +548,7 @@ function wsRead(socket, onMessage) {
 }
 async function remoteProxy(req, res, host) {
   const slug = host.split('.')[0].toLowerCase();
-  const a = /^[0-9a-f]{10}$/.test(slug) ? db.prepare('SELECT * FROM accounts WHERE slug = ?').get(slug) : null;
+  const a = isValidSlug(slug) ? db.prepare('SELECT * FROM accounts WHERE slug = ?').get(slug) : null;
   if (!a) { res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end('<h1>远程地址不存在</h1>'); }
   if (a.expires < now()) { res.writeHead(402, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end('<h1>远程访问已到期</h1><p>请在 x.erp 里续费。</p>'); }
   const tun = tunnels.get(a.id);
@@ -573,9 +594,30 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/api/tunnel/ask') {
       const domain = String(url.searchParams.get('domain') || '').split(':')[0].toLowerCase();
       const slug = domain.endsWith('.' + TUNNEL_DOMAIN) ? domain.slice(0, -TUNNEL_DOMAIN.length - 1) : '';
-      const a = /^[0-9a-f]{10}$/.test(slug) ? db.prepare('SELECT * FROM accounts WHERE slug = ?').get(slug) : null;
+      const a = isValidSlug(slug) ? db.prepare('SELECT * FROM accounts WHERE slug = ?').get(slug) : null;
       res.writeHead(a && a.expires >= now() ? 200 : 403, { 'Content-Type': 'text/plain' });
       return res.end(a && a.expires >= now() ? 'ok' : 'no');
+    }
+    if (p === '/api/internal/tunnel/auth' && req.method === 'POST') {
+      const k = String(req.headers['x-tunnel-key'] || '');
+      if (!TUNNEL_INTERNAL_KEY || !safeEqualHex(k, TUNNEL_INTERNAL_KEY)) return fail(res, 403, 'forbidden');
+      const b = await jsonBody(req);
+      const device = String(b.device || '');
+      const secret = String(b.secret || '');
+      const a = db.prepare('SELECT id, slug, expires, tunnel_hash FROM accounts WHERE device = ?').get(device);
+      const hash = crypto.createHash('sha256').update(secret).digest('hex');
+      if (!a || !a.tunnel_hash || a.expires < now() || !safeEqualHex(hash, a.tunnel_hash)) {
+        return fail(res, 401, 'unauthorized');
+      }
+      return json(res, 200, { ok: true, id: a.id, slug: a.slug, expires: a.expires });
+    }
+    if (p === '/api/internal/tunnel/lookup' && req.method === 'GET') {
+      const k = String(req.headers['x-tunnel-key'] || '');
+      if (!TUNNEL_INTERNAL_KEY || !safeEqualHex(k, TUNNEL_INTERNAL_KEY)) return fail(res, 403, 'forbidden');
+      const slug = String(url.searchParams.get('slug') || '').toLowerCase();
+      const a = isValidSlug(slug) ? db.prepare('SELECT id, slug, expires FROM accounts WHERE slug = ?').get(slug) : null;
+      if (!a) return fail(res, 404, 'not found');
+      return json(res, 200, { ok: true, id: a.id, slug: a.slug, expires: a.expires });
     }
     if (req.method === 'GET' && p === '/api/plans') return json(res, 200, { plans: Object.entries(PLANS).map(([k, v]) => ({ key: k, name: v.name, quota: v.quota, days: v.days, max: v.max, price: v.price })), payment: !!process.env.EPAY_URL });
     if (req.method === 'GET' && p === '/api/relay/status') return json(res, 200, relayOnline());
@@ -599,6 +641,41 @@ const server = http.createServer(async (req, res) => {
       db.prepare('UPDATE accounts SET slug = ?, tunnel_hash = ? WHERE id = ?')
         .run(slug, crypto.createHash('sha256').update(tunnelSecret).digest('hex'), a.id);
       return json(res, 200, { slug, tunnelSecret, url: `https://${slug}.${TUNNEL_DOMAIN}` });
+    }
+    if (req.method === 'POST' && p === '/api/tunnel/slug') {
+      const a = accountOf(req);
+      if (!a) return fail(res, 401, '授权已失效，请重新激活');
+      const ts = now();
+      if (a.expires < ts) return fail(res, 402, '仅有效云会员可自定义远程地址，请续费后再修改');
+      if (a.slug_updated && ts - a.slug_updated < SLUG_COOLDOWN) {
+        const nextAt = a.slug_updated + SLUG_COOLDOWN;
+        const days = Math.ceil((nextAt - ts) / 86400);
+        return json(res, 429, {
+          error: `每 30 天只能修改一次，还需等待约 ${days} 天（${fmtTime(nextAt)} 后可再次修改）`,
+          nextSlugAt: nextAt,
+        });
+      }
+      const b = await jsonBody(req);
+      const slug = String(b.slug || '').trim().toLowerCase();
+      if (!SLUG_RE.test(slug) || slug.includes('--')) {
+        return fail(res, 400, '地址前缀需为 3–32 位小写字母、数字或连字符(-)，首尾须为字母或数字，且不能连续使用 --');
+      }
+      if (RESERVED_SLUGS.has(slug)) return fail(res, 400, '该前缀为系统保留词，请换一个');
+      if (slug === a.slug) return fail(res, 400, '新地址与当前地址相同');
+      const exists = db.prepare('SELECT id FROM accounts WHERE slug = ? AND id != ?').get(slug, a.id);
+      if (exists) return fail(res, 409, '这个地址已被其他用户使用，请换一个');
+      try {
+        db.prepare('UPDATE accounts SET slug = ?, slug_updated = ? WHERE id = ?').run(slug, ts, a.id);
+      } catch (e) {
+        return fail(res, 409, '这个地址已被其他用户使用，请换一个');
+      }
+      console.log(new Date().toISOString(), 'slug updated', a.id, a.slug, '->', slug);
+      return json(res, 200, {
+        slug,
+        url: `https://${slug}.${TUNNEL_DOMAIN}`,
+        slugUpdated: ts,
+        nextSlugAt: ts + SLUG_COOLDOWN,
+      });
     }
     if (p.startsWith('/api/backup/') && (req.method === 'PUT' || req.method === 'POST')) {
       const a = accountOf(req);

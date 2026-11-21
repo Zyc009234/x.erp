@@ -19,7 +19,7 @@ const net = require('net');
 const tls = require('tls');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.14.1';
+const VERSION = '2.14.2';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -3013,6 +3013,7 @@ function autoBackup() {
 /* ================= 云备份（付费云服务；数据在本机加密后上传） ================= */
 const CLOUD_API = (process.env.XERP_CLOUD_URL || 'https://www.zhaoyoucai.xyz/xerp-cloud/api').replace(/\/+$/, '');
 const TUNNEL_DOMAIN = process.env.XERP_TUNNEL_DOMAIN || 'xerp.zhaoyoucai.xyz';
+const TUNNEL_WS_URL = (process.env.XERP_TUNNEL_URL || 'wss://tunnel.zhaoyoucai.xyz/tunnel').replace(/\/+$/, '');
 const CLOUD_MAGIC = Buffer.from('XERPCLOUD1');
 const CLOUD_TABLES = ['docs', 'meta', 'users', 'images', 'cost_layers', 'audit'];
 const cloudState = () => ({
@@ -3158,7 +3159,15 @@ async function cloudAutoTick() {
 /* ================= 远程访问：NAS 主动连云，云端子域名反代 ================= */
 let tunnelWs = null, tunnelRetry = null, tunnelPing = null, tunnelOnline = false, tunnelDelay = 5000;
 function cloudTunnelState() {
-  return { enabled: !!config.cloud.remote, online: tunnelOnline, url: config.cloud.slug ? `https://${config.cloud.slug}.${TUNNEL_DOMAIN}` : '' };
+  return {
+    enabled: !!config.cloud.remote,
+    online: tunnelOnline,
+    url: config.cloud.slug ? `https://${config.cloud.slug}.${TUNNEL_DOMAIN}` : '',
+    slug: config.cloud.slug || '',
+    domain: TUNNEL_DOMAIN,
+    slugUpdated: config.cloud.slugUpdated || 0,
+    nextSlugAt: config.cloud.nextSlugAt || 0,
+  };
 }
 function tunnelForward(msg, ws) {
   const body = Buffer.from(String(msg.body || ''), 'base64');
@@ -3191,7 +3200,7 @@ function cloudTunnelStart() {
   if (!config.cloud.remote || !config.cloud.token || !config.cloud.tunnelSecret) return;
   if (tunnelWs) return;
   if (typeof WebSocket !== 'function') { log('当前 Node 不支持 WebSocket，无法启动远程访问'); return; }
-  const url = CLOUD_API.replace(/\/api$/, '').replace(/^http/, 'ws') + '/tunnel?device=' + encodeURIComponent(config.cloud.device) + '&secret=' + encodeURIComponent(config.cloud.tunnelSecret);
+  const url = TUNNEL_WS_URL + '?device=' + encodeURIComponent(config.cloud.device) + '&secret=' + encodeURIComponent(config.cloud.tunnelSecret);
   let ws;
   try { ws = new WebSocket(url); }
   catch (e) { log('远程访问连接失败：' + e.message); return; }
@@ -3778,6 +3787,10 @@ route('GET', '/api/cloud/status', async ctx => {
     const d = await r.json();
     config.cloud.account = d.account;
     if (d.slug) config.cloud.slug = d.slug;
+    if (d.remote) {
+      config.cloud.slugUpdated = d.remote.slugUpdated || 0;
+      config.cloud.nextSlugAt = d.remote.nextSlugAt || 0;
+    }
     saveConfig();
     return { ...cloudState(), backups: d.backups || [] };
   } catch (e) {
@@ -3857,6 +3870,19 @@ route('POST', '/api/cloud/remote', async ctx => {
   if (on) cloudTunnelStart(); else cloudTunnelStop();
   audit(ctx, on ? '开启远程访问' : '关闭远程访问');
   return { ok: true, ...cloudState() };
+}, { admin: true });
+route('POST', '/api/cloud/slug', async ctx => {
+  if (!config.cloud.token) fail('还没有开通云服务，请先输入授权码');
+  const slug = str(ctx.body.slug, 32).toLowerCase();
+  if (!slug) fail('请输入自定义地址前缀');
+  const r = await cloudReq('/tunnel/slug', { method: 'POST', token: config.cloud.token, body: { slug } });
+  const d = await r.json();
+  config.cloud.slug = d.slug;
+  config.cloud.slugUpdated = d.slugUpdated || 0;
+  config.cloud.nextSlugAt = d.nextSlugAt || 0;
+  saveConfig();
+  audit(ctx, '修改远程访问地址', d.url);
+  return { ok: true, ...cloudState(), url: d.url };
 }, { admin: true });
 route('POST', '/api/reset-demo', ctx => tx(() => { writeAll(seed()); setMeta('counters', {}); audit(ctx, '重置演示数据'); }), { admin: true });
 // 清空前要再输一次当前账号的登录密码，防止误点或别人用你没锁的电脑清掉数据

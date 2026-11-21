@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 2.14.1
+version               = 2.14.2
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 修复 2.14.0 多商品订单点「发货 / 入库」没有反应的问题：订单没有单个仓库能一次满足整单库存时，现在会正常弹出窗口并自动选择有库存的仓库；同时包含 2.14.0 的分批发货入库、三级包装单位、期初应收应付、行小计手改、批量操作和反馈截图等功能。
+changelog             = 云服务远程访问支持自定义地址前缀（有效云会员每 30 天可修改一次）；远程访问隧道切换至独立高速中转节点，云备份继续留在主云端。
