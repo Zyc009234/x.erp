@@ -29,19 +29,23 @@ public final class ThumbNumpadDialog {
             titles.addView(Ui.tv(ctx, subtitle, 12, Ui.MUTED, false));
         }
         head.addView(titles, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView closeX = Ui.tv(ctx, "取消", 14, Ui.MUTED, true);
-        closeX.setPadding(Ui.dp(ctx, 10), Ui.dp(ctx, 6), Ui.dp(ctx, 4), Ui.dp(ctx, 6));
+        TextView closeX = Ui.badge(ctx, "取消", Ui.CHIP_BG, Ui.MUTED);
+        closeX.setTextSize(12);
+        closeX.setPadding(Ui.dp(ctx, 11), Ui.dp(ctx, 6), Ui.dp(ctx, 11), Ui.dp(ctx, 6));
         head.addView(closeX);
         root.addView(head);
 
-        // Large Display Box
-        TextView disp = Ui.tv(ctx, "", 32, Ui.PRIMARY, true);
+        // Large Display Card
+        LinearLayout dispWrap = Ui.col(ctx);
+        dispWrap.setBackground(Ui.outlined(ctx, Ui.PRIMARY_SOFT, Ui.PRIMARY_BORDER, 1, 14));
+        dispWrap.setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 10), Ui.dp(ctx, 16), Ui.dp(ctx, 10));
+        TextView disp = Ui.tv(ctx, "", 34, Ui.PRIMARY, true);
         disp.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        disp.setBackground(Ui.outlined(ctx, Ui.PRIMARY_SOFT, Ui.PRIMARY, 1, 12));
-        disp.setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 10), Ui.dp(ctx, 16), Ui.dp(ctx, 10));
+        disp.setSingleLine(true);
+        dispWrap.addView(disp, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(-1, -2);
-        dlp.topMargin = Ui.dp(ctx, 10);
-        root.addView(disp, dlp);
+        dlp.topMargin = Ui.dp(ctx, 12);
+        root.addView(dispWrap, dlp);
 
         final StringBuilder buf = new StringBuilder(initialVal == null ? "0" : Ui.fmtQty(initialVal));
         final boolean[] replaceNext = {initialVal != null};
@@ -54,7 +58,8 @@ public final class ThumbNumpadDialog {
         LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(-1, -2);
         qlp.topMargin = Ui.dp(ctx, 10);
         if (bookVal != null) {
-            Button eqBook = Ui.outlineBtn(ctx, "=账面(" + Ui.fmtQty(bookVal) + ")", Ui.ACCENT, Ui.ACCENT);
+            Button eqBook = Ui.outlineBtn(ctx, "=账面(" + Ui.fmtQty(bookVal) + ")", Ui.ACCENT_BORDER, Ui.ACCENT);
+            eqBook.setBackground(Ui.rippleOutlined(ctx, Ui.ACCENT_SOFT, Ui.ACCENT_BORDER, 1, 10));
             eqBook.setTextSize(13);
             eqBook.setMinHeight(Ui.dp(ctx, 36));
             eqBook.setMinimumHeight(Ui.dp(ctx, 36));
@@ -69,7 +74,8 @@ public final class ThumbNumpadDialog {
         }
         int[] adds = {1, 5, 10};
         for (int a : adds) {
-            Button ab = Ui.outlineBtn(ctx, "+" + a, Ui.LINE, Ui.INK);
+            Button ab = Ui.outlineBtn(ctx, "+" + a, Ui.LINE, Ui.INK_2);
+            ab.setBackground(Ui.rippleOutlined(ctx, Ui.SURFACE_2, Ui.LINE, 1, 10));
             ab.setTextSize(13);
             ab.setMinHeight(Ui.dp(ctx, 36));
             ab.setMinimumHeight(Ui.dp(ctx, 36));
@@ -85,6 +91,7 @@ public final class ThumbNumpadDialog {
             quick.addView(Ui.space(ctx, 6, 1));
         }
         Button clr = Ui.outlineBtn(ctx, "清零", Ui.DANGER_SOFT, Ui.DANGER);
+        clr.setBackground(Ui.rippleRounded(ctx, Ui.DANGER_SOFT, 10));
         clr.setTextSize(13);
         clr.setMinHeight(Ui.dp(ctx, 36));
         clr.setMinimumHeight(Ui.dp(ctx, 36));
@@ -97,7 +104,7 @@ public final class ThumbNumpadDialog {
         quick.addView(clr, new LinearLayout.LayoutParams(0, Ui.dp(ctx, 36), 1f));
         root.addView(quick, qlp);
 
-        // 3x4 Keypad Grid
+        // 3x4 Keycap Keypad Grid
         String[][] keys = {
                 {"7", "8", "9"},
                 {"4", "5", "6"},
@@ -111,9 +118,11 @@ public final class ThumbNumpadDialog {
             LinearLayout kr = Ui.row(ctx);
             for (int c = 0; c < 3; c++) {
                 final String k = rKeys[c];
-                Button kb = Ui.outlineBtn(ctx, k, Ui.LINE, Ui.INK);
+                boolean isSpecial = "⌫".equals(k) || "C".equals(k);
+                Button kb = Ui.outlineBtn(ctx, k, Ui.LINE, isSpecial ? Ui.MUTED : Ui.INK);
                 kb.setTextSize(20);
-                kb.setBackground(Ui.outlined(ctx, 0xFFF9FAFB, Ui.LINE, 1, 10));
+                kb.setElevation(Ui.dp(ctx, 1));
+                kb.setBackground(Ui.rippleOutlined(ctx, isSpecial ? Ui.SURFACE_2 : Color.WHITE, Ui.LINE, 1, 12));
                 kb.setOnClickListener(v -> {
                     if ("⌫".equals(k)) {
                         replaceNext[0] = false;
@@ -142,12 +151,12 @@ public final class ThumbNumpadDialog {
                 kr.addView(kb, klp);
             }
             LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(-1, -2);
-            rlp.topMargin = Ui.dp(ctx, 6);
+            rlp.topMargin = Ui.dp(ctx, 7);
             pad.addView(kr, rlp);
         }
         root.addView(pad, plp);
 
-        Button ok = Ui.btn(ctx, "确定", Ui.PRIMARY, Color.WHITE);
+        Button ok = Ui.gradientBtn(ctx, "确定", Ui.PRIMARY, Ui.PRIMARY_END);
         ok.setTextSize(17);
         LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(-1, Ui.dp(ctx, 52));
         olp.topMargin = Ui.dp(ctx, 12);

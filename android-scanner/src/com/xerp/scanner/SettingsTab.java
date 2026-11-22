@@ -42,11 +42,12 @@ public class SettingsTab implements TabPage {
 
         // 0. Brand & Splash Logo Card
         LinearLayout brand = Ui.card(act, 14);
-        brand.addView(Ui.tv(act, "品牌与启动页 Logo", 15, Ui.INK, true));
+        brand.addView(Ui.sectionHeader(act, IconView.Type.BRAND, "品牌与启动页 Logo", Ui.PRIMARY));
         LinearLayout bRow = Ui.row(act);
         bRow.setPadding(0, Ui.dp(act, 10), 0, Ui.dp(act, 10));
         BrandLogoView logoPrev = new BrandLogoView(act, store);
         int lpSize = Ui.dp(act, 68);
+        logoPrev.setElevation(Ui.dp(act, 3));
         bRow.addView(logoPrev, new LinearLayout.LayoutParams(lpSize, lpSize));
         bRow.addView(Ui.space(act, 12, 1));
         LinearLayout bInfo = Ui.col(act);
@@ -61,10 +62,11 @@ public class SettingsTab implements TabPage {
         brand.addView(bRow);
 
         LinearLayout bBtns = Ui.row(act);
-        Button bChange = Ui.btn(act, "更换 Logo", Ui.PRIMARY, Color.WHITE);
+        Button bChange = Ui.gradientBtn(act, "更换 Logo", Ui.PRIMARY, Ui.PRIMARY_END);
         bChange.setMinHeight(Ui.dp(act, 38)); bChange.setMinimumHeight(Ui.dp(act, 38)); bChange.setTextSize(13);
         bChange.setOnClickListener(v -> act.pickCustomLogo(this::render));
-        Button bPreview = Ui.outlineBtn(act, "预览启动页", Ui.ACCENT, Ui.ACCENT);
+        Button bPreview = Ui.outlineBtn(act, "预览启动页", Ui.ACCENT_BORDER, Ui.ACCENT);
+        bPreview.setBackground(Ui.rippleOutlined(act, Ui.ACCENT_SOFT, Ui.ACCENT_BORDER, 1, 12));
         bPreview.setMinHeight(Ui.dp(act, 38)); bPreview.setMinimumHeight(Ui.dp(act, 38)); bPreview.setTextSize(13);
         bPreview.setOnClickListener(v -> {
             Intent i = new Intent(act, SplashActivity.class);
@@ -92,7 +94,7 @@ public class SettingsTab implements TabPage {
         }
         brand.addView(bBtns);
 
-        Button bSub = Ui.outlineBtn(act, "修改启动页名称与标语", Ui.LINE, Ui.MUTED);
+        Button bSub = Ui.outlineBtn(act, "修改启动页名称与标语", Ui.LINE, Ui.INK_2);
         bSub.setMinHeight(Ui.dp(act, 36)); bSub.setMinimumHeight(Ui.dp(act, 36)); bSub.setTextSize(12);
         bSub.setOnClickListener(v -> {
             LinearLayout box = Ui.col(act);
@@ -127,17 +129,24 @@ public class SettingsTab implements TabPage {
 
         // 1. Account & Server Card
         LinearLayout acc = Ui.card(act, 14);
-        acc.addView(Ui.tv(act, "服务器与账号", 15, Ui.INK, true));
-        acc.addView(Ui.tv(act, "地址：" + store.server, 13, Ui.MUTED, false));
-        acc.addView(Ui.tv(act, "公司：" + store.companyName + (store.isPortal ? " (" + store.companyCode + ")" : ""), 13, Ui.INK, false));
-        acc.addView(Ui.tv(act, "用户：" + store.userName + " (" + store.username + ")", 13, Ui.MUTED, false));
+        acc.addView(Ui.sectionHeader(act, IconView.Type.WAREHOUSE, "服务器与账号", Ui.ACCENT));
+        LinearLayout accInfo = Ui.col(act);
+        accInfo.setBackground(Ui.rounded(act, Ui.SURFACE_2, 10));
+        accInfo.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 8));
+        accInfo.addView(Ui.tv(act, "地址：" + store.server, 12, Ui.MUTED, false));
+        accInfo.addView(Ui.tv(act, "公司：" + store.companyName + (store.isPortal ? " (" + store.companyCode + ")" : ""), 13, Ui.INK, true));
+        accInfo.addView(Ui.tv(act, "用户：" + store.userName + " (" + store.username + ")", 12, Ui.MUTED, false));
+        LinearLayout.LayoutParams ailp = new LinearLayout.LayoutParams(-1, -2);
+        ailp.topMargin = Ui.dp(act, 10);
+        acc.addView(accInfo, ailp);
 
         LinearLayout accBtns = Ui.row(act);
-        Button bSync = Ui.btn(act, "立即同步数据", Ui.PRIMARY, Color.WHITE);
+        Button bSync = Ui.gradientBtn(act, "立即同步数据", Ui.PRIMARY, Ui.PRIMARY_END);
         bSync.setOnClickListener(v -> act.refreshData(() -> Ui.toast(act, "已同步 " + store.products.size() + " 个商品")));
         accBtns.addView(bSync, new LinearLayout.LayoutParams(0, Ui.dp(act, 42), 1));
         if (store.isPortal && store.companies.size() > 1) {
-            Button bCo = Ui.outlineBtn(act, "切换公司", Ui.ACCENT, Ui.ACCENT);
+            Button bCo = Ui.outlineBtn(act, "切换公司", Ui.ACCENT_BORDER, Ui.ACCENT);
+            bCo.setBackground(Ui.rippleOutlined(act, Ui.ACCENT_SOFT, Ui.ACCENT_BORDER, 1, 12));
             bCo.setOnClickListener(v -> act.showCompanyPicker());
             accBtns.addView(Ui.space(act, 8, 1));
             accBtns.addView(bCo, new LinearLayout.LayoutParams(0, Ui.dp(act, 42), 1));
@@ -154,7 +163,7 @@ public class SettingsTab implements TabPage {
                     act.startActivity(new Intent(act, LoginActivity.class));
                     act.finish();
                 }).setNegativeButton("取消", null).show());
-        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(-1, Ui.dp(act, 42));
+        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(-1, Ui.dp(act, 40));
         llp.topMargin = Ui.dp(act, 8);
         acc.addView(bLogout, llp);
 
@@ -162,17 +171,22 @@ public class SettingsTab implements TabPage {
 
         // 1.5 Stocktake Mode & TTS Voice Card
         LinearLayout ttsCard = Ui.card(act, 14);
-        ttsCard.addView(Ui.tv(act, "盘点模式与语音播报", 15, Ui.INK, true));
+        ttsCard.addView(Ui.sectionHeader(act, IconView.Type.VOLUME_ON, "盘点模式与语音播报", Ui.PRIMARY));
         if (act.tts != null) {
             TextView st = Ui.tv(act, act.tts.statusSummary(), 12, Ui.PRIMARY, false);
-            st.setPadding(0, Ui.dp(act, 4), 0, Ui.dp(act, 4));
-            ttsCard.addView(st);
+            st.setBackground(Ui.outlined(act, Ui.PRIMARY_SOFT, Ui.PRIMARY_BORDER, 1, 10));
+            st.setPadding(Ui.dp(act, 10), Ui.dp(act, 7), Ui.dp(act, 10), Ui.dp(act, 7));
+            LinearLayout.LayoutParams stl = new LinearLayout.LayoutParams(-1, -2);
+            stl.topMargin = Ui.dp(act, 8);
+            stl.bottomMargin = Ui.dp(act, 4);
+            ttsCard.addView(st, stl);
         }
         ttsCard.addView(toggleRow("盲盘模式（盘点隐藏账面库存与盈亏）", store.blindMode, on -> {
             store.blindMode = on;
             store.savePrefs();
             act.notifyDataChanged();
         }));
+        ttsCard.addView(Ui.insetDivider(act));
         ttsCard.addView(toggleRow("扫码语音播报（支持无系统 TTS 自动兜底）", store.ttsEnabled, on -> {
             store.ttsEnabled = on;
             store.savePrefs();
@@ -184,9 +198,10 @@ public class SettingsTab implements TabPage {
             }
             act.notifyDataChanged();
         }));
+        ttsCard.addView(Ui.insetDivider(act));
 
         LinearLayout engRow = Ui.row(act);
-        engRow.setPadding(0, Ui.dp(act, 8), 0, Ui.dp(act, 4));
+        engRow.setPadding(0, Ui.dp(act, 10), 0, Ui.dp(act, 6));
         engRow.addView(Ui.tv(act, "语音引擎", 13, Ui.INK, false), new LinearLayout.LayoutParams(0, -2, 1));
         String[] engKeys = {"auto", "builtin"};
         String[] engLabels = {"自动(优先系统)", "内置离线语音"};
@@ -207,7 +222,7 @@ public class SettingsTab implements TabPage {
         ttsCard.addView(engRow);
 
         LinearLayout rateRow = Ui.row(act);
-        rateRow.setPadding(0, Ui.dp(act, 8), 0, Ui.dp(act, 8));
+        rateRow.setPadding(0, Ui.dp(act, 6), 0, Ui.dp(act, 10));
         rateRow.addView(Ui.tv(act, "播报语速", 13, Ui.INK, false), new LinearLayout.LayoutParams(0, -2, 1));
         float[] rates = {1.0f, 1.2f, 1.5f};
         String[] rateLabels = {"正常 1.0x", "较快 1.2x", "极速 1.5x"};
@@ -226,16 +241,15 @@ public class SettingsTab implements TabPage {
         }
         ttsCard.addView(rateRow);
 
-        Button bTestTts = Ui.outlineBtn(act, "试听语音播报", Ui.PRIMARY, Ui.PRIMARY);
+        Button bTestTts = Ui.outlineBtn(act, "试听语音播报", Ui.PRIMARY_BORDER, Ui.PRIMARY);
+        bTestTts.setBackground(Ui.rippleOutlined(act, Ui.PRIMARY_SOFT, Ui.PRIMARY_BORDER, 1, 12));
         bTestTts.setMinHeight(Ui.dp(act, 38));
         bTestTts.setMinimumHeight(Ui.dp(act, 38));
         bTestTts.setTextSize(13);
         bTestTts.setOnClickListener(v -> {
             if (act.tts != null) act.tts.speakTest(act);
         });
-        LinearLayout.LayoutParams ttlp = new LinearLayout.LayoutParams(-1, Ui.dp(act, 38));
-        ttlp.topMargin = Ui.dp(act, 4);
-        ttsCard.addView(bTestTts, ttlp);
+        ttsCard.addView(bTestTts, new LinearLayout.LayoutParams(-1, Ui.dp(act, 38)));
 
         Button bSysTts = Ui.outlineBtn(act, "系统 TTS 设置（选装引擎可念商品名）", Ui.LINE, Ui.MUTED);
         bSysTts.setMinHeight(Ui.dp(act, 34));
@@ -251,13 +265,19 @@ public class SettingsTab implements TabPage {
 
         // 2. Scanner & One-hand Preferences
         LinearLayout pref = Ui.card(act, 14);
-        pref.addView(Ui.tv(act, "扫码与单手偏好", 15, Ui.INK, true));
+        pref.addView(Ui.sectionHeader(act, IconView.Type.SCAN, "扫码与单手偏好", Ui.ACCENT));
         pref.addView(toggleRow("连续扫码（关闭则每次扫完自动关相机）", store.continuousScan, on -> { store.continuousScan = on; store.savePrefs(); }));
+        pref.addView(Ui.insetDivider(act));
         pref.addView(toggleRow("扫码成功提示音", store.soundEnabled, on -> { store.soundEnabled = on; store.savePrefs(); }));
+        pref.addView(Ui.insetDivider(act));
         pref.addView(toggleRow("扫码震动反馈", store.vibrateEnabled, on -> { store.vibrateEnabled = on; store.savePrefs(); }));
+        pref.addView(Ui.insetDivider(act));
         pref.addView(toggleRow("未识别条码自动弹出录新弹窗", store.autoPromptNew, on -> { store.autoPromptNew = on; store.savePrefs(); }));
+        pref.addView(Ui.insetDivider(act));
         pref.addView(toggleRow("左手持机布局（翻转底部按钮）", store.leftHanded, on -> { store.leftHanded = on; store.savePrefs(); }));
+        pref.addView(Ui.insetDivider(act));
         pref.addView(toggleRow("蓝牙/PDA 扫码枪 HID 按键监听", store.pdaHidMode, on -> { store.pdaHidMode = on; store.savePrefs(); }));
+        pref.addView(Ui.insetDivider(act));
 
         // Cooldown chips
         LinearLayout cdRow = Ui.row(act);
@@ -278,8 +298,10 @@ public class SettingsTab implements TabPage {
         // 3. Offline Drafts & Version
         LinearLayout draft = Ui.card(act, 14);
         int n = store.countDrafts();
-        draft.addView(Ui.tv(act, "离线安全与版本", 15, Ui.INK, true));
-        draft.addView(Ui.tv(act, "本地盘点草稿：" + n + " 份（每次扫码实时保存防丢失）", 13, Ui.MUTED, false));
+        draft.addView(Ui.sectionHeader(act, IconView.Type.CHECK_LIST, "离线安全与版本", Ui.MUTED));
+        LinearLayout.LayoutParams dlp0 = new LinearLayout.LayoutParams(-1, -2);
+        dlp0.topMargin = Ui.dp(act, 8);
+        draft.addView(Ui.tv(act, "本地盘点草稿：" + n + " 份（每次扫码实时保存防丢失）", 13, Ui.INK_2, false), dlp0);
         if (n > 0) {
             Button bClr = Ui.outlineBtn(act, "清理全部本地草稿", Ui.WARN, Ui.WARN);
             bClr.setOnClickListener(v -> new AlertDialog.Builder(act)
@@ -291,7 +313,9 @@ public class SettingsTab implements TabPage {
         }
         String ver = "";
         try { ver = act.getPackageManager().getPackageInfo(act.getPackageName(), 0).versionName; } catch (Exception ignored) { }
-        draft.addView(Ui.tv(act, "x.erp 盘点助手 v" + ver + " · 数据实时同步自服务端", 12, Ui.MUTED, false));
+        LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(-1, -2);
+        vlp.topMargin = Ui.dp(act, 6);
+        draft.addView(Ui.tv(act, "x.erp 盘点助手 v" + ver + " · 数据实时同步自服务端", 12, Ui.MUTED, false), vlp);
         col.addView(draft);
     }
 
@@ -299,10 +323,9 @@ public class SettingsTab implements TabPage {
 
     private View toggleRow(String label, boolean init, BoolCb cb) {
         LinearLayout row = Ui.row(act);
-        row.setPadding(0, Ui.dp(act, 8), 0, Ui.dp(act, 8));
+        row.setPadding(0, Ui.dp(act, 9), 0, Ui.dp(act, 9));
         row.addView(Ui.tv(act, label, 13, Ui.INK, false), new LinearLayout.LayoutParams(0, -2, 1));
-        Switch sw = new Switch(act);
-        sw.setChecked(init);
+        Switch sw = Ui.styledSwitch(act, init);
         sw.setOnCheckedChangeListener((b, c) -> cb.onChange(c));
         row.addView(sw);
         return row;

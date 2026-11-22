@@ -37,12 +37,22 @@ public class MainActivity extends Activity {
     public TtsSpeaker tts;
 
     private BrandLogoView topLogo;
-    private TextView whPill, coPill, camPill, manualBtn, syncBtn;
+    private Ui.IconPill whPill, camPill, manualBtn, syncBtn;
+    private TextView coPill;
     private FrameLayout camHolder, tabHolder;
     private LinearLayout oneShotBanner, navBar;
 
     private final List<TabPage> tabs = new ArrayList<>();
-    private final List<TextView> navBtns = new ArrayList<>();
+    private final List<View> navCapsules = new ArrayList<>();
+    private final List<IconView> navIcons = new ArrayList<>();
+    private final List<TextView> navLabels = new ArrayList<>();
+    private final IconView.Type[] navIconTypes = {
+            IconView.Type.CHECK_LIST,
+            IconView.Type.SWAP,
+            IconView.Type.SEARCH_BAR,
+            IconView.Type.TAG,
+            IconView.Type.SETTINGS
+    };
     private int currentTab = 0;
 
     private boolean cameraOpen = false;
@@ -76,40 +86,39 @@ public class MainActivity extends Activity {
         LinearLayout root = Ui.col(this);
         root.setBackgroundColor(Ui.BG);
 
-        // 1. Top Compact Status Bar
+        // 1. Top Elevated Status Bar
         LinearLayout topBar = Ui.row(this);
         topBar.setBackgroundColor(Color.WHITE);
-        topBar.setPadding(Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 8), Ui.dp(this, 6));
+        topBar.setElevation(Ui.dp(this, 2));
+        topBar.setPadding(Ui.dp(this, 8), Ui.dp(this, 7), Ui.dp(this, 8), Ui.dp(this, 7));
 
         topLogo = new BrandLogoView(this, store);
         topLogo.setOnClickListener(v -> switchToTab(4));
-        topBar.addView(topLogo, new LinearLayout.LayoutParams(Ui.dp(this, 26), Ui.dp(this, 26)));
+        topBar.addView(topLogo, new LinearLayout.LayoutParams(Ui.dp(this, 30), Ui.dp(this, 30)));
         topBar.addView(Ui.space(this, 6, 1));
 
-        whPill = Ui.tv(this, store.whName(store.selectedWh) + " ▾", 12, Ui.PRIMARY, true);
-        whPill.setBackground(Ui.outlined(this, Ui.PRIMARY_SOFT, Ui.PRIMARY, 1, 14));
-        whPill.setPadding(Ui.dp(this, 8), Ui.dp(this, 5), Ui.dp(this, 8), Ui.dp(this, 5));
-        whPill.setSingleLine(true);
+        whPill = Ui.iconPill(this, IconView.Type.WAREHOUSE, store.whName(store.selectedWh) + " ▾",
+                Ui.PRIMARY_SOFT, Ui.PRIMARY_BORDER, Ui.PRIMARY);
+        whPill.setPadding(Ui.dp(this, 7), Ui.dp(this, 5), Ui.dp(this, 8), Ui.dp(this, 5));
         whPill.setOnClickListener(v -> showWarehousePicker());
 
         coPill = Ui.tv(this, "", 12, Ui.MUTED, true);
         coPill.setSingleLine(true);
-        coPill.setPadding(Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 6), Ui.dp(this, 4));
+        coPill.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        coPill.setPadding(Ui.dp(this, 5), Ui.dp(this, 4), Ui.dp(this, 5), Ui.dp(this, 4));
         coPill.setOnClickListener(v -> showCompanyPicker());
 
-        camPill = Ui.badge(this, "扫码", Ui.PRIMARY, Color.WHITE);
-        camPill.setTextSize(12);
-        camPill.setPadding(Ui.dp(this, 10), Ui.dp(this, 6), Ui.dp(this, 10), Ui.dp(this, 6));
+        camPill = Ui.iconPill(this, IconView.Type.SCAN, "扫码", Ui.PRIMARY, 0, Color.WHITE);
+        camPill.setPadding(Ui.dp(this, 9), Ui.dp(this, 5), Ui.dp(this, 10), Ui.dp(this, 5));
+        camPill.setBackground(Ui.rippleGradient(this, Ui.PRIMARY, Ui.PRIMARY_END, 16));
         camPill.setOnClickListener(v -> toggleCamera());
 
-        manualBtn = Ui.badge(this, "输码", Ui.CHIP_BG, Ui.INK);
-        manualBtn.setTextSize(12);
-        manualBtn.setPadding(Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 8), Ui.dp(this, 6));
+        manualBtn = Ui.iconPill(this, IconView.Type.KEYBOARD, "输码", Ui.CHIP_BG, Ui.LINE, Ui.INK_2);
+        manualBtn.setPadding(Ui.dp(this, 8), Ui.dp(this, 5), Ui.dp(this, 9), Ui.dp(this, 5));
         manualBtn.setOnClickListener(v -> openManualBarcodeDialog());
 
-        syncBtn = Ui.badge(this, "同步", Ui.ACCENT_SOFT, Ui.ACCENT);
-        syncBtn.setTextSize(12);
-        syncBtn.setPadding(Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 8), Ui.dp(this, 6));
+        syncBtn = Ui.iconPill(this, IconView.Type.SYNC, "同步", Ui.ACCENT_SOFT, Ui.ACCENT_BORDER, Ui.ACCENT);
+        syncBtn.setPadding(Ui.dp(this, 8), Ui.dp(this, 5), Ui.dp(this, 9), Ui.dp(this, 5));
         syncBtn.setOnClickListener(v -> refreshData(() -> Ui.toast(this, "已同步 " + store.products.size() + " 个商品")));
 
         topBar.addView(whPill);
@@ -120,7 +129,7 @@ public class MainActivity extends Activity {
         topBar.addView(Ui.space(this, 5, 1));
         topBar.addView(syncBtn);
         root.addView(topBar);
-        root.addView(Ui.divider(this));
+        root.addView(Ui.insetDivider(this));
 
         // 2. Embedded Camera Holder (OFF by default; opens strictly on demand)
         camHolder = new FrameLayout(this);
@@ -131,7 +140,7 @@ public class MainActivity extends Activity {
         camHolder.addView(scanner, new FrameLayout.LayoutParams(-1, -1));
 
         oneShotBanner = Ui.row(this);
-        oneShotBanner.setBackgroundColor(0xDD111827);
+        oneShotBanner.setBackgroundColor(0xDD0F172A);
         oneShotBanner.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 8));
         oneShotBanner.setVisibility(View.GONE);
         camHolder.addView(oneShotBanner, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
@@ -143,11 +152,12 @@ public class MainActivity extends Activity {
         tabHolder = new FrameLayout(this);
         root.addView(tabHolder, new LinearLayout.LayoutParams(-1, 0, 1));
 
-        // 4. Bottom Fixed 5-Tab Thumb Navigation Bar
+        // 4. Bottom Elevated 5-Tab Vector Icon Navigation Bar
         root.addView(Ui.divider(this));
         navBar = Ui.row(this);
         navBar.setBackgroundColor(Color.WHITE);
-        navBar.setPadding(Ui.dp(this, 4), Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 8));
+        navBar.setElevation(Ui.dp(this, 8));
+        navBar.setPadding(Ui.dp(this, 4), Ui.dp(this, 5), Ui.dp(this, 4), Ui.dp(this, 6));
         root.addView(navBar);
 
         tabs.add(new StocktakeTab(this));
@@ -159,12 +169,27 @@ public class MainActivity extends Activity {
         String[] labels = {"盘点", "出入库", "查/录", "标签", "设置"};
         for (int i = 0; i < labels.length; i++) {
             final int idx = i;
-            TextView tv = Ui.tv(this, labels[i], 14, Ui.MUTED, true);
+            LinearLayout item = Ui.col(this);
+            item.setGravity(Gravity.CENTER_HORIZONTAL);
+            item.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 4));
+            item.setBackground(Ui.rippleRounded(this, Color.WHITE, 12));
+
+            FrameLayout cap = new FrameLayout(this);
+            IconView iv = new IconView(this, navIconTypes[i], Ui.MUTED);
+            cap.addView(iv, new FrameLayout.LayoutParams(Ui.dp(this, 19), Ui.dp(this, 19), Gravity.CENTER));
+            item.addView(cap, new LinearLayout.LayoutParams(Ui.dp(this, 46), Ui.dp(this, 28)));
+
+            TextView tv = Ui.tv(this, labels[i], 11, Ui.MUTED, false);
             tv.setGravity(Gravity.CENTER);
-            tv.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 10));
-            tv.setOnClickListener(v -> switchToTab(idx));
-            navBtns.add(tv);
-            navBar.addView(tv, new LinearLayout.LayoutParams(0, -2, 1));
+            LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(-2, -2);
+            tlp.topMargin = Ui.dp(this, 2);
+            item.addView(tv, tlp);
+
+            item.setOnClickListener(v -> switchToTab(idx));
+            navCapsules.add(cap);
+            navIcons.add(iv);
+            navLabels.add(tv);
+            navBar.addView(item, new LinearLayout.LayoutParams(0, -2, 1));
         }
 
         setContentView(root);
@@ -243,8 +268,11 @@ public class MainActivity extends Activity {
     private void updateCamPill() {
         boolean show = currentTab < tabs.size() && tabs.get(currentTab).needsCamera();
         camPill.setVisibility(show ? View.VISIBLE : View.GONE);
-        camPill.setText(cameraOpen ? "关相机" : "扫码");
-        camPill.setBackground(Ui.rounded(this, cameraOpen ? Ui.DANGER : Ui.PRIMARY, 14));
+        camPill.applyStyle(IconView.Type.SCAN, cameraOpen ? "关相机" : "扫码",
+                cameraOpen ? Ui.DANGER : Ui.PRIMARY, 0, Color.WHITE);
+        if (!cameraOpen) {
+            camPill.setBackground(Ui.rippleGradient(this, Ui.PRIMARY, Ui.PRIMARY_END, 16));
+        }
     }
 
     private void cancelTransientOrCloseCamera() {
@@ -291,11 +319,13 @@ public class MainActivity extends Activity {
         TabPage page = tabs.get(idx);
         tabHolder.addView(page.getView(), new FrameLayout.LayoutParams(-1, -1));
 
-        for (int i = 0; i < navBtns.size(); i++) {
+        for (int i = 0; i < navLabels.size(); i++) {
             boolean on = i == idx;
-            TextView b = navBtns.get(i);
+            navCapsules.get(i).setBackground(on ? Ui.rounded(this, Ui.PRIMARY_SOFT, 14) : null);
+            navIcons.get(i).setIcon(navIconTypes[i], on ? Ui.PRIMARY : Ui.MUTED);
+            TextView b = navLabels.get(i);
             b.setTextColor(on ? Ui.PRIMARY : Ui.MUTED);
-            b.setBackground(on ? Ui.rounded(this, Ui.PRIMARY_SOFT, 10) : null);
+            b.setTypeface(android.graphics.Typeface.DEFAULT, on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
         }
 
         if (!page.needsCamera() && cameraOpen) {
@@ -308,7 +338,7 @@ public class MainActivity extends Activity {
     }
 
     public void syncWarehouseBadge() {
-        whPill.setText(store.whName(store.selectedWh) + " ▾");
+        whPill.label.setText(store.whName(store.selectedWh) + " ▾");
         if (store.isPortal && store.companies.size() > 1) {
             coPill.setText(store.companyName + " ▾");
         } else {
@@ -362,10 +392,13 @@ public class MainActivity extends Activity {
     }
 
     private void openManualBarcodeDialog() {
+        LinearLayout wrap = Ui.col(this);
+        wrap.setPadding(Ui.dp(this, 18), Ui.dp(this, 8), Ui.dp(this, 18), 0);
         EditText et = Ui.input(this, "输入条码 / 商品编码");
         et.setSingleLine(true);
+        wrap.addView(et);
         new AlertDialog.Builder(this).setTitle("手动输入条码")
-                .setView(et)
+                .setView(wrap)
                 .setPositiveButton("确定", (d, w) -> {
                     String code = et.getText().toString().trim();
                     if (!code.isEmpty()) handleIncomingBarcode(code);
@@ -374,20 +407,20 @@ public class MainActivity extends Activity {
     }
 
     public void refreshData(Runnable onDone) {
-        syncBtn.setText("同步中…");
+        syncBtn.label.setText("同步中…");
         new Thread(() -> {
             try {
                 JSONObject data = ApiClient.fetchData(store);
                 store.reloadFromJson(data);
                 runOnUiThread(() -> {
-                    syncBtn.setText("同步");
+                    syncBtn.label.setText("同步");
                     syncWarehouseBadge();
                     notifyDataChanged();
                     if (onDone != null) onDone.run();
                 });
             } catch (ApiClient.ApiException ae) {
                 runOnUiThread(() -> {
-                    syncBtn.setText("同步");
+                    syncBtn.label.setText("同步");
                     if (ae.status == 401) {
                         store.clearAuth();
                         Ui.toast(this, "登录已过期，请重新登录");
@@ -399,7 +432,7 @@ public class MainActivity extends Activity {
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
-                    syncBtn.setText("同步");
+                    syncBtn.label.setText("同步");
                     Ui.toast(this, ApiClient.friendlyError(e));
                 });
             }

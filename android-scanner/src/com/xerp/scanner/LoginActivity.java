@@ -5,7 +5,13 @@ import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.Shader;
+import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
@@ -16,6 +22,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -52,52 +59,67 @@ public class LoginActivity extends Activity {
             return;
         }
 
+        FrameLayout pageShell = new FrameLayout(this);
+        pageShell.setBackgroundColor(Ui.BG);
+        pageShell.addView(new HeroArcBackdrop(this), new FrameLayout.LayoutParams(-1, Ui.dp(this, 250)));
+
         ScrollView sv = new ScrollView(this);
-        sv.setBackgroundColor(Ui.BG);
         sv.setFillViewport(true);
+        sv.setVerticalScrollBarEnabled(false);
 
         LinearLayout root = Ui.col(this);
-        root.setPadding(Ui.dp(this, 20), Ui.dp(this, 28), Ui.dp(this, 20), Ui.dp(this, 24));
+        root.setPadding(Ui.dp(this, 18), Ui.dp(this, 24), Ui.dp(this, 18), Ui.dp(this, 24));
         sv.addView(root);
+        pageShell.addView(sv, new FrameLayout.LayoutParams(-1, -1));
 
         // Brand Header Showcase
         LinearLayout hero = Ui.col(this);
         hero.setGravity(Gravity.CENTER_HORIZONTAL);
-        hero.setPadding(0, 0, 0, Ui.dp(this, 18));
+        hero.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 18));
 
+        FrameLayout logoFrame = new FrameLayout(this);
+        logoFrame.setBackground(Ui.rounded(this, Color.WHITE, 22));
+        logoFrame.setElevation(Ui.dp(this, 8));
+        int padL = Ui.dp(this, 4);
+        logoFrame.setPadding(padL, padL, padL, padL);
         logoView = new BrandLogoView(this, store);
         int lSize = Ui.dp(this, 76);
-        logoView.setElevation(Ui.dp(this, 6));
         logoView.setOnClickListener(v -> onLogoClick());
-        hero.addView(logoView, new LinearLayout.LayoutParams(lSize, lSize));
+        logoFrame.addView(logoView, new FrameLayout.LayoutParams(-1, -1));
+        hero.addView(logoFrame, new LinearLayout.LayoutParams(lSize, lSize));
 
         String coTitle = store.effectiveSplashTitle();
-        TextView brand = Ui.tv(this, coTitle, store.isDefaultBrand() ? 26 : 22, Ui.INK, true);
+        TextView brand = Ui.tv(this, coTitle, store.isDefaultBrand() ? 27 : 22, Color.WHITE, true);
         if (store.isDefaultBrand()) {
-            SpannableString wm = new SpannableString("x.erp");
-            wm.setSpan(new ForegroundColorSpan(0xFF059669), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            wm.setSpan(new ForegroundColorSpan(0xFF0EA5E9), 1, 2, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            wm.setSpan(new ForegroundColorSpan(0xFF0F172A), 2, 5, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            brand.setText(wm);
+            brand.setText("x.erp");
+            brand.setLetterSpacing(0.04f);
         }
         brand.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams blp0 = new LinearLayout.LayoutParams(-2, -2);
-        blp0.topMargin = Ui.dp(this, 12);
+        blp0.topMargin = Ui.dp(this, 10);
         hero.addView(brand, blp0);
 
-        TextView sub = Ui.tv(this, store.splashSubtitle, 12, Ui.MUTED, false);
+        TextView sub = Ui.tv(this, store.splashSubtitle, 12, 0xFFE2F8F0, false);
         sub.setGravity(Gravity.CENTER);
-        sub.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 6));
+        sub.setPadding(0, Ui.dp(this, 3), 0, Ui.dp(this, 6));
         hero.addView(sub);
 
-        TextView tapHint = Ui.tv(this, "轻触上方图标可更换公司 Logo", 11, Ui.ACCENT, false);
+        TextView tapHint = Ui.badge(this, "轻触上方图标可更换公司 Logo", 0x26FFFFFF, Color.WHITE);
+        tapHint.setTextSize(11);
+        tapHint.setTypeface(Typeface.DEFAULT, Typeface.NORMAL);
         hero.addView(tapHint);
         root.addView(hero);
 
-        // Login Card
-        LinearLayout card = Ui.card(this, 16);
+        // Floating Login Card
+        LinearLayout card = Ui.col(this);
+        card.setBackground(Ui.outlined(this, Ui.CARD, 0xFFE8EDF5, 1, 18));
+        card.setElevation(Ui.dp(this, 5));
+        card.setPadding(Ui.dp(this, 18), Ui.dp(this, 18), Ui.dp(this, 18), Ui.dp(this, 18));
 
-        card.addView(Ui.tv(this, "服务器地址（局域网 IP 或远程域名）", 12, Ui.MUTED, true));
+        card.addView(Ui.sectionHeader(this, IconView.Type.WAREHOUSE, "连接工作台", Ui.PRIMARY));
+        LinearLayout.LayoutParams shlp = new LinearLayout.LayoutParams(-1, -2);
+        shlp.topMargin = Ui.dp(this, 14);
+        card.addView(Ui.tv(this, "服务器地址（局域网 IP 或远程域名）", 12, Ui.MUTED, true), shlp);
         LinearLayout srvRow = Ui.row(this);
         etServer = Ui.input(this, "例如 192.168.1.10:8686");
         etServer.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
@@ -110,7 +132,7 @@ public class LoginActivity extends Activity {
         srvRow.addView(Ui.space(this, 8, 1));
         srvRow.addView(bDiscover, new LinearLayout.LayoutParams(-2, Ui.dp(this, 44)));
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, -2);
-        slp.topMargin = Ui.dp(this, 4);
+        slp.topMargin = Ui.dp(this, 5);
         card.addView(srvRow, slp);
 
         // Recent servers
@@ -119,7 +141,7 @@ public class LoginActivity extends Activity {
         recentRow = Ui.row(this);
         hsv.addView(recentRow);
         LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(-1, -2);
-        rlp.topMargin = Ui.dp(this, 6);
+        rlp.topMargin = Ui.dp(this, 8);
         card.addView(hsv, rlp);
         renderRecentServers();
 
@@ -128,14 +150,14 @@ public class LoginActivity extends Activity {
         coBox.setVisibility(View.GONE);
         coBox.addView(Ui.tv(this, "选择账套 / 公司", 12, Ui.MUTED, true));
         coPick = Ui.tv(this, "默认公司 ▾", 14, Ui.INK, true);
-        coPick.setBackground(Ui.outlined(this, Ui.BG, Ui.LINE, 1, 10));
-        coPick.setPadding(Ui.dp(this, 12), Ui.dp(this, 10), Ui.dp(this, 12), Ui.dp(this, 10));
+        coPick.setBackground(Ui.rippleOutlined(this, Ui.SURFACE_2, Ui.LINE, 1, 12));
+        coPick.setPadding(Ui.dp(this, 13), Ui.dp(this, 11), Ui.dp(this, 13), Ui.dp(this, 11));
         coPick.setOnClickListener(v -> showCompanyChoices());
         LinearLayout.LayoutParams colp = new LinearLayout.LayoutParams(-1, -2);
-        colp.topMargin = Ui.dp(this, 4);
+        colp.topMargin = Ui.dp(this, 5);
         coBox.addView(coPick, colp);
         LinearLayout.LayoutParams cblp = new LinearLayout.LayoutParams(-1, -2);
-        cblp.topMargin = Ui.dp(this, 10);
+        cblp.topMargin = Ui.dp(this, 12);
         card.addView(coBox, cblp);
 
         // Username & Password
@@ -153,7 +175,7 @@ public class LoginActivity extends Activity {
         etPass.setSingleLine(true);
         card.addView(etPass, slp);
 
-        bLogin = Ui.btn(this, "连接并登录", Ui.PRIMARY, Color.WHITE);
+        bLogin = Ui.gradientBtn(this, "连接并登录", Ui.PRIMARY, Ui.PRIMARY_END);
         bLogin.setTextSize(16);
         bLogin.setOnClickListener(v -> doConnectAndLogin());
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(-1, Ui.dp(this, 50));
@@ -167,8 +189,8 @@ public class LoginActivity extends Activity {
         foot.setPadding(0, Ui.dp(this, 18), 0, 0);
         root.addView(foot);
 
-        setContentView(sv);
-        Ui.applyEdgeToEdge(this, sv);
+        setContentView(pageShell);
+        Ui.applyEdgeToEdgeBar(this, pageShell, 0xFF047857, false);
     }
 
     private void renderRecentServers() {
@@ -371,6 +393,30 @@ public class LoginActivity extends Activity {
                     runOnUiThread(() -> Ui.toast(this, ApiClient.friendlyError(e)));
                 }
             }).start();
+        }
+    }
+
+    private static final class HeroArcBackdrop extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path arc = new Path();
+
+        HeroArcBackdrop(android.content.Context ctx) {
+            super(ctx);
+        }
+
+        @Override
+        protected void onDraw(Canvas c) {
+            int w = getWidth(), h = getHeight();
+            if (w <= 0 || h <= 0) return;
+            paint.setShader(new LinearGradient(0, 0, w, h,
+                    new int[]{0xFF047857, 0xFF059669, 0xFF0284C7}, null, Shader.TileMode.CLAMP));
+            arc.reset();
+            arc.moveTo(0, 0);
+            arc.lineTo(w, 0);
+            arc.lineTo(w, h * 0.78f);
+            arc.quadTo(w * 0.5f, h * 1.04f, 0, h * 0.78f);
+            arc.close();
+            c.drawPath(arc, paint);
         }
     }
 }

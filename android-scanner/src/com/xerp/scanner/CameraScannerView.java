@@ -114,7 +114,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
         LinearLayout leftBar = Ui.row(act);
         leftBar.setPadding(Ui.dp(act, 8), Ui.dp(act, 6), Ui.dp(act, 8), Ui.dp(act, 6));
         closeBtn = pill("关闭");
-        closeBtn.setBackground(Ui.rounded(act, 0xAA111827, 14));
+        closeBtn.setBackground(Ui.outlined(act, 0xB30F172A, 0x44FFFFFF, 1, 16));
         closeBtn.setOnClickListener(v -> {
             if (closeListener != null) closeListener.onCloseRequested();
         });
@@ -154,8 +154,8 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
 
     private TextView pill(String label) {
         TextView t = Ui.tv(activity, label, 12, Color.WHITE, true);
-        t.setBackground(Ui.rounded(activity, 0x88000000, 14));
-        t.setPadding(Ui.dp(activity, 10), Ui.dp(activity, 5), Ui.dp(activity, 10), Ui.dp(activity, 5));
+        t.setBackground(Ui.outlined(activity, 0x990F172A, 0x44FFFFFF, 1, 16));
+        t.setPadding(Ui.dp(activity, 11), Ui.dp(activity, 5), Ui.dp(activity, 11), Ui.dp(activity, 5));
         return t;
     }
 
@@ -171,7 +171,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
         wantedActive = true;
         paused = false;
         pauseBtn.setText("暂停");
-        pauseBtn.setBackground(Ui.rounded(activity, 0x88000000, 14));
+        pauseBtn.setBackground(Ui.outlined(activity, 0x990F172A, 0x44FFFFFF, 1, 16));
         resumeCover.setVisibility(View.GONE);
         lastCode = null;
         absentSince = -1;
@@ -198,7 +198,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
     public void setUserPaused(boolean p) {
         paused = p;
         pauseBtn.setText(p ? "恢复" : "暂停");
-        pauseBtn.setBackground(Ui.rounded(activity, p ? Ui.PRIMARY : 0x88000000, 14));
+        pauseBtn.setBackground(p ? Ui.rounded(activity, Ui.PRIMARY, 16) : Ui.outlined(activity, 0x990F172A, 0x44FFFFFF, 1, 16));
         resumeCover.setVisibility(p ? View.VISIBLE : View.GONE);
         if (!p) {
             lastCode = null;
@@ -236,7 +236,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
             torchOn = !torchOn;
             p.setFlashMode(torchOn ? Camera.Parameters.FLASH_MODE_TORCH : Camera.Parameters.FLASH_MODE_OFF);
             camera.setParameters(p);
-            torchBtn.setBackground(Ui.rounded(activity, torchOn ? Ui.WARN : 0x88000000, 14));
+            torchBtn.setBackground(torchOn ? Ui.rounded(activity, Ui.WARN, 16) : Ui.outlined(activity, 0x990F172A, 0x44FFFFFF, 1, 16));
         } catch (Exception ignored) { }
     }
 
@@ -254,7 +254,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
             p.setZoom(target);
             camera.setParameters(p);
             zoomBtn.setText(zoom2x ? "2x" : "1x");
-            zoomBtn.setBackground(Ui.rounded(activity, zoom2x ? Ui.ACCENT : 0x88000000, 14));
+            zoomBtn.setBackground(zoom2x ? Ui.rounded(activity, Ui.ACCENT, 16) : Ui.outlined(activity, 0x990F172A, 0x44FFFFFF, 1, 16));
         } catch (Exception ignored) { }
     }
 
@@ -334,9 +334,9 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
         camera = null;
         torchOn = false;
         zoom2x = false;
-        torchBtn.setBackground(Ui.rounded(activity, 0x88000000, 14));
+        torchBtn.setBackground(Ui.outlined(activity, 0x990F172A, 0x44FFFFFF, 1, 16));
         zoomBtn.setText("1x");
-        zoomBtn.setBackground(Ui.rounded(activity, 0x88000000, 14));
+        zoomBtn.setBackground(Ui.outlined(activity, 0x990F172A, 0x44FFFFFF, 1, 16));
     }
 
     @Override
@@ -503,6 +503,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
         private final Paint mask = new Paint();
         private final Paint box = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint corner = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint laserGlow = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint laser = new Paint(Paint.ANTI_ALIAS_FLAG);
         private int highlightColor = 0;
         private long highlightUntil = 0;
@@ -517,9 +518,14 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
             box.setStrokeWidth(Ui.dp(ctx, 1));
             corner.setColor(Ui.PRIMARY);
             corner.setStyle(Paint.Style.STROKE);
+            corner.setStrokeCap(Paint.Cap.ROUND);
             corner.setStrokeWidth(Ui.dp(ctx, 4));
-            laser.setColor(0xCC10B981);
+            laserGlow.setColor(0x4410B981);
+            laserGlow.setStrokeWidth(Ui.dp(ctx, 6));
+            laserGlow.setStrokeCap(Paint.Cap.ROUND);
+            laser.setColor(0xFF34D399);
             laser.setStrokeWidth(Ui.dp(ctx, 2));
+            laser.setStrokeCap(Paint.Cap.ROUND);
         }
 
         void flash(int color) {
@@ -541,7 +547,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
             boolean flashing = SystemClock.uptimeMillis() < highlightUntil;
             corner.setColor(flashing ? highlightColor : Ui.PRIMARY);
             box.setColor(flashing ? highlightColor : 0x66FFFFFF);
-            c.drawRoundRect(new RectF(l, t, r, b), 10, 10, box);
+            c.drawRoundRect(new RectF(l, t, r, b), 12, 12, box);
 
             float len = Math.min(bw, bh) * 0.14f;
             c.drawLine(l, t, l + len, t, corner); c.drawLine(l, t, l, t + len, corner);
@@ -551,6 +557,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
 
             if (camera != null && !paused && wantedActive && !decodeDisabled) {
                 float ly = t + bh * laserPos;
+                c.drawLine(l + 14, ly, r - 14, ly, laserGlow);
                 c.drawLine(l + 12, ly, r - 12, ly, laser);
                 laserPos += laserDown ? 0.04f : -0.04f;
                 if (laserPos >= 0.90f) { laserPos = 0.90f; laserDown = false; }

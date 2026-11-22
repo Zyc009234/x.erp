@@ -4,6 +4,8 @@
         <item name="android:colorPrimary">#059669</item>
         <item name="android:colorPrimaryDark">#047857</item>
         <item name="android:colorAccent">#059669</item>
+        <item name="android:colorControlActivated">#059669</item>
+        <item name="android:colorControlHighlight">#22059669</item>
         <item name="android:windowBackground">@android:color/white</item>
     </style>
 </resources>

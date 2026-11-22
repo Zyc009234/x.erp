@@ -44,30 +44,39 @@ public final class ProductEditorSheet {
         }
 
         LinearLayout outer = Ui.col(act);
-        int maxH = Math.round(act.getResources().getDisplayMetrics().heightPixels * 0.86f);
+        int maxH = Math.round(act.getResources().getDisplayMetrics().heightPixels * 0.83f);
         outer.setLayoutParams(new LinearLayout.LayoutParams(-1, -2));
 
         // Top Bar with title + Close
         LinearLayout top = Ui.row(act);
-        top.setPadding(Ui.dp(act, 16), Ui.dp(act, 14), Ui.dp(act, 16), Ui.dp(act, 10));
+        top.setPadding(Ui.dp(act, 16), Ui.dp(act, 10), Ui.dp(act, 16), Ui.dp(act, 10));
         String titleStr = existing != null ? "编辑商品 · " + existing.name : "快速建档 / 绑定条码";
         top.addView(Ui.tv(act, titleStr, 17, Ui.INK, true), new LinearLayout.LayoutParams(0, -2, 1));
-        TextView closeBtn = Ui.tv(act, "关闭", 14, Ui.MUTED, true);
-        closeBtn.setPadding(Ui.dp(act, 8), Ui.dp(act, 4), Ui.dp(act, 4), Ui.dp(act, 4));
+        TextView closeBtn = Ui.badge(act, "关闭", Ui.CHIP_BG, Ui.MUTED);
+        closeBtn.setTextSize(12);
+        closeBtn.setPadding(Ui.dp(act, 10), Ui.dp(act, 5), Ui.dp(act, 10), Ui.dp(act, 5));
         top.addView(closeBtn);
         outer.addView(top);
 
-        // Mode switcher (New/Edit vs Bind Existing)
+        // Segmented Control Mode switcher (New/Edit vs Bind Existing)
+        LinearLayout segWrap = Ui.row(act);
+        segWrap.setPadding(Ui.dp(act, 16), 0, Ui.dp(act, 16), Ui.dp(act, 10));
         LinearLayout seg = Ui.row(act);
-        seg.setPadding(Ui.dp(act, 16), 0, Ui.dp(act, 16), Ui.dp(act, 10));
-        Button tabNew = Ui.btn(act, existing != null ? "编辑商品" : "新建商品", Ui.PRIMARY, Color.WHITE);
-        Button tabBind = Ui.outlineBtn(act, "绑定到已有商品", Ui.LINE, Ui.INK);
-        tabNew.setMinHeight(Ui.dp(act, 36)); tabNew.setMinimumHeight(Ui.dp(act, 36)); tabNew.setTextSize(13);
-        tabBind.setMinHeight(Ui.dp(act, 36)); tabBind.setMinimumHeight(Ui.dp(act, 36)); tabBind.setTextSize(13);
-        seg.addView(tabNew, new LinearLayout.LayoutParams(0, Ui.dp(act, 36), 1));
-        seg.addView(Ui.space(act, 8, 1));
-        seg.addView(tabBind, new LinearLayout.LayoutParams(0, Ui.dp(act, 36), 1));
-        if (showBindTab && existing == null) outer.addView(seg);
+        seg.setBackground(Ui.rounded(act, Ui.CHIP_BG, 12));
+        seg.setPadding(Ui.dp(act, 3), Ui.dp(act, 3), Ui.dp(act, 3), Ui.dp(act, 3));
+        Button tabNew = Ui.btn(act, existing != null ? "编辑商品" : "新建商品", Ui.CARD, Ui.PRIMARY);
+        Button tabBind = Ui.btn(act, "绑定到已有商品", Color.TRANSPARENT, Ui.MUTED);
+        tabNew.setMinHeight(Ui.dp(act, 34)); tabNew.setMinimumHeight(Ui.dp(act, 34)); tabNew.setTextSize(13);
+        tabBind.setMinHeight(Ui.dp(act, 34)); tabBind.setMinimumHeight(Ui.dp(act, 34)); tabBind.setTextSize(13);
+        tabNew.setElevation(Ui.dp(act, 1));
+        tabBind.setElevation(0);
+        tabNew.setBackground(Ui.rounded(act, Ui.CARD, 9));
+        tabBind.setBackgroundColor(Color.TRANSPARENT);
+        seg.addView(tabNew, new LinearLayout.LayoutParams(0, Ui.dp(act, 34), 1));
+        seg.addView(Ui.space(act, 4, 1));
+        seg.addView(tabBind, new LinearLayout.LayoutParams(0, Ui.dp(act, 34), 1));
+        segWrap.addView(seg, new LinearLayout.LayoutParams(-1, -2));
+        if (showBindTab && existing == null) outer.addView(segWrap);
 
         outer.addView(Ui.divider(act));
 
@@ -339,7 +348,7 @@ public final class ProductEditorSheet {
         // Bottom fixed Save Bar (Thumb zone!)
         LinearLayout foot = Ui.row(act);
         foot.setPadding(Ui.dp(act, 16), Ui.dp(act, 10), Ui.dp(act, 16), Ui.dp(act, 14));
-        Button bSave = Ui.btn(act, existing != null ? "保存修改" : "保存新商品", Ui.PRIMARY, Color.WHITE);
+        Button bSave = Ui.gradientBtn(act, existing != null ? "保存修改" : "保存新商品", Ui.PRIMARY, Ui.PRIMARY_END);
         bSave.setTextSize(16);
         foot.addView(bSave, new LinearLayout.LayoutParams(-1, Ui.dp(act, 50)));
         outer.addView(Ui.divider(act));
@@ -358,7 +367,7 @@ public final class ProductEditorSheet {
                 String hay = (p.name + " " + p.sku + " " + p.spec + " " + p.barcode).toLowerCase(Locale.ROOT);
                 if (!q.isEmpty() && !hay.contains(q)) continue;
                 LinearLayout item = Ui.row(act);
-                item.setBackground(Ui.outlined(act, Color.WHITE, Ui.LINE, 1, 10));
+                item.setBackground(Ui.rippleOutlined(act, Color.WHITE, Ui.LINE, 1, 12));
                 item.setPadding(Ui.dp(act, 12), Ui.dp(act, 10), Ui.dp(act, 12), Ui.dp(act, 10));
                 LinearLayout info = Ui.col(act);
                 info.addView(Ui.tv(act, p.name, 14, Ui.INK, true));
@@ -372,7 +381,7 @@ public final class ProductEditorSheet {
                 bindList.addView(item, ilp);
                 if (++shown >= 30) break;
             }
-            if (shown == 0) bindList.addView(Ui.tv(act, "没有找到匹配的商品", 13, Ui.MUTED, false));
+            if (shown == 0) bindList.addView(Ui.emptyState(act, IconView.Type.SEARCH_BAR, "没有找到匹配的商品", "请换个名称、编码或规格关键字"));
         };
         etSearch.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
@@ -382,15 +391,15 @@ public final class ProductEditorSheet {
         renderBindList.run();
 
         tabNew.setOnClickListener(v -> {
-            tabNew.setBackground(Ui.rounded(act, Ui.PRIMARY, 10)); tabNew.setTextColor(Color.WHITE);
-            tabBind.setBackground(Ui.outlined(act, Color.WHITE, Ui.LINE, 1, 10)); tabBind.setTextColor(Ui.INK);
+            tabNew.setBackground(Ui.rounded(act, Ui.CARD, 9)); tabNew.setTextColor(Ui.PRIMARY); tabNew.setElevation(Ui.dp(act, 1));
+            tabBind.setBackgroundColor(Color.TRANSPARENT); tabBind.setTextColor(Ui.MUTED); tabBind.setElevation(0);
             formPane.setVisibility(View.VISIBLE);
             bindPane.setVisibility(View.GONE);
             foot.setVisibility(View.VISIBLE);
         });
         tabBind.setOnClickListener(v -> {
-            tabBind.setBackground(Ui.rounded(act, Ui.PRIMARY, 10)); tabBind.setTextColor(Color.WHITE);
-            tabNew.setBackground(Ui.outlined(act, Color.WHITE, Ui.LINE, 1, 10)); tabNew.setTextColor(Ui.INK);
+            tabBind.setBackground(Ui.rounded(act, Ui.CARD, 9)); tabBind.setTextColor(Ui.PRIMARY); tabBind.setElevation(Ui.dp(act, 1));
+            tabNew.setBackgroundColor(Color.TRANSPARENT); tabNew.setTextColor(Ui.MUTED); tabNew.setElevation(0);
             formPane.setVisibility(View.GONE);
             bindPane.setVisibility(View.VISIBLE);
             foot.setVisibility(View.GONE);

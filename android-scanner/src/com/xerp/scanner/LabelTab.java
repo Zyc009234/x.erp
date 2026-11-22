@@ -52,26 +52,33 @@ public class LabelTab implements TabPage {
     }
 
     private void buildUi() {
-        // 1. Mode Switch + Search
+        // 1. Mode Segmented Tabs + Search
         LinearLayout top = Ui.col(act);
         top.setBackgroundColor(Color.WHITE);
         top.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 8));
 
         LinearLayout pills = Ui.row(act);
+        pills.setBackground(Ui.rounded(act, Ui.CHIP_BG, 12));
+        pills.setPadding(Ui.dp(act, 3), Ui.dp(act, 3), Ui.dp(act, 3), Ui.dp(act, 3));
         tabQueue = Ui.chip(act, "打印队列", true);
         tabAll = Ui.chip(act, "添加商品", false);
         tabNoBar = Ui.chip(act, "无条码商品", false);
+        for (TextView t : new TextView[]{tabQueue, tabAll, tabNoBar}) {
+            t.setPadding(Ui.dp(act, 6), Ui.dp(act, 7), Ui.dp(act, 6), Ui.dp(act, 7));
+        }
         tabQueue.setOnClickListener(v -> { viewMode = "queue"; renderAll(); });
         tabAll.setOnClickListener(v -> { viewMode = "all"; renderAll(); });
         tabNoBar.setOnClickListener(v -> { viewMode = "nobar"; renderAll(); });
-        pills.addView(tabQueue); pills.addView(Ui.space(act, 6, 1));
-        pills.addView(tabAll); pills.addView(Ui.space(act, 6, 1));
-        pills.addView(tabNoBar);
+        pills.addView(tabQueue, new LinearLayout.LayoutParams(0, -2, 1));
+        pills.addView(Ui.space(act, 4, 1));
+        pills.addView(tabAll, new LinearLayout.LayoutParams(0, -2, 1));
+        pills.addView(Ui.space(act, 4, 1));
+        pills.addView(tabNoBar, new LinearLayout.LayoutParams(0, -2, 1));
         top.addView(pills);
 
         searchEt = Ui.input(act, "搜索商品名称 / 编码 / 条码");
         searchEt.setSingleLine(true);
-        searchEt.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 8));
+        searchEt.setPadding(Ui.dp(act, 12), Ui.dp(act, 9), Ui.dp(act, 12), Ui.dp(act, 9));
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, -2);
         slp.topMargin = Ui.dp(act, 8);
         top.addView(searchEt, slp);
@@ -79,7 +86,7 @@ public class LabelTab implements TabPage {
         root.addView(Ui.divider(act));
 
         // 2. Preview Card
-        previewCard = Ui.card(act, 10);
+        previewCard = Ui.card(act, 12);
         LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(-1, -2);
         plp.setMargins(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 4));
         root.addView(previewCard, plp);
@@ -87,7 +94,7 @@ public class LabelTab implements TabPage {
         // 3. List
         ScrollView sv = new ScrollView(act);
         listCol = Ui.col(act);
-        listCol.setPadding(Ui.dp(act, 10), Ui.dp(act, 4), Ui.dp(act, 10), Ui.dp(act, 10));
+        listCol.setPadding(Ui.dp(act, 10), Ui.dp(act, 4), Ui.dp(act, 10), Ui.dp(act, 12));
         sv.addView(listCol);
         root.addView(sv, new LinearLayout.LayoutParams(-1, 0, 1));
 
@@ -95,11 +102,12 @@ public class LabelTab implements TabPage {
         root.addView(Ui.divider(act));
         LinearLayout foot = Ui.col(act);
         foot.setBackgroundColor(Color.WHITE);
+        foot.setElevation(Ui.dp(act, 4));
         foot.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 10));
 
         LinearLayout optsRow = Ui.row(act);
         tplPill = Ui.tv(act, "40×30 热敏 ▾", 12, Ui.ACCENT, true);
-        tplPill.setBackground(Ui.outlined(act, Ui.ACCENT_SOFT, Ui.ACCENT, 1, 8));
+        tplPill.setBackground(Ui.rippleOutlined(act, Ui.ACCENT_SOFT, Ui.ACCENT_BORDER, 1, 10));
         tplPill.setPadding(Ui.dp(act, 10), Ui.dp(act, 6), Ui.dp(act, 10), Ui.dp(act, 6));
         tplPill.setOnClickListener(v -> pickPaper());
 
@@ -118,7 +126,7 @@ public class LabelTab implements TabPage {
         optsRow.addView(cbPrice);
         foot.addView(optsRow);
 
-        printBtn = Ui.btn(act, "打印标签", Ui.PRIMARY, Color.WHITE);
+        printBtn = Ui.gradientBtn(act, "打印标签", Ui.PRIMARY, Ui.PRIMARY_END);
         printBtn.setOnClickListener(v -> BarcodeGenHelper.printLabels(act, store.companyName, store.labelQueue, tpl, showCo, showSpec, showPrice, store.seesPrice));
         LinearLayout.LayoutParams pblp = new LinearLayout.LayoutParams(-1, Ui.dp(act, 46));
         pblp.topMargin = Ui.dp(act, 6);
@@ -160,6 +168,12 @@ public class LabelTab implements TabPage {
     }
 
     private void renderAll() {
+        int noBarCnt = 0;
+        for (Models.Product p : store.products) if (p.barcode.isEmpty()) noBarCnt++;
+        tabQueue.setText("打印队列(" + store.labelQueue.size() + ")");
+        tabAll.setText("添加商品");
+        tabNoBar.setText("无条码(" + noBarCnt + ")");
+
         styleTab(tabQueue, "queue".equals(viewMode));
         styleTab(tabAll, "all".equals(viewMode));
         styleTab(tabNoBar, "nobar".equals(viewMode));
@@ -171,12 +185,16 @@ public class LabelTab implements TabPage {
         for (Models.LabelJob j : store.labelQueue) total += Math.max(0, j.copies);
         printBtn.setText("打印条码标签（共 " + total + " 张）");
         printBtn.setEnabled(total > 0);
-        printBtn.setBackground(Ui.rounded(act, total > 0 ? Ui.PRIMARY : 0xFF9CA3AF, 10));
+        printBtn.setBackground(total > 0
+                ? Ui.rippleGradient(act, Ui.PRIMARY, Ui.PRIMARY_END, 12)
+                : Ui.rounded(act, 0xFFCBD5E1, 12));
     }
 
     private void styleTab(TextView t, boolean on) {
-        t.setTextColor(on ? Color.WHITE : Ui.INK);
-        t.setBackground(on ? Ui.rounded(act, Ui.PRIMARY, 16) : Ui.outlined(act, Color.WHITE, Ui.LINE, 1, 16));
+        t.setTextColor(on ? Ui.PRIMARY : Ui.MUTED);
+        t.setTypeface(android.graphics.Typeface.DEFAULT, on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+        t.setBackground(on ? Ui.rounded(act, Ui.CARD, 9) : null);
+        t.setElevation(on ? Ui.dp(act, 1) : 0);
     }
 
     private void renderPreview() {
@@ -188,25 +206,30 @@ public class LabelTab implements TabPage {
         previewCard.setVisibility(View.VISIBLE);
         String code = previewJob.code();
         LinearLayout row = Ui.row(act);
+        LinearLayout barBox = Ui.row(act);
+        barBox.setBackground(Ui.outlined(act, Color.WHITE, Ui.LINE, 1, 10));
+        barBox.setPadding(Ui.dp(act, 6), Ui.dp(act, 4), Ui.dp(act, 6), Ui.dp(act, 4));
         ImageView barImg = new ImageView(act);
         Bitmap bmp = BarcodeGenHelper.renderBarcodeBitmap(code,
                 BarcodeGenHelper.supportsCode128(code) ? BarcodeFormat.CODE_128 : BarcodeFormat.QR_CODE, 420, 110);
         if (bmp != null) barImg.setImageBitmap(bmp);
         barImg.setBackgroundColor(Color.WHITE);
+        barBox.addView(barImg, new LinearLayout.LayoutParams(Ui.dp(act, 146), Ui.dp(act, 46)));
 
         LinearLayout info = Ui.col(act);
         info.addView(Ui.tv(act, previewJob.product.name + (previewJob.unit != null ? " [" + previewJob.unit.name + "]" : ""), 14, Ui.INK, true));
         info.addView(Ui.tv(act, code, 12, Ui.MUTED, false));
         TextView bigBtn = Ui.badge(act, "全屏亮码", Ui.ACCENT_SOFT, Ui.ACCENT);
+        bigBtn.setBackground(Ui.rippleOutlined(act, Ui.ACCENT_SOFT, Ui.ACCENT_BORDER, 1, 8));
         bigBtn.setOnClickListener(v -> BarcodeGenHelper.showFullscreenBarcode(act, previewJob.product.name,
                 previewJob.unit != null ? ("1" + previewJob.unit.name + "=" + previewJob.unit.rate + previewJob.product.unit) : previewJob.product.spec, code));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(-2, -2);
-        blp.topMargin = Ui.dp(act, 4);
+        blp.topMargin = Ui.dp(act, 5);
         info.addView(bigBtn, blp);
 
         row.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
         row.addView(Ui.space(act, 10, 1));
-        row.addView(barImg, new LinearLayout.LayoutParams(Ui.dp(act, 150), Ui.dp(act, 48)));
+        row.addView(barBox);
         previewCard.addView(row);
     }
 
@@ -217,7 +240,8 @@ public class LabelTab implements TabPage {
         if ("queue".equals(viewMode)) {
             if (!store.labelQueue.isEmpty()) {
                 LinearLayout ops = Ui.row(act);
-                Button bStock = Ui.outlineBtn(act, "按当前仓库库存设张数", Ui.ACCENT, Ui.ACCENT);
+                Button bStock = Ui.outlineBtn(act, "按当前仓库库存设张数", Ui.ACCENT_BORDER, Ui.ACCENT);
+                bStock.setBackground(Ui.rippleOutlined(act, Ui.ACCENT_SOFT, Ui.ACCENT_BORDER, 1, 10));
                 bStock.setMinHeight(Ui.dp(act, 34)); bStock.setMinimumHeight(Ui.dp(act, 34)); bStock.setTextSize(12);
                 bStock.setOnClickListener(v -> {
                     for (Models.LabelJob j : store.labelQueue) {
@@ -242,8 +266,12 @@ public class LabelTab implements TabPage {
                 Models.LabelJob j = store.labelQueue.get(i);
                 if (!q.isEmpty() && !(j.product.name + j.code()).toLowerCase(Locale.ROOT).contains(q)) continue;
                 LinearLayout row = Ui.row(act);
-                row.setBackground(Ui.outlined(act, Color.WHITE, j == previewJob ? Ui.PRIMARY : Ui.LINE, 1, 10));
-                row.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 8));
+                boolean isPrev = j == previewJob;
+                row.setBackground(isPrev
+                        ? Ui.rippleOutlined(act, Ui.PRIMARY_SOFT, Ui.PRIMARY, 1, 12)
+                        : Ui.rippleOutlined(act, Ui.CARD, 0xFFE8EDF5, 1, 12));
+                row.setElevation(Ui.dp(act, isPrev ? 2 : 1));
+                row.setPadding(Ui.dp(act, 12), Ui.dp(act, 10), Ui.dp(act, 12), Ui.dp(act, 10));
                 LinearLayout info = Ui.col(act);
                 info.addView(Ui.tv(act, j.product.name + (j.unit != null ? " (" + j.unit.name + ")" : ""), 14, Ui.INK, true));
                 info.addView(Ui.tv(act, j.code(), 12, Ui.MUTED, false));
@@ -262,14 +290,14 @@ public class LabelTab implements TabPage {
                 row.addView(bMin); row.addView(bCnt); row.addView(bAdd);
                 row.addView(Ui.space(act, 6, 1)); row.addView(bDel);
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-                lp.bottomMargin = Ui.dp(act, 6);
+                lp.bottomMargin = Ui.dp(act, 7);
                 listCol.addView(row, lp);
             }
             if (store.labelQueue.isEmpty()) {
-                TextView em = Ui.tv(act, "队列为空，可切到「添加商品」或直接扫码加入打印", 13, Ui.MUTED, false);
-                em.setGravity(Gravity.CENTER);
-                em.setPadding(0, Ui.dp(act, 24), 0, Ui.dp(act, 24));
-                listCol.addView(em);
+                LinearLayout em = Ui.emptyState(act, IconView.Type.TAG, "打印队列为空", "切到「添加商品」或扫码即可快速加入热敏/A4 标签队列");
+                LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(-1, -2);
+                elp.topMargin = Ui.dp(act, 10);
+                listCol.addView(em, elp);
             }
             return;
         }
@@ -280,7 +308,7 @@ public class LabelTab implements TabPage {
         for (Models.Product p : store.products) if (p.barcode.isEmpty()) noBarList.add(p);
 
         if (noBarOnly && !noBarList.isEmpty()) {
-            Button batchGen = Ui.btn(act, "一键为全部无条码商品生成 EAN-13（" + noBarList.size() + " 个）", Ui.ACCENT, Color.WHITE);
+            Button batchGen = Ui.gradientBtn(act, "一键为全部无条码商品生成 EAN-13（" + noBarList.size() + " 个）", Ui.ACCENT, 0xFF0369A1);
             batchGen.setOnClickListener(v -> batchGenerateBarcodes(noBarList, batchGen));
             LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(-1, Ui.dp(act, 44));
             blp.bottomMargin = Ui.dp(act, 8);
@@ -293,8 +321,9 @@ public class LabelTab implements TabPage {
             if (!q.isEmpty() && !(p.name + " " + p.sku + " " + p.barcode).toLowerCase(Locale.ROOT).contains(q)) continue;
 
             LinearLayout row = Ui.row(act);
-            row.setBackground(Ui.outlined(act, Color.WHITE, Ui.LINE, 1, 10));
-            row.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 8));
+            row.setBackground(Ui.rippleOutlined(act, Ui.CARD, 0xFFE8EDF5, 1, 12));
+            row.setElevation(Ui.dp(act, 1));
+            row.setPadding(Ui.dp(act, 12), Ui.dp(act, 10), Ui.dp(act, 12), Ui.dp(act, 10));
             LinearLayout info = Ui.col(act);
             info.addView(Ui.tv(act, p.name, 14, Ui.INK, true));
             info.addView(Ui.tv(act, p.barcode.isEmpty() ? ("编码 " + p.sku + " · 无条码") : p.barcode, 12, p.barcode.isEmpty() ? Ui.WARN : Ui.MUTED, false));

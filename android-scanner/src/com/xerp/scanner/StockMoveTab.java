@@ -46,40 +46,46 @@ public class StockMoveTab implements TabPage {
     }
 
     private void buildUi() {
-        // 1. Mode Switch
+        // 1. Modern Segmented Mode Switch
+        LinearLayout segWrap = Ui.col(act);
+        segWrap.setBackgroundColor(Color.WHITE);
+        segWrap.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 8));
+
         LinearLayout seg = Ui.row(act);
-        seg.setBackgroundColor(Color.WHITE);
-        seg.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 6));
+        seg.setBackground(Ui.rounded(act, Ui.CHIP_BG, 12));
+        seg.setPadding(Ui.dp(act, 3), Ui.dp(act, 3), Ui.dp(act, 3), Ui.dp(act, 3));
         segIn = Ui.btn(act, "扫码入库", Ui.PRIMARY, Color.WHITE);
-        segOut = Ui.outlineBtn(act, "扫码出库", Ui.LINE, Ui.INK);
-        segTransfer = Ui.outlineBtn(act, "仓库调拨", Ui.LINE, Ui.INK);
+        segOut = Ui.btn(act, "扫码出库", Color.TRANSPARENT, Ui.MUTED);
+        segTransfer = Ui.btn(act, "仓库调拨", Color.TRANSPARENT, Ui.MUTED);
         for (Button b : new Button[]{segIn, segOut, segTransfer}) {
-            b.setMinHeight(Ui.dp(act, 36));
-            b.setMinimumHeight(Ui.dp(act, 36));
+            b.setMinHeight(Ui.dp(act, 34));
+            b.setMinimumHeight(Ui.dp(act, 34));
             b.setTextSize(13);
+            b.setPadding(0, 0, 0, 0);
         }
         segIn.setOnClickListener(v -> setMode("in"));
         segOut.setOnClickListener(v -> setMode("out"));
         segTransfer.setOnClickListener(v -> setMode("transfer"));
-        seg.addView(segIn, new LinearLayout.LayoutParams(0, Ui.dp(act, 36), 1));
-        seg.addView(Ui.space(act, 6, 1));
-        seg.addView(segOut, new LinearLayout.LayoutParams(0, Ui.dp(act, 36), 1));
-        seg.addView(Ui.space(act, 6, 1));
-        seg.addView(segTransfer, new LinearLayout.LayoutParams(0, Ui.dp(act, 36), 1));
-        root.addView(seg);
+        seg.addView(segIn, new LinearLayout.LayoutParams(0, Ui.dp(act, 34), 1));
+        seg.addView(Ui.space(act, 4, 1));
+        seg.addView(segOut, new LinearLayout.LayoutParams(0, Ui.dp(act, 34), 1));
+        seg.addView(Ui.space(act, 4, 1));
+        seg.addView(segTransfer, new LinearLayout.LayoutParams(0, Ui.dp(act, 34), 1));
+        segWrap.addView(seg);
+        root.addView(segWrap);
 
         // 2. Context Bar (docType or target warehouse + remark)
         ctxBar = Ui.row(act);
         ctxBar.setBackgroundColor(Color.WHITE);
         ctxBar.setPadding(Ui.dp(act, 10), 0, Ui.dp(act, 10), Ui.dp(act, 8));
         typePill = Ui.tv(act, "其他入库 ▾", 13, Ui.ACCENT, true);
-        typePill.setBackground(Ui.outlined(act, Ui.ACCENT_SOFT, Ui.ACCENT, 1, 8));
-        typePill.setPadding(Ui.dp(act, 10), Ui.dp(act, 6), Ui.dp(act, 10), Ui.dp(act, 6));
+        typePill.setBackground(Ui.rippleOutlined(act, Ui.ACCENT_SOFT, Ui.ACCENT_BORDER, 1, 10));
+        typePill.setPadding(Ui.dp(act, 10), Ui.dp(act, 7), Ui.dp(act, 10), Ui.dp(act, 7));
         typePill.setOnClickListener(v -> pickContextType());
 
-        notePill = Ui.tv(act, "备注", 13, Ui.MUTED, false);
-        notePill.setBackground(Ui.outlined(act, Color.WHITE, Ui.LINE, 1, 8));
-        notePill.setPadding(Ui.dp(act, 10), Ui.dp(act, 6), Ui.dp(act, 10), Ui.dp(act, 6));
+        notePill = Ui.tv(act, "备注", 13, Ui.INK_2, false);
+        notePill.setBackground(Ui.rippleOutlined(act, Ui.SURFACE_2, Ui.LINE, 1, 10));
+        notePill.setPadding(Ui.dp(act, 10), Ui.dp(act, 7), Ui.dp(act, 10), Ui.dp(act, 7));
         notePill.setOnClickListener(v -> editRemark());
 
         ctxBar.addView(typePill, new LinearLayout.LayoutParams(0, -2, 1));
@@ -98,7 +104,7 @@ public class StockMoveTab implements TabPage {
         // 4. Cart List
         ScrollView sv = new ScrollView(act);
         cartList = Ui.col(act);
-        cartList.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 10));
+        cartList.setPadding(Ui.dp(act, 10), Ui.dp(act, 10), Ui.dp(act, 10), Ui.dp(act, 12));
         sv.addView(cartList);
         root.addView(sv, new LinearLayout.LayoutParams(-1, 0, 1));
 
@@ -106,7 +112,8 @@ public class StockMoveTab implements TabPage {
         root.addView(Ui.divider(act));
         thumbBar = Ui.col(act);
         thumbBar.setBackgroundColor(Color.WHITE);
-        thumbBar.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 8));
+        thumbBar.setElevation(Ui.dp(act, 4));
+        thumbBar.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 10));
         root.addView(thumbBar);
     }
 
@@ -424,12 +431,9 @@ public class StockMoveTab implements TabPage {
     }
 
     private void renderAll() {
-        segIn.setBackground("in".equals(mode) ? Ui.rounded(act, Ui.PRIMARY, 10) : Ui.outlined(act, Color.WHITE, Ui.LINE, 1, 10));
-        segIn.setTextColor("in".equals(mode) ? Color.WHITE : Ui.INK);
-        segOut.setBackground("out".equals(mode) ? Ui.rounded(act, Ui.DANGER, 10) : Ui.outlined(act, Color.WHITE, Ui.LINE, 1, 10));
-        segOut.setTextColor("out".equals(mode) ? Color.WHITE : Ui.INK);
-        segTransfer.setBackground("transfer".equals(mode) ? Ui.rounded(act, Ui.ACCENT, 10) : Ui.outlined(act, Color.WHITE, Ui.LINE, 1, 10));
-        segTransfer.setTextColor("transfer".equals(mode) ? Color.WHITE : Ui.INK);
+        applySegmentStyle(segIn, "in".equals(mode), Ui.PRIMARY);
+        applySegmentStyle(segOut, "out".equals(mode), Ui.DANGER);
+        applySegmentStyle(segTransfer, "transfer".equals(mode), Ui.ACCENT);
 
         if ("transfer".equals(mode)) {
             typePill.setText(store.whName(store.selectedWh) + " → " + (toWh.isEmpty() ? "选调入仓" : store.whName(toWh)) + " ▾");
@@ -446,8 +450,11 @@ public class StockMoveTab implements TabPage {
             if (p == null) continue;
             boolean sel = idx == activeIdx;
             LinearLayout card = Ui.col(act);
-            card.setBackground(Ui.outlined(act, sel ? Ui.PRIMARY_SOFT : Color.WHITE, sel ? Ui.PRIMARY : Ui.LINE, 1, 10));
-            card.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 8));
+            card.setBackground(sel
+                    ? Ui.rippleOutlined(act, Ui.PRIMARY_SOFT, Ui.PRIMARY, 1, 12)
+                    : Ui.rippleOutlined(act, Ui.CARD, 0xFFE8EDF5, 1, 12));
+            card.setElevation(Ui.dp(act, sel ? 2 : 1));
+            card.setPadding(Ui.dp(act, 12), Ui.dp(act, 10), Ui.dp(act, 12), Ui.dp(act, 10));
 
             LinearLayout top = Ui.row(act);
             LinearLayout info = Ui.col(act);
@@ -456,7 +463,7 @@ public class StockMoveTab implements TabPage {
                     + " · 库存 " + Ui.fmtQty(p.whQty(store.selectedWh));
             info.addView(Ui.tv(act, sub, 12, Ui.MUTED, false));
             top.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
-            top.addView(Ui.tv(act, "× " + Ui.fmtQty(it.qty) + " " + it.unitName, 16, Ui.INK, true));
+            top.addView(Ui.tv(act, "× " + Ui.fmtQty(it.qty) + " " + it.unitName, 17, Ui.INK, true));
             card.addView(top);
 
             if (p.batch || p.serial) {
@@ -481,14 +488,14 @@ public class StockMoveTab implements TabPage {
                 renderAll();
             });
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(-1, -2);
-            clp.bottomMargin = Ui.dp(act, 6);
+            clp.bottomMargin = Ui.dp(act, 7);
             cartList.addView(card, clp);
         }
         if (cart.isEmpty()) {
-            TextView em = Ui.tv(act, "扫描商品条码加入明细（支持整箱条码自动换算）", 13, Ui.MUTED, false);
-            em.setGravity(Gravity.CENTER);
-            em.setPadding(0, Ui.dp(act, 24), 0, Ui.dp(act, 24));
-            cartList.addView(em);
+            LinearLayout empty = Ui.emptyState(act, IconView.Type.EMPTY_BOX, "扫描条码开始录入明细", "支持主条码及整箱/大包装条码自动换算数量");
+            LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(-1, -2);
+            elp.topMargin = Ui.dp(act, 10);
+            cartList.addView(empty, elp);
         }
 
         // Bottom Bar: item stepper (if active) + Submit Button
@@ -501,7 +508,8 @@ public class StockMoveTab implements TabPage {
                 Button bDel = Ui.outlineBtn(act, "移除", Ui.DANGER, Ui.DANGER);
                 Button bMin = Ui.outlineBtn(act, "-1", Ui.LINE, Ui.INK);
                 Button bQty = Ui.btn(act, Ui.fmtQty(it.qty) + " " + it.unitName, Ui.ACCENT_SOFT, Ui.ACCENT);
-                Button bAdd = Ui.btn(act, "+1", Ui.PRIMARY, Color.WHITE);
+                bQty.setBackground(Ui.rippleOutlined(act, Ui.ACCENT_SOFT, Ui.ACCENT_BORDER, 1, 12));
+                Button bAdd = Ui.gradientBtn(act, "+1", Ui.PRIMARY, Ui.PRIMARY_END);
 
                 bDel.setOnClickListener(v -> {
                     cart.remove(activeIdx);
@@ -533,12 +541,18 @@ public class StockMoveTab implements TabPage {
         }
 
         boolean camOn = act.isCameraOpen();
-        Button bCam = Ui.btn(act, camOn ? "关相机" : "扫码", camOn ? Ui.DANGER : Ui.ACCENT, Color.WHITE);
+        Button bCam = camOn
+                ? Ui.btn(act, "关相机", Ui.DANGER, Color.WHITE)
+                : Ui.outlineBtn(act, "扫码", Ui.ACCENT_BORDER, Ui.ACCENT);
+        if (!camOn) bCam.setBackground(Ui.rippleOutlined(act, Ui.ACCENT_SOFT, Ui.ACCENT_BORDER, 1, 12));
         bCam.setOnClickListener(v -> act.toggleCamera());
 
         String actTitle = "in".equals(mode) ? "提交入库" : "out".equals(mode) ? "提交出库" : "提交调拨";
-        int actColor = "in".equals(mode) ? Ui.PRIMARY : "out".equals(mode) ? Ui.DANGER : Ui.ACCENT;
-        Button submit = Ui.btn(act, actTitle + "（" + cart.size() + "）", cart.isEmpty() ? 0xFF9CA3AF : actColor, Color.WHITE);
+        int actStart = "in".equals(mode) ? Ui.PRIMARY : "out".equals(mode) ? Ui.DANGER : Ui.ACCENT;
+        int actEnd = "in".equals(mode) ? Ui.PRIMARY_END : "out".equals(mode) ? 0xFFB91C1C : 0xFF0369A1;
+        Button submit = cart.isEmpty()
+                ? Ui.btn(act, actTitle + "（0）", 0xFFCBD5E1, Color.WHITE)
+                : Ui.gradientBtn(act, actTitle + "（" + cart.size() + "）", actStart, actEnd);
         submit.setEnabled(!cart.isEmpty());
         submit.setOnClickListener(v -> submitMove(submit));
 
@@ -553,6 +567,18 @@ public class StockMoveTab implements TabPage {
             actionRow.addView(bCam, new LinearLayout.LayoutParams(0, Ui.dp(act, 46), 1));
         }
         thumbBar.addView(actionRow, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private void applySegmentStyle(Button btn, boolean active, int activeColor) {
+        if (active) {
+            btn.setBackground(Ui.rippleRounded(act, activeColor, 9));
+            btn.setTextColor(Color.WHITE);
+            btn.setElevation(Ui.dp(act, 1));
+        } else {
+            btn.setBackgroundColor(Color.TRANSPARENT);
+            btn.setTextColor(Ui.MUTED);
+            btn.setElevation(0);
+        }
     }
 
     private void submitMove(Button submit) {

@@ -35,7 +35,11 @@ public class StocktakeTab implements TabPage {
     private final LinearLayout root;
 
     private TextView docBtn, saveBtn, postBtn;
-    private TextView modeHintTv, blindToggleBtn, ttsToggleBtn;
+    private LinearLayout modeBar, progressBarRow;
+    private View progressFill, progressRest;
+    private IconView modeHintIcon;
+    private TextView modeHintTv;
+    private Ui.IconPill blindToggleBtn, ttsToggleBtn;
     private LinearLayout unknownBanner, heroCard, listCol, thumbBar;
     private TextView filterAll, filterDone, filterDiff, filterTodo;
     private View diffSpacer;
@@ -66,18 +70,21 @@ public class StocktakeTab implements TabPage {
         top.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 8));
 
         docBtn = Ui.tv(act, "选择盘点单 ▾", 13, Ui.INK, true);
-        docBtn.setBackground(Ui.outlined(act, Ui.CHIP_BG, Ui.LINE, 1, 8));
+        docBtn.setBackground(Ui.rippleOutlined(act, Ui.SURFACE_2, Ui.LINE, 1, 10));
         docBtn.setPadding(Ui.dp(act, 10), Ui.dp(act, 7), Ui.dp(act, 10), Ui.dp(act, 7));
         docBtn.setSingleLine(true);
+        docBtn.setEllipsize(android.text.TextUtils.TruncateAt.END);
         docBtn.setOnClickListener(v -> showDocPicker());
 
         saveBtn = Ui.badge(act, "保存", Ui.ACCENT_SOFT, Ui.ACCENT);
-        saveBtn.setTextSize(13);
+        saveBtn.setBackground(Ui.rippleOutlined(act, Ui.ACCENT_SOFT, Ui.ACCENT_BORDER, 1, 10));
+        saveBtn.setTextSize(12);
         saveBtn.setPadding(Ui.dp(act, 12), Ui.dp(act, 7), Ui.dp(act, 12), Ui.dp(act, 7));
         saveBtn.setOnClickListener(v -> syncToServer(false));
 
-        postBtn = Ui.badge(act, "审核", Ui.PRIMARY_SOFT, Ui.PRIMARY);
-        postBtn.setTextSize(13);
+        postBtn = Ui.badge(act, "审核", Ui.PRIMARY, Color.WHITE);
+        postBtn.setBackground(Ui.rippleGradient(act, Ui.PRIMARY, Ui.PRIMARY_END, 10));
+        postBtn.setTextSize(12);
         postBtn.setPadding(Ui.dp(act, 12), Ui.dp(act, 7), Ui.dp(act, 12), Ui.dp(act, 7));
         postBtn.setOnClickListener(v -> syncToServer(true));
 
@@ -87,18 +94,30 @@ public class StocktakeTab implements TabPage {
         top.addView(Ui.space(act, 6, 1));
         top.addView(postBtn);
         root.addView(top);
-        root.addView(Ui.divider(act));
+
+        // 1.2 Real-time Stocktake Progress Bar
+        progressBarRow = Ui.row(act);
+        progressBarRow.setBackgroundColor(Ui.LINE_SOFT);
+        progressFill = new View(act);
+        progressFill.setBackground(Ui.gradientRounded(act, Ui.PRIMARY, Ui.ACCENT, 0));
+        progressRest = new View(act);
+        progressBarRow.addView(progressFill, new LinearLayout.LayoutParams(0, -1, 0f));
+        progressBarRow.addView(progressRest, new LinearLayout.LayoutParams(0, -1, 1f));
+        root.addView(progressBarRow, new LinearLayout.LayoutParams(-1, Ui.dp(act, 3)));
 
         // 1.5 Compact Stocktake Mode Bar (Blind Count + TTS Toggle)
-        LinearLayout modeBar = Ui.row(act);
-        modeBar.setBackgroundColor(0xFFFAFAFA);
-        modeBar.setPadding(Ui.dp(act, 10), Ui.dp(act, 5), Ui.dp(act, 10), Ui.dp(act, 5));
+        modeBar = Ui.row(act);
+        modeBar.setBackgroundColor(Ui.SURFACE_2);
+        modeBar.setPadding(Ui.dp(act, 10), Ui.dp(act, 6), Ui.dp(act, 10), Ui.dp(act, 6));
+        modeHintIcon = new IconView(act, IconView.Type.EYE, Ui.MUTED);
+        modeBar.addView(modeHintIcon, new LinearLayout.LayoutParams(Ui.dp(act, 14), Ui.dp(act, 14)));
+        modeBar.addView(Ui.space(act, 5, 1));
+
         modeHintTv = Ui.tv(act, "", 12, Ui.MUTED, false);
         modeHintTv.setSingleLine(true);
 
-        blindToggleBtn = Ui.badge(act, "盲盘", Color.WHITE, Ui.MUTED);
-        blindToggleBtn.setTextSize(11);
-        blindToggleBtn.setPadding(Ui.dp(act, 9), Ui.dp(act, 4), Ui.dp(act, 9), Ui.dp(act, 4));
+        blindToggleBtn = Ui.iconPill(act, IconView.Type.EYE_OFF, "盲盘", Ui.CARD, Ui.LINE, Ui.INK_2);
+        blindToggleBtn.setPadding(Ui.dp(act, 8), Ui.dp(act, 4), Ui.dp(act, 9), Ui.dp(act, 4));
         blindToggleBtn.setOnClickListener(v -> {
             store.blindMode = !store.blindMode;
             store.savePrefs();
@@ -108,9 +127,8 @@ public class StocktakeTab implements TabPage {
             Ui.toast(act, store.blindMode ? "已开启盲盘模式（隐藏账面库存与盈亏）" : "已关闭盲盘模式");
         });
 
-        ttsToggleBtn = Ui.badge(act, "语音 开", Ui.PRIMARY_SOFT, Ui.PRIMARY);
-        ttsToggleBtn.setTextSize(11);
-        ttsToggleBtn.setPadding(Ui.dp(act, 9), Ui.dp(act, 4), Ui.dp(act, 9), Ui.dp(act, 4));
+        ttsToggleBtn = Ui.iconPill(act, IconView.Type.VOLUME_ON, "语音 开", Ui.PRIMARY_SOFT, Ui.PRIMARY_BORDER, Ui.PRIMARY);
+        ttsToggleBtn.setPadding(Ui.dp(act, 8), Ui.dp(act, 4), Ui.dp(act, 9), Ui.dp(act, 4));
         ttsToggleBtn.setOnClickListener(v -> {
             store.ttsEnabled = !store.ttsEnabled;
             store.savePrefs();
@@ -138,18 +156,23 @@ public class StocktakeTab implements TabPage {
         root.addView(unknownBanner);
 
         // 3. Current item hero card
-        heroCard = Ui.card(act, 10);
+        heroCard = Ui.card(act, 12);
+        heroCard.setElevation(Ui.dp(act, 3));
         LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(-1, -2);
-        hlp.setMargins(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 6));
+        hlp.setMargins(Ui.dp(act, 10), Ui.dp(act, 10), Ui.dp(act, 10), Ui.dp(act, 6));
         root.addView(heroCard, hlp);
 
         // 4. Filter bar
         LinearLayout fBar = Ui.row(act);
-        fBar.setPadding(Ui.dp(act, 10), Ui.dp(act, 2), Ui.dp(act, 10), Ui.dp(act, 6));
+        fBar.setPadding(Ui.dp(act, 10), Ui.dp(act, 2), Ui.dp(act, 10), Ui.dp(act, 8));
         filterDone = Ui.chip(act, "已盘", true);
         filterDiff = Ui.chip(act, "有差异", false);
         filterTodo = Ui.chip(act, "未盘", false);
         filterAll = Ui.chip(act, "全部", false);
+        for (TextView fp : new TextView[]{filterDone, filterDiff, filterTodo, filterAll}) {
+            fp.setTextSize(12);
+            fp.setPadding(Ui.dp(act, 10), Ui.dp(act, 6), Ui.dp(act, 10), Ui.dp(act, 6));
+        }
         filterDone.setOnClickListener(v -> setFilter("done"));
         filterDiff.setOnClickListener(v -> setFilter("diff"));
         filterTodo.setOnClickListener(v -> setFilter("todo"));
@@ -165,7 +188,7 @@ public class StocktakeTab implements TabPage {
         // 5. Scrollable item list
         listScroll = new ScrollView(act);
         listCol = Ui.col(act);
-        listCol.setPadding(Ui.dp(act, 10), 0, Ui.dp(act, 10), Ui.dp(act, 10));
+        listCol.setPadding(Ui.dp(act, 10), 0, Ui.dp(act, 10), Ui.dp(act, 12));
         listScroll.addView(listCol);
         root.addView(listScroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
@@ -173,7 +196,8 @@ public class StocktakeTab implements TabPage {
         root.addView(Ui.divider(act));
         thumbBar = Ui.row(act);
         thumbBar.setBackgroundColor(Color.WHITE);
-        thumbBar.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 8));
+        thumbBar.setElevation(Ui.dp(act, 4));
+        thumbBar.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 9));
         root.addView(thumbBar);
     }
 
@@ -553,30 +577,73 @@ public class StocktakeTab implements TabPage {
         if (store.blindMode && "diff".equals(filterMode)) {
             filterMode = "done";
         }
-        modeHintTv.setText(store.blindMode ? "盲盘中 · 已隐藏账面库存与盈亏" : "明盘 · 显示账面库存与盈亏");
-        modeHintTv.setTextColor(store.blindMode ? Ui.WARN : Ui.MUTED);
-        modeHintTv.setTypeface(android.graphics.Typeface.DEFAULT, store.blindMode ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+        if (store.blindMode) {
+            modeBar.setBackgroundColor(0xFFFFFBEB);
+            modeHintIcon.setIcon(IconView.Type.EYE_OFF, Ui.WARN);
+            modeHintTv.setText("盲盘中 · 已隐藏账面库存与盈亏");
+            modeHintTv.setTextColor(Ui.WARN);
+            modeHintTv.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
+            blindToggleBtn.applyStyle(IconView.Type.EYE_OFF, "盲盘 开", Ui.WARN, 0, Color.WHITE);
+        } else {
+            modeBar.setBackgroundColor(Ui.SURFACE_2);
+            modeHintIcon.setIcon(IconView.Type.EYE, Ui.MUTED);
+            modeHintTv.setText("明盘 · 显示账面库存与盈亏");
+            modeHintTv.setTextColor(Ui.MUTED);
+            modeHintTv.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.NORMAL);
+            blindToggleBtn.applyStyle(IconView.Type.EYE_OFF, "盲盘", Ui.CARD, Ui.LINE, Ui.INK_2);
+        }
 
-        blindToggleBtn.setText(store.blindMode ? "盲盘 开" : "盲盘");
-        blindToggleBtn.setTextColor(store.blindMode ? Color.WHITE : Ui.MUTED);
-        blindToggleBtn.setBackground(store.blindMode ? Ui.rounded(act, Ui.WARN, 12) : Ui.outlined(act, Color.WHITE, Ui.LINE, 1, 12));
-
-        ttsToggleBtn.setText(store.ttsEnabled ? "语音 开" : "静音");
-        ttsToggleBtn.setTextColor(store.ttsEnabled ? Ui.PRIMARY : Ui.MUTED);
-        ttsToggleBtn.setBackground(store.ttsEnabled ? Ui.outlined(act, Ui.PRIMARY_SOFT, Ui.PRIMARY, 1, 12) : Ui.rounded(act, Ui.CHIP_BG, 12));
+        if (store.ttsEnabled) {
+            ttsToggleBtn.applyStyle(IconView.Type.VOLUME_ON, "语音 开", Ui.PRIMARY_SOFT, Ui.PRIMARY_BORDER, Ui.PRIMARY);
+        } else {
+            ttsToggleBtn.applyStyle(IconView.Type.VOLUME_OFF, "静音", Ui.CHIP_BG, Ui.LINE, Ui.MUTED);
+        }
 
         filterDiff.setVisibility(store.blindMode ? View.GONE : View.VISIBLE);
         diffSpacer.setVisibility(store.blindMode ? View.GONE : View.VISIBLE);
+
+        int cAll = 0, cDone = 0, cTodo = 0, cDiff = 0;
+        if (activeDoc != null) {
+            for (Models.CheckLine l : activeDoc.lines) {
+                Models.Product lp = store.productById.get(l.productId);
+                if (lp == null) continue;
+                cAll++;
+                Double lc = countedMap.get(l.productId);
+                if (lc == null) {
+                    cTodo++;
+                } else {
+                    cDone++;
+                    if (!store.blindMode) {
+                        double lDiff = Math.round((lc - lp.whQty(activeDoc.wh)) * 100.0) / 100.0;
+                        if (Math.abs(lDiff) >= 1e-6) cDiff++;
+                    }
+                }
+            }
+        }
+        filterDone.setText(activeDoc == null ? "已盘" : "已盘(" + cDone + ")");
+        filterDiff.setText(activeDoc == null ? "有差异" : "有差异(" + cDiff + ")");
+        filterTodo.setText(activeDoc == null ? "未盘" : "未盘(" + cTodo + ")");
+        filterAll.setText(activeDoc == null ? "全部" : "全部(" + cAll + ")");
 
         if (activeDoc == null) {
             docBtn.setText("无进行中盘点单（点此新建）▾");
             saveBtn.setVisibility(View.GONE);
             postBtn.setVisibility(View.GONE);
+            progressBarRow.setVisibility(View.GONE);
         } else {
             int done = countedMap.size(), total = activeDoc.lines.size();
             docBtn.setText(activeDoc.no + " · " + done + "/" + total + " ▾");
             saveBtn.setVisibility(View.VISIBLE);
             postBtn.setVisibility(store.can("inv.checkpost") || store.perms.isEmpty() ? View.VISIBLE : View.GONE);
+            if (total <= 0) {
+                progressBarRow.setVisibility(View.GONE);
+            } else {
+                progressBarRow.setVisibility(View.VISIBLE);
+                int clamped = Math.min(total, done);
+                ((LinearLayout.LayoutParams) progressFill.getLayoutParams()).weight = clamped;
+                ((LinearLayout.LayoutParams) progressRest.getLayoutParams()).weight = Math.max(0, total - clamped);
+                progressBarRow.requestLayout();
+            }
         }
 
         // Render filter pills
@@ -592,33 +659,49 @@ public class StocktakeTab implements TabPage {
 
     private void renderFilterPill(TextView pill, String key) {
         boolean on = filterMode.equals(key);
-        pill.setTextColor(on ? Color.WHITE : Ui.INK);
-        pill.setBackground(on ? Ui.rounded(act, Ui.PRIMARY, 16) : Ui.outlined(act, Color.WHITE, Ui.LINE, 1, 16));
+        pill.setTextColor(on ? Color.WHITE : Ui.INK_2);
+        pill.setTypeface(android.graphics.Typeface.DEFAULT, on ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+        pill.setBackground(on ? Ui.rippleRounded(act, Ui.PRIMARY, 18) : Ui.rippleOutlined(act, Ui.CARD, Ui.LINE, 1, 18));
     }
 
     private void renderHero() {
         heroCard.removeAllViews();
         if (activeDoc == null) {
-            TextView t = Ui.tv(act, "对准商品条码直接开盘，或点上方「选择盘点单」新建全仓/自由盘点", 13, Ui.MUTED, false);
-            t.setGravity(Gravity.CENTER);
-            t.setPadding(0, Ui.dp(act, 6), 0, Ui.dp(act, 6));
-            heroCard.addView(t);
+            heroCard.setBackground(null);
+            heroCard.setElevation(0);
+            heroCard.setPadding(0, 0, 0, 0);
+            heroCard.addView(Ui.emptyState(act, IconView.Type.SCAN, "扫码直接开盘", "对准商品条码自动建立自由盘点单，或点上方选择已有单据"));
             return;
         }
         Models.Product p = currentPid.isEmpty() ? null : store.productById.get(currentPid);
         if (p == null) {
-            TextView t = Ui.tv(act, "请扫描商品条码开始盘点（点列表任意商品可手动调整）", 13, Ui.MUTED, false);
-            t.setGravity(Gravity.CENTER);
-            t.setPadding(0, Ui.dp(act, 6), 0, Ui.dp(act, 6));
-            heroCard.addView(t);
+            heroCard.setBackground(null);
+            heroCard.setElevation(0);
+            heroCard.setPadding(0, 0, 0, 0);
+            heroCard.addView(Ui.emptyState(act, IconView.Type.SCAN, "请扫描商品条码", "点下方「开启扫码盘点」，或轻触列表任意商品手动输入实盘"));
             return;
         }
+        heroCard.setBackground(Ui.outlined(act, Ui.CARD, 0xFFE8EDF5, 1, 16));
+        heroCard.setElevation(Ui.dp(act, 3));
+        int hp = Ui.dp(act, 12);
+        heroCard.setPadding(hp, hp, hp, hp);
+
         double book = p.whQty(activeDoc.wh);
         Double cnt = countedMap.get(p.id);
+        LinearLayout outerRow = Ui.row(act);
+        outerRow.setGravity(Gravity.FILL_VERTICAL);
+
+        View accentBar = new View(act);
+        accentBar.setBackground(Ui.rounded(act, store.blindMode ? Ui.WARN : Ui.PRIMARY, 3));
+        LinearLayout.LayoutParams abl = new LinearLayout.LayoutParams(Ui.dp(act, 4), -1);
+        abl.rightMargin = Ui.dp(act, 10);
+        outerRow.addView(accentBar, abl);
+
         LinearLayout row = Ui.row(act);
         LinearLayout left = Ui.col(act);
         TextView name = Ui.tv(act, p.name + (p.spec.isEmpty() ? "" : " · " + p.spec), 15, Ui.INK, true);
         name.setMaxLines(1);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         left.addView(name);
         String meta = store.blindMode
                 ? ("盲盘中 · 单位 " + p.unit + (lastActionText.isEmpty() ? "" : " · " + lastActionText))
@@ -628,13 +711,14 @@ public class StocktakeTab implements TabPage {
 
         LinearLayout right = Ui.col(act);
         right.setGravity(Gravity.END);
-        TextView bigNum = Ui.tv(act, cnt == null ? "—" : Ui.fmtQty(cnt), 24, Ui.ACCENT, true);
+        TextView bigNum = Ui.tv(act, cnt == null ? "—" : Ui.fmtQty(cnt), 30, Ui.PRIMARY, true);
         right.addView(bigNum);
 
         LinearLayout badges = Ui.row(act);
         int boxStep = !p.units.isEmpty() ? p.units.get(0).rate : 5;
         String boxLabel = !p.units.isEmpty() ? ("+" + p.units.get(0).name + "(" + boxStep + ")") : "+5";
         TextView plusBoxBadge = Ui.badge(act, boxLabel, Ui.PRIMARY_SOFT, Ui.PRIMARY);
+        plusBoxBadge.setBackground(Ui.rippleOutlined(act, Ui.PRIMARY_SOFT, Ui.PRIMARY_BORDER, 1, 8));
         plusBoxBadge.setOnClickListener(v -> adjustCurrent(boxStep));
         badges.addView(plusBoxBadge);
 
@@ -652,7 +736,8 @@ public class StocktakeTab implements TabPage {
         }
         right.addView(badges);
         row.addView(right);
-        heroCard.addView(row);
+        outerRow.addView(row, new LinearLayout.LayoutParams(0, -2, 1));
+        heroCard.addView(outerRow);
     }
 
     private void renderList() {
@@ -671,12 +756,16 @@ public class StocktakeTab implements TabPage {
 
             boolean sel = p.id.equals(currentPid);
             LinearLayout r = Ui.row(act);
-            r.setBackground(Ui.outlined(act, sel ? Ui.PRIMARY_SOFT : Color.WHITE, sel ? Ui.PRIMARY : Ui.LINE, 1, 10));
-            r.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 8));
+            r.setBackground(sel
+                    ? Ui.rippleOutlined(act, Ui.PRIMARY_SOFT, Ui.PRIMARY, 1, 12)
+                    : Ui.rippleOutlined(act, Ui.CARD, 0xFFE8EDF5, 1, 12));
+            r.setElevation(Ui.dp(act, sel ? 2 : 1));
+            r.setPadding(Ui.dp(act, 12), Ui.dp(act, 10), Ui.dp(act, 12), Ui.dp(act, 10));
 
             LinearLayout info = Ui.col(act);
             TextView tn = Ui.tv(act, p.name, 14, Ui.INK, true);
             tn.setMaxLines(1);
+            tn.setEllipsize(android.text.TextUtils.TruncateAt.END);
             info.addView(tn);
             String subText = store.blindMode
                     ? (p.sku + (p.spec.isEmpty() ? "" : " · " + p.spec) + " · " + p.unit)
@@ -685,7 +774,7 @@ public class StocktakeTab implements TabPage {
             r.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
 
             if (c != null) {
-                r.addView(Ui.tv(act, Ui.fmtQty(c) + (store.blindMode ? " " + p.unit : ""), 16, Ui.INK, true));
+                r.addView(Ui.tv(act, Ui.fmtQty(c) + (store.blindMode ? " " + p.unit : ""), 17, Ui.INK, true));
                 r.addView(Ui.space(act, 6, 1));
                 if (store.blindMode) {
                     r.addView(Ui.badge(act, "已盘", Ui.PRIMARY_SOFT, Ui.PRIMARY));
@@ -706,28 +795,31 @@ public class StocktakeTab implements TabPage {
                 openNumpadForCurrent();
             });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-            lp.bottomMargin = Ui.dp(act, 6);
+            lp.bottomMargin = Ui.dp(act, 7);
             listCol.addView(r, lp);
             if (++count >= 80) break;
         }
         if (count == 0) {
-            TextView empty = Ui.tv(act, "当前筛选下没有商品", 13, Ui.MUTED, false);
-            empty.setGravity(Gravity.CENTER);
-            empty.setPadding(0, Ui.dp(act, 16), 0, Ui.dp(act, 16));
-            listCol.addView(empty);
+            LinearLayout empty = Ui.emptyState(act, IconView.Type.CHECK_LIST, "当前筛选下没有商品", "可切换「未盘 / 全部」查看，或直接扫描条码新增盘点");
+            LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(-1, -2);
+            elp.topMargin = Ui.dp(act, 8);
+            listCol.addView(empty, elp);
         }
     }
 
     private void renderThumbBar() {
         thumbBar.removeAllViews();
         boolean camOn = act.isCameraOpen();
-        Button bCam = Ui.btn(act, camOn ? "关相机" : "扫码盘点", camOn ? Ui.DANGER : Ui.PRIMARY, Color.WHITE);
+        Button bCam = camOn
+                ? Ui.btn(act, "关相机", Ui.DANGER, Color.WHITE)
+                : Ui.gradientBtn(act, "扫码盘点", Ui.PRIMARY, Ui.PRIMARY_END);
         bCam.setOnClickListener(v -> act.toggleCamera());
 
         Models.Product p = currentPid.isEmpty() ? null : store.productById.get(currentPid);
         if (p == null) {
             bCam.setText(camOn ? "关闭相机" : "开启扫码盘点");
-            Button newProdBtn = Ui.outlineBtn(act, "+ 新建商品", Ui.ACCENT, Ui.ACCENT);
+            Button newProdBtn = Ui.outlineBtn(act, "+ 新建商品", Ui.ACCENT_BORDER, Ui.ACCENT);
+            newProdBtn.setBackground(Ui.rippleOutlined(act, Ui.ACCENT_SOFT, Ui.ACCENT_BORDER, 1, 12));
             newProdBtn.setOnClickListener(v -> openQuickNewForCode("", true));
             if (store.leftHanded) {
                 thumbBar.addView(bCam, new LinearLayout.LayoutParams(0, Ui.dp(act, 46), 1.4f));
@@ -744,13 +836,15 @@ public class StocktakeTab implements TabPage {
         bCam.setText(camOn ? "关相机" : "扫码");
         Button bMinus = Ui.outlineBtn(act, "-1", Ui.LINE, Ui.INK);
         Button bNum = Ui.btn(act, "实盘 " + (cur == null ? "—" : Ui.fmtQty(cur)), Ui.ACCENT_SOFT, Ui.ACCENT);
-        Button bPlus1 = Ui.btn(act, "+1", Ui.PRIMARY, Color.WHITE);
+        bNum.setBackground(Ui.rippleOutlined(act, Ui.ACCENT_SOFT, Ui.ACCENT_BORDER, 1, 12));
+        Button bPlus1 = Ui.gradientBtn(act, "+1", Ui.PRIMARY, Ui.PRIMARY_END);
         Button bUndo = Ui.outlineBtn(act, "撤销", Ui.WARN, Ui.WARN);
 
         bMinus.setOnClickListener(v -> adjustCurrent(-1));
         bPlus1.setOnClickListener(v -> adjustCurrent(1));
         bNum.setOnClickListener(v -> openNumpadForCurrent());
         bUndo.setEnabled(!undoStack.isEmpty());
+        bUndo.setAlpha(undoStack.isEmpty() ? 0.45f : 1.0f);
         bUndo.setOnClickListener(v -> undoLast());
 
         View[] order = store.leftHanded
