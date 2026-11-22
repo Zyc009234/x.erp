@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 2.14.6
+version               = 2.14.7
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 修复在「用户管理」新增用户、重置密码或修改密码后无法登录的问题（多账套网关现自动同步账号与密码，老版本已建账号升级后即可直接登录）；优化问题反馈打赏弹窗文案。
+changelog             = 往来款（预付款/预收款）支持分批多次核销到不同订单，也支持多笔预付款核销同一订单，订单详情完整展示每笔核销记录，未核销余额实时精确扣减。

@@ -445,7 +445,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.14.6</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.14.7</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -772,7 +772,10 @@ const partyName = (kind, o) => { const C = ORD[kind]; return (byId(db[C.party], 
 const unpaidOf = (kind, o) => +(orderTotal(o) - (o[ORD[kind].paidKey] || 0)).toFixed(2);
 // 往来单位的应收（销售）/ 应付（采购）= 订单未结 - 退货单还没退的款（冲抵、退款都会让它变小）
 const retUnpaid = (kind, pid) => { const R = ORD[kind + 'Return']; return sum(db[R.db].filter(r => r.status !== '已作废' && (!pid || r[R.partyKey] === pid)), r => unpaidOf(kind + 'Return', r)); };
-const unappliedParty = (kind, pid) => sum((db.partyPayments || []).filter(p => p.partyType === (kind === 'sales' ? 'customer' : 'supplier') && p.partyId === pid && !p.appliedOrderId && !(p.appliedOrders || []).length), p => p.amount);
+const ppAllocs = p => (Array.isArray(p.appliedOrders) && p.appliedOrders.length) ? p.appliedOrders : (p.appliedOrderId ? [{orderId:p.appliedOrderId, no:p.appliedOrderNo || '', amount:+p.amount || 0, date:p.date}] : []);
+const ppApplied = p => +sum(ppAllocs(p), a => +a.amount || 0).toFixed(2);
+const ppRemaining = p => +Math.max(0, (+p.amount || 0) - ppApplied(p)).toFixed(2);
+const unappliedParty = (kind, pid) => sum((db.partyPayments || []).filter(p => p.partyType === (kind === 'sales' ? 'customer' : 'supplier') && (!pid || p.partyId === pid)), ppRemaining);
 const partyDue = (kind, pid) => { const C = ORD[kind], party = pid && byId(db[C.party], pid); return +((party ? +party.openingBalance || 0 : 0) + sum(db[C.db].filter(o => o.status !== '已作废' && (!pid || o[C.partyKey] === pid)), o => unpaidOf(kind, o)) - retUnpaid(kind, pid) - unappliedParty(kind, pid)).toFixed(2); };
 const isSalesKind = kind => kind === 'sales' || kind === 'salesReturn';
 const lineDoneQty = (kind, o, i) => {
@@ -3577,7 +3580,16 @@ function orderModal(kind, id, srcId0) {
 function orderView(kind, id) {
   const C = ORD[kind], o = byId(db[C.db], id), party = byId(db[C.party], o[C.partyKey]) || {};
   const total = orderTotal(o), paid = o[C.paidKey] || 0;
-  const pays = db.finance.filter(f => f.ref === o.no);
+  const ppPays = [];
+  if (kind === 'sales' || kind === 'purchase') {
+    const pType = kind === 'sales' ? 'customer' : 'supplier';
+    (db.partyPayments || []).forEach(p => {
+      if (p.partyType !== pType) return;
+      ppAllocs(p).forEach(a => { if (a.orderId === o.id) ppPays.push({p, a}); });
+    });
+  }
+  const ppFinIds = new Set(ppPays.map(x => x.p.financeId));
+  const pays = db.finance.filter(f => f.ref === o.no && !ppFinIds.has(f.id));
   openModal(`${modalHead(C.title + '详情')}
   <div class="m-body"><div class="print-area doc">
     <h2>${esc(db.settings.company)}</h2><div class="doc-sub">${C.doc} · ${o.no} &nbsp; ${badge(orderDisplayStatus(kind, o))}</div>
@@ -3595,8 +3607,9 @@ function orderView(kind, id) {
     ${o.remark ? `<p style="margin-top:12px;color:var(--muted)">备注：${esc(o.remark)}</p>` : ''}
     ${o.approveNote ? `<p style="margin-top:8px;color:var(--muted)">审核备注：${esc(o.approveNote)}${o.approver ? ' · ' + esc(o.approver) : ''}${o.postDate ? ' · ' + esc(o.postDate) : ''}</p>` : ''}
     ${(() => { const ds = (kind === 'sales' || kind === 'purchase') ? db.stockDocs.filter(d => d.srcOrderId === o.id) : []; return ds.length ? `<h4 style="margin:18px 0 8px">${kind === 'sales' ? '出库单' : '入库单'}</h4><table class="tbl compact"><tbody>${ds.map(d => `<tr><td><a class="link" data-act="docView" data-id="${d.id}">${d.no}</a></td><td>${d.date}</td><td>${badge(d.status)}</td><td class="num">${sum(d.items, x => x.qty)}</td><td style="width:1%"><div class="ops">${tbtn('查看', 'docView', d.id)}</div></td></tr>`).join('')}</tbody></table>` : ''; })()}
-    ${pays.length || o.offset ? `<h4 style="margin:18px 0 8px">${C.payWord}记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(acctName(f))}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td><td style="width:1%"><div class="ops">${tbtn('打印', 'payPrint', kind.replace('Return', '') + '|' + f.id)}${can(kind.replace('Return', '')) && o.status !== '已作废' ? tbtn('编辑', 'payEdit', kind + '|' + o.id + '|' + f.id) + tbtn('删除', 'payDel', kind + '|' + o.id + '|' + f.id, 'danger-text') : ''}</div></td></tr>`).join('')}
-      ${o.offset ? `<tr><td>-</td><td>退货冲抵</td><td class="num">${money(o.offset)}</td><td class="sub-t">${C.src ? '抵扣原单 ' + esc(o.srcNo) + ' 的欠款' : '由退货单抵扣'}</td></tr>` : ''}</tbody></table>` : ''}
+    ${pays.length || ppPays.length || o.offset ? `<h4 style="margin:18px 0 8px">${C.payWord}记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(acctName(f))}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td><td style="width:1%"><div class="ops">${tbtn('打印', 'payPrint', kind.replace('Return', '') + '|' + f.id)}${can(kind.replace('Return', '')) && o.status !== '已作废' ? tbtn('编辑', 'payEdit', kind + '|' + o.id + '|' + f.id) + tbtn('删除', 'payDel', kind + '|' + o.id + '|' + f.id, 'danger-text') : ''}</div></td></tr>`).join('')}
+      ${ppPays.map(({p, a}) => `<tr><td>${a.date || p.date}</td><td>${esc(acctName({account:p.account}))} ${badge('往来款核销', 'blue')}</td><td class="num">${money(a.amount)}</td><td class="sub-t">${esc(p.note || '')}${Math.abs((+a.amount || 0) - (+p.amount || 0)) > 0.001 ? `${p.note ? ' · ' : ''}往来款总额 ${money(p.amount)}` : ''}</td><td style="width:1%"><div class="ops">${can('finance') ? tbtn('往来款', 'partyPayment', C.party + '|' + o[C.partyKey]) : ''}</div></td></tr>`).join('')}
+      ${o.offset ? `<tr><td>-</td><td>退货冲抵</td><td class="num">${money(o.offset)}</td><td class="sub-t">${C.src ? '抵扣原单 ' + esc(o.srcNo) + ' 的欠款' : '由退货单抵扣'}</td><td></td></tr>` : ''}</tbody></table>` : ''}
     ${(() => { const R = ORD[kind + 'Return'], rs = R ? db[R.db].filter(r => r.srcId === o.id) : []; return rs.length ? `<h4 style="margin:18px 0 8px">退货记录</h4><table class="tbl compact"><tbody>${rs.map(r => `<tr><td><a class="link" data-act="orderView" data-id="${kind}Return|${r.id}">${r.no}</a></td><td>${r.date}</td><td>${badge(r.status)}</td><td class="num">${money(orderTotal(r))}</td></tr>`).join('')}</tbody></table>` : ''; })()}
     ${kind === 'sales' && o.status !== '待发货' ? shipBlock('sales', o, o.status !== '已作废') : ''}
   </div></div>
@@ -4494,7 +4507,7 @@ function partyPaymentView(type, id) {
   if (!party) return;
   const rows = (db.partyPayments || []).filter(p => p.partyType === (isC ? 'customer' : 'supplier') && p.partyId === id).sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
   const open = db[C.db].filter(o => o[C.partyKey] === id && o.status !== '已作废' && unpaidOf(kind, o) > 0.001);
-  const pending = sum(rows.filter(p => !p.appliedOrderId && !(p.appliedOrders || []).length), p => p.amount);
+  const pending = sum(rows, ppRemaining);
   const due = partyDue(kind, id);
   openModal(`${modalHead((isC ? '客户收款' : '供应商付款') + ' · ' + esc(party.name))}<div class="m-body">
     <div class="grid g4 mb"><div class="card kpi"><label>当前${isC ? '应收' : '应付'}</label><div class="v">${money(due)}</div></div><div class="card kpi"><label>未核销${isC ? '预收' : '预付'}</label><div class="v">${money(pending)}</div></div></div>
@@ -4514,8 +4527,16 @@ function partyPaymentView(type, id) {
         <div style="display:flex;gap:8px"><button class="btn" id="ppSelAll">全选</button><button class="btn primary" id="ppMerge">合并${isC ? '收款' : '付款'}</button></div>
       </div>
     </div></div>` : ''}
-    <div class="line-head"><b>往来记录（${rows.length}）</b><span class="sub-t" style="margin-left:8px">未核销记录可抵扣后续订单</span></div>
-    ${rows.length ? rows.map(p => `<div class="card" style="margin:8px 0"><div class="card-body"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>${money(p.amount)}</b><span class="sub-t">${p.date}</span>${(p.appliedOrders || []).length > 1 ? badge('合并核销 ' + p.appliedOrders.length + ' 张', 'green') : p.appliedOrderId ? badge('已核销 ' + p.appliedOrderNo, 'green') : badge('未核销', 'orange')}<span class="sub-t">${esc(acctName({account:p.account}))}</span><span class="sub-t">${esc(p.note || '')}</span></div>${(p.appliedOrders || []).length > 1 ? `<div class="sub-t" style="margin-top:6px">${p.appliedOrders.map(a => esc(a.no) + ' ' + money(a.amount)).join('　')}</div>` : ''}<div style="margin-top:8px;text-align:right"><div class="ops">${!p.appliedOrderId && !(p.appliedOrders || []).length && open.length ? `<button class="tbtn" data-act="partyPaymentApply" data-id="${p.id}">核销到订单</button>` : ''}<button class="tbtn danger-text" data-act="partyPaymentDel" data-id="${p.id}">删除</button></div></div></div></div>`).join('') : `<div class="empty">${emptySvg}<p>还没有往来收付款记录</p></div>`}
+    <div class="line-head"><b>往来记录（${rows.length}）</b><span class="sub-t" style="margin-left:8px">未核销或部分核销的余额可多次抵扣后续订单</span></div>
+    ${rows.length ? rows.map(p => {
+      const allocs = ppAllocs(p), rem = ppRemaining(p);
+      const st = !allocs.length ? badge('未核销', 'orange')
+        : rem > 0.001 ? badge('部分核销 · 剩 ' + money(rem), 'blue')
+        : allocs.length > 1 ? badge('已核销 ' + allocs.length + ' 笔', 'green')
+        : badge('已核销 ' + allocs[0].no, 'green');
+      const showDetail = allocs.length > 1 || (allocs.length === 1 && rem > 0.001);
+      return `<div class="card" style="margin:8px 0"><div class="card-body"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>${money(p.amount)}</b><span class="sub-t">${p.date}</span>${st}<span class="sub-t">${esc(acctName({account:p.account}))}</span><span class="sub-t">${esc(p.note || '')}</span></div>${showDetail ? `<div class="sub-t" style="margin-top:6px">核销明细：${allocs.map(a => esc(a.no) + ' ' + money(a.amount) + (a.date ? '（' + a.date + '）' : '')).join('　')}</div>` : ''}<div style="margin-top:8px;text-align:right"><div class="ops">${rem > 0.001 && open.length ? `<button class="tbtn" data-act="partyPaymentApply" data-id="${p.id}">核销到订单</button>` : ''}<button class="tbtn danger-text" data-act="partyPaymentDel" data-id="${p.id}">删除</button></div></div></div></div>`;
+    }).join('') : `<div class="empty">${emptySvg}<p>还没有往来收付款记录</p></div>`}
   </div><div class="m-foot"><button class="btn" data-act="closeModal">关闭</button></div>`, 'lg');
   $('#ppAdd').onclick = async () => {
     const body = {partyType:isC ? 'customer' : 'supplier', partyId:id, date:$('#ppDate').value, amount:+$('#ppAmount').value, account:$('#ppAccount').value, orderId:$('#ppOrder').value, note:$('#ppNote').value.trim()};
@@ -4555,13 +4576,39 @@ function partyPaymentView(type, id) {
 
 function partyPaymentApplyView(id) {
   const pp = (db.partyPayments || []).find(p => p.id === id); if (!pp) return;
+  const rem = ppRemaining(pp), applied = ppApplied(pp);
+  if (rem <= 0.001) return toast('这笔往来款已全部核销', 'info');
   const isC = pp.partyType === 'customer', kind = isC ? 'sales' : 'purchase', C = ORD[kind];
   const open = db[C.db].filter(o => o[C.partyKey] === pp.partyId && o.status !== '已作废' && unpaidOf(kind, o) > 0.001);
   if (!open.length) return toast('这个往来单位没有待结清的订单', 'info');
-  formModal({title:'核销往来款', fields:[{n:'orderId', l:'核销到订单', type:'select', opts:open.map(o => [o.id, o.no + ' · 待' + C.payWord + ' ' + money(unpaidOf(kind, o))]), req:1}], onSubmit:async v => {
-    try { const r = await api('POST', '/api/party-payments/' + id + '/apply', v); await reload(); partyPaymentApplyView(id); toast('已核销到 ' + r.appliedOrderNo); }
-    catch (e) { toast(e.message, 'error'); }
-  }});
+  const maxFor = o => +Math.min(rem, unpaidOf(kind, o)).toFixed(2);
+  openModal(`${modalHead('核销往来款')}<div class="m-body">
+    <div class="sub-t" style="margin-bottom:12px">往来款总额 <b>${money(pp.amount)}</b>${applied > 0.001 ? ` · 已核销 <b>${money(applied)}</b>` : ''} · 剩余可核销 <b class="pos">${money(rem)}</b></div>
+    <div class="form-grid">
+      <label class="field span2"><span>核销到订单 <i>*</i></span><select id="ppaOrder">${open.map(o => `<option value="${o.id}">${esc(o.no)} · ${esc(o.date)} · 待${C.payWord} ${money(unpaidOf(kind, o))}</option>`).join('')}</select></label>
+      <label class="field span2"><span>本次核销金额 <i>*</i></span><input id="ppaAmt" type="number" min="0.01" step="0.01" value="${maxFor(open[0])}"><div class="sub-t" id="ppaHint" style="margin-top:4px"></div></label>
+    </div>
+  </div><div class="m-foot"><button class="btn" id="ppaBack">返回</button><button class="btn primary" id="ppaOk">${ic('check')}确定核销</button></div>`);
+  const syncMax = () => {
+    const o = open.find(x => x.id === $('#ppaOrder').value) || open[0];
+    const m = maxFor(o);
+    $('#ppaAmt').value = m;
+    $('#ppaAmt').max = m;
+    $('#ppaHint').textContent = `本单待${C.payWord} ${money(unpaidOf(kind, o))}，往来款剩 ${money(rem)}，本次最多可核销 ${money(m)}`;
+  };
+  syncMax();
+  $('#ppaOrder').onchange = syncMax;
+  $('#ppaBack').onclick = () => partyPaymentView(isC ? 'customers' : 'suppliers', pp.partyId);
+  $('#ppaOk').onclick = async () => {
+    const orderId = $('#ppaOrder').value, amount = +$('#ppaAmt').value;
+    if (!(amount > 0)) return toast('请输入核销金额', 'error');
+    try {
+      const r = await api('POST', '/api/party-payments/' + id + '/apply', { orderId, amount });
+      await reload();
+      partyPaymentView(isC ? 'customers' : 'suppliers', pp.partyId);
+      toast(`已核销 ${money(r.appliedAmount)} 到 ${r.appliedOrderNo}` + (r.remaining > 0.001 ? `，剩余 ${money(r.remaining)}` : ''));
+    } catch (e) { toast(e.message, 'error'); }
+  };
 }
 
 function pageParty(type) {

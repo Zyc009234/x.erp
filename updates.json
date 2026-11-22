@@ -1,18 +1,18 @@
 {
   "schema": 1,
-  "latest": "2.14.6",
-  "publishedAt": "2026-11-21T15:28:00+08:00",
+  "latest": "2.14.7",
+  "publishedAt": "2026-11-22T08:29:00+08:00",
   "notes": [
-    "修复在「用户管理」新增用户、重置密码或修改密码后无法登录的问题（升级后之前新建的账号自动恢复可登录）",
-    "优化问题反馈打赏弹窗文案"
+    "往来款（预付款/预收款）支持分批多次核销到不同订单，核销弹窗可输入本次核销金额并自动限制上限",
+    "支持多笔预付款核销同一张订单，订单详情完整展示每笔核销记录，未核销余额实时精确扣减"
   ],
   "packages": {
     "fnos": {
-      "version": "2.14.6",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.6.fpk",
-      "sha256": "220f9f8c88c6091a1ad7d1bef0a6f34efe697661fcd35de0653cbaf162200860",
-      "size": 740240,
-      "file": "xerp-2.14.6.fpk",
+      "version": "2.14.7",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.7.fpk",
+      "sha256": "e55110f7f8ce6073491b150690bc3bdb0294664e4fc443fbf5a0730e4a197ace",
+      "size": 737815,
+      "file": "xerp-2.14.7.fpk",
       "kind": "fpk"
     },
     "windows": {
@@ -33,12 +33,12 @@
       "versionCode": 21406
     },
     "docker": {
-      "version": "2.14.6",
+      "version": "2.14.7",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.14.6",
+      "image": "ghcr.io/zyc009234/xerp:2.14.7",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.6-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.6-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.7-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.7-docker-arm64.tar.gz"
       ],
       "note": "也可以下载离线包 docker load"
     }

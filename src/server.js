@@ -20,7 +20,7 @@ const tls = require('tls');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.14.6';
+const VERSION = '2.14.7';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -1203,22 +1203,47 @@ function partyPaymentBatch(ctx) {
     return pp;
   });
 }
+function ppAllocs(pp) {
+  if (Array.isArray(pp.appliedOrders) && pp.appliedOrders.length) return pp.appliedOrders;
+  if (pp.appliedOrderId) return [{ orderId: pp.appliedOrderId, no: pp.appliedOrderNo || '', amount: +pp.amount || 0, date: pp.date }];
+  return [];
+}
+function ppApplied(pp) { return round2(ppAllocs(pp).reduce((s, a) => s + (+a.amount || 0), 0)); }
+function ppRemaining(pp) { return round2(Math.max(0, (+pp.amount || 0) - ppApplied(pp))); }
 function partyPaymentApply(ctx, id) {
-  const b = ctx.body, pp = get('partyPayments', id) || fail('往来款记录不存在', 404);
-  if (pp.appliedOrderId || (pp.appliedOrders || []).length) fail('这笔往来款已经核销过了');
+  const b = ctx.body || {}, pp = get('partyPayments', id) || fail('往来款记录不存在', 404);
+  const rem = ppRemaining(pp);
+  if (rem <= 0.001) fail('这笔往来款已全部核销');
   const kind = pp.partyType === 'supplier' ? 'purchase' : 'sales', C = ORD[kind];
   return tx(() => {
     const order = get(C.col, str(b.orderId, 64)) || fail('关联订单不存在', 404);
     if (order[C.partyKey] !== pp.partyId) fail(`订单不是这个${C.partyLabel}的`);
     if (order.status === '已作废') fail('已作废订单不能核销');
     const due = round2(orderTotal(order) - (order[C.paidKey] || 0));
-    if (pp.amount > due + 0.001) fail(`订单最多只能核销 ${due} 元`);
+    if (due <= 0.001) fail('该订单已结清，无需核销');
+    const maxTake = round2(Math.min(rem, due));
+    const take = b.amount != null && b.amount !== '' ? round2(Number(b.amount)) : maxTake;
+    if (!(take > 0)) fail('核销金额必须大于 0');
+    if (take > rem + 0.001) fail(`这笔往来款最多只剩 ${rem} 元可核销`);
+    if (take > due + 0.001) fail(`订单最多只能核销 ${due} 元`);
+    const allocs = ppAllocs(pp).map(a => ({ ...a }));
+    allocs.push({ orderId: order.id, no: order.no, amount: take, date: today() });
+    pp.appliedOrders = allocs;
+    const left = round2(Math.max(0, (+pp.amount || 0) - allocs.reduce((s, a) => s + (+a.amount || 0), 0)));
+    if (allocs.length === 1 && left <= 0.001) {
+      pp.appliedOrderId = order.id; pp.appliedOrderNo = order.no;
+    } else {
+      delete pp.appliedOrderId; delete pp.appliedOrderNo;
+    }
     const f = get('finance', pp.financeId) || fail('对应的资金流水不存在');
-    f.category = C.fin[1]; f.ref = order.no; put('finance', f);
-    order[C.paidKey] = round2((order[C.paidKey] || 0) + pp.amount); put(C.col, order);
-    pp.appliedOrderId = order.id; pp.appliedOrderNo = order.no; put('partyPayments', pp);
-    audit(ctx, '核销往来款', `${pp.partyName} ${pp.amount} → ${order.no}`);
-    return pp;
+    const uniqNos = [...new Set(allocs.map(a => a.no).filter(Boolean))];
+    f.ref = uniqNos.slice(0, 3).join('、') + (uniqNos.length > 3 ? `等 ${uniqNos.length} 张` : '');
+    if (left <= 0.001) f.category = C.fin[1];
+    put('finance', f);
+    order[C.paidKey] = round2((order[C.paidKey] || 0) + take); put(C.col, order);
+    put('partyPayments', pp);
+    audit(ctx, '核销往来款', `${pp.partyName} ${take} → ${order.no}${left > 0.001 ? `（剩 ${left}）` : ''}`);
+    return { ...pp, appliedOrderNo: order.no, appliedAmount: take, remaining: left };
   });
 }
 function partyPaymentDelete(ctx, id) {
