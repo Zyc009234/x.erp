@@ -136,6 +136,7 @@ public class LabelTab implements TabPage {
     @Override public boolean needsCamera() { return false; }
     @Override public void onShown() { renderAll(); }
     @Override public void onDataUpdated() { renderAll(); }
+    @Override public void onCameraStateChanged(boolean open) { }
 
     @Override
     public void onBarcodeScanned(String code) {
@@ -364,7 +365,7 @@ public class LabelTab implements TabPage {
                     store.upsertProduct(saved);
                     ok++;
                 } catch (Exception e) {
-                    err = e.getMessage();
+                    err = ApiClient.friendlyError(e);
                     break;
                 }
             }

@@ -8,4 +8,5 @@ public interface TabPage {
     void onShown();
     void onDataUpdated();
     void onBarcodeScanned(String code);
+    void onCameraStateChanged(boolean open);
 }

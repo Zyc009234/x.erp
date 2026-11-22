@@ -35,13 +35,20 @@ public class MainActivity extends Activity {
     public AppStore store;
     public CameraScannerView scanner;
 
-    private TextView whPill, coPill, manualBtn, syncBtn;
+    private TextView whPill, coPill, camPill, manualBtn, syncBtn;
     private FrameLayout camHolder, tabHolder;
     private LinearLayout oneShotBanner, navBar;
 
     private final List<TabPage> tabs = new ArrayList<>();
     private final List<TextView> navBtns = new ArrayList<>();
     private int currentTab = 0;
+
+    private boolean cameraOpen = false;
+    private boolean pendingCameraOpen = false;
+    private boolean photoAiming = false;
+    private boolean modalCameraLock = false;
+    private boolean oneShotPrevCam = false;
+    private Runnable pendingAfterCamPerm;
 
     private CodeCallback oneShotCallback;
     private TextCallback voiceCallback;
@@ -68,11 +75,11 @@ public class MainActivity extends Activity {
         // 1. Top Compact Status Bar
         LinearLayout topBar = Ui.row(this);
         topBar.setBackgroundColor(Color.WHITE);
-        topBar.setPadding(Ui.dp(this, 10), Ui.dp(this, 6), Ui.dp(this, 10), Ui.dp(this, 6));
+        topBar.setPadding(Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 8), Ui.dp(this, 6));
 
-        whPill = Ui.tv(this, store.whName(store.selectedWh) + " ▾", 13, Ui.PRIMARY, true);
+        whPill = Ui.tv(this, store.whName(store.selectedWh) + " ▾", 12, Ui.PRIMARY, true);
         whPill.setBackground(Ui.outlined(this, Ui.PRIMARY_SOFT, Ui.PRIMARY, 1, 14));
-        whPill.setPadding(Ui.dp(this, 10), Ui.dp(this, 5), Ui.dp(this, 10), Ui.dp(this, 5));
+        whPill.setPadding(Ui.dp(this, 8), Ui.dp(this, 5), Ui.dp(this, 8), Ui.dp(this, 5));
         whPill.setSingleLine(true);
         whPill.setOnClickListener(v -> showWarehousePicker());
 
@@ -81,29 +88,37 @@ public class MainActivity extends Activity {
         coPill.setPadding(Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 6), Ui.dp(this, 4));
         coPill.setOnClickListener(v -> showCompanyPicker());
 
+        camPill = Ui.badge(this, "扫码", Ui.PRIMARY, Color.WHITE);
+        camPill.setTextSize(12);
+        camPill.setPadding(Ui.dp(this, 10), Ui.dp(this, 6), Ui.dp(this, 10), Ui.dp(this, 6));
+        camPill.setOnClickListener(v -> toggleCamera());
+
         manualBtn = Ui.badge(this, "输码", Ui.CHIP_BG, Ui.INK);
         manualBtn.setTextSize(12);
-        manualBtn.setPadding(Ui.dp(this, 10), Ui.dp(this, 6), Ui.dp(this, 10), Ui.dp(this, 6));
+        manualBtn.setPadding(Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 8), Ui.dp(this, 6));
         manualBtn.setOnClickListener(v -> openManualBarcodeDialog());
 
         syncBtn = Ui.badge(this, "同步", Ui.ACCENT_SOFT, Ui.ACCENT);
         syncBtn.setTextSize(12);
-        syncBtn.setPadding(Ui.dp(this, 10), Ui.dp(this, 6), Ui.dp(this, 10), Ui.dp(this, 6));
+        syncBtn.setPadding(Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 8), Ui.dp(this, 6));
         syncBtn.setOnClickListener(v -> refreshData(() -> Ui.toast(this, "已同步 " + store.products.size() + " 个商品")));
 
         topBar.addView(whPill);
         topBar.addView(coPill, new LinearLayout.LayoutParams(0, -2, 1));
+        topBar.addView(camPill);
+        topBar.addView(Ui.space(this, 5, 1));
         topBar.addView(manualBtn);
-        topBar.addView(Ui.space(this, 6, 1));
+        topBar.addView(Ui.space(this, 5, 1));
         topBar.addView(syncBtn);
         root.addView(topBar);
         root.addView(Ui.divider(this));
 
-        // 2. Embedded Camera Holder (~31% height on scan tabs)
+        // 2. Embedded Camera Holder (OFF by default; opens strictly on demand)
         camHolder = new FrameLayout(this);
         int camH = Math.round(getResources().getDisplayMetrics().heightPixels * 0.30f);
         scanner = new CameraScannerView(this, store);
         scanner.setListener(this::handleIncomingBarcode);
+        scanner.setCloseListener(this::cancelTransientOrCloseCamera);
         camHolder.addView(scanner, new FrameLayout.LayoutParams(-1, -1));
 
         oneShotBanner = Ui.row(this);
@@ -112,6 +127,7 @@ public class MainActivity extends Activity {
         oneShotBanner.setVisibility(View.GONE);
         camHolder.addView(oneShotBanner, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
 
+        camHolder.setVisibility(View.GONE);
         root.addView(camHolder, new LinearLayout.LayoutParams(-1, camH));
 
         // 3. Middle Tab Container
@@ -152,30 +168,96 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (currentTab < tabs.size() && tabs.get(currentTab).needsCamera()) {
-            ensureCameraPermissionAndStart();
+        if (cameraOpen) {
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                scanner.startCamera();
+            } else {
+                setCameraOpen(false);
+            }
         }
     }
 
     @Override
     protected void onPause() {
         scanner.stopCamera();
+        if (cameraOpen && !photoAiming && oneShotCallback == null) {
+            setCameraOpen(false);
+        }
         super.onPause();
     }
 
-    private void ensureCameraPermissionAndStart() {
-        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAM);
-        } else {
+    public boolean isCameraOpen() {
+        return cameraOpen;
+    }
+
+    public void setModalCameraLock(boolean lock) {
+        this.modalCameraLock = lock;
+    }
+
+    public void toggleCamera() {
+        setCameraOpen(!cameraOpen);
+    }
+
+    public void setCameraOpen(boolean open) {
+        if (open) {
+            if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                pendingCameraOpen = true;
+                requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAM);
+                return;
+            }
+            cameraOpen = true;
+            camHolder.setVisibility(View.VISIBLE);
             scanner.startCamera();
+        } else {
+            cameraOpen = false;
+            photoAiming = false;
+            scanner.setDecodeDisabled(false);
+            oneShotBanner.setVisibility(View.GONE);
+            camHolder.setVisibility(View.GONE);
+            scanner.stopCamera();
         }
+        updateCamPill();
+        if (currentTab < tabs.size()) tabs.get(currentTab).onCameraStateChanged(cameraOpen);
+    }
+
+    private void updateCamPill() {
+        boolean show = currentTab < tabs.size() && tabs.get(currentTab).needsCamera();
+        camPill.setVisibility(show ? View.VISIBLE : View.GONE);
+        camPill.setText(cameraOpen ? "关相机" : "扫码");
+        camPill.setBackground(Ui.rounded(this, cameraOpen ? Ui.DANGER : Ui.PRIMARY, 14));
+    }
+
+    private void cancelTransientOrCloseCamera() {
+        if (oneShotCallback != null) {
+            CodeCallback c = oneShotCallback;
+            boolean restore = oneShotPrevCam;
+            oneShotCallback = null;
+            oneShotBanner.setVisibility(View.GONE);
+            setCameraOpen(restore);
+            if (c != null) c.onCode(null);
+            return;
+        }
+        if (photoAiming) {
+            photoAiming = false;
+            scanner.setDecodeDisabled(false);
+            oneShotBanner.setVisibility(View.GONE);
+            setCameraOpen(false);
+            return;
+        }
+        setCameraOpen(false);
     }
 
     @Override
     public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
         if (req == REQ_CAM) {
-            if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED) {
-                if (tabs.get(currentTab).needsCamera()) scanner.startCamera();
+            boolean granted = res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED;
+            Runnable after = pendingAfterCamPerm;
+            pendingAfterCamPerm = null;
+            boolean want = pendingCameraOpen;
+            pendingCameraOpen = false;
+            if (granted) {
+                if (after != null) after.run();
+                else if (want) setCameraOpen(true);
             } else {
                 Ui.toast(this, "未授予相机权限，可使用蓝牙扫码枪或手动输入条码");
             }
@@ -196,14 +278,13 @@ public class MainActivity extends Activity {
             b.setBackground(on ? Ui.rounded(this, Ui.PRIMARY_SOFT, 10) : null);
         }
 
-        if (page.needsCamera()) {
-            camHolder.setVisibility(View.VISIBLE);
-            ensureCameraPermissionAndStart();
+        if (!page.needsCamera() && cameraOpen) {
+            setCameraOpen(false);
         } else {
-            camHolder.setVisibility(View.GONE);
-            scanner.stopCamera();
+            updateCamPill();
         }
         page.onShown();
+        page.onCameraStateChanged(cameraOpen);
     }
 
     public void syncWarehouseBadge() {
@@ -254,7 +335,7 @@ public class MainActivity extends Activity {
                                 Ui.toast(this, "已切换到：" + store.companyName);
                             });
                         } catch (Exception e) {
-                            runOnUiThread(() -> Ui.toast(this, e.getMessage()));
+                            runOnUiThread(() -> Ui.toast(this, ApiClient.friendlyError(e)));
                         }
                     }).start();
                 }).show();
@@ -293,13 +374,13 @@ public class MainActivity extends Activity {
                         startActivity(new Intent(this, LoginActivity.class));
                         finish();
                     } else {
-                        Ui.toast(this, ae.getMessage());
+                        Ui.toast(this, ApiClient.friendlyError(ae));
                     }
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     syncBtn.setText("同步");
-                    Ui.toast(this, "同步失败：" + e.getMessage());
+                    Ui.toast(this, ApiClient.friendlyError(e));
                 });
             }
         }).start();
@@ -310,40 +391,84 @@ public class MainActivity extends Activity {
     }
 
     private void handleIncomingBarcode(String code) {
+        if (photoAiming) return;
         if (oneShotCallback != null) {
             CodeCallback cb = oneShotCallback;
+            boolean restore = oneShotPrevCam;
             oneShotCallback = null;
             oneShotBanner.setVisibility(View.GONE);
             scanner.feedbackOk();
+            setCameraOpen(restore);
             cb.onCode(code);
             return;
         }
         tabs.get(currentTab).onBarcodeScanned(code);
+        if (!store.continuousScan && !modalCameraLock && cameraOpen) {
+            setCameraOpen(false);
+        }
     }
 
     public void captureOneShotBarcode(String prompt, CodeCallback cb) {
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            pendingAfterCamPerm = () -> captureOneShotBarcode(prompt, cb);
+            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAM);
+            return;
+        }
+        oneShotPrevCam = cameraOpen;
         oneShotCallback = cb;
-        camHolder.setVisibility(View.VISIBLE);
-        ensureCameraPermissionAndStart();
-        scanner.setUserPaused(false);
+        photoAiming = false;
+        scanner.setDecodeDisabled(false);
+        setCameraOpen(true);
         oneShotBanner.removeAllViews();
         oneShotBanner.setVisibility(View.VISIBLE);
         oneShotBanner.addView(Ui.tv(this, prompt, 13, Color.WHITE, true), new LinearLayout.LayoutParams(0, -2, 1));
         TextView cancel = Ui.badge(this, "取消扫码", Ui.DANGER, Color.WHITE);
-        cancel.setOnClickListener(v -> {
-            CodeCallback c = oneShotCallback;
-            oneShotCallback = null;
-            oneShotBanner.setVisibility(View.GONE);
-            if (!tabs.get(currentTab).needsCamera()) camHolder.setVisibility(View.GONE);
-            if (c != null) c.onCode(null);
-        });
+        cancel.setOnClickListener(v -> cancelTransientOrCloseCamera());
         oneShotBanner.addView(cancel);
     }
 
     public void takeLiveSnapshot(CameraScannerView.SnapshotCallback cb) {
-        camHolder.setVisibility(View.VISIBLE);
-        ensureCameraPermissionAndStart();
-        scanner.captureSnapshot(cb);
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            pendingAfterCamPerm = () -> takeLiveSnapshot(cb);
+            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAM);
+            return;
+        }
+        final boolean prevCam = cameraOpen;
+        photoAiming = true;
+        scanner.setDecodeDisabled(true);
+        setCameraOpen(true);
+        oneShotBanner.removeAllViews();
+        oneShotBanner.setVisibility(View.VISIBLE);
+        oneShotBanner.addView(Ui.tv(this, "对准商品后点击拍照", 13, Color.WHITE, true), new LinearLayout.LayoutParams(0, -2, 1));
+
+        TextView snap = Ui.badge(this, "拍照", Ui.PRIMARY, Color.WHITE);
+        snap.setTextSize(13);
+        snap.setPadding(Ui.dp(this, 14), Ui.dp(this, 6), Ui.dp(this, 14), Ui.dp(this, 6));
+        snap.setOnClickListener(v -> {
+            snap.setEnabled(false);
+            scanner.captureSnapshot((uri, bmp, err) -> {
+                photoAiming = false;
+                scanner.setDecodeDisabled(false);
+                oneShotBanner.setVisibility(View.GONE);
+                setCameraOpen(prevCam);
+                cb.onSnapshot(uri, bmp, err);
+            });
+        });
+
+        TextView cancel = Ui.badge(this, "取消", Ui.DANGER, Color.WHITE);
+        cancel.setTextSize(13);
+        cancel.setPadding(Ui.dp(this, 12), Ui.dp(this, 6), Ui.dp(this, 12), Ui.dp(this, 6));
+        cancel.setOnClickListener(v -> {
+            photoAiming = false;
+            scanner.setDecodeDisabled(false);
+            oneShotBanner.setVisibility(View.GONE);
+            setCameraOpen(prevCam);
+            cb.onSnapshot(null, null, null);
+        });
+
+        oneShotBanner.addView(snap);
+        oneShotBanner.addView(Ui.space(this, 8, 1));
+        oneShotBanner.addView(cancel);
     }
 
     public void pickGalleryImage(CameraScannerView.SnapshotCallback cb) {
@@ -387,7 +512,7 @@ public class MainActivity extends Activity {
                     String dataUri = CameraScannerView.encodeBitmapToDataUri(bmp);
                     runOnUiThread(() -> cb.onSnapshot(dataUri, bmp, null));
                 } catch (Exception e) {
-                    runOnUiThread(() -> cb.onSnapshot(null, null, "处理图片失败：" + e.getMessage()));
+                    runOnUiThread(() -> cb.onSnapshot(null, null, "读取图片失败，请换一张再试"));
                 }
             }).start();
         }
@@ -422,11 +547,12 @@ public class MainActivity extends Activity {
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
-        if (oneShotCallback != null) {
-            CodeCallback c = oneShotCallback;
-            oneShotCallback = null;
-            oneShotBanner.setVisibility(View.GONE);
-            if (c != null) c.onCode(null);
+        if (oneShotCallback != null || photoAiming) {
+            cancelTransientOrCloseCamera();
+            return;
+        }
+        if (cameraOpen) {
+            setCameraOpen(false);
             return;
         }
         if (currentTab != 0) {

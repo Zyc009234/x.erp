@@ -288,7 +288,7 @@ public class LoginActivity extends Activity {
                 runOnUiThread(() -> {
                     bLogin.setEnabled(true);
                     bLogin.setText("连接并登录");
-                    Ui.toast(this, e.getMessage());
+                    Ui.toast(this, ApiClient.friendlyError(e));
                 });
             }
         }).start();

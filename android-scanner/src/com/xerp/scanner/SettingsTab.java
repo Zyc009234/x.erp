@@ -31,6 +31,7 @@ public class SettingsTab implements TabPage {
     @Override public void onShown() { render(); }
     @Override public void onDataUpdated() { render(); }
     @Override public void onBarcodeScanned(String code) { }
+    @Override public void onCameraStateChanged(boolean open) { }
 
     private void render() {
         col.removeAllViews();
@@ -75,7 +76,7 @@ public class SettingsTab implements TabPage {
         // 2. Scanner & One-hand Preferences
         LinearLayout pref = Ui.card(act, 14);
         pref.addView(Ui.tv(act, "扫码与单手偏好", 15, Ui.INK, true));
-        pref.addView(toggleRow("连续扫码模式（不暂停相机）", store.continuousScan, on -> { store.continuousScan = on; store.savePrefs(); act.scanner.setUserPaused(false); }));
+        pref.addView(toggleRow("连续扫码（关闭则每次扫完自动关相机）", store.continuousScan, on -> { store.continuousScan = on; store.savePrefs(); }));
         pref.addView(toggleRow("扫码成功提示音", store.soundEnabled, on -> { store.soundEnabled = on; store.savePrefs(); }));
         pref.addView(toggleRow("扫码震动反馈", store.vibrateEnabled, on -> { store.vibrateEnabled = on; store.savePrefs(); }));
         pref.addView(toggleRow("未识别条码自动弹出录新弹窗", store.autoPromptNew, on -> { store.autoPromptNew = on; store.savePrefs(); }));

@@ -112,6 +112,7 @@ public class StockMoveTab implements TabPage {
 
     @Override public View getView() { return root; }
     @Override public boolean needsCamera() { return true; }
+    @Override public void onCameraStateChanged(boolean open) { renderAll(); }
 
     @Override
     public void onShown() {
@@ -353,8 +354,15 @@ public class StockMoveTab implements TabPage {
         dlp.topMargin = Ui.dp(act, 10);
         box.addView(done, dlp);
 
+        final boolean prevCam = act.isCameraOpen();
+        act.setModalCameraLock(true);
+        act.setCameraOpen(true);
         Dialog dlg = Ui.showBottomDialog(act, box, false);
-        dlg.setOnDismissListener(d -> onSerialSheetUpdate = null);
+        dlg.setOnDismissListener(d -> {
+            onSerialSheetUpdate = null;
+            act.setModalCameraLock(false);
+            act.setCameraOpen(prevCam);
+        });
         done.setOnClickListener(v -> dlg.dismiss());
     }
 
@@ -510,12 +518,27 @@ public class StockMoveTab implements TabPage {
             }
         }
 
-        String actTitle = "in".equals(mode) ? "确认提交入库单" : "out".equals(mode) ? "确认提交出库单" : "确认提交调拨单";
+        boolean camOn = act.isCameraOpen();
+        Button bCam = Ui.btn(act, camOn ? "关相机" : "扫码", camOn ? Ui.DANGER : Ui.ACCENT, Color.WHITE);
+        bCam.setOnClickListener(v -> act.toggleCamera());
+
+        String actTitle = "in".equals(mode) ? "提交入库" : "out".equals(mode) ? "提交出库" : "提交调拨";
         int actColor = "in".equals(mode) ? Ui.PRIMARY : "out".equals(mode) ? Ui.DANGER : Ui.ACCENT;
-        Button submit = Ui.btn(act, actTitle + "（" + cart.size() + " 项）", cart.isEmpty() ? 0xFF9CA3AF : actColor, Color.WHITE);
+        Button submit = Ui.btn(act, actTitle + "（" + cart.size() + "）", cart.isEmpty() ? 0xFF9CA3AF : actColor, Color.WHITE);
         submit.setEnabled(!cart.isEmpty());
         submit.setOnClickListener(v -> submitMove(submit));
-        thumbBar.addView(submit, new LinearLayout.LayoutParams(-1, Ui.dp(act, 46)));
+
+        LinearLayout actionRow = Ui.row(act);
+        if (store.leftHanded) {
+            actionRow.addView(bCam, new LinearLayout.LayoutParams(0, Ui.dp(act, 46), 1));
+            actionRow.addView(Ui.space(act, 8, 1));
+            actionRow.addView(submit, new LinearLayout.LayoutParams(0, Ui.dp(act, 46), 1.6f));
+        } else {
+            actionRow.addView(submit, new LinearLayout.LayoutParams(0, Ui.dp(act, 46), 1.6f));
+            actionRow.addView(Ui.space(act, 8, 1));
+            actionRow.addView(bCam, new LinearLayout.LayoutParams(0, Ui.dp(act, 46), 1));
+        }
+        thumbBar.addView(actionRow, new LinearLayout.LayoutParams(-1, -2));
     }
 
     private void submitMove(Button submit) {
@@ -582,12 +605,12 @@ public class StockMoveTab implements TabPage {
                     act.runOnUiThread(() -> {
                         submit.setEnabled(true);
                         act.scanner.feedbackError();
-                        Ui.toast(act, e.getMessage());
+                        Ui.toast(act, ApiClient.friendlyError(e));
                     });
                 }
             }).start();
         } catch (Exception e) {
-            Ui.toast(act, e.getMessage());
+            Ui.toast(act, ApiClient.friendlyError(e));
         }
     }
 }

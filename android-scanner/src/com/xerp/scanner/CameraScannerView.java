@@ -55,6 +55,10 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
         void onBarcodeScanned(String code);
     }
 
+    public interface CloseListener {
+        void onCloseRequested();
+    }
+
     public interface SnapshotCallback {
         void onSnapshot(String dataUri, Bitmap preview, String error);
     }
@@ -63,7 +67,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
     private final AppStore store;
     private final SurfaceView surface;
     private final ScanOverlay overlay;
-    private final TextView torchBtn, zoomBtn, pauseBtn, resumeCover;
+    private final TextView closeBtn, torchBtn, zoomBtn, pauseBtn, resumeCover;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final MultiFormatReader reader = new MultiFormatReader();
 
@@ -72,7 +76,10 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
     private HandlerThread worker;
     private Handler decoder;
     private Listener listener;
-    private volatile boolean busy, paused, wantedActive;
+    private CloseListener closeListener;
+    private volatile boolean busy, paused, wantedActive, decodeDisabled;
+    private volatile long lastDecodeEndMs = 0;
+    private byte[] roiBuf = new byte[0];
     private boolean torchOn, zoom2x;
     private int frameIndex;
     private String lastCode;
@@ -103,7 +110,18 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
         overlay = new ScanOverlay(act);
         addView(overlay, new LayoutParams(-1, -1));
 
-        // Top floating camera controls
+        // Top-left Close pill
+        LinearLayout leftBar = Ui.row(act);
+        leftBar.setPadding(Ui.dp(act, 8), Ui.dp(act, 6), Ui.dp(act, 8), Ui.dp(act, 6));
+        closeBtn = pill("关闭");
+        closeBtn.setBackground(Ui.rounded(act, 0xAA111827, 14));
+        closeBtn.setOnClickListener(v -> {
+            if (closeListener != null) closeListener.onCloseRequested();
+        });
+        leftBar.addView(closeBtn);
+        addView(leftBar, new LayoutParams(-2, -2, Gravity.TOP | Gravity.START));
+
+        // Top-right camera controls
         LinearLayout topBar = Ui.row(act);
         topBar.setPadding(Ui.dp(act, 8), Ui.dp(act, 6), Ui.dp(act, 8), Ui.dp(act, 6));
         torchBtn = pill("手电");
@@ -120,7 +138,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
         topBar.addView(pauseBtn);
         addView(topBar, new LayoutParams(-2, -2, Gravity.TOP | Gravity.END));
 
-        // Resume cover for paused / single-scan mode
+        // Resume cover for paused mode
         resumeCover = Ui.tv(act, "点击画面继续扫码", 16, Color.WHITE, true);
         resumeCover.setGravity(Gravity.CENTER);
         resumeCover.setBackgroundColor(0x99000000);
@@ -141,12 +159,22 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
         return t;
     }
 
-    public void setListener(Listener l) {
-        this.listener = l;
+    public void setListener(Listener l) { this.listener = l; }
+    public void setCloseListener(CloseListener l) { this.closeListener = l; }
+
+    public void setDecodeDisabled(boolean disabled) {
+        this.decodeDisabled = disabled;
+        overlay.setVisibility(disabled ? View.GONE : View.VISIBLE);
     }
 
     public void startCamera() {
         wantedActive = true;
+        paused = false;
+        pauseBtn.setText("暂停");
+        pauseBtn.setBackground(Ui.rounded(activity, 0x88000000, 14));
+        resumeCover.setVisibility(View.GONE);
+        lastCode = null;
+        absentSince = -1;
         if (worker == null) {
             worker = new HandlerThread("scanner-decode");
             worker.start();
@@ -175,11 +203,8 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
         if (!p) {
             lastCode = null;
             absentSince = -1;
+            overlay.invalidate();
         }
-    }
-
-    public void resumeIfSingleModeDone() {
-        if (!store.continuousScan) setUserPaused(false);
     }
 
     public void flashStatus(int color) {
@@ -196,9 +221,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
 
     private void triggerFocus() {
         if (camera == null) return;
-        try {
-            camera.autoFocus((ok, c) -> { });
-        } catch (Exception ignored) { }
+        try { camera.autoFocus((ok, c) -> { }); } catch (Exception ignored) { }
     }
 
     private void toggleTorch() {
@@ -250,7 +273,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
     }
 
     private void openCamera(SurfaceHolder holder) {
-        if (camera != null || getVisibility() != View.VISIBLE) return;
+        if (camera != null || !wantedActive) return;
         try {
             int id = 0;
             Camera.CameraInfo info = new Camera.CameraInfo();
@@ -267,8 +290,9 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
 
             Camera.Parameters p = camera.getParameters();
             Camera.Size best = null;
+            int targetPixels = 800 * 480;
             for (Camera.Size s : p.getSupportedPreviewSizes()) {
-                if (best == null || Math.abs(s.width * s.height - 1280 * 720) < Math.abs(best.width * best.height - 1280 * 720)) {
+                if (best == null || Math.abs(s.width * s.height - targetPixels) < Math.abs(best.width * best.height - targetPixels)) {
                     best = s;
                 }
             }
@@ -285,22 +309,25 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
             camera.setPreviewDisplay(holder);
             camera.setPreviewCallback(this);
             camera.startPreview();
+            overlay.invalidate();
             if (fm != null && !fm.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE) && fm.contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
                 autoFocusLoop();
             }
         } catch (Exception e) {
             closeCamera();
+            main.post(() -> Ui.toast(activity, "无法打开相机，请检查相机权限或是否被占用"));
         }
     }
 
     private void autoFocusLoop() {
         if (camera == null || !wantedActive) return;
         try {
-            camera.autoFocus((ok, c) -> main.postDelayed(this::autoFocusLoop, 1800));
+            camera.autoFocus((ok, c) -> main.postDelayed(this::autoFocusLoop, 2000));
         } catch (Exception ignored) { }
     }
 
     private void closeCamera() {
+        pendingSnapshot = null;
         if (camera == null) return;
         try { camera.setPreviewCallback(null); camera.stopPreview(); } catch (Exception ignored) { }
         try { camera.release(); } catch (Exception ignored) { }
@@ -314,7 +341,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
 
     @Override
     public void onPreviewFrame(byte[] data, Camera cam) {
-        if (cam != camera) return;
+        if (cam != camera || !wantedActive) return;
         Camera.Size size;
         try { size = cam.getParameters().getPreviewSize(); } catch (Exception e) { return; }
 
@@ -327,22 +354,57 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
             return;
         }
 
-        if (paused || busy || decoder == null) return;
+        if (decodeDisabled || paused || busy || decoder == null) return;
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastDecodeEndMs < 160) return;
+
         busy = true;
         final int w = size.width, h = size.height, n = frameIndex++;
         decoder.post(() -> {
             try {
-                String code = (n % 2 == 0) ? decode(rotate(data, w, h), h, w) : decode(data, w, h);
-                if (code == null) {
-                    code = (n % 2 == 0) ? decode(data, w, h) : decode(rotate(data, w, h), h, w);
-                }
-                final String detected = code;
-                final long observedAt = SystemClock.elapsedRealtime();
+                String detected = decodeCenterRoi(data, w, h, n % 2 == 0);
+                lastDecodeEndMs = SystemClock.elapsedRealtime();
+                final long observedAt = lastDecodeEndMs;
                 main.post(() -> handleFrame(detected, observedAt));
             } finally {
                 busy = false;
             }
         });
+    }
+
+    private String decodeCenterRoi(byte[] data, int w, int h, boolean rotate90) {
+        int cw = Math.max(32, (w * 76) / 100);
+        int ch = Math.max(32, (h * 56) / 100);
+        int left = (w - cw) / 2;
+        int top = (h - ch) / 2;
+        int needed = cw * ch;
+        if (roiBuf.length != needed) roiBuf = new byte[needed];
+
+        int rw, rh;
+        if (rotate90) {
+            rw = ch; rh = cw;
+            for (int y = 0; y < ch; y++) {
+                int srcRow = (top + y) * w + left;
+                int dstCol = ch - 1 - y;
+                for (int x = 0; x < cw; x++) {
+                    roiBuf[x * ch + dstCol] = data[srcRow + x];
+                }
+            }
+        } else {
+            rw = cw; rh = ch;
+            for (int y = 0; y < ch; y++) {
+                System.arraycopy(data, (top + y) * w + left, roiBuf, y * cw, cw);
+            }
+        }
+        try {
+            PlanarYUVLuminanceSource src = new PlanarYUVLuminanceSource(roiBuf, rw, rh, 0, 0, rw, rh, false);
+            Result r = reader.decodeWithState(new BinaryBitmap(new HybridBinarizer(src)));
+            return r.getText();
+        } catch (Exception e) {
+            return null;
+        } finally {
+            reader.reset();
+        }
     }
 
     private void processSnapshot(byte[] nv21, int w, int h, int orient, SnapshotCallback cb) {
@@ -363,7 +425,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
             final Bitmap finalBmp = bmp;
             main.post(() -> cb.onSnapshot(uri, finalBmp, null));
         } catch (Exception e) {
-            main.post(() -> cb.onSnapshot(null, null, "拍照失败：" + e.getMessage()));
+            main.post(() -> cb.onSnapshot(null, null, "拍照失败，请重试"));
         }
     }
 
@@ -389,7 +451,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
     }
 
     private void handleFrame(String code, long now) {
-        if (paused) return;
+        if (paused || decodeDisabled) return;
         if (code == null) {
             if (absentSince < 0) absentSince = now;
             if (now - absentSince >= store.cooldownMs) lastCode = null;
@@ -400,31 +462,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
         if (code.equals(lastCode)) return;
         lastCode = code;
         lastFireAt = now;
-        if (!store.continuousScan) setUserPaused(true);
         if (listener != null) listener.onBarcodeScanned(code);
-    }
-
-    private String decode(byte[] y, int w, int h) {
-        int cw = w * 8 / 10, ch = h * 6 / 10;
-        try {
-            PlanarYUVLuminanceSource src = new PlanarYUVLuminanceSource(y, w, h, (w - cw) / 2, (h - ch) / 2, cw, ch, false);
-            Result r = reader.decodeWithState(new BinaryBitmap(new HybridBinarizer(src)));
-            return r.getText();
-        } catch (Exception e) {
-            return null;
-        } finally {
-            reader.reset();
-        }
-    }
-
-    private static byte[] rotate(byte[] d, int w, int h) {
-        byte[] out = new byte[w * h];
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                out[x * h + h - 1 - y] = d[y * w + x];
-            }
-        }
-        return out;
     }
 
     public void feedbackOk() {
@@ -493,7 +531,7 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
         @Override
         protected void onDraw(Canvas c) {
             int w = getWidth(), h = getHeight();
-            float bw = w * 0.78f, bh = h * 0.62f;
+            float bw = w * 0.76f, bh = h * 0.56f;
             float l = (w - bw) / 2f, t = (h - bh) / 2f, r = l + bw, b = t + bh;
             c.drawRect(0, 0, w, t, mask);
             c.drawRect(0, b, w, h, mask);
@@ -511,13 +549,13 @@ public class CameraScannerView extends FrameLayout implements SurfaceHolder.Call
             c.drawLine(l, b, l + len, b, corner); c.drawLine(l, b - len, l, b, corner);
             c.drawLine(r - len, b, r, b, corner); c.drawLine(r, b - len, r, b, corner);
 
-            if (!paused && wantedActive) {
+            if (camera != null && !paused && wantedActive && !decodeDisabled) {
                 float ly = t + bh * laserPos;
                 c.drawLine(l + 12, ly, r - 12, ly, laser);
-                laserPos += laserDown ? 0.025f : -0.025f;
+                laserPos += laserDown ? 0.04f : -0.04f;
                 if (laserPos >= 0.90f) { laserPos = 0.90f; laserDown = false; }
                 else if (laserPos <= 0.10f) { laserPos = 0.10f; laserDown = true; }
-                postInvalidateDelayed(35);
+                postInvalidateDelayed(75);
             }
         }
     }

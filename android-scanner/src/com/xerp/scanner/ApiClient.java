@@ -3,15 +3,20 @@ package com.xerp.scanner;
 import android.net.Uri;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.MalformedURLException;
 import java.net.NetworkInterface;
+import java.net.NoRouteToHostException;
+import java.net.SocketException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -19,6 +24,8 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
+import javax.net.ssl.SSLException;
 
 public final class ApiClient {
     private static final int DEFAULT_PORT = 8686;
@@ -58,10 +65,54 @@ public final class ApiClient {
         } catch (java.net.UnknownHostException e) {
             return "找不到该地址";
         } catch (Exception e) {
-            return e.getClass().getSimpleName() + "：" + e.getMessage();
+            return friendlyError(e);
         } finally {
             if (c != null) c.disconnect();
         }
+    }
+
+    public static String friendlyError(Throwable e) {
+        if (e == null) return "操作失败，请稍后重试";
+        if (e instanceof ApiException) {
+            ApiException ae = (ApiException) e;
+            String m = ae.getMessage();
+            if (containsChinese(m)) return m;
+            switch (ae.status) {
+                case 400: return "请求参数不正确，请检查填写内容";
+                case 401: return "登录已失效，请重新登录";
+                case 403: return "当前账号没有该操作权限";
+                case 404: return "服务端不支持该功能，请升级服务端到最新版本";
+                case 409: return "数据已存在或发生冲突";
+                case 413: return "上传内容太大，请压缩后重试";
+                case 429: return "操作过于频繁，请稍后再试";
+                case 500: return "服务器处理出错，请稍后重试";
+                case 502:
+                case 503:
+                case 504: return "服务器暂时不可用，请检查服务端是否正常运行";
+                default: return "服务器返回错误（状态码 " + ae.status + "）";
+            }
+        }
+        if (e instanceof java.net.ConnectException) return "无法连接服务器，请检查网络及服务端是否已启动";
+        if (e instanceof java.net.SocketTimeoutException) return "连接服务器超时，请检查网络是否畅通";
+        if (e instanceof java.net.UnknownHostException) return "找不到服务器地址，请检查 IP 或域名是否正确";
+        if (e instanceof SSLException) return "安全连接失败，请检查服务器证书或手机时间";
+        if (e instanceof MalformedURLException) return "服务器地址格式不正确";
+        if (e instanceof NoRouteToHostException || e instanceof SocketException) return "网络连接异常，请检查 Wi-Fi 或移动网络";
+        if (e instanceof JSONException) return "服务器返回格式异常，请确认服务器地址为 x.erp 服务端";
+        if (e instanceof IOException) return "网络传输中断，请重试";
+        if (e instanceof SecurityException) return "缺少系统权限，请在手机设置中开启权限";
+        String m = e.getMessage();
+        if (containsChinese(m)) return m;
+        return "操作失败，请检查网络或稍后重试";
+    }
+
+    private static boolean containsChinese(String s) {
+        if (s == null) return false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= '\u4e00' && c <= '\u9fa5') return true;
+        }
+        return false;
     }
 
     public static List<String> discoverLanServers() {
@@ -177,11 +228,14 @@ public final class ApiClient {
             if (code >= 200 && code < 300) {
                 return resp.trim().isEmpty() ? new JSONObject() : new JSONObject(resp);
             }
-            String errMsg = "HTTP " + code;
+            String errMsg = "";
             try {
                 JSONObject ej = new JSONObject(resp);
-                if (ej.has("error")) errMsg = ej.getString("error");
+                if (ej.has("error")) errMsg = ej.optString("error", "");
             } catch (Exception ignored) { }
+            if (!containsChinese(errMsg)) {
+                errMsg = friendlyError(new ApiException(code, ""));
+            }
             throw new ApiException(code, errMsg);
         } finally {
             if (c != null) c.disconnect();

@@ -418,9 +418,12 @@ public final class ProductEditorSheet {
         }));
         bSnap.setOnClickListener(v -> {
             bSnap.setEnabled(false);
+            dlg.hide();
             act.takeLiveSnapshot((uri, bmp, err) -> {
+                dlg.show();
                 bSnap.setEnabled(true);
                 if (err != null) { Ui.toast(act, err); return; }
+                if (uri == null || bmp == null) return;
                 photoDataUri[0] = uri;
                 thumb.setImageBitmap(bmp);
                 thumb.setVisibility(View.VISIBLE);
@@ -514,12 +517,12 @@ public final class ProductEditorSheet {
                         act.runOnUiThread(() -> {
                             bSave.setEnabled(true);
                             bSave.setText(existing != null ? "保存修改" : "保存新商品");
-                            Ui.toast(act, ex.getMessage());
+                            Ui.toast(act, ApiClient.friendlyError(ex));
                         });
                     }
                 }).start();
             } catch (Exception ex) {
-                Ui.toast(act, "表单错误：" + ex.getMessage());
+                Ui.toast(act, "表单填写有误，请检查");
             }
         });
     }
@@ -600,7 +603,7 @@ public final class ProductEditorSheet {
                     if (onSaved != null) onSaved.onProductSaved(saved, matchU, null);
                 });
             } catch (Exception e) {
-                act.runOnUiThread(() -> Ui.toast(act, e.getMessage()));
+                act.runOnUiThread(() -> Ui.toast(act, ApiClient.friendlyError(e)));
             }
         }).start();
     }

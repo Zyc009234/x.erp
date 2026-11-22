@@ -68,7 +68,7 @@ public class LookupTab implements TabPage {
         root.addView(sv, new LinearLayout.LayoutParams(-1, 0, 1));
 
         root.addView(Ui.divider(act));
-        bottomBar = Ui.row(act);
+        bottomBar = Ui.col(act);
         bottomBar.setBackgroundColor(Color.WHITE);
         bottomBar.setPadding(Ui.dp(act, 10), Ui.dp(act, 8), Ui.dp(act, 10), Ui.dp(act, 8));
         root.addView(bottomBar);
@@ -89,6 +89,7 @@ public class LookupTab implements TabPage {
 
     @Override public View getView() { return root; }
     @Override public boolean needsCamera() { return true; }
+    @Override public void onCameraStateChanged(boolean open) { renderBottomBar(); }
 
     @Override
     public void onShown() {
@@ -156,7 +157,7 @@ public class LookupTab implements TabPage {
 
     private void renderSearchResults(String q) {
         contentCol.removeAllViews();
-        bottomBar.setVisibility(View.GONE);
+        renderBottomBar();
         String ql = q.toLowerCase(Locale.ROOT);
         int shown = 0;
         for (Models.Product p : store.products) {
@@ -202,7 +203,7 @@ public class LookupTab implements TabPage {
     private void renderView() {
         contentCol.removeAllViews();
         if (!unknownCode.isEmpty()) {
-            bottomBar.setVisibility(View.GONE);
+            renderBottomBar();
             LinearLayout card = Ui.card(act, 16);
             card.setBackground(Ui.outlined(act, Ui.WARN_SOFT, Ui.WARN, 1, 12));
             card.addView(Ui.tv(act, "未收录的条码", 16, 0xFF92400E, true));
@@ -248,10 +249,10 @@ public class LookupTab implements TabPage {
         }
 
         if (activeProduct == null) {
-            bottomBar.setVisibility(View.GONE);
+            renderBottomBar();
             LinearLayout card = Ui.card(act, 16);
             card.addView(Ui.tv(act, "扫码查货 · 录新商品 · 绑条码", 16, Ui.INK, true));
-            TextView sub = Ui.tv(act, "支持扫描商品主条码、箱条码、序列号或批号。\n遇到未收录的新商品可直接一指语音/抓拍快速建档，或绑定到已有商品（支持设置大包装箱码）。", 13, Ui.MUTED, false);
+            TextView sub = Ui.tv(act, "支持扫描商品主条码、箱条码、序列号或批号。\n点底部「开启扫码」后再扫商品；遇到新条码可直接语音/拍照建档或绑到已有商品。", 13, Ui.MUTED, false);
             sub.setPadding(0, Ui.dp(act, 6), 0, 0);
             card.addView(sub);
             contentCol.addView(card);
@@ -341,32 +342,60 @@ public class LookupTab implements TabPage {
             contentCol.addView(bc, ilp);
         }
 
-        // Bottom One-Hand Action Bar
+        renderBottomBar();
+    }
+
+    private void renderBottomBar() {
         bottomBar.setVisibility(View.VISIBLE);
         bottomBar.removeAllViews();
-        Button bCheck = Ui.btn(act, "快速盘点", Ui.PRIMARY, Color.WHITE);
-        Button bEdit = Ui.outlineBtn(act, "编辑/绑码", Ui.ACCENT, Ui.ACCENT);
-        Button bPhoto = Ui.outlineBtn(act, "拍图", Ui.LINE, Ui.INK);
-        Button bLabel = Ui.outlineBtn(act, "打标签", Ui.LINE, Ui.INK);
 
-        bCheck.setOnClickListener(v -> quickCheckProduct(p));
-        bEdit.setOnClickListener(v -> openEditor(p, ""));
-        bPhoto.setOnClickListener(v -> quickSnapProduct(p));
-        bLabel.setOnClickListener(v -> {
-            store.addToLabelQueue(p, activeUnit, 1);
-            Ui.toast(act, "已加入标签打印队列");
-            act.switchToTab(3);
-        });
+        if (activeProduct != null) {
+            Models.Product p = activeProduct;
+            LinearLayout prodRow = Ui.row(act);
+            Button bCheck = Ui.btn(act, "快速盘点", Ui.PRIMARY, Color.WHITE);
+            Button bEdit = Ui.outlineBtn(act, "编辑/绑码", Ui.ACCENT, Ui.ACCENT);
+            Button bPhoto = Ui.outlineBtn(act, "拍图", Ui.LINE, Ui.INK);
+            Button bLabel = Ui.outlineBtn(act, "打标签", Ui.LINE, Ui.INK);
 
-        Button[] btns = {bCheck, bEdit, bPhoto, bLabel};
-        float[] ws = {1.2f, 1.1f, 0.85f, 0.95f};
-        for (int i = 0; i < btns.length; i++) {
-            btns[i].setTextSize(12);
-            btns[i].setPadding(Ui.dp(act, 4), 0, Ui.dp(act, 4), 0);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(act, 44), ws[i]);
-            if (i > 0) lp.leftMargin = Ui.dp(act, 6);
-            bottomBar.addView(btns[i], lp);
+            bCheck.setOnClickListener(v -> quickCheckProduct(p));
+            bEdit.setOnClickListener(v -> openEditor(p, ""));
+            bPhoto.setOnClickListener(v -> quickSnapProduct(p));
+            bLabel.setOnClickListener(v -> {
+                store.addToLabelQueue(p, activeUnit, 1);
+                Ui.toast(act, "已加入标签打印队列");
+                act.switchToTab(3);
+            });
+
+            Button[] btns = {bCheck, bEdit, bPhoto, bLabel};
+            float[] ws = {1.2f, 1.1f, 0.85f, 0.95f};
+            for (int i = 0; i < btns.length; i++) {
+                btns[i].setTextSize(12);
+                btns[i].setPadding(Ui.dp(act, 4), 0, Ui.dp(act, 4), 0);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.dp(act, 40), ws[i]);
+                if (i > 0) lp.leftMargin = Ui.dp(act, 6);
+                prodRow.addView(btns[i], lp);
+            }
+            LinearLayout.LayoutParams prlp = new LinearLayout.LayoutParams(-1, -2);
+            prlp.bottomMargin = Ui.dp(act, 8);
+            bottomBar.addView(prodRow, prlp);
         }
+
+        boolean camOn = act.isCameraOpen();
+        LinearLayout scanRow = Ui.row(act);
+        Button bCam = Ui.btn(act, camOn ? "关闭相机" : "扫码查货", camOn ? Ui.DANGER : Ui.PRIMARY, Color.WHITE);
+        bCam.setOnClickListener(v -> act.toggleCamera());
+        Button bAdd = Ui.outlineBtn(act, "+ 新建商品", Ui.ACCENT, Ui.ACCENT);
+        bAdd.setOnClickListener(v -> openEditor(null, ""));
+        if (store.leftHanded) {
+            scanRow.addView(bCam, new LinearLayout.LayoutParams(0, Ui.dp(act, 44), 1.4f));
+            scanRow.addView(Ui.space(act, 8, 1));
+            scanRow.addView(bAdd, new LinearLayout.LayoutParams(0, Ui.dp(act, 44), 1));
+        } else {
+            scanRow.addView(bAdd, new LinearLayout.LayoutParams(0, Ui.dp(act, 44), 1));
+            scanRow.addView(Ui.space(act, 8, 1));
+            scanRow.addView(bCam, new LinearLayout.LayoutParams(0, Ui.dp(act, 44), 1.4f));
+        }
+        bottomBar.addView(scanRow, new LinearLayout.LayoutParams(-1, -2));
     }
 
     private void quickCheckProduct(Models.Product p) {
@@ -389,7 +418,7 @@ public class LookupTab implements TabPage {
                             Ui.toast(act, "库存已盘点为 " + Ui.fmtQty(val));
                         });
                     } catch (Exception e) {
-                        act.runOnUiThread(() -> Ui.toast(act, e.getMessage()));
+                        act.runOnUiThread(() -> Ui.toast(act, ApiClient.friendlyError(e)));
                     }
                 }).start());
     }
@@ -397,6 +426,7 @@ public class LookupTab implements TabPage {
     private void quickSnapProduct(Models.Product p) {
         act.takeLiveSnapshot((uri, bmp, err) -> {
             if (err != null) { Ui.toast(act, err); return; }
+            if (uri == null) return;
             Ui.toast(act, "正在上传商品图片…");
             new Thread(() -> {
                 try {
@@ -404,7 +434,7 @@ public class LookupTab implements TabPage {
                     p.img = "1";
                     act.runOnUiThread(() -> Ui.toast(act, "商品图片已更新"));
                 } catch (Exception e) {
-                    act.runOnUiThread(() -> Ui.toast(act, e.getMessage()));
+                    act.runOnUiThread(() -> Ui.toast(act, ApiClient.friendlyError(e)));
                 }
             }).start();
         });
@@ -431,7 +461,7 @@ public class LookupTab implements TabPage {
                     renderView();
                 });
             } catch (Exception e) {
-                act.runOnUiThread(() -> Ui.toast(act, e.getMessage()));
+                act.runOnUiThread(() -> Ui.toast(act, ApiClient.friendlyError(e)));
             }
         }).start();
     }

@@ -135,6 +135,7 @@ public class StocktakeTab implements TabPage {
 
     @Override public View getView() { return root; }
     @Override public boolean needsCamera() { return true; }
+    @Override public void onCameraStateChanged(boolean open) { renderThumbBar(); }
 
     @Override
     public void onShown() {
@@ -344,7 +345,7 @@ public class StocktakeTab implements TabPage {
                     applyMatchedScan(match, addQty, "建单并扫入 +" + Ui.fmtQty(addQty));
                 });
             } catch (Exception e) {
-                act.runOnUiThread(() -> Ui.toast(act, "建单失败：" + e.getMessage()));
+                act.runOnUiThread(() -> Ui.toast(act, "建单失败：" + ApiClient.friendlyError(e)));
             }
         }).start();
     }
@@ -403,7 +404,7 @@ public class StocktakeTab implements TabPage {
                     Ui.toast(act, "已新建盘点单 " + doc.no);
                 });
             } catch (Exception e) {
-                act.runOnUiThread(() -> Ui.toast(act, e.getMessage()));
+                act.runOnUiThread(() -> Ui.toast(act, ApiClient.friendlyError(e)));
             }
         }).start();
     }
@@ -481,12 +482,12 @@ public class StocktakeTab implements TabPage {
                     act.runOnUiThread(() -> {
                         saveBtn.setEnabled(true);
                         postBtn.setEnabled(true);
-                        Ui.toast(act, e.getMessage());
+                        Ui.toast(act, ApiClient.friendlyError(e));
                     });
                 }
             }).start();
         } catch (Exception e) {
-            Ui.toast(act, e.getMessage());
+            Ui.toast(act, ApiClient.friendlyError(e));
         }
     }
 
@@ -551,13 +552,23 @@ public class StocktakeTab implements TabPage {
         right.setGravity(Gravity.END);
         TextView bigNum = Ui.tv(act, cnt == null ? "—" : Ui.fmtQty(cnt), 24, Ui.ACCENT, true);
         right.addView(bigNum);
+
+        LinearLayout badges = Ui.row(act);
+        int boxStep = !p.units.isEmpty() ? p.units.get(0).rate : 5;
+        String boxLabel = !p.units.isEmpty() ? ("+" + p.units.get(0).name + "(" + boxStep + ")") : "+5";
+        TextView plusBoxBadge = Ui.badge(act, boxLabel, Ui.PRIMARY_SOFT, Ui.PRIMARY);
+        plusBoxBadge.setOnClickListener(v -> adjustCurrent(boxStep));
+        badges.addView(plusBoxBadge);
+
         if (cnt != null) {
             double diff = Math.round((cnt - book) * 100.0) / 100.0;
             String dStr = diff == 0 ? "相符" : (diff > 0 ? "盈+" + Ui.fmtQty(diff) : "亏" + Ui.fmtQty(diff));
             int bg = diff == 0 ? Ui.PRIMARY_SOFT : diff > 0 ? Ui.ACCENT_SOFT : Ui.DANGER_SOFT;
             int fg = diff == 0 ? Ui.PRIMARY : diff > 0 ? Ui.ACCENT : Ui.DANGER;
-            right.addView(Ui.badge(act, dStr, bg, fg));
+            badges.addView(Ui.space(act, 4, 1));
+            badges.addView(Ui.badge(act, dStr, bg, fg));
         }
+        right.addView(badges);
         row.addView(right);
         heroCard.addView(row);
     }
@@ -620,36 +631,45 @@ public class StocktakeTab implements TabPage {
 
     private void renderThumbBar() {
         thumbBar.removeAllViews();
+        boolean camOn = act.isCameraOpen();
+        Button bCam = Ui.btn(act, camOn ? "关相机" : "扫码盘点", camOn ? Ui.DANGER : Ui.PRIMARY, Color.WHITE);
+        bCam.setOnClickListener(v -> act.toggleCamera());
+
         Models.Product p = currentPid.isEmpty() ? null : store.productById.get(currentPid);
         if (p == null) {
-            Button newProdBtn = Ui.outlineBtn(act, "+ 快速新建商品", Ui.PRIMARY, Ui.PRIMARY);
+            bCam.setText(camOn ? "关闭相机" : "开启扫码盘点");
+            Button newProdBtn = Ui.outlineBtn(act, "+ 新建商品", Ui.ACCENT, Ui.ACCENT);
             newProdBtn.setOnClickListener(v -> openQuickNewForCode("", true));
-            thumbBar.addView(newProdBtn, new LinearLayout.LayoutParams(-1, Ui.dp(act, 44)));
+            if (store.leftHanded) {
+                thumbBar.addView(bCam, new LinearLayout.LayoutParams(0, Ui.dp(act, 46), 1.4f));
+                thumbBar.addView(Ui.space(act, 8, 1));
+                thumbBar.addView(newProdBtn, new LinearLayout.LayoutParams(0, Ui.dp(act, 46), 1));
+            } else {
+                thumbBar.addView(newProdBtn, new LinearLayout.LayoutParams(0, Ui.dp(act, 46), 1));
+                thumbBar.addView(Ui.space(act, 8, 1));
+                thumbBar.addView(bCam, new LinearLayout.LayoutParams(0, Ui.dp(act, 46), 1.4f));
+            }
             return;
         }
         Double cur = countedMap.get(p.id);
-        int boxStep = !p.units.isEmpty() ? p.units.get(0).rate : 5;
-        String boxLabel = !p.units.isEmpty() ? ("+" + p.units.get(0).name + "(" + boxStep + ")") : "+5";
-
+        bCam.setText(camOn ? "关相机" : "扫码");
         Button bMinus = Ui.outlineBtn(act, "-1", Ui.LINE, Ui.INK);
         Button bNum = Ui.btn(act, "实盘 " + (cur == null ? "—" : Ui.fmtQty(cur)), Ui.ACCENT_SOFT, Ui.ACCENT);
         Button bPlus1 = Ui.btn(act, "+1", Ui.PRIMARY, Color.WHITE);
-        Button bPlusBox = Ui.outlineBtn(act, boxLabel, Ui.PRIMARY, Ui.PRIMARY);
         Button bUndo = Ui.outlineBtn(act, "撤销", Ui.WARN, Ui.WARN);
 
         bMinus.setOnClickListener(v -> adjustCurrent(-1));
         bPlus1.setOnClickListener(v -> adjustCurrent(1));
-        bPlusBox.setOnClickListener(v -> adjustCurrent(boxStep));
         bNum.setOnClickListener(v -> openNumpadForCurrent());
         bUndo.setEnabled(!undoStack.isEmpty());
         bUndo.setOnClickListener(v -> undoLast());
 
         View[] order = store.leftHanded
-                ? new View[]{bPlus1, bNum, bMinus, bPlusBox, bUndo}
-                : new View[]{bUndo, bMinus, bNum, bPlus1, bPlusBox};
+                ? new View[]{bCam, bPlus1, bNum, bMinus, bUndo}
+                : new View[]{bUndo, bMinus, bNum, bPlus1, bCam};
         float[] weights = store.leftHanded
-                ? new float[]{1.1f, 1.3f, 0.9f, 1.1f, 0.9f}
-                : new float[]{0.9f, 0.9f, 1.3f, 1.1f, 1.1f};
+                ? new float[]{1.1f, 1.0f, 1.3f, 0.85f, 0.85f}
+                : new float[]{0.85f, 0.85f, 1.3f, 1.0f, 1.1f};
 
         for (int i = 0; i < order.length; i++) {
             Button b = (Button) order[i];
