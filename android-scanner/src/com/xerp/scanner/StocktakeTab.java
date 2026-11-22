@@ -104,7 +104,7 @@ public class StocktakeTab implements TabPage {
             store.savePrefs();
             if (store.blindMode && "diff".equals(filterMode)) filterMode = "done";
             renderAll();
-            act.speak(store.blindMode ? "已开启盲盘模式" : "已关闭盲盘模式");
+            if (act.tts != null) act.tts.speakCue(store.blindMode ? "已开启盲盘模式" : "已关闭盲盘模式", store.blindMode ? "blind_on" : "blind_off");
             Ui.toast(act, store.blindMode ? "已开启盲盘模式（隐藏账面库存与盈亏）" : "已关闭盲盘模式");
         });
 
@@ -118,7 +118,7 @@ public class StocktakeTab implements TabPage {
                 if (act.tts != null) act.tts.stop();
             } else if (act.tts != null) {
                 act.tts.warmUp();
-                act.tts.speakForce("语音播报已开启");
+                act.tts.speakForceCue("语音播报已开启", "tts_on");
             }
             renderAll();
         });
@@ -281,7 +281,7 @@ public class StocktakeTab implements TabPage {
         Models.BarcodeMatch match = store.findByCode(c);
         if (match == null) {
             act.scanner.feedbackUnknown();
-            act.speak("未找到条码");
+            if (act.tts != null) act.tts.speakCue("未找到条码", "not_found");
             pendingUnknownCode = c;
             showUnknownBanner();
             if (store.autoPromptNew) {
@@ -319,10 +319,12 @@ public class StocktakeTab implements TabPage {
         lastActionText = note;
         saveDraftNow();
         act.scanner.feedbackOk();
-        if (match.unit != null && Math.abs(addQty - match.rate()) < 1e-6) {
-            act.speak(TtsSpeaker.shortName(p.name) + "，加1" + match.unit.name + "，共" + Ui.fmtQty(next));
-        } else {
-            act.speak(TtsSpeaker.shortName(p.name) + "，加" + Ui.fmtQty(addQty) + "，共" + Ui.fmtQty(next));
+        if (act.tts != null) {
+            if (match.unit != null && Math.abs(addQty - match.rate()) < 1e-6) {
+                act.tts.speakCountAdd(p.name, match.unit.name, addQty, next);
+            } else {
+                act.tts.speakCountAdd(p.name, null, addQty, next);
+            }
         }
         renderAll();
     }
@@ -531,7 +533,7 @@ public class StocktakeTab implements TabPage {
                     act.refreshData(() -> {
                         saveBtn.setEnabled(true);
                         postBtn.setEnabled(true);
-                        act.speak(post ? "盘点已审核" : "盘点已保存");
+                        if (act.tts != null) act.tts.speakCue(post ? "盘点已审核" : "盘点已保存", post ? "posted" : "saved");
                         Ui.toast(act, post ? "盘点已审核，库存已更新" : "盘点进度已保存到服务器");
                     });
                 } catch (Exception e) {
@@ -779,7 +781,7 @@ public class StocktakeTab implements TabPage {
         countedMap.put(p.id, next);
         lastActionText = (delta > 0 ? "手动 +" : "手动 ") + Ui.fmtQty(delta);
         saveDraftNow();
-        act.speak((delta > 0 ? "加" : "减") + Ui.fmtQty(Math.abs(delta)) + "，共" + Ui.fmtQty(next));
+        if (act.tts != null) act.tts.speakDelta(delta, next);
         renderAll();
     }
 
@@ -797,7 +799,7 @@ public class StocktakeTab implements TabPage {
                     countedMap.put(p.id, val);
                     lastActionText = "键盘录入";
                     saveDraftNow();
-                    act.speak(TtsSpeaker.shortName(p.name) + "，实盘" + Ui.fmtQty(val));
+                    if (act.tts != null) act.tts.speakCountSet(p.name, val);
                     renderAll();
                 });
     }
@@ -819,7 +821,7 @@ public class StocktakeTab implements TabPage {
         currentPid = step.productId;
         lastActionText = "已撤销上一步";
         saveDraftNow();
-        act.speak(step.prevCount == null ? "已撤销" : "已撤销，恢复为" + Ui.fmtQty(step.prevCount));
+        if (act.tts != null) act.tts.speakUndo(step.prevCount);
         renderAll();
     }
 }

@@ -163,25 +163,51 @@ public class SettingsTab implements TabPage {
         // 1.5 Stocktake Mode & TTS Voice Card
         LinearLayout ttsCard = Ui.card(act, 14);
         ttsCard.addView(Ui.tv(act, "盘点模式与语音播报", 15, Ui.INK, true));
+        if (act.tts != null) {
+            TextView st = Ui.tv(act, act.tts.statusSummary(), 12, Ui.PRIMARY, false);
+            st.setPadding(0, Ui.dp(act, 4), 0, Ui.dp(act, 4));
+            ttsCard.addView(st);
+        }
         ttsCard.addView(toggleRow("盲盘模式（盘点隐藏账面库存与盈亏）", store.blindMode, on -> {
             store.blindMode = on;
             store.savePrefs();
             act.notifyDataChanged();
         }));
-        ttsCard.addView(toggleRow("TTS 本地语音播报（扫码实时念出品名与数量）", store.ttsEnabled, on -> {
+        ttsCard.addView(toggleRow("扫码语音播报（支持无系统 TTS 自动兜底）", store.ttsEnabled, on -> {
             store.ttsEnabled = on;
             store.savePrefs();
             if (!on) {
                 if (act.tts != null) act.tts.stop();
             } else if (act.tts != null) {
                 act.tts.warmUp();
-                act.tts.speakForce("语音播报已开启");
+                act.tts.speakForceCue("语音播报已开启", "tts_on");
             }
             act.notifyDataChanged();
         }));
 
+        LinearLayout engRow = Ui.row(act);
+        engRow.setPadding(0, Ui.dp(act, 8), 0, Ui.dp(act, 4));
+        engRow.addView(Ui.tv(act, "语音引擎", 13, Ui.INK, false), new LinearLayout.LayoutParams(0, -2, 1));
+        String[] engKeys = {"auto", "builtin"};
+        String[] engLabels = {"自动(优先系统)", "内置离线语音"};
+        for (int i = 0; i < engKeys.length; i++) {
+            final String ek = engKeys[i];
+            TextView ch = Ui.chip(act, engLabels[i], ek.equals(store.ttsEngineMode));
+            ch.setTextSize(12);
+            ch.setPadding(Ui.dp(act, 10), Ui.dp(act, 5), Ui.dp(act, 10), Ui.dp(act, 5));
+            ch.setOnClickListener(v -> {
+                store.ttsEngineMode = ek;
+                store.savePrefs();
+                if ("auto".equals(ek) && act.tts != null) act.tts.warmUp();
+                render();
+            });
+            engRow.addView(ch);
+            if (i < engKeys.length - 1) engRow.addView(Ui.space(act, 6, 1));
+        }
+        ttsCard.addView(engRow);
+
         LinearLayout rateRow = Ui.row(act);
-        rateRow.setPadding(0, Ui.dp(act, 10), 0, Ui.dp(act, 8));
+        rateRow.setPadding(0, Ui.dp(act, 8), 0, Ui.dp(act, 8));
         rateRow.addView(Ui.tv(act, "播报语速", 13, Ui.INK, false), new LinearLayout.LayoutParams(0, -2, 1));
         float[] rates = {1.0f, 1.2f, 1.5f};
         String[] rateLabels = {"正常 1.0x", "较快 1.2x", "极速 1.5x"};
@@ -210,6 +236,17 @@ public class SettingsTab implements TabPage {
         LinearLayout.LayoutParams ttlp = new LinearLayout.LayoutParams(-1, Ui.dp(act, 38));
         ttlp.topMargin = Ui.dp(act, 4);
         ttsCard.addView(bTestTts, ttlp);
+
+        Button bSysTts = Ui.outlineBtn(act, "系统 TTS 设置（选装引擎可念商品名）", Ui.LINE, Ui.MUTED);
+        bSysTts.setMinHeight(Ui.dp(act, 34));
+        bSysTts.setMinimumHeight(Ui.dp(act, 34));
+        bSysTts.setTextSize(12);
+        bSysTts.setOnClickListener(v -> {
+            if (act.tts != null) act.tts.openSystemTtsSettings(act);
+        });
+        LinearLayout.LayoutParams stlp = new LinearLayout.LayoutParams(-1, Ui.dp(act, 34));
+        stlp.topMargin = Ui.dp(act, 6);
+        ttsCard.addView(bSysTts, stlp);
         col.addView(ttsCard, clp);
 
         // 2. Scanner & One-hand Preferences

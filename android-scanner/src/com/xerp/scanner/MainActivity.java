@@ -202,8 +202,8 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
-    public void speak(String text) {
-        if (tts != null) tts.speak(text);
+    public void speakCue(String text, String clipKey) {
+        if (tts != null) tts.speakCue(text, clipKey);
     }
 
     public boolean isCameraOpen() {
