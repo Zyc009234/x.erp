@@ -53,7 +53,9 @@ public final class AppStore {
     public boolean autoPromptNew = true;
     public boolean leftHanded = false;
     public boolean pdaHidMode = true;
-    public String splashSubtitle = "智能扫码盘点 · 极速建档 · 全链路条码助手";
+    public static final String DEFAULT_SUBTITLE = "轻量开源进销存 · 单手扫码盘点";
+    public String splashTitle = "";
+    public String splashSubtitle = DEFAULT_SUBTITLE;
 
     private Bitmap cachedLogo;
     private boolean logoLoaded = false;
@@ -103,6 +105,7 @@ public final class AppStore {
         autoPromptNew = prefs.getBoolean("autoPromptNew", true);
         leftHanded = prefs.getBoolean("leftHanded", false);
         pdaHidMode = prefs.getBoolean("pdaHidMode", true);
+        splashTitle = prefs.getString("splashTitle", "");
         String sub = prefs.getString("splashSubtitle", "");
         if (!sub.isEmpty()) splashSubtitle = sub;
         try {
@@ -165,8 +168,26 @@ public final class AppStore {
                 .putBoolean("autoPromptNew", autoPromptNew)
                 .putBoolean("leftHanded", leftHanded)
                 .putBoolean("pdaHidMode", pdaHidMode)
+                .putString("splashTitle", splashTitle == null ? "" : splashTitle)
                 .putString("splashSubtitle", splashSubtitle == null ? "" : splashSubtitle)
                 .apply();
+    }
+
+    public String effectiveSplashTitle() {
+        if (splashTitle != null && !splashTitle.trim().isEmpty()) {
+            return splashTitle.trim();
+        }
+        if (hasCustomLogo() && companyName != null) {
+            String co = companyName.trim();
+            if (!co.isEmpty() && !co.contains("示例") && !"默认公司".equals(co)) {
+                return co;
+            }
+        }
+        return "x.erp";
+    }
+
+    public boolean isDefaultBrand() {
+        return "x.erp".equals(effectiveSplashTitle());
     }
 
     private File companyLogoFile() {

@@ -9,6 +9,9 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -68,8 +71,15 @@ public class LoginActivity extends Activity {
         logoView.setOnClickListener(v -> onLogoClick());
         hero.addView(logoView, new LinearLayout.LayoutParams(lSize, lSize));
 
-        String coTitle = store.companyName != null && !store.companyName.isEmpty() ? store.companyName : "x.erp 盘点助手";
-        TextView brand = Ui.tv(this, coTitle, 22, Ui.INK, true);
+        String coTitle = store.effectiveSplashTitle();
+        TextView brand = Ui.tv(this, coTitle, store.isDefaultBrand() ? 26 : 22, Ui.INK, true);
+        if (store.isDefaultBrand()) {
+            SpannableString wm = new SpannableString("x.erp");
+            wm.setSpan(new ForegroundColorSpan(0xFF059669), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            wm.setSpan(new ForegroundColorSpan(0xFF0EA5E9), 1, 2, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            wm.setSpan(new ForegroundColorSpan(0xFF0F172A), 2, 5, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            brand.setText(wm);
+        }
         brand.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams blp0 = new LinearLayout.LayoutParams(-2, -2);
         blp0.topMargin = Ui.dp(this, 12);

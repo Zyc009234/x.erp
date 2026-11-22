@@ -51,10 +51,11 @@ public class SettingsTab implements TabPage {
         bRow.addView(Ui.space(act, 12, 1));
         LinearLayout bInfo = Ui.col(act);
         boolean hasCustom = store.hasCustomLogo();
+        boolean hasCustomBrand = hasCustom || !store.splashTitle.trim().isEmpty()
+                || !AppStore.DEFAULT_SUBTITLE.equals(store.splashSubtitle);
         bInfo.addView(Ui.badge(act, hasCustom ? "自定义公司 Logo" : "默认 x.erp Logo",
                 hasCustom ? Ui.ACCENT_SOFT : Ui.PRIMARY_SOFT, hasCustom ? Ui.ACCENT : Ui.PRIMARY));
-        String coTitle = !store.companyName.isEmpty() ? store.companyName : "x.erp 盘点";
-        bInfo.addView(Ui.tv(act, coTitle, 15, Ui.INK, true));
+        bInfo.addView(Ui.tv(act, store.effectiveSplashTitle(), 16, Ui.INK, true));
         bInfo.addView(Ui.tv(act, store.splashSubtitle, 12, Ui.MUTED, false));
         bRow.addView(bInfo, new LinearLayout.LayoutParams(0, -2, 1));
         brand.addView(bRow);
@@ -74,32 +75,49 @@ public class SettingsTab implements TabPage {
         bBtns.addView(bChange, new LinearLayout.LayoutParams(0, Ui.dp(act, 38), 1));
         bBtns.addView(Ui.space(act, 6, 1));
         bBtns.addView(bPreview, new LinearLayout.LayoutParams(0, Ui.dp(act, 38), 1));
-        if (hasCustom) {
+        if (hasCustomBrand) {
             Button bReset = Ui.outlineBtn(act, "恢复默认", Ui.WARN, Ui.WARN);
             bReset.setMinHeight(Ui.dp(act, 38)); bReset.setMinimumHeight(Ui.dp(act, 38)); bReset.setTextSize(13);
             bReset.setOnClickListener(v -> {
                 store.clearCustomLogo();
+                store.splashTitle = "";
+                store.splashSubtitle = AppStore.DEFAULT_SUBTITLE;
+                store.savePrefs();
                 act.refreshBrandLogo();
                 render();
-                Ui.toast(act, "已恢复默认 x.erp Logo");
+                Ui.toast(act, "已恢复默认 x.erp 启动页与 Logo");
             });
             bBtns.addView(Ui.space(act, 6, 1));
             bBtns.addView(bReset, new LinearLayout.LayoutParams(0, Ui.dp(act, 38), 0.9f));
         }
         brand.addView(bBtns);
 
-        Button bSub = Ui.outlineBtn(act, "修改启动页标语", Ui.LINE, Ui.MUTED);
+        Button bSub = Ui.outlineBtn(act, "修改启动页名称与标语", Ui.LINE, Ui.MUTED);
         bSub.setMinHeight(Ui.dp(act, 36)); bSub.setMinimumHeight(Ui.dp(act, 36)); bSub.setTextSize(12);
         bSub.setOnClickListener(v -> {
-            EditText et = Ui.input(act, "留空恢复默认标语");
-            et.setText(store.splashSubtitle);
-            new AlertDialog.Builder(act).setTitle("修改启动页标语").setView(et)
+            LinearLayout box = Ui.col(act);
+            int pad = Ui.dp(act, 16);
+            box.setPadding(pad, Ui.dp(act, 8), pad, 0);
+            box.addView(Ui.tv(act, "启动页主标题（留空默认显示 x.erp）", 12, Ui.MUTED, false));
+            EditText etTitle = Ui.input(act, "x.erp");
+            etTitle.setSingleLine(true);
+            etTitle.setText(store.splashTitle);
+            box.addView(etTitle);
+            LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(-1, -2);
+            tlp.topMargin = Ui.dp(act, 10);
+            box.addView(Ui.tv(act, "启动页副标题 / 标语", 12, Ui.MUTED, false), tlp);
+            EditText etSub = Ui.input(act, AppStore.DEFAULT_SUBTITLE);
+            etSub.setSingleLine(true);
+            etSub.setText(store.splashSubtitle);
+            box.addView(etSub);
+            new AlertDialog.Builder(act).setTitle("自定义启动页文字").setView(box)
                     .setPositiveButton("保存", (d, w) -> {
-                        String s = et.getText().toString().trim();
-                        store.splashSubtitle = s.isEmpty() ? "智能扫码盘点 · 极速建档 · 全链路条码助手" : s;
+                        store.splashTitle = etTitle.getText().toString().trim();
+                        String s = etSub.getText().toString().trim();
+                        store.splashSubtitle = s.isEmpty() ? AppStore.DEFAULT_SUBTITLE : s;
                         store.savePrefs();
                         render();
-                        Ui.toast(act, "启动页标语已更新");
+                        Ui.toast(act, "启动页设置已更新");
                     }).setNegativeButton("取消", null).show();
         });
         LinearLayout.LayoutParams sblp = new LinearLayout.LayoutParams(-1, Ui.dp(act, 36));
