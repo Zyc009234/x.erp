@@ -118,6 +118,7 @@ public class LookupTab implements TabPage {
             activeProduct = m.product;
             activeUnit = m.unit;
             act.scanner.feedbackOk();
+            act.speak(TtsSpeaker.shortName(m.product.name) + "，库存" + Ui.fmtQty(m.product.whQty(store.selectedWh)) + m.product.unit);
             renderView();
             return;
         }
@@ -126,6 +127,7 @@ public class LookupTab implements TabPage {
             activeSerial = sr;
             activeProduct = store.productById.get(sr.productId);
             act.scanner.feedbackOk();
+            act.speak("序列号，" + sr.status);
             renderView();
             return;
         }
@@ -134,12 +136,14 @@ public class LookupTab implements TabPage {
             activeBatches = br;
             activeProduct = store.productById.get(br.get(0).productId);
             act.scanner.feedbackOk();
+            act.speak("找到" + br.size() + "条批次记录");
             renderView();
             return;
         }
 
         unknownCode = c;
         act.scanner.feedbackUnknown();
+        act.speak("未收录条码");
         renderView();
         if (store.autoPromptNew) openEditor(null, c);
     }

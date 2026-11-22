@@ -160,6 +160,58 @@ public class SettingsTab implements TabPage {
 
         col.addView(acc, clp);
 
+        // 1.5 Stocktake Mode & TTS Voice Card
+        LinearLayout ttsCard = Ui.card(act, 14);
+        ttsCard.addView(Ui.tv(act, "盘点模式与语音播报", 15, Ui.INK, true));
+        ttsCard.addView(toggleRow("盲盘模式（盘点隐藏账面库存与盈亏）", store.blindMode, on -> {
+            store.blindMode = on;
+            store.savePrefs();
+            act.notifyDataChanged();
+        }));
+        ttsCard.addView(toggleRow("TTS 本地语音播报（扫码实时念出品名与数量）", store.ttsEnabled, on -> {
+            store.ttsEnabled = on;
+            store.savePrefs();
+            if (!on) {
+                if (act.tts != null) act.tts.stop();
+            } else if (act.tts != null) {
+                act.tts.warmUp();
+                act.tts.speakForce("语音播报已开启");
+            }
+            act.notifyDataChanged();
+        }));
+
+        LinearLayout rateRow = Ui.row(act);
+        rateRow.setPadding(0, Ui.dp(act, 10), 0, Ui.dp(act, 8));
+        rateRow.addView(Ui.tv(act, "播报语速", 13, Ui.INK, false), new LinearLayout.LayoutParams(0, -2, 1));
+        float[] rates = {1.0f, 1.2f, 1.5f};
+        String[] rateLabels = {"正常 1.0x", "较快 1.2x", "极速 1.5x"};
+        for (int i = 0; i < rates.length; i++) {
+            final float rv = rates[i];
+            TextView ch = Ui.chip(act, rateLabels[i], Math.abs(store.ttsRate - rv) < 0.05f);
+            ch.setTextSize(12);
+            ch.setPadding(Ui.dp(act, 10), Ui.dp(act, 5), Ui.dp(act, 10), Ui.dp(act, 5));
+            ch.setOnClickListener(v -> {
+                store.ttsRate = rv;
+                store.savePrefs();
+                render();
+            });
+            rateRow.addView(ch);
+            if (i < rates.length - 1) rateRow.addView(Ui.space(act, 6, 1));
+        }
+        ttsCard.addView(rateRow);
+
+        Button bTestTts = Ui.outlineBtn(act, "试听语音播报", Ui.PRIMARY, Ui.PRIMARY);
+        bTestTts.setMinHeight(Ui.dp(act, 38));
+        bTestTts.setMinimumHeight(Ui.dp(act, 38));
+        bTestTts.setTextSize(13);
+        bTestTts.setOnClickListener(v -> {
+            if (act.tts != null) act.tts.speakTest(act);
+        });
+        LinearLayout.LayoutParams ttlp = new LinearLayout.LayoutParams(-1, Ui.dp(act, 38));
+        ttlp.topMargin = Ui.dp(act, 4);
+        ttsCard.addView(bTestTts, ttlp);
+        col.addView(ttsCard, clp);
+
         // 2. Scanner & One-hand Preferences
         LinearLayout pref = Ui.card(act, 14);
         pref.addView(Ui.tv(act, "扫码与单手偏好", 15, Ui.INK, true));

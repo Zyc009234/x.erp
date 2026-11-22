@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
 
     public AppStore store;
     public CameraScannerView scanner;
+    public TtsSpeaker tts;
 
     private BrandLogoView topLogo;
     private TextView whPill, coPill, camPill, manualBtn, syncBtn;
@@ -70,6 +71,7 @@ public class MainActivity extends Activity {
             finish();
             return;
         }
+        tts = new TtsSpeaker(this, store);
 
         LinearLayout root = Ui.col(this);
         root.setBackgroundColor(Ui.BG);
@@ -187,10 +189,21 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         scanner.stopCamera();
+        if (tts != null) tts.stop();
         if (cameraOpen && !photoAiming && oneShotCallback == null) {
             setCameraOpen(false);
         }
         super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (tts != null) tts.shutdown();
+        super.onDestroy();
+    }
+
+    public void speak(String text) {
+        if (tts != null) tts.speak(text);
     }
 
     public boolean isCameraOpen() {

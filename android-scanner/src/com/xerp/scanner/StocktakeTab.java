@@ -35,8 +35,10 @@ public class StocktakeTab implements TabPage {
     private final LinearLayout root;
 
     private TextView docBtn, saveBtn, postBtn;
+    private TextView modeHintTv, blindToggleBtn, ttsToggleBtn;
     private LinearLayout unknownBanner, heroCard, listCol, thumbBar;
     private TextView filterAll, filterDone, filterDiff, filterTodo;
+    private View diffSpacer;
     private ScrollView listScroll;
 
     private Models.CheckDoc activeDoc;
@@ -87,6 +89,47 @@ public class StocktakeTab implements TabPage {
         root.addView(top);
         root.addView(Ui.divider(act));
 
+        // 1.5 Compact Stocktake Mode Bar (Blind Count + TTS Toggle)
+        LinearLayout modeBar = Ui.row(act);
+        modeBar.setBackgroundColor(0xFFFAFAFA);
+        modeBar.setPadding(Ui.dp(act, 10), Ui.dp(act, 5), Ui.dp(act, 10), Ui.dp(act, 5));
+        modeHintTv = Ui.tv(act, "", 12, Ui.MUTED, false);
+        modeHintTv.setSingleLine(true);
+
+        blindToggleBtn = Ui.badge(act, "盲盘", Color.WHITE, Ui.MUTED);
+        blindToggleBtn.setTextSize(11);
+        blindToggleBtn.setPadding(Ui.dp(act, 9), Ui.dp(act, 4), Ui.dp(act, 9), Ui.dp(act, 4));
+        blindToggleBtn.setOnClickListener(v -> {
+            store.blindMode = !store.blindMode;
+            store.savePrefs();
+            if (store.blindMode && "diff".equals(filterMode)) filterMode = "done";
+            renderAll();
+            act.speak(store.blindMode ? "已开启盲盘模式" : "已关闭盲盘模式");
+            Ui.toast(act, store.blindMode ? "已开启盲盘模式（隐藏账面库存与盈亏）" : "已关闭盲盘模式");
+        });
+
+        ttsToggleBtn = Ui.badge(act, "语音 开", Ui.PRIMARY_SOFT, Ui.PRIMARY);
+        ttsToggleBtn.setTextSize(11);
+        ttsToggleBtn.setPadding(Ui.dp(act, 9), Ui.dp(act, 4), Ui.dp(act, 9), Ui.dp(act, 4));
+        ttsToggleBtn.setOnClickListener(v -> {
+            store.ttsEnabled = !store.ttsEnabled;
+            store.savePrefs();
+            if (!store.ttsEnabled) {
+                if (act.tts != null) act.tts.stop();
+            } else if (act.tts != null) {
+                act.tts.warmUp();
+                act.tts.speakForce("语音播报已开启");
+            }
+            renderAll();
+        });
+
+        modeBar.addView(modeHintTv, new LinearLayout.LayoutParams(0, -2, 1));
+        modeBar.addView(blindToggleBtn);
+        modeBar.addView(Ui.space(act, 6, 1));
+        modeBar.addView(ttsToggleBtn);
+        root.addView(modeBar);
+        root.addView(Ui.divider(act));
+
         // 2. Unknown barcode banner (hidden unless needed)
         unknownBanner = Ui.row(act);
         unknownBanner.setBackgroundColor(Ui.WARN_SOFT);
@@ -112,8 +155,9 @@ public class StocktakeTab implements TabPage {
         filterTodo.setOnClickListener(v -> setFilter("todo"));
         filterAll.setOnClickListener(v -> setFilter("all"));
 
+        diffSpacer = Ui.space(act, 6, 1);
         fBar.addView(filterDone); fBar.addView(Ui.space(act, 6, 1));
-        fBar.addView(filterDiff); fBar.addView(Ui.space(act, 6, 1));
+        fBar.addView(filterDiff); fBar.addView(diffSpacer);
         fBar.addView(filterTodo); fBar.addView(Ui.space(act, 6, 1));
         fBar.addView(filterAll);
         root.addView(fBar);
@@ -237,6 +281,7 @@ public class StocktakeTab implements TabPage {
         Models.BarcodeMatch match = store.findByCode(c);
         if (match == null) {
             act.scanner.feedbackUnknown();
+            act.speak("未找到条码");
             pendingUnknownCode = c;
             showUnknownBanner();
             if (store.autoPromptNew) {
@@ -274,6 +319,11 @@ public class StocktakeTab implements TabPage {
         lastActionText = note;
         saveDraftNow();
         act.scanner.feedbackOk();
+        if (match.unit != null && Math.abs(addQty - match.rate()) < 1e-6) {
+            act.speak(TtsSpeaker.shortName(p.name) + "，加1" + match.unit.name + "，共" + Ui.fmtQty(next));
+        } else {
+            act.speak(TtsSpeaker.shortName(p.name) + "，加" + Ui.fmtQty(addQty) + "，共" + Ui.fmtQty(next));
+        }
         renderAll();
     }
 
@@ -422,18 +472,23 @@ public class StocktakeTab implements TabPage {
         if (post) {
             int n = 0;
             double gain = 0, loss = 0;
+            double totalCounted = 0;
             for (Models.CheckLine l : activeDoc.lines) {
                 Double c = countedMap.get(l.productId);
                 if (c == null) continue;
                 n++;
+                totalCounted += c;
                 Models.Product p = store.productById.get(l.productId);
                 double book = p != null ? p.whQty(activeDoc.wh) : l.book;
                 double d = c - book;
                 if (d > 0) gain += d; else loss -= d;
             }
+            String msg = store.blindMode
+                    ? "盲盘模式：已盘 " + n + " 项（实盘合计 " + Ui.fmtQty(totalCounted) + "）\n\n审核后将按实盘数自动计算盈亏并调整库存。\n如需核对差异，可先点「保存」或关闭盲盘查看。"
+                    : "已盘 " + n + " 项\n预计盘盈：+" + Ui.fmtQty(gain) + "\n预计盘亏：-" + Ui.fmtQty(loss) + "\n\n审核后将直接按实盘数调整库存。";
             new AlertDialog.Builder(act)
                     .setTitle("确认审核盘点单 " + activeDoc.no)
-                    .setMessage("已盘 " + n + " 项\n预计盘盈：+" + Ui.fmtQty(gain) + "\n预计盘亏：-" + Ui.fmtQty(loss) + "\n\n审核后将直接按实盘数调整库存。")
+                    .setMessage(msg)
                     .setPositiveButton("确定审核", (d, w) -> performSync(true))
                     .setNegativeButton("取消", null)
                     .show();
@@ -476,6 +531,7 @@ public class StocktakeTab implements TabPage {
                     act.refreshData(() -> {
                         saveBtn.setEnabled(true);
                         postBtn.setEnabled(true);
+                        act.speak(post ? "盘点已审核" : "盘点已保存");
                         Ui.toast(act, post ? "盘点已审核，库存已更新" : "盘点进度已保存到服务器");
                     });
                 } catch (Exception e) {
@@ -492,6 +548,24 @@ public class StocktakeTab implements TabPage {
     }
 
     private void renderAll() {
+        if (store.blindMode && "diff".equals(filterMode)) {
+            filterMode = "done";
+        }
+        modeHintTv.setText(store.blindMode ? "盲盘中 · 已隐藏账面库存与盈亏" : "明盘 · 显示账面库存与盈亏");
+        modeHintTv.setTextColor(store.blindMode ? Ui.WARN : Ui.MUTED);
+        modeHintTv.setTypeface(android.graphics.Typeface.DEFAULT, store.blindMode ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+
+        blindToggleBtn.setText(store.blindMode ? "盲盘 开" : "盲盘");
+        blindToggleBtn.setTextColor(store.blindMode ? Color.WHITE : Ui.MUTED);
+        blindToggleBtn.setBackground(store.blindMode ? Ui.rounded(act, Ui.WARN, 12) : Ui.outlined(act, Color.WHITE, Ui.LINE, 1, 12));
+
+        ttsToggleBtn.setText(store.ttsEnabled ? "语音 开" : "静音");
+        ttsToggleBtn.setTextColor(store.ttsEnabled ? Ui.PRIMARY : Ui.MUTED);
+        ttsToggleBtn.setBackground(store.ttsEnabled ? Ui.outlined(act, Ui.PRIMARY_SOFT, Ui.PRIMARY, 1, 12) : Ui.rounded(act, Ui.CHIP_BG, 12));
+
+        filterDiff.setVisibility(store.blindMode ? View.GONE : View.VISIBLE);
+        diffSpacer.setVisibility(store.blindMode ? View.GONE : View.VISIBLE);
+
         if (activeDoc == null) {
             docBtn.setText("无进行中盘点单（点此新建）▾");
             saveBtn.setVisibility(View.GONE);
@@ -544,8 +618,10 @@ public class StocktakeTab implements TabPage {
         TextView name = Ui.tv(act, p.name + (p.spec.isEmpty() ? "" : " · " + p.spec), 15, Ui.INK, true);
         name.setMaxLines(1);
         left.addView(name);
-        String meta = "账面 " + Ui.fmtQty(book) + " " + p.unit + (lastActionText.isEmpty() ? "" : " · " + lastActionText);
-        left.addView(Ui.tv(act, meta, 12, Ui.PRIMARY, false));
+        String meta = store.blindMode
+                ? ("盲盘中 · 单位 " + p.unit + (lastActionText.isEmpty() ? "" : " · " + lastActionText))
+                : ("账面 " + Ui.fmtQty(book) + " " + p.unit + (lastActionText.isEmpty() ? "" : " · " + lastActionText));
+        left.addView(Ui.tv(act, meta, 12, store.blindMode ? Ui.WARN : Ui.PRIMARY, false));
         row.addView(left, new LinearLayout.LayoutParams(0, -2, 1));
 
         LinearLayout right = Ui.col(act);
@@ -561,12 +637,16 @@ public class StocktakeTab implements TabPage {
         badges.addView(plusBoxBadge);
 
         if (cnt != null) {
-            double diff = Math.round((cnt - book) * 100.0) / 100.0;
-            String dStr = diff == 0 ? "相符" : (diff > 0 ? "盈+" + Ui.fmtQty(diff) : "亏" + Ui.fmtQty(diff));
-            int bg = diff == 0 ? Ui.PRIMARY_SOFT : diff > 0 ? Ui.ACCENT_SOFT : Ui.DANGER_SOFT;
-            int fg = diff == 0 ? Ui.PRIMARY : diff > 0 ? Ui.ACCENT : Ui.DANGER;
             badges.addView(Ui.space(act, 4, 1));
-            badges.addView(Ui.badge(act, dStr, bg, fg));
+            if (store.blindMode) {
+                badges.addView(Ui.badge(act, "已盘", Ui.PRIMARY_SOFT, Ui.PRIMARY));
+            } else {
+                double diff = Math.round((cnt - book) * 100.0) / 100.0;
+                String dStr = diff == 0 ? "相符" : (diff > 0 ? "盈+" + Ui.fmtQty(diff) : "亏" + Ui.fmtQty(diff));
+                int bg = diff == 0 ? Ui.PRIMARY_SOFT : diff > 0 ? Ui.ACCENT_SOFT : Ui.DANGER_SOFT;
+                int fg = diff == 0 ? Ui.PRIMARY : diff > 0 ? Ui.ACCENT : Ui.DANGER;
+                badges.addView(Ui.badge(act, dStr, bg, fg));
+            }
         }
         right.addView(badges);
         row.addView(right);
@@ -585,7 +665,7 @@ public class StocktakeTab implements TabPage {
             double diff = c == null ? 0 : Math.round((c - book) * 100.0) / 100.0;
             if ("done".equals(filterMode) && c == null) continue;
             if ("todo".equals(filterMode) && c != null) continue;
-            if ("diff".equals(filterMode) && (c == null || Math.abs(diff) < 1e-6)) continue;
+            if (!store.blindMode && "diff".equals(filterMode) && (c == null || Math.abs(diff) < 1e-6)) continue;
 
             boolean sel = p.id.equals(currentPid);
             LinearLayout r = Ui.row(act);
@@ -596,16 +676,23 @@ public class StocktakeTab implements TabPage {
             TextView tn = Ui.tv(act, p.name, 14, Ui.INK, true);
             tn.setMaxLines(1);
             info.addView(tn);
-            info.addView(Ui.tv(act, p.sku + " · 账面 " + Ui.fmtQty(book) + " " + p.unit, 12, Ui.MUTED, false));
+            String subText = store.blindMode
+                    ? (p.sku + (p.spec.isEmpty() ? "" : " · " + p.spec) + " · " + p.unit)
+                    : (p.sku + " · 账面 " + Ui.fmtQty(book) + " " + p.unit);
+            info.addView(Ui.tv(act, subText, 12, Ui.MUTED, false));
             r.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
 
             if (c != null) {
-                r.addView(Ui.tv(act, Ui.fmtQty(c), 16, Ui.INK, true));
+                r.addView(Ui.tv(act, Ui.fmtQty(c) + (store.blindMode ? " " + p.unit : ""), 16, Ui.INK, true));
                 r.addView(Ui.space(act, 6, 1));
-                String dStr = diff == 0 ? "平" : (diff > 0 ? "+" + Ui.fmtQty(diff) : Ui.fmtQty(diff));
-                int bg = diff == 0 ? Ui.PRIMARY_SOFT : diff > 0 ? Ui.ACCENT_SOFT : Ui.DANGER_SOFT;
-                int fg = diff == 0 ? Ui.PRIMARY : diff > 0 ? Ui.ACCENT : Ui.DANGER;
-                r.addView(Ui.badge(act, dStr, bg, fg));
+                if (store.blindMode) {
+                    r.addView(Ui.badge(act, "已盘", Ui.PRIMARY_SOFT, Ui.PRIMARY));
+                } else {
+                    String dStr = diff == 0 ? "平" : (diff > 0 ? "+" + Ui.fmtQty(diff) : Ui.fmtQty(diff));
+                    int bg = diff == 0 ? Ui.PRIMARY_SOFT : diff > 0 ? Ui.ACCENT_SOFT : Ui.DANGER_SOFT;
+                    int fg = diff == 0 ? Ui.PRIMARY : diff > 0 ? Ui.ACCENT : Ui.DANGER;
+                    r.addView(Ui.badge(act, dStr, bg, fg));
+                }
             } else {
                 r.addView(Ui.badge(act, "未盘", Ui.CHIP_BG, Ui.MUTED));
             }
@@ -692,6 +779,7 @@ public class StocktakeTab implements TabPage {
         countedMap.put(p.id, next);
         lastActionText = (delta > 0 ? "手动 +" : "手动 ") + Ui.fmtQty(delta);
         saveDraftNow();
+        act.speak((delta > 0 ? "加" : "减") + Ui.fmtQty(Math.abs(delta)) + "，共" + Ui.fmtQty(next));
         renderAll();
     }
 
@@ -700,13 +788,16 @@ public class StocktakeTab implements TabPage {
         Models.Product p = store.productById.get(currentPid);
         if (p == null) return;
         double book = p.whQty(activeDoc.wh);
-        ThumbNumpadDialog.show(act, p.name, "账面：" + Ui.fmtQty(book) + " " + p.unit,
-                countedMap.get(p.id), book, p.dec, val -> {
+        String numSub = store.blindMode ? ("盲盘模式 · 单位：" + p.unit) : ("账面：" + Ui.fmtQty(book) + " " + p.unit);
+        Double numBook = store.blindMode ? null : book;
+        ThumbNumpadDialog.show(act, p.name, numSub,
+                countedMap.get(p.id), numBook, p.dec, val -> {
                     Double prev = countedMap.get(p.id);
                     undoStack.add(new UndoStep(p.id, prev, false));
                     countedMap.put(p.id, val);
                     lastActionText = "键盘录入";
                     saveDraftNow();
+                    act.speak(TtsSpeaker.shortName(p.name) + "，实盘" + Ui.fmtQty(val));
                     renderAll();
                 });
     }
@@ -728,6 +819,7 @@ public class StocktakeTab implements TabPage {
         currentPid = step.productId;
         lastActionText = "已撤销上一步";
         saveDraftNow();
+        act.speak(step.prevCount == null ? "已撤销" : "已撤销，恢复为" + Ui.fmtQty(step.prevCount));
         renderAll();
     }
 }

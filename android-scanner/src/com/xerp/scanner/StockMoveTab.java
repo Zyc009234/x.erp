@@ -187,6 +187,7 @@ public class StockMoveTab implements TabPage {
         Models.BarcodeMatch match = store.findByCode(c);
         if (match == null) {
             act.scanner.feedbackUnknown();
+            act.speak("未找到条码");
             pendingUnknown = c;
             showUnknownBanner();
             if ("in".equals(mode) && store.autoPromptNew) {
@@ -206,6 +207,7 @@ public class StockMoveTab implements TabPage {
         if (p == null) return;
         if (item.serials.contains(sn)) {
             act.scanner.feedbackError();
+            act.speak("重复序列号");
             Ui.toast(act, "重复序列号：" + sn);
             return;
         }
@@ -213,12 +215,14 @@ public class StockMoveTab implements TabPage {
         if ("in".equals(mode)) {
             if (rec != null && "在库".equals(rec.status)) {
                 act.scanner.feedbackError();
+                act.speak("序列号异常");
                 Ui.toast(act, "该序列号已在库：" + sn);
                 return;
             }
         } else {
             if (rec == null || !rec.productId.equals(p.id) || !"在库".equals(rec.status) || !rec.wh.equals(store.selectedWh)) {
                 act.scanner.feedbackError();
+                act.speak("序列号异常");
                 Ui.toast(act, "该序列号不在当前仓库在库列表");
                 return;
             }
@@ -226,6 +230,7 @@ public class StockMoveTab implements TabPage {
         item.serials.add(sn);
         item.qty = item.serials.size();
         act.scanner.feedbackOk();
+        act.speak("序列号已扫，共" + item.serials.size() + "件");
         if (onSerialSheetUpdate != null) onSerialSheetUpdate.run();
         renderAll();
     }
@@ -249,6 +254,7 @@ public class StockMoveTab implements TabPage {
                 activeIdx = idx;
             }
             act.scanner.feedbackOk();
+            act.speak(TtsSpeaker.shortName(p.name) + "，请扫序列号");
             renderAll();
             openSerialSheet(cart.get(activeIdx), p);
             return;
@@ -271,10 +277,19 @@ public class StockMoveTab implements TabPage {
             activeIdx = 0;
         }
 
+        boolean lowStock = false;
         if (!"in".equals(mode)) {
             double avail = p.whQty(store.selectedWh);
             double need = cart.get(activeIdx).baseQty();
-            if (need > avail + 1e-6) Ui.toast(act, "注意：当前仓仅剩 " + Ui.fmtQty(avail) + " " + p.unit);
+            if (need > avail + 1e-6) {
+                lowStock = true;
+                Ui.toast(act, "注意：当前仓仅剩 " + Ui.fmtQty(avail) + " " + p.unit);
+                act.speak(TtsSpeaker.shortName(p.name) + "，库存不足，仅剩" + Ui.fmtQty(avail));
+            }
+        }
+        if (!lowStock) {
+            String verb = "in".equals(mode) ? "入库" : "out".equals(mode) ? "出库" : "调拨";
+            act.speak(TtsSpeaker.shortName(p.name) + "，" + verb + Ui.fmtQty(cart.get(activeIdx).qty) + uName);
         }
         act.scanner.feedbackOk();
         renderAll();
@@ -598,6 +613,7 @@ public class StockMoveTab implements TabPage {
                         activeIdx = -1;
                         remark = "";
                         act.scanner.feedbackOk();
+                        act.speak("单据已提交");
                         Ui.toast(act, "单据已提交：" + no);
                         renderAll();
                     });

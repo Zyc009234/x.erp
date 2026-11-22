@@ -53,6 +53,9 @@ public final class AppStore {
     public boolean autoPromptNew = true;
     public boolean leftHanded = false;
     public boolean pdaHidMode = true;
+    public boolean ttsEnabled = true;
+    public float ttsRate = 1.2f;
+    public boolean blindMode = false;
     public static final String DEFAULT_SUBTITLE = "轻量开源进销存 · 单手扫码盘点";
     public String splashTitle = "";
     public String splashSubtitle = DEFAULT_SUBTITLE;
@@ -105,6 +108,9 @@ public final class AppStore {
         autoPromptNew = prefs.getBoolean("autoPromptNew", true);
         leftHanded = prefs.getBoolean("leftHanded", false);
         pdaHidMode = prefs.getBoolean("pdaHidMode", true);
+        ttsEnabled = prefs.getBoolean("ttsEnabled", true);
+        ttsRate = prefs.getFloat("ttsRate", 1.2f);
+        blindMode = prefs.getBoolean("blindMode", false);
         splashTitle = prefs.getString("splashTitle", "");
         String sub = prefs.getString("splashSubtitle", "");
         if (!sub.isEmpty()) splashSubtitle = sub;
@@ -168,6 +174,9 @@ public final class AppStore {
                 .putBoolean("autoPromptNew", autoPromptNew)
                 .putBoolean("leftHanded", leftHanded)
                 .putBoolean("pdaHidMode", pdaHidMode)
+                .putBoolean("ttsEnabled", ttsEnabled)
+                .putFloat("ttsRate", ttsRate)
+                .putBoolean("blindMode", blindMode)
                 .putString("splashTitle", splashTitle == null ? "" : splashTitle)
                 .putString("splashSubtitle", splashSubtitle == null ? "" : splashSubtitle)
                 .apply();
