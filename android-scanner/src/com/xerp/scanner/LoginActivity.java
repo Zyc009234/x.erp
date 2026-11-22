@@ -4,7 +4,9 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
@@ -23,7 +25,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class LoginActivity extends Activity {
+    private static final int REQ_PICK_LOGO = 201;
+
     private AppStore store;
+    private BrandLogoView logoView;
     private EditText etServer, etUser, etPass;
     private LinearLayout recentRow, coBox;
     private TextView coPick;
@@ -52,12 +57,32 @@ public class LoginActivity extends Activity {
         root.setPadding(Ui.dp(this, 20), Ui.dp(this, 28), Ui.dp(this, 20), Ui.dp(this, 24));
         sv.addView(root);
 
-        // Header
-        TextView brand = Ui.tv(this, "x.erp 盘点助手", 26, Ui.PRIMARY, true);
-        TextView sub = Ui.tv(this, "单手扫码盘点 · 快速建档录新 · 全功能条码工具", 13, Ui.MUTED, false);
-        sub.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 20));
-        root.addView(brand);
-        root.addView(sub);
+        // Brand Header Showcase
+        LinearLayout hero = Ui.col(this);
+        hero.setGravity(Gravity.CENTER_HORIZONTAL);
+        hero.setPadding(0, 0, 0, Ui.dp(this, 18));
+
+        logoView = new BrandLogoView(this, store);
+        int lSize = Ui.dp(this, 76);
+        logoView.setElevation(Ui.dp(this, 6));
+        logoView.setOnClickListener(v -> onLogoClick());
+        hero.addView(logoView, new LinearLayout.LayoutParams(lSize, lSize));
+
+        String coTitle = store.companyName != null && !store.companyName.isEmpty() ? store.companyName : "x.erp 盘点助手";
+        TextView brand = Ui.tv(this, coTitle, 22, Ui.INK, true);
+        brand.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams blp0 = new LinearLayout.LayoutParams(-2, -2);
+        blp0.topMargin = Ui.dp(this, 12);
+        hero.addView(brand, blp0);
+
+        TextView sub = Ui.tv(this, store.splashSubtitle, 12, Ui.MUTED, false);
+        sub.setGravity(Gravity.CENTER);
+        sub.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 6));
+        hero.addView(sub);
+
+        TextView tapHint = Ui.tv(this, "轻触上方图标可更换公司 Logo", 11, Ui.ACCENT, false);
+        hero.addView(tapHint);
+        root.addView(hero);
 
         // Login Card
         LinearLayout card = Ui.card(this, 16);
@@ -292,5 +317,50 @@ public class LoginActivity extends Activity {
                 });
             }
         }).start();
+    }
+
+    private void onLogoClick() {
+        if (!store.hasCustomLogo()) {
+            launchLogoPicker();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("公司 Logo")
+                .setItems(new String[]{"更换公司 Logo", "恢复默认 x.erp Logo"}, (d, w) -> {
+                    if (w == 0) launchLogoPicker();
+                    else {
+                        store.clearCustomLogo();
+                        logoView.reload();
+                        Ui.toast(this, "已恢复默认 x.erp Logo");
+                    }
+                }).show();
+    }
+
+    private void launchLogoPicker() {
+        Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("image/*");
+        try { startActivityForResult(Intent.createChooser(i, "选择公司 Logo"), REQ_PICK_LOGO); }
+        catch (Exception e) { Ui.toast(this, "没有可选择图片的相册应用"); }
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req == REQ_PICK_LOGO && res == RESULT_OK && data != null && data.getData() != null) {
+            Uri uri = data.getData();
+            new Thread(() -> {
+                try {
+                    Bitmap bmp = AppStore.decodeSampledUri(this, uri, 512);
+                    store.saveCustomLogo(bmp);
+                    runOnUiThread(() -> {
+                        logoView.reload();
+                        Ui.toast(this, "公司 Logo 已更新");
+                    });
+                } catch (Exception e) {
+                    runOnUiThread(() -> Ui.toast(this, ApiClient.friendlyError(e)));
+                }
+            }).start();
+        }
     }
 }

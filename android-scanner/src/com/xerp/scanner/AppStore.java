@@ -2,6 +2,9 @@ package com.xerp.scanner;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.net.Uri;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -50,6 +53,10 @@ public final class AppStore {
     public boolean autoPromptNew = true;
     public boolean leftHanded = false;
     public boolean pdaHidMode = true;
+    public String splashSubtitle = "智能扫码盘点 · 极速建档 · 全链路条码助手";
+
+    private Bitmap cachedLogo;
+    private boolean logoLoaded = false;
 
     // Data
     public List<Models.Product> products = new ArrayList<>();
@@ -96,6 +103,8 @@ public final class AppStore {
         autoPromptNew = prefs.getBoolean("autoPromptNew", true);
         leftHanded = prefs.getBoolean("leftHanded", false);
         pdaHidMode = prefs.getBoolean("pdaHidMode", true);
+        String sub = prefs.getString("splashSubtitle", "");
+        if (!sub.isEmpty()) splashSubtitle = sub;
         try {
             JSONArray cs = new JSONArray(prefs.getString("companies", "[]"));
             companies.clear();
@@ -156,7 +165,85 @@ public final class AppStore {
                 .putBoolean("autoPromptNew", autoPromptNew)
                 .putBoolean("leftHanded", leftHanded)
                 .putBoolean("pdaHidMode", pdaHidMode)
+                .putString("splashSubtitle", splashSubtitle == null ? "" : splashSubtitle)
                 .apply();
+    }
+
+    private File companyLogoFile() {
+        return new File(ctx.getFilesDir(), "company_logo.png");
+    }
+
+    public boolean hasCustomLogo() {
+        return companyLogoFile().isFile();
+    }
+
+    public synchronized Bitmap getCustomLogo() {
+        if (!logoLoaded) {
+            File f = companyLogoFile();
+            if (f.isFile()) {
+                try { cachedLogo = BitmapFactory.decodeFile(f.getAbsolutePath()); } catch (Exception ignored) { cachedLogo = null; }
+            }
+            logoLoaded = true;
+        }
+        return cachedLogo;
+    }
+
+    public synchronized void saveCustomLogo(Bitmap src) throws Exception {
+        if (src == null) throw new Exception("无法读取所选图片");
+        int maxDim = 512;
+        Bitmap scaled = src;
+        if (src.getWidth() > maxDim || src.getHeight() > maxDim) {
+            float r = Math.min((float) maxDim / src.getWidth(), (float) maxDim / src.getHeight());
+            int nw = Math.max(1, Math.round(src.getWidth() * r));
+            int nh = Math.max(1, Math.round(src.getHeight() * r));
+            scaled = Bitmap.createScaledBitmap(src, nw, nh, true);
+        }
+        File f = companyLogoFile();
+        try (FileOutputStream fos = new FileOutputStream(f)) {
+            if (!scaled.compress(Bitmap.CompressFormat.PNG, 100, fos)) {
+                throw new Exception("保存 Logo 失败");
+            }
+        }
+        if (scaled != src) src.recycle();
+        cachedLogo = BitmapFactory.decodeFile(f.getAbsolutePath());
+        logoLoaded = true;
+    }
+
+    public synchronized void clearCustomLogo() {
+        try { companyLogoFile().delete(); } catch (Exception ignored) { }
+        cachedLogo = null;
+        logoLoaded = true;
+    }
+
+    public static Bitmap decodeSampledUri(Context ctx, Uri uri, int maxDim) throws Exception {
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inJustDecodeBounds = true;
+        try (java.io.InputStream is = ctx.getContentResolver().openInputStream(uri)) {
+            if (is == null) throw new Exception("无法打开所选图片");
+            BitmapFactory.decodeStream(is, null, opts);
+        }
+        if (opts.outWidth <= 0 || opts.outHeight <= 0) throw new Exception("无效的图片格式");
+        int sample = 1;
+        while (opts.outWidth / (sample * 2) >= maxDim && opts.outHeight / (sample * 2) >= maxDim) {
+            sample *= 2;
+        }
+        BitmapFactory.Options dec = new BitmapFactory.Options();
+        dec.inSampleSize = sample;
+        Bitmap bmp;
+        try (java.io.InputStream is = ctx.getContentResolver().openInputStream(uri)) {
+            if (is == null) throw new Exception("无法读取所选图片");
+            bmp = BitmapFactory.decodeStream(is, null, dec);
+        }
+        if (bmp == null) throw new Exception("图片解码失败，请换一张图片");
+        if (bmp.getWidth() > maxDim || bmp.getHeight() > maxDim) {
+            float r = Math.min((float) maxDim / bmp.getWidth(), (float) maxDim / bmp.getHeight());
+            int nw = Math.max(1, Math.round(bmp.getWidth() * r));
+            int nh = Math.max(1, Math.round(bmp.getHeight() * r));
+            Bitmap scaled = Bitmap.createScaledBitmap(bmp, nw, nh, true);
+            bmp.recycle();
+            return scaled;
+        }
+        return bmp;
     }
 
     public void clearAuth() {

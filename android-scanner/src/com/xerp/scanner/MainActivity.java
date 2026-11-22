@@ -30,11 +30,12 @@ public class MainActivity extends Activity {
     public interface CodeCallback { void onCode(String code); }
     public interface TextCallback { void onText(String text); }
 
-    private static final int REQ_CAM = 101, REQ_VOICE = 102, REQ_GALLERY = 103;
+    private static final int REQ_CAM = 101, REQ_VOICE = 102, REQ_GALLERY = 103, REQ_LOGO = 104;
 
     public AppStore store;
     public CameraScannerView scanner;
 
+    private BrandLogoView topLogo;
     private TextView whPill, coPill, camPill, manualBtn, syncBtn;
     private FrameLayout camHolder, tabHolder;
     private LinearLayout oneShotBanner, navBar;
@@ -49,6 +50,7 @@ public class MainActivity extends Activity {
     private boolean modalCameraLock = false;
     private boolean oneShotPrevCam = false;
     private Runnable pendingAfterCamPerm;
+    private Runnable logoChangedCallback;
 
     private CodeCallback oneShotCallback;
     private TextCallback voiceCallback;
@@ -76,6 +78,11 @@ public class MainActivity extends Activity {
         LinearLayout topBar = Ui.row(this);
         topBar.setBackgroundColor(Color.WHITE);
         topBar.setPadding(Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 8), Ui.dp(this, 6));
+
+        topLogo = new BrandLogoView(this, store);
+        topLogo.setOnClickListener(v -> switchToTab(4));
+        topBar.addView(topLogo, new LinearLayout.LayoutParams(Ui.dp(this, 26), Ui.dp(this, 26)));
+        topBar.addView(Ui.space(this, 6, 1));
 
         whPill = Ui.tv(this, store.whName(store.selectedWh) + " ▾", 12, Ui.PRIMARY, true);
         whPill.setBackground(Ui.outlined(this, Ui.PRIMARY_SOFT, Ui.PRIMARY, 1, 14));
@@ -471,6 +478,19 @@ public class MainActivity extends Activity {
         oneShotBanner.addView(cancel);
     }
 
+    public void refreshBrandLogo() {
+        if (topLogo != null) topLogo.reload();
+    }
+
+    public void pickCustomLogo(Runnable onChanged) {
+        logoChangedCallback = onChanged;
+        Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("image/*");
+        try { startActivityForResult(Intent.createChooser(i, "选择公司 Logo"), REQ_LOGO); }
+        catch (Exception e) { logoChangedCallback = null; Ui.toast(this, "没有可选择图片的相册应用"); }
+    }
+
     public void pickGalleryImage(CameraScannerView.SnapshotCallback cb) {
         photoCallback = cb;
         Intent i = new Intent(Intent.ACTION_GET_CONTENT);
@@ -513,6 +533,24 @@ public class MainActivity extends Activity {
                     runOnUiThread(() -> cb.onSnapshot(dataUri, bmp, null));
                 } catch (Exception e) {
                     runOnUiThread(() -> cb.onSnapshot(null, null, "读取图片失败，请换一张再试"));
+                }
+            }).start();
+        } else if (req == REQ_LOGO && logoChangedCallback != null) {
+            Runnable cb = logoChangedCallback;
+            logoChangedCallback = null;
+            if (res != RESULT_OK || data == null || data.getData() == null) return;
+            Uri uri = data.getData();
+            new Thread(() -> {
+                try {
+                    Bitmap bmp = AppStore.decodeSampledUri(this, uri, 512);
+                    store.saveCustomLogo(bmp);
+                    runOnUiThread(() -> {
+                        refreshBrandLogo();
+                        cb.run();
+                        Ui.toast(this, "公司 Logo 已更新");
+                    });
+                } catch (Exception e) {
+                    runOnUiThread(() -> Ui.toast(this, ApiClient.friendlyError(e)));
                 }
             }).start();
         }

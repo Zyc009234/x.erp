@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
@@ -35,6 +36,76 @@ public class SettingsTab implements TabPage {
 
     private void render() {
         col.removeAllViews();
+
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(-1, -2);
+        clp.bottomMargin = Ui.dp(act, 12);
+
+        // 0. Brand & Splash Logo Card
+        LinearLayout brand = Ui.card(act, 14);
+        brand.addView(Ui.tv(act, "品牌与启动页 Logo", 15, Ui.INK, true));
+        LinearLayout bRow = Ui.row(act);
+        bRow.setPadding(0, Ui.dp(act, 10), 0, Ui.dp(act, 10));
+        BrandLogoView logoPrev = new BrandLogoView(act, store);
+        int lpSize = Ui.dp(act, 68);
+        bRow.addView(logoPrev, new LinearLayout.LayoutParams(lpSize, lpSize));
+        bRow.addView(Ui.space(act, 12, 1));
+        LinearLayout bInfo = Ui.col(act);
+        boolean hasCustom = store.hasCustomLogo();
+        bInfo.addView(Ui.badge(act, hasCustom ? "自定义公司 Logo" : "默认 x.erp Logo",
+                hasCustom ? Ui.ACCENT_SOFT : Ui.PRIMARY_SOFT, hasCustom ? Ui.ACCENT : Ui.PRIMARY));
+        String coTitle = !store.companyName.isEmpty() ? store.companyName : "x.erp 盘点";
+        bInfo.addView(Ui.tv(act, coTitle, 15, Ui.INK, true));
+        bInfo.addView(Ui.tv(act, store.splashSubtitle, 12, Ui.MUTED, false));
+        bRow.addView(bInfo, new LinearLayout.LayoutParams(0, -2, 1));
+        brand.addView(bRow);
+
+        LinearLayout bBtns = Ui.row(act);
+        Button bChange = Ui.btn(act, "更换 Logo", Ui.PRIMARY, Color.WHITE);
+        bChange.setMinHeight(Ui.dp(act, 38)); bChange.setMinimumHeight(Ui.dp(act, 38)); bChange.setTextSize(13);
+        bChange.setOnClickListener(v -> act.pickCustomLogo(this::render));
+        Button bPreview = Ui.outlineBtn(act, "预览启动页", Ui.ACCENT, Ui.ACCENT);
+        bPreview.setMinHeight(Ui.dp(act, 38)); bPreview.setMinimumHeight(Ui.dp(act, 38)); bPreview.setTextSize(13);
+        bPreview.setOnClickListener(v -> {
+            Intent i = new Intent(act, SplashActivity.class);
+            i.putExtra("preview", true);
+            act.startActivity(i);
+            act.overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
+        });
+        bBtns.addView(bChange, new LinearLayout.LayoutParams(0, Ui.dp(act, 38), 1));
+        bBtns.addView(Ui.space(act, 6, 1));
+        bBtns.addView(bPreview, new LinearLayout.LayoutParams(0, Ui.dp(act, 38), 1));
+        if (hasCustom) {
+            Button bReset = Ui.outlineBtn(act, "恢复默认", Ui.WARN, Ui.WARN);
+            bReset.setMinHeight(Ui.dp(act, 38)); bReset.setMinimumHeight(Ui.dp(act, 38)); bReset.setTextSize(13);
+            bReset.setOnClickListener(v -> {
+                store.clearCustomLogo();
+                act.refreshBrandLogo();
+                render();
+                Ui.toast(act, "已恢复默认 x.erp Logo");
+            });
+            bBtns.addView(Ui.space(act, 6, 1));
+            bBtns.addView(bReset, new LinearLayout.LayoutParams(0, Ui.dp(act, 38), 0.9f));
+        }
+        brand.addView(bBtns);
+
+        Button bSub = Ui.outlineBtn(act, "修改启动页标语", Ui.LINE, Ui.MUTED);
+        bSub.setMinHeight(Ui.dp(act, 36)); bSub.setMinimumHeight(Ui.dp(act, 36)); bSub.setTextSize(12);
+        bSub.setOnClickListener(v -> {
+            EditText et = Ui.input(act, "留空恢复默认标语");
+            et.setText(store.splashSubtitle);
+            new AlertDialog.Builder(act).setTitle("修改启动页标语").setView(et)
+                    .setPositiveButton("保存", (d, w) -> {
+                        String s = et.getText().toString().trim();
+                        store.splashSubtitle = s.isEmpty() ? "智能扫码盘点 · 极速建档 · 全链路条码助手" : s;
+                        store.savePrefs();
+                        render();
+                        Ui.toast(act, "启动页标语已更新");
+                    }).setNegativeButton("取消", null).show();
+        });
+        LinearLayout.LayoutParams sblp = new LinearLayout.LayoutParams(-1, Ui.dp(act, 36));
+        sblp.topMargin = Ui.dp(act, 8);
+        brand.addView(bSub, sblp);
+        col.addView(brand, clp);
 
         // 1. Account & Server Card
         LinearLayout acc = Ui.card(act, 14);
@@ -69,8 +140,6 @@ public class SettingsTab implements TabPage {
         llp.topMargin = Ui.dp(act, 8);
         acc.addView(bLogout, llp);
 
-        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(-1, -2);
-        clp.bottomMargin = Ui.dp(act, 12);
         col.addView(acc, clp);
 
         // 2. Scanner & One-hand Preferences
