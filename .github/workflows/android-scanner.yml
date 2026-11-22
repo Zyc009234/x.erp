@@ -1,0 +1,74 @@
+name: android-scanner
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to attach APK to (e.g. v2.14.8, leave empty to build artifact only)'
+        required: false
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/v') && github.ref_name) || '' }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.ref }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Ensure Android SDK 36 and build-tools 36.1.0
+        shell: powershell
+        run: |
+          $sdk = @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT, "$env:LOCALAPPDATA\Android\Sdk") | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $sdk) { throw 'Android SDK not found' }
+          $need = @()
+          if (-not (Test-Path "$sdk\platforms\android-36\android.jar")) { $need += 'platforms;android-36' }
+          if (-not (Test-Path "$sdk\build-tools\36.1.0\apksigner.bat")) { $need += 'build-tools;36.1.0' }
+          if ($need.Count -gt 0) {
+            $mgr = Join-Path $sdk 'cmdline-tools\latest\bin\sdkmanager.bat'
+            "y`ny`ny`ny`ny`ny`n" | & $mgr @need
+          }
+
+      - name: Restore release keystore
+        shell: powershell
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          PROPS_B64: ${{ secrets.ANDROID_KEYSTORE_PROPS_B64 }}
+        run: |
+          if (-not $env:KS_B64 -or -not $env:PROPS_B64) { throw 'Missing ANDROID_KEYSTORE_B64 or ANDROID_KEYSTORE_PROPS_B64 secret' }
+          $dir = Join-Path $env:USERPROFILE '.xerp-android'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          [IO.File]::WriteAllBytes((Join-Path $dir 'release.jks'), [Convert]::FromBase64String($env:KS_B64))
+          [IO.File]::WriteAllBytes((Join-Path $dir 'keystore.properties'), [Convert]::FromBase64String($env:PROPS_B64))
+
+      - name: Build and sign Scanner APK
+        shell: powershell
+        run: .\android-scanner\build-scanner.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xerp-scanner-apk
+          path: dist\xerp-scanner-*-android.apk
+          retention-days: 30
+
+      - name: Upload Scanner APK to GitHub Release
+        if: env.TAG != ''
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $apk = Get-ChildItem dist\xerp-scanner-*-android.apk | Select-Object -First 1
+          if (-not $apk) { throw 'Scanner APK not found' }
+          gh release upload "$env:TAG" $apk.FullName --clobber

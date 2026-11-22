@@ -1806,25 +1806,43 @@ function markPrinted(ctx, id) {
 /* ---------- 盘点单：新建（快照账面）→ 录入实盘 → 审核（按审核时的账面生成盘盈 / 盘亏） ---------- */
 const CHECK = { col: 'checkDocs', prefix: 'PD', title: '盘点单' };
 function applyCounts(o, lines) {
+  const wh = o.wh || DEFAULT_WH;
   const byId = new Map(o.lines.map(l => [l.productId, l]));
   for (const x of Array.isArray(lines) ? lines : []) {
-    const l = x && byId.get(x.productId); if (!l) continue;
+    if (!x || !x.productId) continue;
+    const p = get('products', x.productId);
+    let l = byId.get(x.productId);
+    if (!l && x.add && p) {
+      l = { productId: p.id, book: whQty(p, wh), counted: null };
+      o.lines.push(l);
+      byId.set(p.id, l);
+    }
+    if (!l) continue;
     if (x.counted === null || x.counted === '' || x.counted === undefined) { l.counted = null; continue; }
     const n = Number(x.counted);
-    if (!Number.isInteger(n) || n < 0) fail('实盘数量必须是非负整数');
-    l.counted = n;
+    if (p && p.dec) {
+      const r = round2(n);
+      if (!Number.isFinite(n) || n < 0 || Math.abs(n - r) > 1e-9) fail('实盘数量必须是非负数字（最多两位小数）');
+      l.counted = r;
+    } else {
+      if (!Number.isInteger(n) || n < 0) fail('实盘数量必须是非负整数');
+      l.counted = n;
+    }
   }
 }
 function createCheck(ctx) {
-  const b = ctx.body, cat = str(b.category, 50);
-  let ps = list('products');
-  if (cat) ps = ps.filter(p => p.category === cat);
-  if (Array.isArray(b.productIds) && b.productIds.length) { const s = new Set(b.productIds); ps = ps.filter(p => s.has(p.id)); }
-  if (!ps.length) fail('没有符合条件的商品');
-  ps.sort((x, y) => String(x.sku).localeCompare(String(y.sku)));
+  const b = ctx.body, cat = str(b.category, 50), empty = !!b.empty;
+  let ps = empty ? [] : list('products');
+  if (!empty) {
+    if (cat) ps = ps.filter(p => p.category === cat);
+    if (Array.isArray(b.productIds) && b.productIds.length) { const s = new Set(b.productIds); ps = ps.filter(p => s.has(p.id)); }
+    if (!ps.length) fail('没有符合条件的商品');
+    ps.sort((x, y) => String(x.sku).localeCompare(String(y.sku)));
+  }
   const wh = pickWh(b.wh);
+  const scope = empty ? (str(b.scope, 60) || '扫码自由盘点') : (cat ? '分类：' + cat : b.productIds && b.productIds.length ? `指定 ${ps.length} 个商品` : '全部商品');
   return tx(() => {
-    const o = { id: uid(), no: nextNo(CHECK), wh, date: today(), time: hhmm(), scope: cat ? '分类：' + cat : b.productIds && b.productIds.length ? `指定 ${ps.length} 个商品` : '全部商品',
+    const o = { id: uid(), no: nextNo(CHECK), wh, date: today(), time: hhmm(), scope,
       remark: str(b.remark, 500), lines: ps.map(p => ({ productId: p.id, book: whQty(p, wh), counted: null })), status: '盘点中',
       creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString() };
     put('checkDocs', o); audit(ctx, '新建盘点单', `${o.no} ${o.scope} ${o.lines.length} 项`);
@@ -1854,8 +1872,8 @@ const postCheck = (ctx, id) => editCheck(ctx, id, o => {
   for (const l of counted) {
     const p = get('products', l.productId); if (!p) continue;
     const book = whQty(p, wh);
-    l.bookAtPost = book; l.diff = l.counted - book; l.cost = p.cost || 0;
-    if (l.diff > 0) gain += l.diff; else loss -= l.diff;
+    l.bookAtPost = book; l.diff = round2(l.counted - book); l.cost = p.cost || 0;
+    if (l.diff > 0) gain = round2(gain + l.diff); else loss = round2(loss - l.diff);
     if (l.diff) moveStock(ctx, p, l.diff, l.diff > 0 ? '盘盈' : '盘亏', o.no, '', { wh, batch: { no: '盘盈' + o.no } });
   }
   Object.assign(o, { status: '已完成', poster: ctx.user.name, postedAt: new Date().toISOString(), postDate: today() });
