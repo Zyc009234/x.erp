@@ -16,21 +16,21 @@
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.14.6",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.6-windows-x64-setup.exe",
-      "sha256": "98ed44a2d674bd7df5acc50806fb8469a02e81aa562dd8049545bc5c2e659a5d",
-      "size": 23830686,
-      "file": "xerp-2.14.6-windows-x64-setup.exe",
+      "version": "2.14.7",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.7-windows-x64-setup.exe",
+      "sha256": "9474b23fddcbb09a5151a3e0975fdc62c4d6c2a8aed1c4c6ec15caba824f9312",
+      "size": 23831450,
+      "file": "xerp-2.14.7-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.14.6",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.6-android.apk",
-      "sha256": "fa461fb0acb285232c3e81d8ea3c4e64f2626d887287bdb117258640179d1928",
+      "version": "2.14.7",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.7-android.apk",
+      "sha256": "75dcb9d6182ac4723a0abadabd0680b31d9bde6273ba302c0586b92663ecfd80",
       "size": 279329,
-      "file": "xerp-2.14.6-android.apk",
+      "file": "xerp-2.14.7-android.apk",
       "kind": "apk",
-      "versionCode": 21406
+      "versionCode": 21407
     },
     "docker": {
       "version": "2.14.7",
