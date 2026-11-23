@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.14.9": {
+          "changelog": "报销审批流程支持管理员可视化勾选所有报销单的审批人与默认抄送人，可控制是否允许报销人自行补充抄送，在报销管理页提供快捷配置入口；打通抄送人与流程指定审批人的报销单可见性与当前节点审批权限。",
+          "updated_at": "2026-11-23T12:04:13+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.9.fpk",
+              "sha256": "da49fa0190f054d30e6cb003a2b37cd6c4bdba5c3e370a13aa255214e6bc0526",
+              "size": 754996
+            }
+          }
+        },
         "2.14.8": {
           "changelog": "修复统计报表将供应商预付款计入运营费用导致净利润异常的问题；修复分批发货/入库开启审核或改单后已执行数量未同步更新的问题；销售/采购/退货/调拨等所有单据打印统一新增「打印金额」开关；打印模板新增导出、导入及从其他单据复制模板。",
           "updated_at": "2026-11-23T11:27:00+08:00",
@@ -53,17 +64,6 @@
               "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.7.fpk",
               "sha256": "e55110f7f8ce6073491b150690bc3bdb0294664e4fc443fbf5a0730e4a197ace",
               "size": 737815
-            }
-          }
-        },
-        "2.14.6": {
-          "changelog": "修复在「用户管理」新增用户、重置密码或修改密码后无法登录的问题（多账套网关现自动同步账号与密码，老版本已建账号升级后即可直接登录）；优化问题反馈打赏弹窗文案。",
-          "updated_at": "2026-11-21T15:28:00+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.6.fpk",
-              "sha256": "220f9f8c88c6091a1ad7d1bef0a6f34efe697661fcd35de0653cbaf162200860",
-              "size": 740240
             }
           }
         }

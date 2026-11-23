@@ -172,3 +172,52 @@ test('流程12 三步流程与总经理金额门槛', async () => {
   assert.equal(big.approval.steps.length, 3, '达到门槛加总经理节点');
   assert.equal(big.approval.steps[2].name, '总经理');
 });
+
+test('流程13 管理员固定抄送与禁止报销人自填抄送', async () => {
+  await setFlow({ cc: ['u_cc'], allowCustomCc: false });
+  const oLocked = await mk({ cc: 'u_extra, u_cc' });
+  assert.deepEqual(oLocked.cc, ['u_cc'], '关闭自定义抄送后忽略提交人自填');
+
+  await setFlow({ cc: ['u_cc'], allowCustomCc: true });
+  const oMerged = await mk({ cc: 'u_extra, u_cc' });
+  assert.deepEqual(oMerged.cc, ['u_cc', 'u_extra'], '开启自定义抄送后自动合并管理员固定抄送且去重');
+});
+
+test('流程14 抄送人只读可见（无全局报销/审批权限也能看，但不能审批或篡改）', async () => {
+  const roRole = await ok(admin, 'POST', '/api/roles', { name: '仅仓储只读', perms: ['inv.view'] });
+  await ok(admin, 'POST', '/api/users', { username: 'u_cc', name: '老板抄送', roleId: roRole.id, password: 'test123456' });
+  const ccTok = await login('u_cc', 'test123456');
+
+  await setFlow({ cc: [], allowCustomCc: true });
+  const hidden = await mk({ reason: '未抄送的单' });
+  const shown = await mk({ reason: '抄送给老板', cc: 'u_cc' });
+
+  const ccData = await ok(ccTok, 'GET', '/api/data');
+  assert.ok(ccData.data.expenses.some(x => x.id === shown.id), '抄送人能看到抄送自己的报销单');
+  assert.ok(!ccData.data.expenses.some(x => x.id === hidden.id), '抄送人看不到未抄送给自己的报销单');
+
+  assert.equal((await call(ccTok, 'POST', `/api/expenses/${shown.id}/approve`, {})).http, 403, '抄送人不能审批');
+  assert.equal((await call(ccTok, 'PUT', `/api/expenses/${shown.id}`, { applicant: 'u_staff', date: '2026-11-17', reason: '篡改', lines: [{ category: '差旅', amount: 1 }] })).http, 403, '抄送人不能修改');
+  assert.equal((await call(ccTok, 'POST', `/api/expenses/${shown.id}/void`, {})).http, 403, '抄送人不能作废');
+  assert.equal((await call(ccTok, 'GET', `/api/expenses/${shown.id}/images/nonexist`)).http, 404, '抄送人通过附件查看鉴权（非403）');
+});
+
+test('流程15 指定审批人无需全局审批权限也可审批当前节点，且普通账号可获取审批流程设置', async () => {
+  const mgrRole = await ok(admin, 'POST', '/api/roles', { name: '无财务权限主管', perms: ['inv.view', 'sales'] });
+  await ok(admin, 'POST', '/api/users', { username: 'u_mgr', name: '指定审批人', roleId: mgrRole.id, password: 'test123456' });
+  const mgrTok = await login('u_mgr', 'test123456');
+
+  await setFlow({ deptHeads: { 销售部: ['u_head1'] }, finance: ['u_mgr'], gm: [], gmThreshold: 0, cc: ['u_extra'], allowCustomCc: false });
+  const staffData = await ok(staff, 'GET', '/api/data');
+  assert.deepEqual(staffData.settings.expenseFlow.cc, ['u_extra'], '普通账号也能获取非敏感报销流程配置');
+  assert.equal(staffData.settings.expenseFlow.allowCustomCc, false);
+
+  const o = await mk({ reason: '指定无全局权限主管审批' });
+  const mgrDataBefore = await ok(mgrTok, 'GET', '/api/data');
+  assert.ok(mgrDataBefore.data.expenses.some(x => x.id === o.id), '流程中的指定审批人能看到待审批报销单');
+
+  assert.equal((await call(mgrTok, 'POST', `/api/expenses/${o.id}/approve`, {})).http, 403, '未轮到自己节点时不能越级审批');
+  await ok(head1, 'POST', `/api/expenses/${o.id}/approve`, {});
+  const done = await ok(mgrTok, 'POST', `/api/expenses/${o.id}/approve`, { comment: '指定审批人同意' });
+  assert.equal(done.status, '已批准', '轮到当前节点时指定审批人无需 exp.approve 权限即可批准通过');
+});

@@ -20,7 +20,7 @@ const tls = require('tls');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.14.8';
+const VERSION = '2.14.9';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -2591,7 +2591,7 @@ function visibleData(ctx) {
     finance: any('finance', 'sales', 'purchase', 'reports'), partyPayments: any('finance', 'parties', 'sales', 'purchase'), projects: P.has('inv.view') || any('sales', 'purchase'), employees: P.has('hr'),
     warehouses: true, transferDocs: P.has('inv.view'), batches: any('inv.view', 'prod.view'), serials: P.has('inv.view'),
     carriers: any('ship.view', 'ship.edit', 'ship.rate'), shipments: any('ship.view', 'ship.edit'), shipBills: P.has('ship.view'), shipLabels: false,
-    accounts: any('finance', 'sales', 'purchase', 'ship.bill', 'expense'), acctTransfers: P.has('finance'), expenses: any('expense', 'exp.approve', 'finance'),
+    accounts: any('finance', 'sales', 'purchase', 'ship.bill', 'expense'), acctTransfers: P.has('finance'), expenses: enabledModules().includes('finance'),
     advances: any('expense', 'exp.approve', 'finance'),
     deliveries: any('ship.view', 'ship.edit')
   };
@@ -2604,7 +2604,7 @@ function visibleData(ctx) {
     data.stockDocs = data.stockDocs.map(d => ({ ...d, items: d.items.map(({ price, sale, usale, uprice, ...i }) => i) }));
   }
   if (!P.has('bom')) data.products = data.products.map(({ bom, ...p }) => p);
-  if (!expAll(P)) data.expenses = data.expenses.filter(o => o.creatorId === ctx.user.id);
+  if (!expAll(P)) data.expenses = data.expenses.filter(o => expCanView(o, ctx));
   if (!expAll(P)) data.advances = data.advances.filter(a => a.creatorId === ctx.user.id);
   data.shipBills = data.shipBills.map(({ rows, ...b }) => b);  // 账单明细可能上万行，打开账单时再单独取
   // 电子面单密码不下发，只告诉前端有没有设置
@@ -2660,9 +2660,25 @@ const EXP_CATS = ['差旅', '交通费', '餐费', '住宿费', '办公费', '�
 const EXP_IMG_MAX = 9;
 const expAll = P => P.has('finance') || P.has('exp.approve');  // 能看全部报销单
 const expPerm = ctx => ['expense', 'exp.approve', 'finance'].find(k => ctx.perms.has(k)) || 'expense';
+const expIsApprover = (o, username) => !!(o && o.approval && Array.isArray(o.approval.steps) && o.approval.steps.some(s => (s.approvers || []).includes(username)));
+const expCanView = (o, ctx) => !!(o && (expAll(ctx.perms) || o.creatorId === ctx.user.id || (Array.isArray(o.cc) && o.cc.includes(ctx.user.username)) || expIsApprover(o, ctx.user.username)));
+function expStepPerm(ctx) {
+  if (!enabledModules().includes('finance')) return 'exp.approve';
+  if (ctx.perms.has('exp.approve')) return 'exp.approve';
+  const o = get('expenses', ctx.params.id), step = o ? currentApprovalStep(o) : null;
+  if (step && (step.approvers || []).includes(ctx.user.username)) return null;
+  return 'exp.approve';
+}
+function expViewPerm(ctx) {
+  if (!enabledModules().includes('finance')) return 'expense';
+  if (ctx.perms.has('expense') || ctx.perms.has('exp.approve') || ctx.perms.has('finance')) return null;
+  const o = get('expenses', ctx.params.id);
+  if (expCanView(o, ctx)) return null;
+  return 'expense';
+}
 function expGet(ctx, id) {
   const o = get('expenses', id) || fail('报销单不存在', 404);
-  if (!expAll(ctx.perms) && o.creatorId !== ctx.user.id) fail('只能查看自己提交的报销单', 403);
+  if (!expCanView(o, ctx)) fail('只能查看自己提交或与自己相关的报销单', 403);
   return o;
 }
 function cleanExpense(b) {
@@ -2689,7 +2705,11 @@ function cleanExpense(b) {
     if (advanceOffset > amount + 0.001) fail('冲抵金额不能超过报销金额');
     if (advanceOffset > advRemaining(a) + 0.001) fail(`这张备用金只剩 ${advRemaining(a).toFixed(2)} 可冲抵`);
   }
-  const cc = [...new Set((Array.isArray(b.cc) ? b.cc : String(b.cc || '').split(/[,，\s]+/)).map(x => String(x).trim()).filter(Boolean))].slice(0, 10);
+  const flow = getMeta('settings', {}).expenseFlow || {};
+  const defCc = Array.isArray(flow.cc) ? flow.cc : [];
+  const allowCustomCc = flow.allowCustomCc !== false;
+  const userCc = (Array.isArray(b.cc) ? b.cc : String(b.cc || '').split(/[,，\s]+/)).map(x => String(x).trim()).filter(Boolean);
+  const cc = [...new Set(allowCustomCc ? [...defCc, ...userCc] : defCc)].slice(0, 20);
   return { date, applicant: str(b.applicant, 32) || fail('请填写报销人'), dept: str(b.dept, 32), reason: str(b.reason, 300) || fail('请填写报销事由'),
     lines, amount, advanceId: advanceId || '', advanceOffset, cc };
 }
@@ -2997,6 +3017,7 @@ function addExpenseImage(ctx, id) {
   const mime = imgMime(buf) || fail('只支持 JPG、PNG、WebP 图片');
   return tx(() => {
     const o = expGet(ctx, id);
+    if (o.creatorId !== ctx.user.id && !expAll(ctx.perms)) fail('只能修改自己提交的报销单附件', 403);
     if (o.status === '已作废' || o.status === '已付款') fail(`报销单已${o.status.replace('已', '')}，不能再加附件`);
     const imgs = o.imgs || [];
     if (imgs.length >= EXP_IMG_MAX) fail(`每张报销单最多 ${EXP_IMG_MAX} 张附件`);
@@ -3009,6 +3030,7 @@ function addExpenseImage(ctx, id) {
 function delExpenseImage(ctx, id, k) {
   return tx(() => {
     const o = expGet(ctx, id);
+    if (o.creatorId !== ctx.user.id && !expAll(ctx.perms)) fail('只能修改自己提交的报销单附件', 403);
     if (o.status === '已作废' || o.status === '已付款') fail(`报销单已${o.status.replace('已', '')}，不能再删附件`);
     if (!(o.imgs || []).includes(k)) fail('附件不存在', 404);
     db.prepare('DELETE FROM images WHERE id = ?').run(`bx_${o.id}_${k}`);
@@ -3343,7 +3365,7 @@ const publicSettings = ctx => {
   const { notify, kdn, expenseFlow, ...s } = getMeta('settings', {}), k = kdn || {}, ready = !!(k.ebid && k.key);
   const pub = { ready, eorder: ready && kdnSenderOk(k), sandbox: !!k.sandbox, autoTrack: !!k.autoTrack };
   const safeNotify = notify ? { ...notify, mail: notify.mail ? { ...notify.mail, pass: '', hasPass: !!notify.mail.pass } : undefined } : notify;
-  return ctx.user.role === 'admin' ? { ...s, backupPath: BACKUP_DIR, notify: safeNotify, expenseFlow: expenseFlow || {}, kdn: { ...pub, ebid: k.ebid || '', keySet: !!k.key, sender: k.sender || {} } } : { ...s, kdn: pub };
+  return ctx.user.role === 'admin' ? { ...s, backupPath: BACKUP_DIR, notify: safeNotify, expenseFlow: expenseFlow || {}, kdn: { ...pub, ebid: k.ebid || '', keySet: !!k.key, sender: k.sender || {} } } : { ...s, expenseFlow: expenseFlow || {}, kdn: pub };
 };
 route('GET', '/api/data', ctx => ({
   version: VERSION, settings: { ...publicSettings(ctx), modules: enabledModules(), feedbackUnread: fbUnread(), platform: PLAT },
@@ -3479,9 +3501,9 @@ route('PUT', '/api/settings/expense-flow', ctx => {
   }
   const modes = {};
   for (const k of ['dept', 'finance', 'gm']) modes[k] = (b.modes && b.modes[k]) === 'any' ? 'any' : 'all';
-  const flow = { deptHeads: heads, finance: names(b.finance), gm: names(b.gm), gmThreshold: Math.max(0, round2(Number(b.gmThreshold) || 0)), modes };
+  const flow = { deptHeads: heads, finance: names(b.finance), gm: names(b.gm), gmThreshold: Math.max(0, round2(Number(b.gmThreshold) || 0)), modes, cc: names(b.cc), allowCustomCc: b.allowCustomCc !== false };
   s.expenseFlow = flow; setMeta('settings', s);
-  audit(ctx, '修改报销审批流程', `财务 ${flow.finance.length} 人，总经理 ${flow.gm.length} 人`);
+  audit(ctx, '修改报销审批流程', `财务 ${flow.finance.length} 人，总经理 ${flow.gm.length} 人，默认抄送 ${flow.cc.length} 人`);
   return { ok: true, expenseFlow: flow };
 }, { admin: true });
 route('POST', '/api/settings/notify/test', async ctx => {
@@ -3764,10 +3786,10 @@ route('PUT', '/api/finance/:id', ctx => editFinance(ctx, ctx.params.id), { perm:
 route('DELETE', '/api/finance/:id', ctx => deleteFinance(ctx, ctx.params.id), { perm: 'finance' });
 route('POST', '/api/expenses', ctx => createExpense(ctx), { perm: expPerm });
 route('PUT', '/api/expenses/:id', ctx => saveExpense(ctx, ctx.params.id), { perm: expPerm });
-route('POST', '/api/expenses/:id/approve', ctx => approveExpense(ctx, ctx.params.id, true), { perm: 'exp.approve' });
-route('POST', '/api/expenses/:id/reject', ctx => approveExpense(ctx, ctx.params.id, false), { perm: 'exp.approve' });
-  route('POST', '/api/expenses/:id/addsigner', ctx => addExpenseSigner(ctx, ctx.params.id), { perm: 'exp.approve' });
-  route('POST', '/api/expenses/:id/transfer', ctx => transferExpense(ctx, ctx.params.id), { perm: 'exp.approve' });
+route('POST', '/api/expenses/:id/approve', ctx => approveExpense(ctx, ctx.params.id, true), { perm: expStepPerm });
+route('POST', '/api/expenses/:id/reject', ctx => approveExpense(ctx, ctx.params.id, false), { perm: expStepPerm });
+  route('POST', '/api/expenses/:id/addsigner', ctx => addExpenseSigner(ctx, ctx.params.id), { perm: expStepPerm });
+  route('POST', '/api/expenses/:id/transfer', ctx => transferExpense(ctx, ctx.params.id), { perm: expStepPerm });
   route('POST', '/api/expenses/:id/urge', ctx => urgeExpense(ctx, ctx.params.id), { perm: expPerm });
   route('POST', '/api/expenses/:id/withdraw', ctx => withdrawExpense(ctx, ctx.params.id), { perm: expPerm });
 route('POST', '/api/expenses/:id/pay', ctx => payExpense(ctx, ctx.params.id), { perm: 'finance' });
@@ -3775,10 +3797,10 @@ route('POST', '/api/expenses/:id/unpay', ctx => unpayExpense(ctx, ctx.params.id)
 route('POST', '/api/expenses/:id/void', ctx => voidExpense(ctx, ctx.params.id), { perm: expPerm });
 route('POST', '/api/expenses/:id/images', ctx => addExpenseImage(ctx, ctx.params.id), { perm: expPerm });
 route('DELETE', '/api/expenses/:id/images/:k', ctx => delExpenseImage(ctx, ctx.params.id, ctx.params.k), { perm: expPerm });
-route('GET', '/api/expenses/:id/images/:k', ctx => getExpenseImage(ctx, ctx.params.id, ctx.params.k), { perm: expPerm });
+route('GET', '/api/expenses/:id/images/:k', ctx => getExpenseImage(ctx, ctx.params.id, ctx.params.k), { perm: expViewPerm });
 route('POST', '/api/expenses/:id/payimages', ctx => addExpensePayImage(ctx, ctx.params.id), { perm: 'finance' });
 route('DELETE', '/api/expenses/:id/payimages/:k', ctx => delExpensePayImage(ctx, ctx.params.id, ctx.params.k), { perm: 'finance' });
-route('GET', '/api/expenses/:id/payimages/:k', ctx => getExpensePayImage(ctx, ctx.params.id, ctx.params.k), { perm: expPerm });
+route('GET', '/api/expenses/:id/payimages/:k', ctx => getExpensePayImage(ctx, ctx.params.id, ctx.params.k), { perm: expViewPerm });
 route('POST', '/api/advances', ctx => createAdvance(ctx), { perm: expPerm });
 route('PUT', '/api/advances/:id', ctx => saveAdvance(ctx, ctx.params.id), { perm: expPerm });
 route('POST', '/api/advances/:id/approve', ctx => approveAdvance(ctx, ctx.params.id, true), { perm: 'exp.approve' });
