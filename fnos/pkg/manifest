@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 2.14.7
+version               = 2.14.8
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 往来款（预付款/预收款）支持分批多次核销到不同订单，也支持多笔预付款核销同一订单，订单详情完整展示每笔核销记录，未核销余额实时精确扣减。
+changelog             = 修复统计报表将供应商预付款计入运营费用导致净利润异常的问题；修复分批发货/入库开启审核或改单后已执行数量未同步更新的问题；销售/采购/退货/调拨等所有单据打印统一新增「打印金额」开关；打印模板新增导出、导入及从其他单据复制模板。

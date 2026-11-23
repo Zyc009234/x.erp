@@ -1521,3 +1521,77 @@ test('在线更新：只检查并下载，SHA 校验失败拒绝，非管理员�
   const d2 = await ok(admin, 'POST', '/api/update/download', { version: '99.0.0' });
   assert.equal(d2.path, d.path);
 });
+
+test('分批发货/入库与审核、改单、多行同商品及打印模板接口与页面回归', async () => {
+  const p = await newProduct('PART_SYNC1');
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '采购入库', items: [{ productId: p.id, qty: 30, price: 5 }] });
+  const c = await ok(admin, 'POST', '/api/customers', { name: '分批同步客户' });
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // 1) 开启出库审核：待审核不计入已执行，但计入待审数量且阻断超发；审核通过后转入已执行
+  await setApprove(false, true);
+  try {
+    const so = await ok(admin, 'POST', '/api/orders/sales', { partyId: c.id, date: todayStr, items: [{ productId: p.id, qty: 10, price: 12 }] });
+    await ok(admin, 'POST', `/api/orders/sales/${so.id}/ship`, { items: [{ line: 0, productId: p.id, unit: '个', qty: 4 }] });
+    let d = await data(), order = d.sales.find(o => o.id === so.id);
+    assert.equal(order.status, '待发货');
+    assert.equal(order.items[0].fulfilledQty, 0);
+    assert.equal(order.items[0].pendingQty, 4);
+    assert.equal((await call(admin, 'POST', `/api/orders/sales/${so.id}/ship`, { items: [{ line: 0, productId: p.id, unit: '个', qty: 7 }] })).http, 400, '待审数量计入已占用');
+    const pendingDoc = d.stockDocs.find(x => x.srcOrderId === so.id && x.status === '待审核');
+    assert.ok(pendingDoc);
+
+    // 再发 3 并驳回，待审清零
+    await ok(admin, 'POST', `/api/orders/sales/${so.id}/ship`, { items: [{ line: 0, productId: p.id, unit: '个', qty: 3 }] });
+    d = await data();
+    const doc2 = d.stockDocs.find(x => x.srcOrderId === so.id && x.id !== pendingDoc.id);
+    assert.equal(d.sales.find(o => o.id === so.id).items[0].pendingQty, 7);
+    await ok(admin, 'POST', `/api/stockdocs/${doc2.id}/reject`, { reason: '测试驳回' });
+    await ok(admin, 'POST', `/api/stockdocs/${pendingDoc.id}/approve`, {});
+    d = await data(); order = d.sales.find(o => o.id === so.id);
+    assert.equal(order.items[0].fulfilledQty, 4);
+    assert.equal(order.items[0].pendingQty, undefined);
+
+    // 2) 编辑已部分发货订单（改备注/单价）不能清零 fulfilledQty
+    const updated = await ok(admin, 'PUT', `/api/orders/sales/${so.id}`, {
+      partyId: c.id, date: todayStr, remark: '改备注不断同步',
+      items: [{ productId: p.id, unit: '个', qty: 10, price: 13 }]
+    });
+    assert.equal(updated.items[0].fulfilledQty, 4, '改单响应保留已执行数量');
+    d = await data();
+    assert.equal(d.sales.find(o => o.id === so.id).items[0].fulfilledQty, 4, '持久化保留已执行数量');
+  } finally {
+    await setApprove(false, false);
+  }
+
+  // 3) 同一商品多行订单按行顺序分配 fulfilledQty，不重复累加
+  const multiSo = await ok(admin, 'POST', '/api/orders/sales', {
+    partyId: c.id, date: todayStr,
+    items: [{ productId: p.id, qty: 3, price: 10 }, { productId: p.id, qty: 2, price: 0 }]
+  });
+  await ok(admin, 'POST', `/api/orders/sales/${multiSo.id}/ship`, { items: [{ line: 0, productId: p.id, unit: '个', qty: 4 }] });
+  const multiSaved = (await data()).sales.find(o => o.id === multiSo.id);
+  assert.equal(multiSaved.items[0].fulfilledQty, 3);
+  assert.equal(multiSaved.items[1].fulfilledQty, 1);
+
+  // 4) 打印模板全列保存（含医疗列与跨单据导入导出结构）
+  const tplPayload = {
+    title: '送货单', header: '电话：123', footer: '谢谢惠顾', signs: '制单,签收', fontSize: 13, paper: 'half', font: 'hei',
+    upper: false, printer: true, meta: { no: true, date: true, party: true },
+    cols: [{ k: 'idx', label: '行', on: true }, { k: 'name', label: '品名', on: true }, { k: 'regNo', label: '注册证号', on: true }, { k: 'expiry', label: '有效期', on: true }]
+  };
+  const savedTpl = await ok(admin, 'PUT', '/api/settings/print', { kind: 'sales', create: true, name: '医疗送货版', tpl: tplPayload });
+  assert.equal(savedTpl.sales.title, '送货单');
+  assert.ok(savedTpl.sales.cols.some(c => c.k === 'regNo' && c.on));
+  assert.ok(savedTpl.sales.cols.some(c => c.k === 'expiry' && c.on));
+
+  // 5) 前端页面结构与口径回归检查
+  const html = fs.readFileSync(path.join(ROOT, 'src/index.html'), 'utf8');
+  assert.match(html, /NON_OP_EXP\s*=\s*new Set\(\['采购付款',\s*'供应商预付款',\s*'销售退款'\]\)/);
+  assert.match(html, /id="oMoney"/);
+  assert.match(html, /prefs\.orderMoney !== false/);
+  assert.match(html, /id="tMoney"/);
+  assert.match(html, /id="tpCopyFrom"/);
+  assert.match(html, /id="tpExport"/);
+  assert.match(html, /id="tpImport"/);
+});

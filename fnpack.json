@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.14.8": {
+          "changelog": "修复统计报表将供应商预付款计入运营费用导致净利润异常的问题；修复分批发货/入库开启审核或改单后已执行数量未同步更新的问题；销售/采购/退货/调拨等所有单据打印统一新增「打印金额」开关；打印模板新增导出、导入及从其他单据复制模板。",
+          "updated_at": "2026-11-23T11:27:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.8.fpk",
+              "sha256": "4a4a036b8afd04699b13a1990c7633bb0ae1b315c1178cc105c9a4524fb79e8d",
+              "size": 752516
+            }
+          }
+        },
         "2.14.7": {
           "changelog": "往来款（预付款/预收款）支持分批多次核销到不同订单，也支持多笔预付款核销同一订单，订单详情完整展示每笔核销记录，未核销余额实时精确扣减。",
           "updated_at": "2026-11-22T08:29:00+08:00",
@@ -53,83 +64,6 @@
               "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.6.fpk",
               "sha256": "220f9f8c88c6091a1ad7d1bef0a6f34efe697661fcd35de0653cbaf162200860",
               "size": 740240
-            }
-          }
-        },
-        "2.14.5": {
-          "changelog": "「云服务」和「问题反馈」页面新增产品官网入口，方便查看教程与下载新版；同时包含 2.14.4 的复选框开关修复、IPv6 双栈监听修复、远程隧道 gzip 提速及自定义前缀重名检测。",
-          "updated_at": "2026-11-21T12:51:00+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.5.fpk",
-              "sha256": "8df5923be1017b808509cc6e4486cfb92b0ce17e0c07c2a7d3bba3bde21326e7",
-              "size": 739120
-            }
-          }
-        },
-        "2.14.4": {
-          "changelog": "修复云服务「远程访问开启」与「每天自动上传」复选框点击后状态和提示相反的问题；同时包含 2.14.3 的 IPv6 双栈监听修复、远程隧道 gzip 提速及自定义前缀实时重名检测。",
-          "updated_at": "2026-11-21T12:20:00+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.4.fpk",
-              "sha256": "763938af1f7b262de9d8e81f74ef779396b4e9ef5ba8978c5a702d80cf3ff827",
-              "size": 739153
-            }
-          }
-        },
-        "2.14.3": {
-          "changelog": "修复多账套网关仅监听 IPv4 导致 IPv6 地址无法访问的问题（恢复 IPv4/IPv6 双栈监听）；云服务远程访问隧道新增 gzip 压缩传输提速；自定义地址前缀新增实时重名检测。",
-          "updated_at": "2026-11-21T12:02:00+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.3.fpk",
-              "sha256": "b93f04213c0216020ef0df4262e38455665b6e1b1a9d30b27b86f67d2ed42d0b",
-              "size": 739140
-            }
-          }
-        },
-        "2.14.2": {
-          "changelog": "云服务远程访问支持自定义地址前缀（有效云会员每 30 天可修改一次）；远程访问隧道切换至独立高速中转节点，云备份继续留在主云端。",
-          "updated_at": "2026-11-21T11:25:00+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.2.fpk",
-              "sha256": "04d0a4a6a697ed021f5453bbb30f3a51d8cedbb9acf270f05179071ecc1dd490",
-              "size": 738241
-            }
-          }
-        },
-        "2.14.1": {
-          "changelog": "修复 2.14.0 多商品订单点「发货 / 入库」没有反应的问题：订单没有单个仓库能一次满足整单库存时，现在会正常弹出窗口并自动选择有库存的仓库；同时包含 2.14.0 的分批发货入库、三级包装单位、期初应收应付、行小计手改、批量操作和反馈截图等功能。",
-          "updated_at": "2026-11-20T21:47:59+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.1.fpk",
-              "sha256": "82a51cebb84d4f36e3c8e31f16394e7101493d4ecf5cff4bdb68065e5e1f8d24",
-              "size": 737273
-            }
-          }
-        },
-        "2.14.0": {
-          "changelog": "销售分批发货、采购分批入库，发货入库统一生成来源单据并只扣一次库存；新增三级包装单位、每级条码、默认采购销售单位和分单位售价；问题反馈支持截图；客户供应商支持期初应收应付；列表支持全选、批量删除和批量作废；订单行小计可手改，销售列表隐藏成本和毛利，仓管隐藏金额；优化自动备份路径提示和侧栏滚动条。",
-          "updated_at": "2026-11-20T20:45:44+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.0.fpk",
-              "sha256": "d56c3367c7f4f3d3e344eb77cdb65af8ca907ae52a0b0620cc318c1558e544c6",
-              "size": 737361
-            }
-          }
-        },
-        "2.13.3": {
-          "changelog": "经营日报新增今日毛利、毛利率和热销商品前 5；打印模板测试样张按真实打印规则排版（固定张三示例、补空行、页脚不再多出一张纸）。",
-          "updated_at": "2026-11-18T22:55:00+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.13.3.fpk",
-              "sha256": "24b9d6ba5bd1370243b12b9f2c2fd7a7f3ec8fc0f39373ee2863b72658e0552d",
-              "size": 713163
             }
           }
         }

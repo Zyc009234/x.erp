@@ -20,7 +20,7 @@ const tls = require('tls');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.14.7';
+const VERSION = '2.14.8';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -362,6 +362,7 @@ function writeAll(data) {
   }
   ensureWh();
   ensureAccounts();
+  ensureOrderFulfillment();
   // 商品图片：备份里有就恢复，没有（演示数据、清空、旧版备份）就清掉
   db.exec('DELETE FROM images');
   const ins = db.prepare('INSERT OR REPLACE INTO images (id, mime, data, updated_at) VALUES (?, ?, ?, ?)');
@@ -857,15 +858,24 @@ function orderLineRemaining(o, kind) {
   const left = orderRemainingByProduct(o, kind, true);
   return o.items.map(i => { const q = round4(Math.min(i.qty, left[i.productId] || 0)); left[i.productId] = round4((left[i.productId] || 0) - q); return q; });
 }
-function syncSourceOrder(ctx, doc) {
-  if (!doc || !doc.srcOrderId) return;
-  const kind = doc.srcOrderKind || (doc.dir === 'out' ? 'sales' : 'purchase'), C = ORD[kind];
-  const o = C && get(C.col, doc.srcOrderId); if (!o || o.status === '已作废') return;
+function syncOrderFulfillment(o, kind) {
+  const C = ORD[kind];
+  if (!o || !C || o.status === '已作废') return;
   const done = orderFulfilledByProduct(o, kind, false);
+  const withPend = orderFulfilledByProduct(o, kind, true);
+  const doneLeft = {}, pendLeft = {};
+  for (const [pid, d] of Object.entries(done)) doneLeft[pid] = d.qty || 0;
+  for (const [pid, wp] of Object.entries(withPend)) pendLeft[pid] = round4(Math.max(0, (wp.qty || 0) - (done[pid]?.qty || 0)));
   let all = true, changed = false;
   o.items.forEach(i => {
-    const d = done[i.productId] || {}, take = round4(Math.min(i.qty, d.qty || 0));
+    const pid = i.productId, d = done[pid] || {};
+    const take = round4(Math.min(i.qty, doneLeft[pid] || 0));
+    doneLeft[pid] = round4((doneLeft[pid] || 0) - take);
+    const ptake = round4(Math.min(round4(i.qty - take), pendLeft[pid] || 0));
+    pendLeft[pid] = round4((pendLeft[pid] || 0) - ptake);
     if (i.fulfilledQty !== take) { i.fulfilledQty = take; changed = true; }
+    if (ptake > 0.0001) { if (i.pendingQty !== ptake) { i.pendingQty = ptake; changed = true; } }
+    else if ('pendingQty' in i) { delete i.pendingQty; changed = true; }
     if (take > 0 && d.qty > 0) { const c = round4(d.value / d.qty); if (i.cost !== c) { i.cost = c; changed = true; } }
     if (take > 0 && d.serials && d.serials.length) { const sn = [...new Set(d.serials)]; if (JSON.stringify(i.serials || []) !== JSON.stringify(sn)) { i.serials = sn; changed = true; } }
     if (take > 0 && d.batches && d.batches.length) { if (JSON.stringify(i.batches || []) !== JSON.stringify(d.batches)) { i.batches = d.batches; changed = true; } }
@@ -879,6 +889,23 @@ function syncSourceOrder(ctx, doc) {
     else if (!all && o.status === '已入库') { o.status = '已审核'; changed = true; }
   }
   if (changed) put(C.col, o);
+}
+function syncSourceOrder(ctx, doc) {
+  if (!doc || !doc.srcOrderId) return;
+  const kind = doc.srcOrderKind || (doc.dir === 'out' ? 'sales' : 'purchase'), C = ORD[kind];
+  const o = C && get(C.col, doc.srcOrderId);
+  if (o) syncOrderFulfillment(o, kind);
+}
+function ensureOrderFulfillment() {
+  const seen = new Set();
+  for (const d of list('stockDocs')) {
+    if (!d.srcOrderId) continue;
+    const kind = d.srcOrderKind || (d.dir === 'out' ? 'sales' : 'purchase'), key = kind + '|' + d.srcOrderId;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const C = ORD[kind], o = C && get(C.col, d.srcOrderId);
+    if (o) syncOrderFulfillment(o, kind);
+  }
 }
 function validateSourceItems(o, kind, items) {
   const left = orderRemainingByProduct(o, kind, true), need = {};
@@ -971,7 +998,7 @@ function saveOrder(ctx, kind, id, noTx = false) {
       let note = '';
       if (posted) note = redoPosted(ctx, kind, o, items);
       Object.assign(o, data);
-      put(C.col, o); audit(ctx, '修改' + C.title, o.no + note);
+      put(C.col, o); if (linkedDocs.length) syncOrderFulfillment(o, kind); audit(ctx, '修改' + C.title, o.no + note);
       return o;
     }
     const o = { id: uid(), no: nextNo(C), ...data, status: C.statuses[0], [C.paidKey]: 0, createdAt: today(), creator: ctx.user.name };
@@ -3289,6 +3316,7 @@ if (!getMeta('initialized', false)) {
 }
 tx(ensureWh);  // v1.0.3 升级：补默认仓库与分仓库存
 tx(ensureAccounts);  // v2.0.11 升级：补资金账户，旧流水按收付方式归到对应账户
+tx(ensureOrderFulfillment);  // v2.14.8 升级：同步分批关联出入库单的订单已执行 / 待审数量
 if (!db.prepare('SELECT COUNT(*) AS n FROM users').get().n) {
   // --admin-password-file：首次启动时从文件读取管理员初始密码（NAS 安装向导填写），读取后删除
   let pwd = '';
@@ -3472,7 +3500,7 @@ route('GET', '/api/settings/notify/preview', () => notifyText(), { admin: true }
 
 // 打印模板：每种单据一份（标题、抬头、表头项目、明细列的显示 / 顺序 / 名称、签字栏、底部说明、字号），所有用户共用
 const PRINT_KINDS = { in: '入库单', out: '出库单', transfer: '调拨单', sales: '销售单', purchase: '采购单', salesReturn: '销售退货单', purchaseReturn: '采购退货单' };
-const PRINT_COLS = ['idx', 'sku', 'barcode', 'name', 'spec', 'unit', 'qty', 'price', 'amount', 'batch', 'note'];
+const PRINT_COLS = ['idx', 'sku', 'barcode', 'name', 'spec', 'unit', 'qty', 'price', 'amount', 'batch', 'regNo', 'regHolder', 'manufacturer', 'expiry', 'note'];
 const PRINT_META = ['no', 'type', 'date', 'party', 'wh', 'handler', 'contact', 'address', 'express', 'project'];
 function cleanTpl(t) {
   if (!t || typeof t !== 'object') return null;
