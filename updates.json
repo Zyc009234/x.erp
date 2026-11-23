@@ -1,46 +1,44 @@
 {
   "schema": 1,
-  "latest": "2.14.8",
-  "publishedAt": "2026-11-23T11:28:49+08:00",
+  "latest": "2.14.9",
+  "publishedAt": "2026-11-23T12:06:11+08:00",
   "notes": [
-    "修复统计报表将供应商预付款计入运营费用导致净利润异常的问题",
-    "修复分批发货/入库开启审核或改单后已执行数量未同步更新的问题",
-    "销售/采购/退货/调拨等所有单据打印统一新增「打印金额」开关",
-    "打印模板新增导出、导入及从其他单据复制模板。"
+    "报销审批流程支持管理员可视化勾选所有报销单的审批人与默认抄送人，可控制是否允许报销人自行补充抄送，在报销管理页提供快捷配置入口",
+    "打通抄送人与流程指定审批人的报销单可见性与当前节点审批权限。"
   ],
   "packages": {
     "fnos": {
-      "version": "2.14.8",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.8.fpk",
-      "sha256": "4a4a036b8afd04699b13a1990c7633bb0ae1b315c1178cc105c9a4524fb79e8d",
-      "size": 752516,
-      "file": "xerp-2.14.8.fpk",
+      "version": "2.14.9",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.9.fpk",
+      "sha256": "da49fa0190f054d30e6cb003a2b37cd6c4bdba5c3e370a13aa255214e6bc0526",
+      "size": 754996,
+      "file": "xerp-2.14.9.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.14.8",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.8-windows-x64-setup.exe",
-      "sha256": "098ecc52e659e0da5f829db5f8eb7f46e3b6d4193aed731bcc8939c21a098f7c",
-      "size": 23836120,
-      "file": "xerp-2.14.8-windows-x64-setup.exe",
+      "version": "2.14.9",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.9-windows-x64-setup.exe",
+      "sha256": "26265735d7951295f762adeceb1daa531d3ffd5d8dc975180bb5d7f5935d134f",
+      "size": 23837006,
+      "file": "xerp-2.14.9-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.14.8",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.8-android.apk",
-      "sha256": "594bf70ca34b794a0e8bb8154788ce1c308f82c0dddc4f460a657b1a3f0458a7",
+      "version": "2.14.9",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.9-android.apk",
+      "sha256": "80acd07431f9f7ed29813b8eb020be6bd729e820eb0bbd87de8ce46c1491a96c",
       "size": 279329,
-      "file": "xerp-2.14.8-android.apk",
+      "file": "xerp-2.14.9-android.apk",
       "kind": "apk",
-      "versionCode": 21408
+      "versionCode": 21409
     },
     "docker": {
-      "version": "2.14.8",
+      "version": "2.14.9",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.14.8",
+      "image": "ghcr.io/zyc009234/xerp:2.14.9",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.8-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.8-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.9-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.9-docker-arm64.tar.gz"
       ],
       "note": "也可以下载离线包 docker load"
     }
