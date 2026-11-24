@@ -1,44 +1,47 @@
 {
   "schema": 1,
-  "latest": "2.14.9",
-  "publishedAt": "2026-11-23T12:06:11+08:00",
+  "latest": "2.15.0",
+  "publishedAt": "2026-11-24T14:48:34+08:00",
   "notes": [
-    "报销审批流程支持管理员可视化勾选所有报销单的审批人与默认抄送人，可控制是否允许报销人自行补充抄送，在报销管理页提供快捷配置入口",
-    "打通抄送人与流程指定审批人的报销单可见性与当前节点审批权限。"
+    "打印模板支持 Logo 位置调整（默认与标题同排）、二等分纸自定义宽度（默认 215mm）及费用报销单模板与 24px 大字号",
+    "销售单与直接出库默认带出销售价，采购单支持 4 位小数单价并按优惠分摊净单价精确入库",
+    "库存成本价权限与销售价权限拆分，业务员看不到成本但可按销售价开单",
+    "备用金代领同步到领用人个人账号，人事员工绑定登录账号并自动带出部门",
+    "新增发票管理、粮食过磅收购、业务员客户与报表隔离、人事联动开号、退货审核自动生成仓库出入库单、订单超量容差与提前完结、待审/驳回出入库单修改与作废单据删除、条码标签日期与操作员、农资二维码解析及多图问题反馈"
   ],
   "packages": {
     "fnos": {
-      "version": "2.14.9",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.9.fpk",
-      "sha256": "da49fa0190f054d30e6cb003a2b37cd6c4bdba5c3e370a13aa255214e6bc0526",
-      "size": 754996,
-      "file": "xerp-2.14.9.fpk",
+      "version": "2.15.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.0.fpk",
+      "sha256": "2ad786a36d615f1b1d0e9e81be1184a1d7d4ded1c58a8d685e8e9a18ba1ac7ef",
+      "size": 782941,
+      "file": "xerp-2.15.0.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.14.9",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.9-windows-x64-setup.exe",
-      "sha256": "26265735d7951295f762adeceb1daa531d3ffd5d8dc975180bb5d7f5935d134f",
-      "size": 23837006,
-      "file": "xerp-2.14.9-windows-x64-setup.exe",
+      "version": "2.15.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.0-windows-x64-setup.exe",
+      "sha256": "d2e3ed41f98378f5ac8c3806291d79640d810b927f5f7854dea376dc787b5e9d",
+      "size": 23852373,
+      "file": "xerp-2.15.0-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.14.9",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.9-android.apk",
-      "sha256": "80acd07431f9f7ed29813b8eb020be6bd729e820eb0bbd87de8ce46c1491a96c",
+      "version": "2.15.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.0-android.apk",
+      "sha256": "1facfc89e8dda947b7c8892dfc1149a828cac32764c942cd1e53dba02c4252d1",
       "size": 279329,
-      "file": "xerp-2.14.9-android.apk",
+      "file": "xerp-2.15.0-android.apk",
       "kind": "apk",
-      "versionCode": 21409
+      "versionCode": 21500
     },
     "docker": {
-      "version": "2.14.9",
+      "version": "2.15.0",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.14.9",
+      "image": "ghcr.io/zyc009234/xerp:2.15.0",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.9-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.14.9-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.0-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.0-docker-arm64.tar.gz"
       ],
       "note": "也可以下载离线包 docker load"
     }
