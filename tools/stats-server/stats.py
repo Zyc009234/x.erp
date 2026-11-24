@@ -42,6 +42,7 @@ def db():
               'text TEXT, city TEXT, allow_pub INTEGER DEFAULT 0, pub INTEGER DEFAULT 0, reply TEXT, replied TEXT)')
     have = {r[1] for r in c.execute('PRAGMA table_info(feedback)')}
     if 'image' not in have: c.execute('ALTER TABLE feedback ADD COLUMN image TEXT')
+    if 'images' not in have: c.execute("ALTER TABLE feedback ADD COLUMN images TEXT DEFAULT '[]'")
     return c
 
 
@@ -181,6 +182,21 @@ tok_hash = lambda t: hashlib.sha256(('xerp-fb:' + t).encode()).hexdigest()
 TOKEN_RE = r'[0-9a-f]{32}'
 
 
+_IMG_RE = re.compile(r'data:image/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+')
+
+
+def _fb_parse_imgs(raw_json, first_img):
+    imgs = []
+    if raw_json:
+        try:
+            arr = json.loads(raw_json)
+            if isinstance(arr, list): imgs = [x for x in arr if isinstance(x, str) and x]
+        except Exception:
+            imgs = []
+    if not imgs and first_img: imgs = [first_img]
+    return imgs[:4]
+
+
 def fb_add(b, ip):
     t, text = b.get('token'), str(b.get('text') or '').strip()
     if not (isinstance(t, str) and re.fullmatch(TOKEN_RE, t)): return None
@@ -188,11 +204,12 @@ def fb_add(b, ip):
     v = b.get('v') if isinstance(b.get('v'), str) and re.fullmatch(r'\d{1,3}\.\d{1,3}\.\d{1,4}', b.get('v')) else ''
     p = b.get('plat') if b.get('plat') in PLATS else 'other'
     nick, contact = str(b.get('nick') or '').strip()[:30], str(b.get('contact') or '').strip()[:100]
-    image = b.get('image') if isinstance(b.get('image'), str) else ''
-    if image and (len(image) > 1_500_000 or not re.fullmatch(r'data:image/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+', image)): image = ''
+    raw_imgs = b.get('images') if isinstance(b.get('images'), list) else ([b.get('image')] if b.get('image') else [])
+    imgs = [x for x in raw_imgs[:4] if isinstance(x, str) and len(x) <= 1_500_000 and _IMG_RE.fullmatch(x)]
+    image = imgs[0] if imgs else ''
     with lock, db() as c:
-        cur = c.execute('INSERT INTO feedback (tok, created, v, plat, nick, contact, text, city, allow_pub, image) VALUES (?,?,?,?,?,?,?,?,?,?)',
-                        (tok_hash(t), now_str(), v, p, nick, contact, text, city_of(ip), 1 if b.get('allowPublic') else 0, image or None))
+        cur = c.execute('INSERT INTO feedback (tok, created, v, plat, nick, contact, text, city, allow_pub, image, images) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                        (tok_hash(t), now_str(), v, p, nick, contact, text, city_of(ip), 1 if b.get('allowPublic') else 0, image or None, json.dumps(imgs) if imgs else '[]'))
         return cur.lastrowid
 
 
@@ -200,8 +217,12 @@ def fb_mine(b):
     t = b.get('token')
     if not (isinstance(t, str) and re.fullmatch(TOKEN_RE, t)): return None
     with db() as c:
-        rows = c.execute('SELECT fid, created, text, reply, replied, pub, image FROM feedback WHERE tok = ? ORDER BY fid', (tok_hash(t),)).fetchall()
-    return [dict(fid=r[0], created=r[1], text=r[2], reply=r[3] or '', replied=r[4] or '', public=bool(r[5]), image=r[6] or '') for r in rows]
+        rows = c.execute('SELECT fid, created, text, reply, replied, pub, image, images FROM feedback WHERE tok = ? ORDER BY fid', (tok_hash(t),)).fetchall()
+    out = []
+    for r in rows:
+        imgs = _fb_parse_imgs(r[7], r[6])
+        out.append(dict(fid=r[0], created=r[1], text=r[2], reply=r[3] or '', replied=r[4] or '', public=bool(r[5]), image=imgs[0] if imgs else '', images=imgs))
+    return out
 
 
 def fb_public():
@@ -244,16 +265,18 @@ body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.6 system-ui,"Ping
 
 def fb_admin_page():
     with db() as c:
-        rows = c.execute('SELECT fid, created, v, plat, nick, contact, text, city, allow_pub, pub, reply, replied, image FROM feedback ORDER BY (reply IS NULL) DESC, fid DESC').fetchall()
+        rows = c.execute('SELECT fid, created, v, plat, nick, contact, text, city, allow_pub, pub, reply, replied, image, images FROM feedback ORDER BY (reply IS NULL) DESC, fid DESC').fetchall()
     e, tok = (lambda s: html.escape(str(s or ''))), csrf_token()
     hidden = lambda fid, act: f'<input type="hidden" name="csrf" value="{tok}"><input type="hidden" name="fid" value="{fid}"><input type="hidden" name="act" value="{act}">'
     cards = ''
-    for fid, created, v, plat, nick, contact, text, city, allow, pub, reply, replied, image in rows:
+    for fid, created, v, plat, nick, contact, text, city, allow, pub, reply, replied, image, raw_imgs in rows:
         state = '<span class="tag ok">已回复</span>' if reply else '<span class="tag warn">待回复</span>'
         pubtag = ('<span class="tag ok">官网已公开</span>' if pub else '<span class="tag">同意公开</span>') if allow else '<span class="tag">不同意公开</span>'
         pub_btn = f'<button {"" if allow else "disabled title=用户没有同意公开"}>{"取消公开" if pub else "公开到官网"}</button>'
+        imgs = _fb_parse_imgs(raw_imgs, image)
+        imgs_html = f'<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px">' + ''.join(f'<img src="{e(im)}" alt="用户截图" style="max-width:100%;max-height:520px;border:1px solid #e2e8f0;border-radius:10px">' for im in imgs) + '</div>' if imgs else ''
         cards += f'''<div class="c" id="f{fid}"><div class="top"><b>#{fid}</b><span>{e(created)}</span><span>{e(nick) or '匿名'}</span><span>{e(contact) or '未留联系方式'}</span><span>{e(city)}</span><span>v{e(v)} · {e(PLATS.get(plat, '其他'))}</span>{state}{pubtag}</div>
-<div class="txt">{e(text)}</div>{f'<div style="margin-top:10px"><img src="{e(image)}" alt="用户截图" style="max-width:100%;max-height:520px;border:1px solid #e2e8f0;border-radius:10px"></div>' if image else ''}
+<div class="txt">{e(text)}</div>{imgs_html}
 <form method="post">{hidden(fid, 'reply')}<textarea name="reply" placeholder="回复内容（用户在 x.erp 的「问题反馈」里能看到）">{e(reply)}</textarea><div class="row"><button class="p">{'更新回复' if reply else '回复'}</button>{f'<span class="m">回复于 {e(replied)}</span>' if replied else ''}</div></form>
 <div class="row"><form method="post">{hidden(fid, 'unpub' if pub else 'pub')}{pub_btn}</form>
 <form method="post" onsubmit="return confirm('删除这条留言？用户那边也会看不到。')">{hidden(fid, 'del')}<button class="d">删除</button></form></div></div>'''
@@ -290,7 +313,7 @@ class H(BaseHTTPRequestHandler):
             return self.out(303, '', 'text/plain', {'Location': '/xerp/api/admin/feedback'})
         if path not in ('/xerp/api/ping', '/xerp/api/feedback', '/xerp/api/feedback/mine'): return self.out(404, '{"error":"not found"}')
         if limited(ip) or path == '/xerp/api/feedback' and limited('fb:' + ip, 10): return self.out(429, '{"error":"too many"}')
-        raw = self.body(2_000_000 if path == '/xerp/api/feedback' else 1024)
+        raw = self.body(4_500_000 if path == '/xerp/api/feedback' else 1024)
         if raw is None: return self.out(413, '{"error":"too large"}')
         try: b = json.loads(raw or b'{}')
         except Exception: return bad()
