@@ -517,7 +517,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.15.2</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.15.3</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -2368,7 +2368,7 @@ function rmbUpper(v) {
   out = out.replace(/(零.)*零元/, '元').replace(/(零.)+/g, '零');
   return (v < 0 ? '负' : '') + out + s;
 }
-const PAPERS = {a4:['A4 纵向', 'A4 portrait', 12], a4l:['A4 横向', 'A4 landscape', 0], half:['二等分 241×140（可用215mm）', '215mm 140mm', 6], a5:['A5 横向', 'A5 landscape', 7]};
+const PAPERS = {a4:['A4 纵向', 'A4 portrait', 12], a4l:['A4 横向', 'A4 landscape', 0], full:['一等分 241×280（可用215mm）', '215mm 280mm', 12], half:['二等分 241×140（可用215mm）', '215mm 140mm', 6], a5:['A5 横向', 'A5 landscape', 7]};
 const PRINT_ONLY = {a4l:['A4 横向', 'A4 landscape', 0]};
 /* ---------- 单据打印：入库 / 出库 / 调拨 / 销售 / 采购 / 费用报销单共用一套排版，样式在 系统设置 → 打印模板 里调整 ---------- */
 const SLIP_COLS = {idx:'序号', sku:'商品编码', barcode:'条码', name:'商品名称', spec:'规格型号', unit:'单位', qty:'数量', price:'单价', amount:'金额', category:'类别', batch:'批次', regNo:'注册证号', regHolder:'注册人', manufacturer:'生产厂家', expiry:'失效日期', note:'备注'};
@@ -2480,11 +2480,12 @@ const slipHtml = (o, opts) => slipRender(o.dir, o, opts);
 const printFoot = (kind, n, tpl = slipTpl(kind)) => tpl.printer ? `<div class="foot">打印人：${esc(ME.name)} · ${fmtTime(new Date())}${n ? ' · 第 ' + n + ' 次打印' : ''}</div>` : '';
 function printFrame(title, body, paperKey, tpl) {
   const paper = PAPERS[paperKey] || PRINT_ONLY[paperKey] || PAPERS.a4;
-  const pw = {a4:210, a4l:297, half:215, a5:210}[paperKey] || 210;
-  const halfW = paperKey === 'half' && tpl && +tpl.paperW >= 120 && +tpl.paperW <= 300 ? Math.round(+tpl.paperW) : 215;
-  const pageSize = paperKey === 'half' ? `${halfW}mm 140mm` : paper[1];
-  const pageMargin = paperKey === 'half' ? '6mm 4mm' : '8mm 10mm';
-  const contentW = paperKey === 'half' ? Math.max(100, halfW - 8) : pw - 20;
+  const isPin = paperKey === 'half' || paperKey === 'full';
+  const pw = {a4:210, a4l:297, full:215, half:215, a5:210}[paperKey] || 210;
+  const pinW = isPin && tpl && +tpl.paperW >= 120 && +tpl.paperW <= 300 ? Math.round(+tpl.paperW) : 215;
+  const pageSize = paperKey === 'half' ? `${pinW}mm 140mm` : paperKey === 'full' ? `${pinW}mm 280mm` : paper[1];
+  const pageMargin = isPin ? '6mm 4mm' : '8mm 10mm';
+  const contentW = isPin ? Math.max(100, pinW - 8) : pw - 20;
   const css = `@page{size:${pageSize};margin:${pageMargin}}*{box-sizing:border-box;margin:0;padding:0}
   @media print{body{width:${contentW}mm!important;margin:0 auto!important}}
   body{font-family:"SimSun","Songti SC","Microsoft YaHei",serif;color:#000;font-size:12px}
@@ -6259,7 +6260,7 @@ function printTplPage(body) {
       footer: String(src.footer || '').slice(0, 300),
       signs: src.signs != null ? String(src.signs).slice(0, 100) : K2.signs,
       fontSize: Math.min(24, Math.max(10, Math.round(Number(src.fontSize) || 12))),
-      paper: ['', 'a4', 'a4l', 'half', 'a5'].includes(src.paper) ? src.paper : '',
+      paper: ['', 'a4', 'a4l', 'full', 'half', 'a5'].includes(src.paper) ? src.paper : '',
       paperW: Number.isFinite(+src.paperW) && +src.paperW >= 120 && +src.paperW <= 300 ? Math.round(+src.paperW) : 0,
       font: ['song', 'hei', 'kai'].includes(src.font) ? src.font : 'song',
       logo: typeof src.logo === 'string' && src.logo.length <= 180000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(src.logo) ? src.logo : '',
@@ -6281,7 +6282,7 @@ function printTplPage(body) {
     </div></div>
     <label class="field"><span>单据标题</span><input id="tpTitle" maxlength="20" value="${esc(t.title)}" placeholder="${K.name}（例如改成「送货单」）"></label>
     <label class="field"><span>打印纸张</span><select id="tpPaper"><option value="">跟随打印窗口（默认 A4 纵向）</option>${Object.entries(PAPERS).map(([k, v]) => `<option value="${k}" ${t.paper === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></label>
-    <label class="field" id="tpPaperWBox" style="${t.paper === 'half' ? '' : 'display:none'}"><span>二等分纸宽（mm，针式可用宽度默认 215）</span><input id="tpPaperW" type="number" min="120" max="300" step="1" value="${t.paperW || 215}"></label>
+    <label class="field" id="tpPaperWBox" style="${t.paper === 'half' || t.paper === 'full' ? '' : 'display:none'}"><span>针式纸宽（mm，可用宽度默认 215）</span><input id="tpPaperW" type="number" min="120" max="300" step="1" value="${t.paperW || 215}"></label>
     <label class="field"><span>打印字体</span><select id="tpFont"><option value="song" ${t.font === 'song' ? 'selected' : ''}>宋体（默认）</option><option value="hei" ${t.font === 'hei' ? 'selected' : ''}>微软雅黑</option><option value="kai" ${t.font === 'kai' ? 'selected' : ''}>楷体</option></select></label>
     <div class="field"><span>单据 LOGO 与位置</span><div id="tpLogoBox" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${logoSrc ? `<img id="tpLogoPrev" src="${logoSrc}" alt="LOGO" style="max-width:120px;max-height:50px;object-fit:contain">` : '<span class="sub-t" id="tpLogoPrev">未上传</span>'}<label class="btn sm">${ic('upload')}上传<input type="file" id="tpLogo" accept="image/png,image/jpeg,image/webp" hidden></label>${logoSrc ? '<button class="btn sm danger-text" id="tpLogoDel">删除</button>' : ''}</div>
       <select id="tpLogoPos" style="margin-top:6px"><option value="inline" ${(t.logoPos || 'inline') === 'inline' ? 'selected' : ''}>与标题同排（居中并列）</option><option value="left" ${t.logoPos === 'left' ? 'selected' : ''}>标题左侧（与标题同排）</option><option value="right" ${t.logoPos === 'right' ? 'selected' : ''}>标题右侧（与标题同排）</option><option value="top" ${t.logoPos === 'top' ? 'selected' : ''}>标题上方（独占一行）</option></select>
@@ -6289,7 +6290,7 @@ function printTplPage(body) {
     <label class="field"><span>抬头附加信息（公司名下方，可多行）</span><textarea id="tpHeader" rows="2" maxlength="300" placeholder="地址：…  电话：…">${esc(t.header)}</textarea></label>
     <div class="field"><span>表头项目</span><div style="display:flex;flex-wrap:wrap;gap:4px 16px">${K.meta.map(k => `<label class="chk"><input type="checkbox" data-meta="${k}" ${t.meta[k] ? 'checked' : ''}>${k === 'party' ? K.party : SLIP_META[k]}</label>`).join('')}</div></div>
     <div class="field"><span>明细列：勾选要打印的列，可以改列名、用箭头调顺序</span><div id="tpCols"></div></div>
-    <p class="sub-t" style="margin:-4px 0 8px">列宽单位 mm，留空自动；A4 纵向内容宽度约 190 mm，二等分默认按实际可用 215 mm 排版。空白表头字段和整列都为空的可选明细列不会打印。</p>
+    <p class="sub-t" style="margin:-4px 0 8px">列宽单位 mm，留空自动；A4 纵向内容宽度约 190 mm，一等分 / 二等分默认按实际可用 215 mm 排版。空白表头字段和整列都为空的可选明细列不会打印。</p>
     <label class="field"><span>签字栏（逗号分隔；「制单」「经手」会自动填上名字）</span><input id="tpSigns" maxlength="100" value="${esc(t.signs)}"></label>
     <label class="field"><span>底部说明（可多行）</span><textarea id="tpFooter" rows="2" maxlength="300" placeholder="例如：货物当面点清，质量问题请于 3 日内联系">${esc(t.footer)}</textarea></label>
     <div style="display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center"><label class="chk">字号 <select id="tpFs" class="select" style="margin-left:6px">${[10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24].map(n => `<option ${n === +t.fontSize ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
@@ -6297,14 +6298,15 @@ function printTplPage(body) {
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">${saved[kind] ? '<button class="btn" id="tpReset">恢复默认</button>' : ''}<button class="btn" id="tpTest">${ic('printer')}打印测试样张</button><button class="btn primary" id="tpSave">${ic('check')}保存模板</button></div>
   </div></div>
   <div class="card"><div class="card-head"><h3>预览</h3><span class="sub-t">${sample.no === '示例单号' ? '示例数据' : '用最近一张' + K.name + '预览'}</span><label class="chk" style="margin-left:auto"><input type="checkbox" id="tpShowMoney" checked>显示金额</label></div><div class="card-body"><div class="slip-preview" id="tpPrev"></div></div></div></div>`;
-  const read = () => ({title:$('#tpTitle').value.trim(), header:$('#tpHeader').value.trim(), footer:$('#tpFooter').value.trim(), signs:$('#tpSigns').value.trim(), fontSize:+$('#tpFs').value, paper:$('#tpPaper').value, paperW:$('#tpPaper').value === 'half' ? Math.max(120, Math.min(300, Math.round(+$('#tpPaperW').value || 215))) : 0, font:$('#tpFont').value, logo:logoSrc, logoPos:$('#tpLogoPos').value,
+  const isPinPaper = k => k === 'half' || k === 'full';
+  const read = () => ({title:$('#tpTitle').value.trim(), header:$('#tpHeader').value.trim(), footer:$('#tpFooter').value.trim(), signs:$('#tpSigns').value.trim(), fontSize:+$('#tpFs').value, paper:$('#tpPaper').value, paperW:isPinPaper($('#tpPaper').value) ? Math.max(120, Math.min(300, Math.round(+$('#tpPaperW').value || 215))) : 0, font:$('#tpFont').value, logo:logoSrc, logoPos:$('#tpLogoPos').value,
     upper:$('#tpUpper').checked, printer:$('#tpPrinter').checked, meta:Object.fromEntries([...body.querySelectorAll('[data-meta]')].map(x => [x.dataset.meta, x.checked])), cols});
   const prev = () => {
     const tpl = read();
-    if ($('#tpPaperWBox')) $('#tpPaperWBox').style.display = tpl.paper === 'half' ? '' : 'none';
+    if ($('#tpPaperWBox')) $('#tpPaperWBox').style.display = isPinPaper(tpl.paper) ? '' : 'none';
     const box = $('#tpPrev');
-    box.style.maxWidth = tpl.paper === 'half' ? (tpl.paperW || 215) + 'mm' : '';
-    box.style.margin = tpl.paper === 'half' ? '0 auto' : '';
+    box.style.maxWidth = isPinPaper(tpl.paper) ? (tpl.paperW || 215) + 'mm' : '';
+    box.style.margin = isPinPaper(tpl.paper) ? '0 auto' : '';
     box.innerHTML = slipRender(kind, sample, {showMoney:showMoneyPrev, tpl});
   };
   const drawCols = () => {

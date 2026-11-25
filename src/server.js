@@ -20,7 +20,7 @@ const tls = require('tls');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.15.2';
+const VERSION = '2.15.3';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -4138,7 +4138,7 @@ function cleanTpl(t) {
   const meta = {};
   for (const k of PRINT_META) if (t.meta && k in t.meta) meta[k] = !!t.meta[k];
   const size = Math.round(Number(t.fontSize) || 12);
-  const paper = ['', 'a4', 'a4l', 'half', 'a5'].includes(t.paper) ? t.paper : '';
+  const paper = ['', 'a4', 'a4l', 'full', 'half', 'a5'].includes(t.paper) ? t.paper : '';
   const paperW = Number.isFinite(+t.paperW) && +t.paperW >= 120 && +t.paperW <= 300 ? Math.round(+t.paperW) : 0;
   const font = ['song', 'hei', 'kai'].includes(t.font) ? t.font : 'song';
   const logo = typeof t.logo === 'string' && t.logo.length <= 180000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(t.logo) ? t.logo : '';
