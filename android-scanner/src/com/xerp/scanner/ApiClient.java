@@ -37,16 +37,64 @@ public final class ApiClient {
 
     private ApiClient() { }
 
+    public static boolean isIpOrLocal(String host) {
+        if (host == null || host.isEmpty()) return false;
+        if ("localhost".equalsIgnoreCase(host)) return true;
+        if (host.contains(":")) return true;
+        return host.matches("^\\d{1,3}(\\.\\d{1,3}){3}$");
+    }
+
+    private static String normalizePath(Uri u) {
+        String p = u.getEncodedPath();
+        if (p == null || p.isEmpty() || "/".equals(p)) return "";
+        return p.replaceAll("/+$", "");
+    }
+
     public static String normalizeUrl(String raw) {
         if (raw == null) return "";
         String s = raw.trim();
         if (s.isEmpty()) return "";
-        if (!s.matches("(?i)^https?://.*")) s = "http://" + s;
-        Uri u = Uri.parse(s);
-        if (u.getHost() == null || u.getHost().isEmpty()) return "";
+        boolean hasScheme = s.matches("(?i)^https?://.*");
+        Uri u = Uri.parse(hasScheme ? s : "http://" + s);
+        String host = u.getHost();
+        if (host == null || host.isEmpty()) return "";
         int port = u.getPort();
         String scheme = u.getScheme().toLowerCase();
-        return scheme + "://" + u.getHost() + (port > 0 ? ":" + port : "http".equals(scheme) ? ":" + DEFAULT_PORT : "");
+        String path = normalizePath(u);
+        String portPart = port > 0 ? ":" + port : ("http".equals(scheme) && isIpOrLocal(host) ? ":" + DEFAULT_PORT : "");
+        return scheme + "://" + host + portPart + path;
+    }
+
+    public static List<String> candidateUrls(String raw) {
+        List<String> out = new ArrayList<>();
+        if (raw == null) return out;
+        String s = raw.trim();
+        if (s.isEmpty()) return out;
+        boolean hasScheme = s.matches("(?i)^https?://.*");
+        Uri u = Uri.parse(hasScheme ? s : "http://" + s);
+        String host = u.getHost();
+        if (host == null || host.isEmpty()) return out;
+        int port = u.getPort();
+        String scheme = u.getScheme().toLowerCase();
+        String path = normalizePath(u);
+        boolean ip = isIpOrLocal(host);
+        if (hasScheme) {
+            String primary = scheme + "://" + host + (port > 0 ? ":" + port : ("http".equals(scheme) && ip ? ":" + DEFAULT_PORT : "")) + path;
+            out.add(primary);
+            if ("http".equals(scheme) && port <= 0 && !ip) {
+                out.add("https://" + host + path);
+            }
+        } else if (ip) {
+            out.add("http://" + host + (port > 0 ? ":" + port : ":" + DEFAULT_PORT) + path);
+        } else if (port > 0) {
+            out.add("https://" + host + ":" + port + path);
+            out.add("http://" + host + ":" + port + path);
+        } else {
+            out.add("https://" + host + path);
+            out.add("http://" + host + path);
+            out.add("http://" + host + ":" + DEFAULT_PORT + path);
+        }
+        return out;
     }
 
     public static String ping(String url, int timeoutMs) {

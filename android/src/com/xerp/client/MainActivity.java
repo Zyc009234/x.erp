@@ -269,14 +269,64 @@ public class MainActivity extends Activity {
     }
 
     /* ---------- 服务器地址 ---------- */
+    static boolean isIpOrLocal(String host) {
+        if (host == null || host.isEmpty()) return false;
+        if ("localhost".equalsIgnoreCase(host)) return true;
+        if (host.contains(":")) return true;
+        return host.matches("^\\d{1,3}(\\.\\d{1,3}){3}$");
+    }
+
+    static String normalizePath(Uri u) {
+        String p = u.getEncodedPath();
+        if (p == null || p.isEmpty() || "/".equals(p)) return "";
+        return p.replaceAll("/+$", "");
+    }
+
     static String normalize(String s) {
+        if (s == null) return "";
         s = s.trim();
         if (s.isEmpty()) return "";
-        if (!s.matches("(?i)^https?://.*")) s = "http://" + s;
-        Uri u = Uri.parse(s);
-        if (u.getHost() == null || u.getHost().isEmpty()) return "";
+        boolean hasScheme = s.matches("(?i)^https?://.*");
+        Uri u = Uri.parse(hasScheme ? s : "http://" + s);
+        String host = u.getHost();
+        if (host == null || host.isEmpty()) return "";
         int port = u.getPort();
-        return u.getScheme().toLowerCase() + "://" + u.getHost() + (port > 0 ? ":" + port : u.getScheme().equalsIgnoreCase("http") ? ":" + DEFAULT_PORT : "");
+        String scheme = u.getScheme().toLowerCase();
+        String path = normalizePath(u);
+        String portPart = port > 0 ? ":" + port : ("http".equals(scheme) && isIpOrLocal(host) ? ":" + DEFAULT_PORT : "");
+        return scheme + "://" + host + portPart + path;
+    }
+
+    static List<String> candidateUrls(String raw) {
+        List<String> out = new ArrayList<>();
+        if (raw == null) return out;
+        String s = raw.trim();
+        if (s.isEmpty()) return out;
+        boolean hasScheme = s.matches("(?i)^https?://.*");
+        Uri u = Uri.parse(hasScheme ? s : "http://" + s);
+        String host = u.getHost();
+        if (host == null || host.isEmpty()) return out;
+        int port = u.getPort();
+        String scheme = u.getScheme().toLowerCase();
+        String path = normalizePath(u);
+        boolean ip = isIpOrLocal(host);
+        if (hasScheme) {
+            String primary = scheme + "://" + host + (port > 0 ? ":" + port : ("http".equals(scheme) && ip ? ":" + DEFAULT_PORT : "")) + path;
+            out.add(primary);
+            if ("http".equals(scheme) && port <= 0 && !ip) {
+                out.add("https://" + host + path);
+            }
+        } else if (ip) {
+            out.add("http://" + host + (port > 0 ? ":" + port : ":" + DEFAULT_PORT) + path);
+        } else if (port > 0) {
+            out.add("https://" + host + ":" + port + path);
+            out.add("http://" + host + ":" + port + path);
+        } else {
+            out.add("https://" + host + path);
+            out.add("http://" + host + path);
+            out.add("http://" + host + ":" + DEFAULT_PORT + path);
+        }
+        return out;
     }
 
     private void askServer(boolean first) {
@@ -285,13 +335,13 @@ public class MainActivity extends Activity {
         int p = dp(20);
         box.setPadding(p, dp(8), p, 0);
         TextView tip = new TextView(this);
-        tip.setText("填写 x.erp 服务端地址（飞牛 NAS 或 Windows 电脑的 IP），手机需要和它连在同一个 Wi-Fi。\n例如：192.168.1.10:8686");
+        tip.setText("填写 x.erp 服务端地址（局域网 IP 或自建域名，支持 http:// / https://）。\n例如：192.168.1.10:8686 或 https://erp.example.com");
         tip.setTextSize(13);
         tip.setTextColor(0xFF6B7280);
         EditText in = new EditText(this);
         in.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        in.setHint("192.168.1.10:8686");
-        in.setText(server.replaceFirst("^http://", ""));
+        in.setHint("192.168.1.10:8686 或 erp.example.com");
+        in.setText(server);
         in.setSingleLine(true);
         box.addView(tip);
         box.addView(in);
@@ -305,24 +355,31 @@ public class MainActivity extends Activity {
                 .create();
         d.setOnShowListener(x -> {
             d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-                String url = normalize(in.getText().toString());
-                if (url.isEmpty()) { toast("请填写服务器地址"); return; }
+                List<String> cands = candidateUrls(in.getText().toString());
+                if (cands.isEmpty()) { toast("请填写服务器地址"); return; }
                 d.dismiss();
-                testAndUse(url, first);
+                testAndUse(cands, first);
             });
             d.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> { d.dismiss(); discover(first); });
         });
         d.show();
     }
 
-    private void testAndUse(String url, boolean first) {
-        ProgressDialog pd = ProgressDialog.show(this, null, "正在连接 " + url + " …", true, false);
+    private void testAndUse(List<String> cands, boolean first) {
+        String primary = cands.get(0);
+        ProgressDialog pd = ProgressDialog.show(this, null, "正在连接 " + primary + " …", true, false);
         new Thread(() -> {
-            String err = ping(url, 5000);
+            String matched = null, firstErr = null;
+            for (String u : cands) {
+                String err = ping(u, 5000);
+                if (err == null) { matched = u; break; }
+                if (firstErr == null) firstErr = err;
+            }
+            String okUrl = matched, errMsg = firstErr;
             ui.post(() -> {
                 pd.dismiss();
-                if (err == null) useServer(url);
-                else new AlertDialog.Builder(this).setTitle("连接失败").setMessage(url + "\n\n" + err + "\n\n请确认：手机和服务器在同一个 Wi-Fi；地址和端口正确；服务端已启动。")
+                if (okUrl != null) useServer(okUrl);
+                else new AlertDialog.Builder(this).setTitle("连接失败").setMessage(primary + "\n\n" + errMsg + "\n\n请确认：地址和端口正确、服务端已启动；若使用域名请确认反代与证书正常。")
                         .setPositiveButton("重新填写", (d, w) -> askServer(first)).setCancelable(false).show();
             });
         }).start();

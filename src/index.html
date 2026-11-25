@@ -247,6 +247,28 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .m-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid var(--border)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
 .bom-tbl{table-layout:fixed;min-width:760px}.bom-tbl input{width:100%;box-sizing:border-box}
+.pk-head{display:flex;align-items:center;justify-content:space-between;gap:8px 12px;flex-wrap:wrap;margin-bottom:10px}
+.pk-head-l{display:flex;align-items:baseline;gap:6px 12px;flex-wrap:wrap}
+.pk-tbl{table-layout:fixed;min-width:700px}
+.pk-tbl th,.pk-tbl td{padding:7px 8px;vertical-align:middle}
+.pk-tbl input:not([type=radio]):not([type=checkbox]){width:100%;min-width:0;height:34px;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:var(--panel);color:var(--text);outline:none;transition:.15s}
+.pk-tbl input:not([type=radio]):not([type=checkbox]):focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.pk-tbl .pk-def{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.pk-tbl .pk-def .chk{gap:4px;padding:0;font-size:12.5px}
+.pk-tbl .pk-def input[type=radio]{width:15px;height:15px;margin:0}
+.pcombo{position:relative;display:flex;align-items:center}
+.pcombo input{width:100%;padding-right:30px}
+.pcombo-clr{position:absolute;right:6px;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--muted);font-size:15px;line-height:1}
+.pcombo-clr:hover{background:var(--gray-soft);color:var(--text)}
+.pcombo-drop{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:60;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.15);max-height:260px;overflow-y:auto;display:none;padding:4px}
+.pcombo-drop.open{display:block}
+.pcombo-opt{padding:7px 10px;border-radius:7px;cursor:pointer;display:flex;flex-direction:column;gap:1px}
+.pcombo-opt:hover,.pcombo-opt.hi{background:var(--primary-soft)}
+.pcombo-opt.on b{color:var(--primary)}
+.pcombo-opt b{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcombo-opt small{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcombo-add{color:var(--primary);font-weight:500;border-top:1px solid var(--border);margin-top:4px;padding-top:8px}
+.pcombo-empty{padding:10px;text-align:center;font-size:12.5px;color:var(--muted)}
 .pop-menu{position:fixed;z-index:200;min-width:130px;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.15);padding:4px;display:flex;flex-direction:column}.pop-menu button{border:0;background:none;text-align:left;padding:8px 12px;border-radius:7px;font:inherit;color:var(--text);cursor:pointer}.pop-menu button:hover{background:var(--panel2)}.pop-menu .danger-text{color:var(--red)}
 .exp-imgs{display:flex;flex-wrap:wrap;gap:8px}.exp-img{position:relative;width:96px;height:96px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg)}.exp-img img{width:100%;height:100%;object-fit:cover;cursor:zoom-in}.exp-img .icon-btn{position:absolute;right:2px;top:2px;background:rgba(0,0,0,.55);color:#fff}
 .pwrap{display:flex;align-items:center;gap:2px}.pwrap input{flex:1;min-width:0}.spm{width:12px;flex:none;text-align:center}.spm b{color:var(--red)}.spm i{color:var(--muted);font-style:normal;cursor:pointer}
@@ -314,9 +336,36 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .ppl-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:16px;border:1px solid var(--border);background:var(--panel);font-size:12.5px;cursor:pointer;user-select:none}
 .ppl-chip.on{border-color:var(--primary);background:var(--primary-soft);color:var(--primary);font-weight:500}
 .ppl-chip input{width:14px;height:14px;accent-color:var(--primary);margin:0}
+.pmulti{position:relative;width:100%;min-width:0}
+.pmulti-box{min-height:38px;padding:4px 30px 4px 8px;border:1px solid var(--border);border-radius:9px;background:var(--panel);display:flex;flex-wrap:wrap;gap:5px;align-items:center;cursor:pointer;position:relative;transition:.15s}
+.pmulti-box:hover{border-color:var(--primary)}
+.pmulti.open .pmulti-box{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.pmulti-arr{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;pointer-events:none;transition:transform .15s}
+.pmulti.open .pmulti-arr{transform:translateY(-50%) rotate(180deg);color:var(--primary)}
+.pmulti-ph{color:var(--muted);font-size:13px;padding:2px 4px;user-select:none}
+.pmulti-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:14px;background:var(--primary-soft);color:var(--primary);font-size:12.5px;font-weight:500;max-width:100%}
+.pmulti-tag span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pmulti-tag button{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-size:13px;line-height:1;color:var(--primary);opacity:.75}
+.pmulti-tag button:hover{background:rgba(79,70,229,.15);opacity:1}
+.pmulti-drop{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:85;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 14px 36px rgba(0,0,0,.16);display:none;overflow:hidden;min-width:240px}
+.pmulti.open .pmulti-drop{display:block}
+.pmulti-drop.up{top:auto;bottom:calc(100% + 4px)}
+.pmulti-top{display:flex;align-items:center;gap:6px;padding:8px;border-bottom:1px solid var(--border);background:var(--panel2)}
+.pmulti-q{flex:1;min-width:0;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 10px;background:var(--panel);color:var(--text);font-size:13px;outline:none}
+.pmulti-q:focus{border-color:var(--primary)}
+.pmulti-list{max-height:220px;overflow-y:auto;padding:4px}
+.pmulti-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px;user-select:none}
+.pmulti-item:hover{background:var(--panel2)}
+.pmulti-item.on{background:var(--primary-soft);color:var(--primary)}
+.pmulti-item input{width:15px;height:15px;accent-color:var(--primary);margin:0;flex:none}
+.pmulti-item b{font-weight:500}
+.pmulti-item small{color:var(--muted);font-size:12px;margin-left:auto;white-space:nowrap}
+.pmulti-foot{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-top:1px solid var(--border);background:var(--panel2);font-size:12px;color:var(--muted)}
 .ef-sec{border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--panel);margin-bottom:12px}
-.ef-sec-h{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
-.ef-dept-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;flex-wrap:wrap}.ef-dept-row>input{width:130px;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:var(--panel);flex:none}
+.ef-sec-h{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.ef-step-no{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--primary-soft);color:var(--primary);font-size:12px;font-weight:700;margin-right:6px;vertical-align:1px}
+.ef-dept-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.ef-dept-sel{width:150px;height:38px;flex:none}
 .tpl-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:14px}
 .slip-preview{border:1px solid var(--border);border-radius:10px;padding:18px;background:#fff;color:#000;overflow-x:auto}
 .slip-preview table{border-collapse:collapse;width:100%;min-width:460px}
@@ -387,6 +436,8 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
   .form-grid{gap:10px}
   .tbl.items th,.tbl.items td{padding:6px 8px;font-size:12.5px}
   .tbl.items input,.tbl.items select{height:32px}
+  .pk-tbl th,.pk-tbl td{padding:6px;font-size:12.5px}
+  .pk-tbl input:not([type=radio]):not([type=checkbox]){height:32px}
   /* 单据正文：手机上按屏宽排，不横向撑出屏幕 */
   .m-body{overflow-x:hidden}
   .print-area.doc{font-size:12px}
@@ -421,6 +472,8 @@ html.mobile .m-foot .btn{height:36px}
 html.mobile .form-grid{gap:10px}
 html.mobile .tbl.items th,html.mobile .tbl.items td{padding:6px 8px;font-size:12.5px}
 html.mobile .tbl.items input,html.mobile .tbl.items select{height:32px}
+html.mobile .pk-tbl th,html.mobile .pk-tbl td{padding:6px;font-size:12.5px}
+html.mobile .pk-tbl input:not([type=radio]):not([type=checkbox]){height:32px}
 html.mobile .m-body{overflow-x:hidden}
 html.mobile .print-area.doc{font-size:12px}
 html.mobile .print-area.doc .tbl{white-space:normal;table-layout:fixed;width:100%}
@@ -458,7 +511,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.15.0</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.15.1</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -1089,22 +1142,28 @@ function mountPackEditor(rec) {
   let baseBarcode = rec && rec.barcode || '';
   const buy0 = rec && rec.buyUnit || baseUnit;
   const sale0 = rec && rec.saleUnit || baseUnit;
-  $('#mform').insertAdjacentHTML('beforeend', `<div class="span2" id="pkBox" style="margin-top:6px;min-width:0">
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px"><b>包装规格与条码</b><button class="btn sm" type="button" id="pkAdd">+ 添加包装单位</button><span class="sub-t">库存、成本始终按基本单位核算</span></div>
-    <div class="table-wrap" style="width:100%;max-width:100%;min-width:0;overflow-x:auto"><table class="tbl compact" style="table-layout:fixed;min-width:650px"><colgroup><col style="width:48px"><col style="width:100px"><col style="width:64px"><col><col style="width:78px"><col style="width:104px"><col style="width:34px"></colgroup><thead><tr><th>层级</th><th>单位</th><th>换算</th><th>条码</th><th>售价</th><th>默认</th><th></th></tr></thead><tbody id="pkRows"></tbody></table></div>
-    <p class="sub-t" id="pkHint" style="margin-top:6px"></p></div>`);
+  let buySel = buy0 === baseUnit ? '__base' : ((rows.find(u => u.name === buy0) || {}).id || '__base');
+  let saleSel = sale0 === baseUnit ? '__base' : ((rows.find(u => u.name === sale0) || {}).id || '__base');
+  $('#mform').insertAdjacentHTML('beforeend', `<div class="span2" id="pkBox" style="margin-top:4px;padding-top:14px;border-top:1px solid var(--border);min-width:0">
+    <div class="pk-head"><div class="pk-head-l"><b>包装规格与条码</b><span class="sub-t">库存、成本始终按基本单位核算</span></div><button class="btn sm" type="button" id="pkAdd">${ic('plus')}添加包装单位</button></div>
+    <div class="table-wrap" style="width:100%;max-width:100%;min-width:0;overflow-x:auto"><table class="tbl pk-tbl"><colgroup><col style="width:66px"><col style="width:124px"><col style="width:78px"><col><col style="width:94px"><col style="width:104px"><col style="width:44px"></colgroup><thead><tr><th>层级</th><th>单位</th><th>换算</th><th>条码</th><th>售价</th><th>默认</th><th></th></tr></thead><tbody id="pkRows"></tbody></table></div>
+    <p class="sub-t" id="pkHint" style="margin-top:8px"></p></div>`);
   const draw = () => {
     const curBaseCode = $('#pkBaseBarcode');
     if (curBaseCode) baseBarcode = curBaseCode.value;
+    const curBuy = $('#pkRows input[name="pkBuy"]:checked'); if (curBuy) buySel = curBuy.value;
+    const curSale = $('#pkRows input[name="pkSale"]:checked'); if (curSale) saleSel = curSale.value;
+    if (buySel !== '__base' && !rows.some(u => u.id === buySel)) buySel = '__base';
+    if (saleSel !== '__base' && !rows.some(u => u.id === saleSel)) saleSel = '__base';
     $('#pkRows').innerHTML = `<tr data-base="1"><td><span class="badge blue plain">基本</span></td><td><b id="pkBaseUnit">${esc(baseUnit)}</b></td><td>1</td>
       <td><input id="pkBaseBarcode" value="${esc(baseBarcode)}" placeholder="最小规格条码"></td><td class="num sub-t">上方基本价</td>
-      <td><span style="display:flex;gap:6px;white-space:nowrap"><label class="chk" title="默认采购单位"><input type="radio" name="pkBuy" value="__base" ${buy0 === baseUnit ? 'checked' : ''}>采</label><label class="chk" title="默认销售单位"><input type="radio" name="pkSale" value="__base" ${sale0 === baseUnit ? 'checked' : ''}>销</label></span></td><td></td></tr>`
-      + rows.map((u, i) => `<tr data-id="${u.id}"><td><span class="badge gray">包装</span></td><td><input data-pk="name" data-i="${i}" value="${esc(u.name)}" placeholder="如 中包装 / 外箱"></td>
+      <td><span class="pk-def"><label class="chk" title="默认采购单位"><input type="radio" name="pkBuy" value="__base" ${buySel === '__base' ? 'checked' : ''}>采</label><label class="chk" title="默认销售单位"><input type="radio" name="pkSale" value="__base" ${saleSel === '__base' ? 'checked' : ''}>销</label></span></td><td></td></tr>`
+      + rows.map((u, i) => `<tr data-id="${u.id}"><td><span class="badge gray plain">包装</span></td><td><input data-pk="name" data-i="${i}" value="${esc(u.name)}" placeholder="如 中包装 / 外箱"></td>
         <td><input data-pk="rate" data-i="${i}" type="number" min="2" step="1" value="${esc(u.rate)}" placeholder="如 10"></td>
         <td><input data-pk="barcode" data-i="${i}" value="${esc(u.barcode)}" placeholder="该包装的条码"></td>
         <td><input data-pk="price" data-i="${i}" type="number" min="0" step="0.01" value="${esc(u.price)}" placeholder="按换算"></td>
-        <td><span style="display:flex;gap:6px;white-space:nowrap"><label class="chk" title="默认采购单位"><input type="radio" name="pkBuy" value="${u.id}" ${buy0 === u.name ? 'checked' : ''}>采</label><label class="chk" title="默认销售单位"><input type="radio" name="pkSale" value="${u.id}" ${sale0 === u.name ? 'checked' : ''}>销</label></span></td>
-        <td><button class="icon-btn sm" type="button" data-pkdel="${u.id}" title="删除">${ic('trash')}</button></td></tr>`).join('');
+        <td><span class="pk-def"><label class="chk" title="默认采购单位"><input type="radio" name="pkBuy" value="${u.id}" ${buySel === u.id ? 'checked' : ''}>采</label><label class="chk" title="默认销售单位"><input type="radio" name="pkSale" value="${u.id}" ${saleSel === u.id ? 'checked' : ''}>销</label></span></td>
+        <td style="text-align:center"><button class="icon-btn sm" type="button" data-pkdel="${u.id}" title="删除">${ic('trash')}</button></td></tr>`).join('');
     sync();
   };
   const sync = () => {
@@ -3745,6 +3804,111 @@ function orderOps(kind, o) {
   if (o.status === '已作废') b.push(tbtn('删除', 'orderDel', id, 'danger-text'));
   return b.join('');
 }
+// 可搜索的客户 / 供应商下拉选择器（支持按名称、联系人、电话过滤，有往来单位权限时可直接输入快捷新建）
+function mountPartyCombo({ box, col, label }) {
+  const hidden = $('input[type=hidden]', box), inp = $('#oPartyIn', box), clr = $('.pcombo-clr', box), drop = $('.pcombo-drop', box);
+  const all = () => db[col] || [];
+  let shown = [], canAdd = false, hi = -1, open = false, creating = false, lastId = hidden.value;
+  const emit = () => { if (hidden.value !== lastId) { lastId = hidden.value; hidden.dispatchEvent(new Event('change')); } };
+  const close = () => { open = false; drop.classList.remove('open'); };
+  const pick = p => {
+    hidden.value = p ? p.id : '';
+    inp.value = p ? p.name : '';
+    clr.hidden = !inp.value;
+    close();
+    emit();
+  };
+  const createQuick = async name => {
+    name = (name || '').trim();
+    if (creating || !name) return;
+    creating = true;
+    try {
+      const r = await api('POST', '/api/' + col, { name });
+      if (r && r.id) { db[col].push(r); pick(r); toast(`已新建${label}：${r.name}`); }
+    } catch (e) { toast(e.message || '新建失败', 'error'); }
+    finally { creating = false; }
+  };
+  const updHi = () => {
+    drop.querySelectorAll('.pcombo-opt').forEach((el, idx) => {
+      el.classList.toggle('hi', idx === hi);
+      if (idx === hi) el.scrollIntoView({ block: 'nearest' });
+    });
+  };
+  const render = useFilter => {
+    const raw = useFilter ? inp.value.trim() : '', q = raw.toLowerCase(), list = all();
+    let matched = q ? list.filter(p => [p.name, p.contact, p.phone, p.address, p.level, p.category].some(s => s && String(s).toLowerCase().includes(q))) : list;
+    if (q) {
+      const rank = p => { const n = (p.name || '').toLowerCase(); return n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : 3; };
+      matched = [...matched].sort((a, b) => rank(a) - rank(b));
+    }
+    shown = matched.slice(0, 60);
+    const more = matched.length - shown.length;
+    canAdd = can('parties') && !!raw && !list.some(p => (p.name || '').trim().toLowerCase() === q);
+    const selIdx = shown.findIndex(p => p.id === hidden.value);
+    hi = q ? (shown.length || canAdd ? 0 : -1) : (selIdx >= 0 ? selIdx : (shown.length ? 0 : -1));
+    let html = shown.map((p, i) => {
+      const sub = [p.contact, p.phone].filter(Boolean).join(' · ');
+      return `<div class="pcombo-opt${p.id === hidden.value ? ' on' : ''}${i === hi ? ' hi' : ''}" data-pidx="${i}"><b>${esc(p.name)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
+    }).join('');
+    if (!shown.length && !canAdd) html = `<div class="pcombo-empty">${q ? `未找到匹配的${label}` : `暂无${label}`}</div>`;
+    if (more > 0) html += `<div class="pcombo-empty">仅显示前 60 条（共 ${matched.length} 条），请继续输入缩小范围</div>`;
+    if (canAdd) html += `<div class="pcombo-opt pcombo-add${shown.length === hi ? ' hi' : ''}" data-padd="1">+ 新建${label}「${esc(raw)}」</div>`;
+    drop.innerHTML = html;
+    open = true;
+    drop.classList.add('open');
+  };
+  inp.addEventListener('focus', () => {
+    if (hidden.value) { inp.select(); render(false); }
+    else render(!!inp.value.trim());
+  });
+  inp.addEventListener('input', () => {
+    clr.hidden = !inp.value;
+    const cur = hidden.value ? byId(all(), hidden.value) : null;
+    if (cur && cur.name !== inp.value.trim()) hidden.value = '';
+    render(true);
+  });
+  inp.addEventListener('keydown', e => {
+    const total = shown.length + (canAdd ? 1 : 0);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!open) { render(!!inp.value.trim() && !hidden.value); return; }
+      if (total) { hi = (hi + 1) % total; updHi(); }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!open) { render(!!inp.value.trim() && !hidden.value); return; }
+      if (total) { hi = (hi - 1 + total) % total; updHi(); }
+    } else if (e.key === 'Enter' && open) {
+      e.preventDefault();
+      if (hi >= 0 && hi < shown.length) pick(shown[hi]);
+      else if (canAdd && hi === shown.length) createQuick(inp.value.trim());
+    } else if (e.key === 'Escape' && open) {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    }
+  });
+  inp.addEventListener('blur', () => {
+    close();
+    const raw = inp.value.trim();
+    if (!hidden.value) {
+      if (!raw) { emit(); return; }
+      const hit = all().find(p => (p.name || '').trim().toLowerCase() === raw.toLowerCase() || (p.phone && String(p.phone).trim() === raw));
+      if (hit) pick(hit);
+    }
+  });
+  drop.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const opt = e.target.closest('[data-pidx]');
+    if (opt) { pick(shown[+opt.dataset.pidx]); return; }
+    if (e.target.closest('[data-padd]')) createQuick(inp.value.trim());
+  });
+  clr.addEventListener('mousedown', e => {
+    e.preventDefault();
+    pick(null);
+    inp.focus();
+    render(false);
+  });
+}
 // 商品明细跟入库单一样：输入编码 / 条码 / 名称搜索，扫码枪录入后回车；退货单可关联原单，按原单带出可退数量和单价
 function orderModal(kind, id, srcId0) {
   const C = ORD[kind], o = id ? byId(db[C.db], id) : null, S0 = C.src && ORD[C.src];
@@ -3767,7 +3931,7 @@ function orderModal(kind, id, srcId0) {
     .map(s => `<option value="${s.id}" ${s.id === draft.srcId ? 'selected' : ''}>${s.no} · ${s.date} · ${money(orderTotal(s))}</option>`).join('');
   openModal(`${modalHead((o ? '编辑' : '新建') + C.title + (o ? ' · ' + o.no : ''))}
   <div class="m-body">${o && o.status === '已审核' ? '<div class="sub-t" style="margin-bottom:10px">这张采购单已审核，保存修改后会退回「待审核」，需要重新审核才能入库。</div>' : ''}${o && (o.status === '已发货' || o.status === '已入库') ? `<div class="tip-line">这张单已${o.status.slice(1)}。只改${kind === 'sales' ? '单价、' : ''}优惠或备注不影响库存；改了商品、数量${kind === 'purchase' ? '或单价' : ''}，保存时会把原来的${kind === 'sales' ? '出库' : '入库'}冲回，按新明细重新${kind === 'sales' ? '出库' : '入库'}（库存流水里能看到「改单冲回」）。${kind === 'purchase' ? '货已经卖出去一部分的，就不能再改数量或单价了。' : ''}</div>` : ''}<div class="form-grid">
-    <label class="field"><span>${C.partyLabel} <i>*</i></span><select id="oParty"><option value="">请选择${C.partyLabel}</option>${db[C.party].map(p => `<option value="${p.id}" ${p.id === party0 ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+    <div class="field"><span>${C.partyLabel} <i>*</i></span><div class="pcombo" id="oPartyBox"><input type="hidden" id="oParty" value="${esc(party0)}"><input id="oPartyIn" autocomplete="off" value="${esc((byId(db[C.party], party0) || {}).name || '')}" placeholder="搜索${C.partyLabel}名称 / 联系人 / 电话${can('parties') ? '，或直接输入新建' : ''}"><button type="button" class="pcombo-clr" title="清空" ${party0 ? '' : 'hidden'}>×</button><div class="pcombo-drop"></div></div></div>
     <label class="field"><span>单据日期 <i>*</i></span><input type="date" id="oDate" value="${o ? o.date : today()}"></label>
     <label class="field"><span>${kind === 'sales' ? '业务员' : kind === 'purchase' ? '采购员' : '经手人'}</span><input id="oHandler" list="oHList" maxlength="32" value="${esc(o ? o.handler || o.creator || '' : ME.name)}" placeholder="默认开单人"><datalist id="oHList">${handlerNames().map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>
     ${kind === 'sales' ? `<label class="field span2"><span>收货地址（选填）</span><input id="oAddress" maxlength="200" value="${esc(o ? o.address || '' : '')}" placeholder="默认带出客户档案地址，可改成这次订单的收货地址"></label>` : ''}
@@ -3870,10 +4034,15 @@ function orderModal(kind, id, srcId0) {
     $('#oParty').onchange = e => { const s = srcOf(); if (s && s[S0.partyKey] !== e.target.value) draft.srcId = ''; $('#oSrc').innerHTML = srcOpts(e.target.value); reprice(e.target.value); renderItems(); };
     $('#oSrc').onchange = e => { draft.srcId = e.target.value; const s = srcOf(); if (s) { fillFromSrc(s); draft.items.push(blank()); } renderItems(); };
   }
+  mountPartyCombo({ box: $('#oPartyBox'), col: C.party, label: C.partyLabel });
   $('#oSave').onclick = () => {
     const party = $('#oParty').value, date = $('#oDate').value, remark = $('#oRemark').value.trim();
     const items = draft.items.filter(i => i.productId);
-    if (!party) return toast('请选择' + C.partyLabel, 'error');
+    if (!party) {
+      const typed = ($('#oPartyIn')?.value || '').trim();
+      $('#oPartyIn')?.focus();
+      return toast(typed ? `未选中${C.partyLabel}「${typed}」，请从下拉列表选择${can('parties') ? '或点击新建' : ''}` : '请选择' + C.partyLabel, 'error');
+    }
     if (!date) return toast('请选择日期', 'error');
     if (!items.length) return toast('请至少添加一个商品', 'error');
     if (items.some(i => !Number.isInteger(+i.qty) || +i.qty <= 0)) return toast('数量必须为正整数', 'error');
@@ -5945,7 +6114,7 @@ function pageSettings() {
   if (!items.some(i => i[0] === ui.setTab)) ui.setTab = 'general';
   const st = db.settings;
   const platLabel = st.platform === 'fnos' ? '飞牛 fnOS' : st.platform === 'win32' ? 'Windows' : st.platform === 'docker' ? 'Docker' : (st.platform || '未知平台');
-  $('#view').innerHTML = pageHead('系统设置', '账户、偏好、用户权限与数据管理') + tabs('setTab', items) + '<div id="setBody"></div>';
+  $('#view').innerHTML = pageHead('系统设置', isAdmin() ? '账户、偏好、用户权限与数据管理' : '我的账户与本机界面偏好') + tabs('setTab', items) + '<div id="setBody"></div>';
   const body = $('#setBody');
   if (ui.setTab === 'print') printTplPage(body);
   else if (ui.setTab === 'gsp') gspPage(body);
@@ -5966,8 +6135,8 @@ function pageSettings() {
         <label class="field"><span>每页显示条数</span><select id="sPs">${[10, 15, 20, 50].map(n => `<option ${+st.pageSize === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       </div>
       <div style="margin-top:16px;text-align:right"><button class="btn" data-act="savePrefs">${ic('check')}保存偏好</button></div>
-      <div class="setting-row" style="margin-top:12px;border-top:1px solid var(--border)"><div class="sr-group" style="flex:1"><b>公司名称</b><small>显示在单据抬头，所有用户共享${isAdmin() ? '' : '（仅管理员可修改）'}</small>
-        <div style="display:flex;gap:8px;margin-top:6px"><input class="select" style="flex:1" id="sCompany" value="${esc(st.company)}" ${isAdmin() ? '' : 'disabled'}>${isAdmin() ? `<button class="btn primary" data-act="saveCompany">保存</button>` : ''}</div></div></div>
+      ${isAdmin() ? `<div class="setting-row" style="margin-top:12px;border-top:1px solid var(--border)"><div class="sr-group" style="flex:1"><b>公司名称</b><small>显示在单据抬头，所有用户共享</small>
+        <div style="display:flex;gap:8px;margin-top:6px"><input class="select" style="flex:1" id="sCompany" value="${esc(st.company)}"><button class="btn primary" data-act="saveCompany">保存</button></div></div></div>` : ''}
     </div></div></div>
     ${isAdmin() ? `<div class="card" style="margin-top:16px"><div class="card-head"><h3>启用的功能模块</h3></div><div class="card-body">
       <p class="sub-t" style="margin-bottom:10px">未启用的模块对所有账号（包括管理员）隐藏，相关接口也会拒绝访问；数据不会删除，重新启用即可恢复。</p>
@@ -6003,7 +6172,7 @@ function pageSettings() {
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>匿名使用统计</h3></div><div class="card-body">
       <p class="sub-t" style="margin-bottom:10px">每天向 x.erp 作者的服务器报一次：随机生成的安装编号、软件版本号、系统类型（Windows / Linux），用来了解有多少人在用、该维护哪些版本。不包含公司名、账号、商品、单据等任何业务数据。统计服务不保存 IP 原文：只用它识别大致所在城市，并做不可逆加密后用来把同一网络下的多台设备合并计数。连不上外网时自动跳过，不影响使用。</p>
       <label class="chk"><input type="checkbox" id="statsOn" ${st.stats !== false ? 'checked' : ''}>参与匿名使用统计</label>
-    </div></div>` : ''}`;
+    </div></div>` : ''}${!isAdmin() && can('exp.flow') ? `<div class="card" style="margin-top:16px"><div class="card-head"><h3>报销审批流程</h3><span class="sub-t">统一指定所有报销单由谁审批、固定抄送给谁</span></div><div class="card-body" id="expFlowCardBody"><div class="empty">加载成员中…</div></div></div>` : ''}`;
     if ($('#statsOn')) $('#statsOn').onchange = e => A.saveStats(e.target.checked);
     if ($('#expFlowCardBody')) renderExpFlowEditor($('#expFlowCardBody'));
   } else if (ui.setTab === 'users') {
@@ -6262,7 +6431,7 @@ function printTplPage(body) {
 let USERS = [];
 const fmtTime = t => t ? new Date(t).toLocaleString('zh-CN', {hour12:false}) : '-';
 let ROLES = [];
-const PERM_SHORT = {'expense':'报销', 'exp.approve':'报销审批', 'inv.view':'查看', 'inv.in':'入库', 'inv.out':'出库', 'inv.check':'盘点录入', 'inv.void':'作废', 'inv.approve':'出入库审核', 'inv.print':'打印', 'inv.export':'导出', 'inv.cost':'成本价', 'inv.price':'销售价',
+const PERM_SHORT = {'expense':'报销', 'exp.approve':'报销审批', 'exp.flow':'报销流程设置', 'inv.view':'查看', 'inv.in':'入库', 'inv.out':'出库', 'inv.check':'盘点录入', 'inv.void':'作废', 'inv.approve':'出入库审核', 'inv.print':'打印', 'inv.export':'导出', 'inv.cost':'成本价', 'inv.price':'销售价',
   'inv.backdate':'补录', 'inv.others':'他人单据', 'inv.checkpost':'盘点审核', 'prod.view':'商品查看', 'prod.edit':'商品编辑', 'prod.delete':'商品删除',
   'parties.all':'全部客户', 'reports.all':'全部报表', 'agri':'粮食收购',
   'ship.view':'运单查看', 'ship.edit':'登记运单', 'ship.rate':'快递报价', 'ship.bill':'快递对账'};
@@ -6348,6 +6517,81 @@ function expFlowSummaryHtml(dept, amount, flow, selfUsername) {
   const ccTxt = cc.length ? `固定抄送：<b>${cc.map(u => esc(personLabel(u))).join('、')}</b>` : '固定抄送：无';
   return `<b>审批流程：</b>${stepTxt}<br><b>默认抄送：</b>${ccTxt}${f.allowCustomCc === false ? '（仅管理员设置，报销人不可改）' : '（报销人可额外补充）'}`;
 }
+let activePmulti = null;
+document.addEventListener('mousedown', e => { if (activePmulti && !activePmulti.el.contains(e.target)) activePmulti.close(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && activePmulti) { e.preventDefault(); e.stopImmediatePropagation(); activePmulti.close(); }
+});
+// 弹出式多选人员下拉选择器（带搜索、部门展示、标签删除，自动向上/向下翻转）
+function mountPeopleMulti(host, { people = [], selected, placeholder = '点击选择人员…', emptyText = '暂无可用账号，请先在「用户管理」添加账号', onChange }) {
+  const map = new Map(people.map(p => [p.username, p]));
+  const arr = [...people];
+  selected.forEach(u => { if (!map.has(u)) arr.push({ username: u, name: u, dept: '' }); });
+  if (!arr.length) { host.innerHTML = `<span class="sub-t">${esc(emptyText)}</span>`; return; }
+  host.innerHTML = `<div class="pmulti"><div class="pmulti-box" tabindex="0"><span class="pmulti-arr">▾</span></div><div class="pmulti-drop"><div class="pmulti-top"><input class="pmulti-q" placeholder="搜索姓名 / 账号 / 部门"><button type="button" class="tbtn" data-pmclr="1" hidden>清空</button></div><div class="pmulti-list"></div><div class="pmulti-foot"><span class="pmulti-cnt"></span><button type="button" class="btn sm primary" data-pmdone="1">确定</button></div></div></div>`;
+  const wrap = $('.pmulti', host), box = $('.pmulti-box', wrap), drop = $('.pmulti-drop', wrap), qIn = $('.pmulti-q', wrap), clrBtn = $('[data-pmclr]', wrap), listEl = $('.pmulti-list', wrap), cntEl = $('.pmulti-cnt', wrap);
+  let isOpen = false;
+  const close = () => {
+    if (!isOpen) return;
+    isOpen = false;
+    wrap.classList.remove('open');
+    drop.classList.remove('up');
+    if (activePmulti && activePmulti.el === wrap) activePmulti = null;
+  };
+  const renderTags = () => {
+    const tags = [...selected].map(u => {
+      const p = map.get(u);
+      const lbl = p ? p.name : u;
+      return `<span class="pmulti-tag"><span>${esc(lbl)}</span><button type="button" data-rm="${esc(u)}" title="移除">×</button></span>`;
+    }).join('');
+    box.innerHTML = (tags || `<span class="pmulti-ph">${esc(placeholder)}</span>`) + '<span class="pmulti-arr">▾</span>';
+    clrBtn.hidden = !selected.size;
+    cntEl.textContent = selected.size ? `已选 ${selected.size} 人` : '未选择';
+  };
+  const renderList = () => {
+    const q = qIn.value.trim().toLowerCase();
+    const matched = q ? arr.filter(p => [p.name, p.username, p.dept].some(s => s && String(s).toLowerCase().includes(q))) : arr;
+    listEl.innerHTML = matched.length ? matched.map(p => {
+      const on = selected.has(p.username);
+      const meta = [p.name !== p.username ? p.username : '', p.dept].filter(Boolean).join(' · ');
+      return `<label class="pmulti-item${on ? ' on' : ''}"><input type="checkbox" value="${esc(p.username)}" ${on ? 'checked' : ''}><b>${esc(p.name)}</b>${meta ? `<small>${esc(meta)}</small>` : ''}</label>`;
+    }).join('') : '<div class="pcombo-empty">未找到匹配成员</div>';
+  };
+  const open = () => {
+    if (activePmulti && activePmulti.el !== wrap) activePmulti.close();
+    isOpen = true;
+    qIn.value = '';
+    renderList();
+    const r = box.getBoundingClientRect();
+    drop.classList.toggle('up', window.innerHeight - r.bottom < 280 && r.top > 280);
+    wrap.classList.add('open');
+    activePmulti = { el: wrap, close };
+    setTimeout(() => qIn.focus(), 0);
+  };
+  box.addEventListener('click', e => {
+    const rm = e.target.closest('[data-rm]');
+    if (rm) {
+      e.stopPropagation();
+      selected.delete(rm.dataset.rm);
+      renderTags();
+      if (isOpen) renderList();
+      if (onChange) onChange();
+      return;
+    }
+    if (isOpen) close(); else open();
+  });
+  qIn.addEventListener('input', renderList);
+  listEl.addEventListener('change', e => {
+    const cb = e.target; if (cb.type !== 'checkbox') return;
+    cb.checked ? selected.add(cb.value) : selected.delete(cb.value);
+    cb.closest('.pmulti-item').classList.toggle('on', cb.checked);
+    renderTags();
+    if (onChange) onChange();
+  });
+  clrBtn.addEventListener('click', () => { selected.clear(); renderTags(); renderList(); if (onChange) onChange(); });
+  $('[data-pmdone]', wrap).addEventListener('click', close);
+  renderTags();
+}
 async function renderExpFlowEditor(box, { onSaved } = {}) {
   const people = await loadPeople(true);
   const st = db.settings.expenseFlow || {};
@@ -6358,21 +6602,6 @@ async function renderExpFlowEditor(box, { onSaved } = {}) {
   let allowCustomCc = st.allowCustomCc !== false, gmThreshold = Number(st.gmThreshold) || 0;
   const deptRows = Object.entries(st.deptHeads || {}).map(([dept, who]) => ({ dept, who: new Set([].concat(who).filter(Boolean)) }));
   if (!deptRows.length) deptRows.push({ dept: '', who: new Set() });
-  const mergeList = set => {
-    const map = new Map(people.map(p => [p.username, p]));
-    const arr = [...people];
-    set.forEach(u => { if (!map.has(u)) arr.push({ username: u, name: u }); });
-    return arr;
-  };
-  const chipsHtml = (attr, set, extraAttr = '') => {
-    const arr = mergeList(set);
-    if (!arr.length) return '<span class="sub-t">暂无可用账号，请先在「用户管理」添加账号</span>';
-    return `<div class="ppl-pick">${arr.map(p => `<label class="ppl-chip ${set.has(p.username) ? 'on' : ''}"><input type="checkbox" ${attr} ${extraAttr} value="${esc(p.username)}" ${set.has(p.username) ? 'checked' : ''}><span>${esc(p.name)}${p.name !== p.username ? `（${esc(p.username)}）` : ''}</span></label>`).join('')}</div>`;
-  };
-  const drawDepts = () => {
-    box.querySelector('#efDeptList').innerHTML = `<datalist id="efDeptOpts">${depts().map(d => `<option value="${esc(d)}">`).join('')}</datalist>` +
-      deptRows.map((r, i) => `<div class="ef-dept-row" data-di="${i}"><input list="efDeptOpts" maxlength="32" data-dk="dept" value="${esc(r.dept)}" placeholder="部门，如：销售部"><div style="flex:1;min-width:220px">${chipsHtml(`data-dk="who" data-di="${i}"`, r.who)}</div><button type="button" class="icon-btn sm" data-ddel="${i}" title="删除此部门规则">${ic('trash')}</button></div>`).join('');
-  };
   const updPrev = () => {
     const dh = {};
     deptRows.forEach(r => { if (r.dept.trim() && r.who.size) dh[r.dept.trim()] = [...r.who]; });
@@ -6384,39 +6613,47 @@ async function renderExpFlowEditor(box, { onSaved } = {}) {
     const ccTxt = ccSet.size ? [...ccSet].map(u => esc(personLabel(u))).join('、') : '不固定（无）';
     box.querySelector('#efPreview').innerHTML = `<b>当前生效规则：</b>${parts.length ? parts.join(' → ') : '未设置固定审批人（有「报销审批」权限账号单级审批）'}<br><b>所有报销单默认抄送：</b>${ccTxt} · ${allowCustomCc ? '允许报销人补充抄送' : '禁止报销人自行修改抄送'}`;
   };
+  const drawDepts = () => {
+    const allDepts = depts();
+    const el = box.querySelector('#efDeptList');
+    el.innerHTML = deptRows.map((r, i) => {
+      const opts = [...new Set([...allDepts, r.dept].filter(Boolean))];
+      return `<div class="ef-dept-row" data-di="${i}"><select class="select ef-dept-sel" data-dk="dept"><option value="">选择部门</option>${opts.map(d => `<option value="${esc(d)}" ${d === r.dept ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select><div style="flex:1;min-width:220px" data-dpick="${i}"></div><button type="button" class="icon-btn sm" data-ddel="${i}" title="删除此部门规则">${ic('trash')}</button></div>`;
+    }).join('');
+    deptRows.forEach((r, i) => {
+      mountPeopleMulti(el.querySelector(`[data-dpick="${i}"]`), { people, selected: r.who, placeholder: '点击选择该部门负责人（可多选）', onChange: updPrev });
+    });
+  };
   box.innerHTML = `
-    <p class="sub-t" style="margin-bottom:12px">勾选所有报销单默认经过的审批人与固定抄送人；提交人本人会自动跳过自己所在的审批节点。未配置任何审批人时按单级审批处理。</p>
+    <p class="sub-t" style="margin-bottom:12px">通过下拉框选择各审批节点与固定抄送人员；提交人本人会自动跳过自己所在的审批节点。未配置任何审批人时按单级审批处理。</p>
     <div class="ef-sec">
-      <div class="ef-sec-h"><b>1. 部门负责人（按报销单部门匹配，选填）</b><div style="display:flex;gap:8px;align-items:center"><select class="select" style="height:30px" id="efModeDept"><option value="all" ${modes.dept === 'all' ? 'selected' : ''}>会签（全部同意）</option><option value="any" ${modes.dept === 'any' ? 'selected' : ''}>或签（一人同意）</option></select><button type="button" class="btn sm" id="efAddDept">${ic('plus')}添加部门</button></div></div>
+      <div class="ef-sec-h"><b><span class="ef-step-no">1</span>部门负责人（按报销单部门匹配，选填）</b><div style="display:flex;gap:8px;align-items:center"><select class="select" style="height:30px" id="efModeDept"><option value="all" ${modes.dept === 'all' ? 'selected' : ''}>会签（全部同意）</option><option value="any" ${modes.dept === 'any' ? 'selected' : ''}>或签（一人同意）</option></select><button type="button" class="btn sm" id="efAddDept">${ic('plus')}添加部门</button></div></div>
       <div id="efDeptList"></div>
     </div>
     <div class="ef-sec">
-      <div class="ef-sec-h"><b>2. 财务 / 固定审批人（所有报销单都经过，可不选）</b><select class="select" style="height:30px" id="efModeFinance"><option value="all" ${modes.finance === 'all' ? 'selected' : ''}>会签（全部同意）</option><option value="any" ${modes.finance === 'any' ? 'selected' : ''}>或签（一人同意）</option></select></div>
-      <div id="efFinPick">${chipsHtml('data-ef="finance"', finSet)}</div>
+      <div class="ef-sec-h"><b><span class="ef-step-no">2</span>财务 / 固定审批人（所有报销单都经过，可不选）</b><select class="select" style="height:30px" id="efModeFinance"><option value="all" ${modes.finance === 'all' ? 'selected' : ''}>会签（全部同意）</option><option value="any" ${modes.finance === 'any' ? 'selected' : ''}>或签（一人同意）</option></select></div>
+      <div id="efFinPick"></div>
     </div>
     <div class="ef-sec">
-      <div class="ef-sec-h"><b>3. 总经理 / 终审人（所有报销单或满额经过，可不选）</b><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><label class="sub-t" style="display:flex;align-items:center;gap:6px">起点金额(元,0=每单)<input type="number" min="0" step="0.01" id="efThreshold" value="${gmThreshold}" style="width:92px;height:30px;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:var(--panel)"></label><select class="select" style="height:30px" id="efModeGm"><option value="all" ${modes.gm === 'all' ? 'selected' : ''}>会签（全部同意）</option><option value="any" ${modes.gm === 'any' ? 'selected' : ''}>或签（一人同意）</option></select></div></div>
-      <div id="efGmPick">${chipsHtml('data-ef="gm"', gmSet)}</div>
+      <div class="ef-sec-h"><b><span class="ef-step-no">3</span>总经理 / 终审人（所有报销单或满额经过，可不选）</b><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><label class="sub-t" style="display:flex;align-items:center;gap:6px">起点金额(元,0=每单)<input type="number" min="0" step="0.01" id="efThreshold" value="${gmThreshold}" style="width:92px;height:30px;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:var(--panel)"></label><select class="select" style="height:30px" id="efModeGm"><option value="all" ${modes.gm === 'all' ? 'selected' : ''}>会签（全部同意）</option><option value="any" ${modes.gm === 'any' ? 'selected' : ''}>或签（一人同意）</option></select></div></div>
+      <div id="efGmPick"></div>
     </div>
     <div class="ef-sec">
-      <div class="ef-sec-h"><b>4. 默认抄送人（所有报销单自动抄送，抄送人仅只读查看）</b><label class="chk"><input type="checkbox" id="efAllowCustomCc" ${allowCustomCc ? 'checked' : ''}>允许报销人提交时额外补充抄送人</label></div>
-      <div id="efCcPick">${chipsHtml('data-ef="cc"', ccSet)}</div>
+      <div class="ef-sec-h"><b><span class="ef-step-no">4</span>默认抄送人（所有报销单自动抄送，抄送人仅只读查看）</b><label class="chk"><input type="checkbox" id="efAllowCustomCc" ${allowCustomCc ? 'checked' : ''}>允许报销人提交时额外补充抄送人</label></div>
+      <div id="efCcPick"></div>
     </div>
     <div class="tip-line" id="efPreview" style="background:var(--panel2);border:1px solid var(--border);margin-bottom:12px"></div>
     <div style="text-align:right"><button type="button" class="btn primary" id="efSaveBtn">${ic('check')}保存审批流程</button></div>`;
+  mountPeopleMulti(box.querySelector('#efFinPick'), { people, selected: finSet, placeholder: '点击选择财务审批人（可多选，不选则跳过）', onChange: updPrev });
+  mountPeopleMulti(box.querySelector('#efGmPick'), { people, selected: gmSet, placeholder: '点击选择总经理 / 终审人（可多选，不选则跳过）', onChange: updPrev });
+  mountPeopleMulti(box.querySelector('#efCcPick'), { people, selected: ccSet, placeholder: '点击选择固定抄送人（可多选，可不选）', onChange: updPrev });
   drawDepts(); updPrev();
   box.addEventListener('input', e => {
-    const t = e.target;
-    if (t.dataset.dk === 'dept') { deptRows[+t.closest('.ef-dept-row').dataset.di].dept = t.value; updPrev(); }
-    if (t.id === 'efThreshold') { gmThreshold = Math.max(0, +t.value || 0); updPrev(); }
+    if (e.target.id === 'efThreshold') { gmThreshold = Math.max(0, +e.target.value || 0); updPrev(); }
   });
   box.addEventListener('change', e => {
     const t = e.target;
-    if (t.type === 'checkbox' && t.closest('.ppl-chip')) t.closest('.ppl-chip').classList.toggle('on', t.checked);
-    if (t.dataset.dk === 'who') { const s = deptRows[+t.dataset.di].who; t.checked ? s.add(t.value) : s.delete(t.value); updPrev(); }
-    if (t.dataset.ef === 'finance') { t.checked ? finSet.add(t.value) : finSet.delete(t.value); updPrev(); }
-    if (t.dataset.ef === 'gm') { t.checked ? gmSet.add(t.value) : gmSet.delete(t.value); updPrev(); }
-    if (t.dataset.ef === 'cc') { t.checked ? ccSet.add(t.value) : ccSet.delete(t.value); updPrev(); }
+    if (t.dataset.dk === 'dept') { deptRows[+t.closest('.ef-dept-row').dataset.di].dept = t.value; updPrev(); }
     if (t.id === 'efAllowCustomCc') { allowCustomCc = t.checked; updPrev(); }
     if (t.id === 'efModeDept') { modes.dept = t.value; updPrev(); }
     if (t.id === 'efModeFinance') { modes.finance = t.value; updPrev(); }
@@ -6467,7 +6704,7 @@ function pageExpenses() {
   const E = db.expenses || [], m = monthKey(today());
   const live = E.filter(o => o.status !== '已作废' && o.status !== '已驳回');
   const S = st => E.filter(o => o.status === st);
-  const headBtns = `${isAdmin() ? `<button class="btn" data-act="expFlowModal">${ic('settings')}审批流程设置</button>` : ''}${canSubmit ? `<button class="btn" data-act="advNew">${ic('plus')}备用金领用</button><button class="btn primary" data-act="expNew">${ic('plus')}新建报销单</button>` : ''}`;
+  const headBtns = `${isAdmin() || can('exp.flow') ? `<button class="btn" data-act="expFlowModal">${ic('settings')}审批流程设置</button>` : ''}${canSubmit ? `<button class="btn" data-act="advNew">${ic('plus')}备用金领用</button><button class="btn primary" data-act="expNew">${ic('plus')}新建报销单</button>` : ''}`;
   $('#view').innerHTML = pageHead('报销管理', expAll() ? '员工提交报销 → 审批 → 财务付款，付款后自动记入收支流水' : canSubmit ? '提交报销单，审批、付款、抄送进度在这里查看' : '查看指派给你的报销审批、抄送或备用金单据', headBtns) + `
   <div class="grid g4 mb">
     ${kpi('待审批', S('待审批').length + ' 张', 'clock', 'orange', `<div class="trend"><span>${money(sum(S('待审批'), o => o.amount))}</span></div>`)}
@@ -6562,35 +6799,52 @@ async function advModal(id) {
   if (!PEOPLE) await loadPeople();
   const emps = (db.employees || []).filter(e => e.status !== '离职');
   const ppl = PEOPLE || [];
-  const people = [...new Set([...ppl.map(u => u.name), ...emps.map(e => e.name), ...(db.advances || []).map(x => x.applicant)].filter(Boolean))];
-  const userOpts = [['', '自动按领用人姓名匹配'], ...ppl.map(u => [u.id, `${u.name}（${u.username}）${u.dept ? ' · ' + u.dept : ''}`])];
-  const initUid = a ? (a.applicantUserId || '') : ((personByInput(ME.id) || {}).id || '');
+  const usedNames = new Set(ppl.map(u => u.name));
+  const pickOpts = [
+    ...ppl.map(u => ['u:' + u.id, `${u.name}（${u.username}）${u.dept ? ' · ' + u.dept : ''}`]),
+    ...emps.filter(e => !e.userId && !usedNames.has(e.name)).map(e => ['e:' + e.name, `${e.name}${e.dept ? ' · ' + e.dept : ''}（未关联账号）`])
+  ];
+  const initUid = a ? (a.applicantUserId || (personByInput(a.applicant) || {}).id || '') : ((personByInput(ME.id) || {}).id || '');
+  const initName = a ? (a.applicant || '') : ME.name;
+  const initPick = initUid && ppl.some(u => u.id === initUid) ? 'u:' + initUid : (initName ? 'e:' + initName : (pickOpts[0] ? pickOpts[0][0] : ''));
+  if (initPick && !pickOpts.some(x => x[0] === initPick)) pickOpts.unshift([initPick, initName || initPick.slice(2)]);
   const initDept = a ? (a.dept || '') : (ME.dept || deptOfPerson(ME.id) || '');
+  const deptList = [...new Set([...depts(), initDept].filter(Boolean))];
+  const deptOpts = [['', '未指定'], ...deptList.map(d => [d, d])];
   formModal({ title: a ? '编辑备用金 · ' + a.no : '备用金领用', fields: [
-    { n: 'applicantUserId', l: '领用人账号（保存后同步到其个人账号）', type: 'select', opts: userOpts },
-    { n: 'applicant', l: '领用人姓名', req: 1, type: 'combo', opts: people },
-    { n: 'dept', l: '部门（选人自动带出）', type: 'combo', opts: depts() },
+    { n: 'applicantPick', l: '领用人（选登录账号自动同步到其个人账号）', type: 'select', req: 1, opts: pickOpts },
+    { n: 'dept', l: '部门（选人自动带出）', type: 'select', opts: deptOpts },
     { n: 'date', l: '领用日期', type: 'date', req: 1 },
     { n: 'amount', l: '金额（元）', type: 'number', req: 1 },
     { n: 'purpose', l: '用途', req: 1, span: 1 },
     { n: 'note', l: '备注（选填）', type: 'textarea', span: 1 }
-  ], data: a ? { ...a, applicantUserId: initUid } : { applicantUserId: initUid, applicant: ME.name, dept: initDept, date: today() },
-  onSubmit: v => mutate(a ? 'PUT' : 'POST', '/api/advances' + (a ? '/' + a.id : ''), v, a ? '备用金已保存' : '备用金申请已提交') });
-  const uidSel = $('#mform select[name=applicantUserId]'), who = $('#mform input[name=applicant]'), deptIn = $('#mform input[name=dept]');
-  if (uidSel) uidSel.onchange = () => {
-    const u = ppl.find(x => x.id === uidSel.value);
-    if (u && who) who.value = u.name;
-    const dp = u ? (u.dept || deptOfPerson(u.name)) : deptOfPerson(who ? who.value : '');
-    if (dp && deptIn) deptIn.value = dp;
+  ], data: a ? { ...a, applicantPick: initPick, dept: initDept } : { applicantPick: initPick, dept: initDept, date: today() },
+  onSubmit: v => {
+    const pick = String(v.applicantPick || '');
+    let applicantUserId = '', applicant = '';
+    if (pick.startsWith('u:')) {
+      const u = ppl.find(x => x.id === pick.slice(2));
+      applicantUserId = u ? u.id : pick.slice(2);
+      applicant = u ? u.name : '';
+    } else if (pick.startsWith('e:')) {
+      applicant = pick.slice(2);
+    }
+    const payload = { ...v, applicantUserId, applicant };
+    delete payload.applicantPick;
+    return mutate(a ? 'PUT' : 'POST', '/api/advances' + (a ? '/' + a.id : ''), payload, a ? '备用金已保存' : '备用金申请已提交');
+  }});
+  const pickSel = $('#mform select[name=applicantPick]'), deptSel = $('#mform select[name=dept]');
+  if (pickSel && deptSel) pickSel.onchange = () => {
+    const val = pickSel.value;
+    const u = val.startsWith('u:') ? ppl.find(x => x.id === val.slice(2)) : null;
+    const dp = u ? (u.dept || deptOfPerson(u.name)) : deptOfPerson(val.slice(2));
+    if (dp) {
+      if (![...deptSel.options].some(o => o.value === dp)) deptSel.insertAdjacentHTML('beforeend', `<option value="${esc(dp)}">${esc(dp)}</option>`);
+      deptSel.value = dp;
+    } else {
+      deptSel.value = '';
+    }
   };
-  const syncFromName = () => {
-    const val = who ? who.value.trim() : '';
-    const u = personByInput(val);
-    if (u && uidSel) uidSel.value = u.id;
-    const dp = deptOfPerson(val);
-    if (dp && deptIn) deptIn.value = dp;
-  };
-  if (who) { who.addEventListener('change', syncFromName); who.addEventListener('input', () => { if (deptOfPerson(who.value.trim())) syncFromName(); }); }
 }
 function advView(id) {
   const a = byId(db.advances, id); if (!a) return;
@@ -6642,8 +6896,27 @@ function expOps(o) {
 function expModal(id) {
   const o = id ? byId(db.expenses, id) : null;
   const emps = (db.employees || []).filter(e => e.status !== '离职');
-  const whoOpts = () => [...new Set([...(PEOPLE || []).map(u => u.name), ...emps.map(e => e.name), ...(db.expenses || []).map(x => x.applicant)].filter(Boolean))];
-  const deptOpts = () => [...new Set([...depts(), ...(db.expenses || []).map(x => x.dept)].filter(Boolean))];
+  const buildWhoOpts = (curVal) => {
+    const ppl = PEOPLE || [], seen = new Set(), opts = [];
+    for (const u of ppl) {
+      if (!u.name || seen.has(u.name)) continue;
+      seen.add(u.name);
+      opts.push({ val: u.name, label: `${u.name}${u.username && u.username !== u.name ? `（${u.username}）` : ''}${u.dept ? ' · ' + u.dept : ''}`, dept: u.dept || '' });
+    }
+    for (const e of emps) {
+      if (!e.name || seen.has(e.name)) continue;
+      seen.add(e.name);
+      opts.push({ val: e.name, label: `${e.name}${e.dept ? ' · ' + e.dept : ''}`, dept: e.dept || '' });
+    }
+    if (curVal && !seen.has(curVal)) opts.unshift({ val: curVal, label: curVal, dept: deptOfPerson(curVal) || '' });
+    return opts.map(x => `<option value="${esc(x.val)}" data-dept="${esc(x.dept)}" ${x.val === curVal ? 'selected' : ''}>${esc(x.label)}</option>`).join('');
+  };
+  const buildDeptOpts = (curVal) => {
+    const list = [...new Set([...depts(), ...(db.expenses || []).map(x => x.dept), curVal].filter(Boolean))];
+    return '<option value="">未指定</option>' + list.map(d => `<option value="${esc(d)}" ${d === curVal ? 'selected' : ''}>${esc(d)}</option>`).join('');
+  };
+  const initWho = o ? o.applicant : ME.name;
+  const initDept = o ? (o.dept || '') : (ME.dept || deptOfPerson(ME.id) || '');
   const advs = (db.advances || []).filter(a => ['已发放', '部分核销'].includes(a.status) && advRemainingUI(a) > 0);
   const lines = o ? o.lines.map(l => ({...l})) : [{category:'', amount:'', note:''}];
   const imgs = [];  // 新建时先选好的照片，保存后再上传
@@ -6653,8 +6926,8 @@ function expModal(id) {
   openModal(`${modalHead(o ? '编辑报销单 · ' + o.no : '新建报销单')}<div class="m-body">
     ${o && o.status === '已驳回' ? `<div class="tip-line" style="background:var(--red-soft)">已被 ${esc(o.approver || '')} 驳回：${esc(o.rejectReason || '')}。修改后保存会重新提交审批。</div>` : ''}
     <div class="form-grid">
-      <label class="field"><span>报销人 <i>*</i></span><input id="xWho" list="xWhoList" maxlength="32" value="${esc(o ? o.applicant : ME.name)}"><datalist id="xWhoList">${whoOpts().map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>
-      <label class="field"><span>部门（选人自动带出）</span><input id="xDept" list="xDeptList" maxlength="32" value="${esc(o ? o.dept || '' : (ME.dept || deptOfPerson(ME.id) || ''))}"><datalist id="xDeptList">${deptOpts().map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>
+      <label class="field"><span>报销人 <i>*</i></span><select id="xWho">${buildWhoOpts(initWho)}</select></label>
+      <label class="field"><span>部门（选人自动带出）</span><select id="xDept">${buildDeptOpts(initDept)}</select></label>
       <label class="field"><span>报销日期</span><input type="date" id="xDate" max="${today()}" value="${o ? o.date : today()}"></label>
       <label class="field"><span>事由 <i>*</i></span><input id="xReason" maxlength="300" placeholder="例如：11 月 5 日去柳州拜访客户" value="${esc(o ? o.reason : '')}"></label>
       <label class="field"><span>冲抵备用金（可选）</span><select id="xAdv"><option value="">不冲抵</option></select></label>
@@ -6697,16 +6970,7 @@ function expModal(id) {
   const drawCcPick = (accs) => {
     const box = $('#xCcBox'); if (!box) return;
     const avail = (accs || []).filter(p => !fixedCc.includes(p.username));
-    const merged = [...avail];
-    customCcSet.forEach(u => { if (!fixedCc.includes(u) && !merged.some(p => p.username === u)) merged.push({ username: u, name: u }); });
-    box.innerHTML = merged.length
-      ? `<div class="ppl-pick">${merged.map(p => `<label class="ppl-chip ${customCcSet.has(p.username) ? 'on' : ''}"><input type="checkbox" data-xcc="${esc(p.username)}" ${customCcSet.has(p.username) ? 'checked' : ''}><span>${esc(p.name)}${p.name !== p.username ? `（${esc(p.username)}）` : ''}</span></label>`).join('')}</div>`
-      : '<span class="sub-t">没有可额外抄送的其他账号</span>';
-    box.onchange = e => {
-      const cb = e.target; if (!cb.dataset.xcc) return;
-      cb.checked ? customCcSet.add(cb.dataset.xcc) : customCcSet.delete(cb.dataset.xcc);
-      cb.closest('.ppl-chip').classList.toggle('on', cb.checked);
-    };
+    mountPeopleMulti(box, { people: avail, selected: customCcSet, placeholder: '点击选择额外抄送人（可多选）', emptyText: '没有可额外抄送的其他账号' });
   };
   tb.addEventListener('input', e => { const t = e.target, i = t.dataset.i; if (i == null) return; lines[+i][t.dataset.k] = t.dataset.k === 'amount' ? (t.value === '' ? '' : +t.value) : t.value; if (t.dataset.k === 'amount') { upd(); syncAdv(); } });
   tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { lines.splice(+b.dataset.del, 1); if (!lines.length) lines.push({category:'', amount:'', note:''}); draw(); } });
@@ -6724,10 +6988,19 @@ function expModal(id) {
     $('#xAdvAmt').max = max > 0 ? max : '';
     $('#xAdvHint').textContent = a ? `这张备用金剩余 ${money(advRemainingUI(a))}，本次最多可冲抵 ${money(max)}。` : '备用金冲抵只抵扣余额，不重复生成付款流水；不冲抵就留空。';
   };
-  const onWhoSync = () => { const dp = deptOfPerson($('#xWho').value); if (dp) $('#xDept').value = dp; updFlowPrev(); fillAdv(); };
+  const setDeptVal = dp => {
+    const sel = $('#xDept'); if (!sel) return;
+    if (dp && ![...sel.options].some(op => op.value === dp)) sel.insertAdjacentHTML('beforeend', `<option value="${esc(dp)}">${esc(dp)}</option>`);
+    sel.value = dp || '';
+  };
+  const onWhoSync = () => {
+    const sel = $('#xWho'), opt = sel && sel.selectedOptions && sel.selectedOptions[0];
+    const dp = (opt && opt.dataset.dept) || deptOfPerson(sel ? sel.value : '');
+    if (dp) setDeptVal(dp);
+    updFlowPrev(); fillAdv();
+  };
   $('#xWho').onchange = onWhoSync;
-  $('#xWho').oninput = () => { const dp = deptOfPerson($('#xWho').value); if (dp) $('#xDept').value = dp; updFlowPrev(); };
-  $('#xDept').oninput = updFlowPrev;
+  $('#xDept').onchange = updFlowPrev;
   $('#xAdv').onchange = syncAdv;
   $('#xFile').onchange = async e => {
     const have = (o ? o.imgs || [] : []).length + imgs.length, files = [...e.target.files].slice(0, Math.max(0, 9 - have));
@@ -6742,7 +7015,7 @@ function expModal(id) {
   };
   $('#xSave').onclick = async () => {
     const ls = lines.filter(l => String(l.category).trim() || +l.amount);
-    if (!$('#xWho').value.trim()) return toast('请填写报销人', 'error'), $('#xWho').focus();
+    if (!$('#xWho').value.trim()) return toast('请选择报销人', 'error'), $('#xWho').focus();
     if (!$('#xReason').value.trim()) return toast('请填写报销事由', 'error'), $('#xReason').focus();
     if (!ls.length) return toast('请至少填写一行报销明细', 'error');
     const bad = ls.findIndex(l => !String(l.category).trim() || !(+l.amount > 0));
@@ -6760,9 +7033,9 @@ function expModal(id) {
   };
   draw(); drawImgs(); fillAdv();
   loadPeople(true).then(accs => {
-    if ($('#xWhoList')) $('#xWhoList').innerHTML = whoOpts().map(n => `<option value="${esc(n)}">`).join('');
-    if ($('#xDeptList')) $('#xDeptList').innerHTML = deptOpts().map(n => `<option value="${esc(n)}">`).join('');
-    if (!o && $('#xDept') && !$('#xDept').value.trim()) { const dp = deptOfPerson($('#xWho').value); if (dp) $('#xDept').value = dp; }
+    if ($('#xWho')) { const curW = $('#xWho').value; $('#xWho').innerHTML = buildWhoOpts(curW); }
+    if ($('#xDept')) { const curD = $('#xDept').value; $('#xDept').innerHTML = buildDeptOpts(curD); }
+    if (!o && $('#xDept') && !$('#xDept').value.trim()) { const dp = deptOfPerson($('#xWho').value); if (dp) setDeptVal(dp); }
     fillAdv(); updFlowPrev(); if (allowCustomCc) drawCcPick(accs);
   });
   if (!o) $('#xReason').focus();
@@ -6880,7 +7153,7 @@ const NAV = [
   {id:'suppliers', label:'供应商管理', icon:'truck', fn:() => pageParty('suppliers'), perm:'parties'},
   {group:'运营管理'},
   {id:'finance', label:'财务管理', icon:'wallet', fn:pageFinance, perm:'finance'},
-  {id:'expenses', label:'报销管理', icon:'coin', fn:pageExpenses, badge:expCount, perm:['expense', 'exp.approve', 'finance']},
+  {id:'expenses', label:'报销管理', icon:'coin', fn:pageExpenses, badge:expCount, perm:['expense', 'exp.approve', 'exp.flow', 'finance']},
   {id:'employees', label:'人事管理', icon:'id', fn:pageEmployees, perm:'hr'},
   {id:'reports', label:'统计报表', icon:'chart', fn:pageReports, perm:'reports'},
   {group:'系统'},

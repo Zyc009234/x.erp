@@ -20,7 +20,7 @@ const tls = require('tls');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.15.0';
+const VERSION = '2.15.1';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -169,7 +169,7 @@ const PERMS = [
   ['bom', '设置 BOM 物料清单、生产入库按 BOM 领料', 'bom'],
   ['dashboard', '工作台', 'dashboard'], ['sales', '销售管理（全部操作）', 'sales'], ['purchase', '采购管理（全部操作）', 'purchase'],
   ['parties', '客户 / 供应商管理', 'parties'], ['parties.all', '查看 / 管理全部客户（不勾则只看自己负责的客户）', 'parties'], ['finance', '财务管理', 'finance'],
-  ['expense', '报销：提交、查看自己的报销单', 'finance'], ['exp.approve', '报销审批（查看全部报销单、批准 / 驳回）', 'finance'], ['hr', '人事管理', 'hr'], ['reports', '统计报表', 'reports'], ['reports.all', '查看公司全量统计报表（不勾则只看本人业绩统计）', 'reports'],
+  ['expense', '报销：提交、查看自己的报销单', 'finance'], ['exp.approve', '报销审批（查看全部报销单、批准 / 驳回）', 'finance'], ['exp.flow', '报销审批流程设置（指定各节点审核人与默认抄送人）', 'finance'], ['hr', '人事管理', 'hr'], ['reports', '统计报表', 'reports'], ['reports.all', '查看公司全量统计报表（不勾则只看本人业绩统计）', 'reports'],
   ['ship.view', '查看运单、快递账单与运费统计', 'shipping'], ['ship.edit', '登记运单（快递单号、称重）', 'shipping'],
   ['ship.rate', '维护快递公司与报价', 'shipping'], ['ship.bill', '导入快递账单、对账确认', 'shipping'],
   ['agri', '农业 / 粮食收购（登记车牌、扣水扣杂、农户结算）', 'agri']
@@ -4108,7 +4108,7 @@ route('PUT', '/api/settings/expense-flow', ctx => {
   s.expenseFlow = flow; setMeta('settings', s);
   audit(ctx, '修改报销审批流程', `财务 ${flow.finance.length} 人，总经理 ${flow.gm.length} 人，默认抄送 ${flow.cc.length} 人`);
   return { ok: true, expenseFlow: flow };
-}, { admin: true });
+}, { perm: 'exp.flow' });
 route('POST', '/api/settings/notify/test', async ctx => {
   const b = ctx.body || {}, conf = notifyConf();
   const hookUrl = str((b.webhook && b.webhook.url) || b.url, 500);

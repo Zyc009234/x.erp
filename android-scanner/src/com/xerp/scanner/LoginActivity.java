@@ -121,7 +121,7 @@ public class LoginActivity extends Activity {
         shlp.topMargin = Ui.dp(this, 14);
         card.addView(Ui.tv(this, "服务器地址（局域网 IP 或远程域名）", 12, Ui.MUTED, true), shlp);
         LinearLayout srvRow = Ui.row(this);
-        etServer = Ui.input(this, "例如 192.168.1.10:8686");
+        etServer = Ui.input(this, "例如 192.168.1.10:8686 或 erp.example.com");
         etServer.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         etServer.setSingleLine(true);
         etServer.setText(store.server);
@@ -233,12 +233,16 @@ public class LoginActivity extends Activity {
     }
 
     private void probeUrlSilent(String rawUrl) {
-        String url = ApiClient.normalizeUrl(rawUrl);
-        if (url.isEmpty()) return;
+        List<String> cands = ApiClient.candidateUrls(rawUrl);
+        if (cands.isEmpty()) return;
         new Thread(() -> {
-            if (ApiClient.ping(url, 3000) != null) return;
-            JSONObject info = ApiClient.probePortal(url);
-            applyPortalProbe(url, info);
+            String okUrl = null;
+            for (String u : cands) {
+                if (ApiClient.ping(u, 3000) == null) { okUrl = u; break; }
+            }
+            if (okUrl == null) return;
+            JSONObject info = ApiClient.probePortal(okUrl);
+            applyPortalProbe(okUrl, info);
         }).start();
     }
 
@@ -284,18 +288,23 @@ public class LoginActivity extends Activity {
     }
 
     private void doConnectAndLogin() {
-        String url = ApiClient.normalizeUrl(etServer.getText().toString());
+        List<String> cands = ApiClient.candidateUrls(etServer.getText().toString());
         String user = etUser.getText().toString().trim();
         String pass = etPass.getText().toString();
-        if (url.isEmpty()) { Ui.toast(this, "请填写服务器地址"); return; }
+        if (cands.isEmpty()) { Ui.toast(this, "请填写服务器地址"); return; }
         if (user.isEmpty() || pass.isEmpty()) { Ui.toast(this, "请填写用户名和密码"); return; }
 
         bLogin.setEnabled(false);
         bLogin.setText("正在连接…");
         new Thread(() -> {
             try {
-                String pingErr = ApiClient.ping(url, 6000);
-                if (pingErr != null) throw new Exception(pingErr);
+                String url = null, firstErr = null;
+                for (String cand : cands) {
+                    String err = ApiClient.ping(cand, 6000);
+                    if (err == null) { url = cand; break; }
+                    if (firstErr == null) firstErr = err;
+                }
+                if (url == null) throw new Exception(firstErr != null ? firstErr : "无法连接服务器");
 
                 if (!url.equals(probedUrl)) {
                     JSONObject info = ApiClient.probePortal(url);
