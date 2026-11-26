@@ -36,12 +36,12 @@
       "releases": {
         "2.15.5": {
           "changelog": "新增「套打模板」功能（预印纸张只打数据、不打标题与表格框线，支持左/上偏移与固定行高毫米级微调及预览校准底图）；系统设置新增「功能激活」入口，支持一次性激活码联网绑定并生成离线凭证",
-          "updated_at": "2026-11-26T15:50:45+08:00",
+          "updated_at": "2026-11-26T15:52:01+08:00",
           "packages": {
             "all": {
               "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.5.fpk",
-              "sha256": "7a7974f7ed09eafac8840daed95b199eb4979c466a8bc35a776535ce46e5ec5c",
-              "size": 785478
+              "sha256": "79e597d936ae2fa288d46d568b04b1a7099fcde1e53b2be7e0d613813036bce7",
+              "size": 786450
             }
           }
         },
