@@ -1,44 +1,44 @@
 {
   "schema": 1,
-  "latest": "2.15.5",
-  "publishedAt": "2026-11-26T16:04:06+08:00",
+  "latest": "2.15.6",
+  "publishedAt": "2026-11-26T16:33:18+08:00",
   "notes": [
     "新增「套打模板」功能（预印纸张只打数据、不打标题与表格框线，支持左/上偏移与固定行高毫米级微调及预览校准底图）",
     "系统设置新增「功能激活」入口，支持一次性激活码联网绑定并生成离线凭证"
   ],
   "packages": {
     "fnos": {
-      "version": "2.15.5",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.5.fpk",
-      "sha256": "79e597d936ae2fa288d46d568b04b1a7099fcde1e53b2be7e0d613813036bce7",
-      "size": 786450,
-      "file": "xerp-2.15.5.fpk",
+      "version": "2.15.6",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.6.fpk",
+      "sha256": "ac9c65482ae5dea98ed72ebc6dd7a19bc503d102a67c1db98f18eec97a38f291",
+      "size": 787944,
+      "file": "xerp-2.15.6.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.15.5",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.5-windows-x64-setup.exe",
-      "sha256": "ed725a6642fa803b2a1d2b9dedc08af612149def19eaa9ebd60aa12ec7999960",
-      "size": 23862592,
-      "file": "xerp-2.15.5-windows-x64-setup.exe",
+      "version": "2.15.6",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.6-windows-x64-setup.exe",
+      "sha256": "660aae73f60915cc15bfac65e5676bf7e2cb2b274186a8fa2555f9e94331f6f0",
+      "size": 23861959,
+      "file": "xerp-2.15.6-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.15.5",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.5-android.apk",
-      "sha256": "c96756abc1b743a943c74c4f2bcb915b0662a5082a7c12b131027ed494905382",
+      "version": "2.15.6",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.6-android.apk",
+      "sha256": "fd9e35cd6f47f4425beb20c2fdf15868c659e68c5689c5e2c86142f98c8e49b6",
       "size": 279329,
-      "file": "xerp-2.15.5-android.apk",
+      "file": "xerp-2.15.6-android.apk",
       "kind": "apk",
-      "versionCode": 21505
+      "versionCode": 21506
     },
     "docker": {
-      "version": "2.15.5",
+      "version": "2.15.6",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.15.5",
+      "image": "ghcr.io/zyc009234/xerp:2.15.6",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.5-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.5-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.6-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.6-docker-arm64.tar.gz"
       ],
       "note": "也可以下载离线包 docker load"
     }
