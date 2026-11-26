@@ -20,7 +20,7 @@ const tls = require('tls');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.15.4';
+const VERSION = '2.15.5';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -1162,7 +1162,7 @@ function saveOrder(ctx, kind, id, noTx = false) {
       for (const [pid, q] of Object.entries(qtyByProduct(items))) {
         const p = get('products', pid);
         if (!(pid in left)) fail(`「${p.name}」不在原单 ${src.no} 里`);
-        if (q > left[pid]) fail(`「${p.name}」最多还能退 ${left[pid]}（原单 ${src.no}）`);
+        if (q > left[pid] + 1e-9) fail(`「${p.name}」最多还能退 ${left[pid]}（原单 ${src.no}）`);
       }
     }
     const discount = C.src ? 0 : round2(Number(b.discount) || 0);
@@ -1239,11 +1239,23 @@ function returnSrc(C, srcId, party) {
   if (!C.srcOk.includes(src.status)) fail(`原单 ${src.no} 状态为「${src.status}」，${C.src === 'sales' ? '发货' : '入库'}后才能退货`);
   return src;
 }
-// 原单每个商品还能退多少（基本单位）= 原单数量 - 其他没作废的退货单已退的
+// 原单每个商品还能退多少（基本单位）= 原单实际已执行数量（旧数据无关联出入库单时回退原单数量）- 其他没作废的退货单已退的
 function returnable(src, exceptId) {
-  const left = qtyByProduct(src.items), col = src.supplierId ? 'purchaseReturns' : 'salesReturns';
-  list(col).filter(r => r.srcId === src.id && r.id !== exceptId && r.status !== '已作废').forEach(r => r.items.forEach(i => { if (i.productId in left) left[i.productId] -= i.qty; }));
-  for (const k in left) left[k] = Math.max(0, left[k]);
+  const kind = src.supplierId ? 'purchase' : 'sales';
+  const col = src.supplierId ? 'purchaseReturns' : 'salesReturns';
+  const okDocs = linkedOrderDocs(src, kind, false);
+  const left = {};
+  if (okDocs.length) {
+    const done = orderFulfilledByProduct(src, kind, false);
+    for (const [pid, d] of Object.entries(done)) left[pid] = round4(d.qty || 0);
+    for (const i of src.items || []) if (!(i.productId in left)) left[i.productId] = 0;
+  } else {
+    Object.assign(left, qtyByProduct(src.items));
+  }
+  list(col).filter(r => r.srcId === src.id && r.id !== exceptId && r.status !== '已作废').forEach(r => r.items.forEach(i => {
+    if (i.productId in left) left[i.productId] = round4(left[i.productId] - i.qty);
+  }));
+  for (const k in left) left[k] = Math.max(0, round4(left[k]));
   return left;
 }
 // 订单明细第 k 行的序列号：启用序列号的商品必须登记，数量要和这一行一致
@@ -1305,6 +1317,15 @@ function orderAction(ctx, kind, id, action) {
       o.status = kind === 'sales' ? '已发货' : '已入库';
     } else if (action === 'post' && C.src) {
       need(C.statuses[0]);
+      if (o.srcId) {
+        const src = returnSrc(C, o.srcId, o[C.partyKey]);
+        const left = returnable(src, o.id);
+        for (const [pid, q] of Object.entries(qtyByProduct(o.items))) {
+          const p = get('products', pid);
+          if (!(pid in left)) fail(`「${p ? p.name : pid}」不在原单 ${src.no} 里`);
+          if (q > left[pid] + 1e-9) fail(`「${p ? p.name : pid}」最多还能退 ${left[pid]}（原单 ${src.no}）`);
+        }
+      }
       const wh = pickWh(b.wh), bi = b.batches && typeof b.batches === 'object' ? b.batches : {}, pname = (get(C.party, o[C.partyKey]) || {}).name || '';
       const approveNote = str(b.note, 200) || fail('请填写审核备注');
       if (kind === 'purchaseReturn') { const lack = lackOf(o.items, wh); if (lack.length) fail(lackText(lack, wh)); }

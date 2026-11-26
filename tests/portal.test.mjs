@@ -135,3 +135,44 @@ test('未登录访问业务接口被拒绝，登录失效后也不能切换公�
   assert.equal((await call(null, 'POST', '/api/portal/switch', { company: 'default' })).http, 401);
   assert.equal((await call('not-a-real-token', 'GET', '/api/portal/companies')).http, 401);
 });
+
+test('成员移除后旧会话立即失效，不能继续访问该公司业务接口', async () => {
+  const admin = await login('admin', 'welcome123', 'branch');
+  await ok(admin, 'POST', '/api/portal/members', {
+    company: 'branch', username: 'clerk2', name: '临时员工', password: 'clerk2123', role: 'user',
+  });
+  const tok = await login('clerk2', 'clerk2123', 'branch');
+  await ok(tok, 'GET', '/api/data');
+  await ok(admin, 'DELETE', '/api/portal/members?company=branch&username=clerk2');
+  assert.equal((await call(tok, 'GET', '/api/data')).http, 401);
+  assert.equal((await call(null, 'POST', '/api/portal/login', { username: 'clerk2', password: 'clerk2123', company: 'branch' })).http, 403);
+});
+
+test('成员降权后旧会话立即失效，重新登录也不再拥有管理员权限', async () => {
+  const admin = await login('admin', 'welcome123', 'branch');
+  await ok(admin, 'POST', '/api/portal/members', {
+    company: 'branch', username: 'mgr2', name: '副管理员', password: 'mgr21234', role: 'admin',
+  });
+  const mgrOld = await login('mgr2', 'mgr21234', 'branch');
+  assert.equal((await ok(mgrOld, 'GET', '/api/data')).user.role, 'admin');
+  await ok(mgrOld, 'GET', '/api/users');
+  // 降权为普通成员
+  await ok(admin, 'POST', '/api/portal/members', {
+    company: 'branch', username: 'mgr2', role: 'user',
+  });
+  // 旧 token 立即失效
+  assert.equal((await call(mgrOld, 'GET', '/api/data')).http, 401);
+  assert.equal((await call(mgrOld, 'GET', '/api/users')).http, 401);
+  // 重新登录后仅为普通成员，不能访问管理员接口
+  const mgrNew = await login('mgr2', 'mgr21234', 'branch');
+  assert.equal((await ok(mgrNew, 'GET', '/api/data')).user.role, 'user');
+  assert.equal((await call(mgrNew, 'GET', '/api/users')).http, 403);
+  assert.equal((await call(mgrNew, 'GET', '/api/portal/companies')).http, 403);
+  // 清理 mgr2 后，不能把唯一管理员降权
+  await ok(admin, 'DELETE', '/api/portal/members?company=branch&username=mgr2');
+  const lastDemote = await call(admin, 'POST', '/api/portal/members', {
+    company: 'branch', username: 'admin', role: 'user',
+  });
+  assert.equal(lastDemote.http, 400);
+  assert.match(lastDemote.error, /至少.*管理员/);
+});

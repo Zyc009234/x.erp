@@ -90,3 +90,29 @@ test('开启出库审核：待审核不动库存，审核后才扣', async () =>
     assert.equal(await batchQty('A'), 5, '审核后扣指定批次');
   }
 });
+
+test('提前完结销售单（不同步数量）后退货上限按实发数封顶，不能超量退货凭空增库', async () => {
+  const p2 = await ok(admin, 'POST', '/api/products', { name: '套退测试商品', unit: '个', cost: 10, price: 20 });
+  const c1 = await ok(admin, 'POST', '/api/customers', { name: '退货测试客户' });
+  await ok(admin, 'POST', '/api/stockdocs', { dir: 'in', type: '其他入库', date: '2026-11-17', wh: 'w1', items: [{ productId: p2.id, qty: 20, price: 10 }] });
+  const s = await ok(admin, 'POST', '/api/orders/sales', { partyId: c1.id, date: '2026-11-17', items: [{ productId: p2.id, qty: 10, price: 20 }] });
+  // 只发 2 个并审核出库
+  const shipDoc = await ok(admin, 'POST', `/api/orders/sales/${s.id}/ship`, { date: '2026-11-17', wh: 'w1', items: [{ productId: p2.id, qty: 2 }] });
+  const sd = (await data()).stockDocs.find(d => d.srcOrderId === s.id && d.dir === 'out');
+  if (sd && sd.status === '待审核') await ok(admin, 'POST', `/api/stockdocs/${sd.id}/approve`, {});
+  assert.equal((await data()).products.find(p => p.id === p2.id).stock, 18);
+  // 提前完结但不勾选同步数量（原单 items 仍为 10）
+  await ok(admin, 'POST', `/api/orders/sales/${s.id}/finish-fulfill`, { syncQty: false, note: '其余取消' });
+  // 尝试按原单数量 10 退货 -> 必须拒绝（最多只能退实发的 2）
+  const over = await call(admin, 'POST', '/api/orders/salesReturn', { partyId: c1.id, srcId: s.id, date: '2026-11-17', items: [{ productId: p2.id, qty: 10, price: 20 }] });
+  assert.equal(over.http, 400);
+  assert.match(over.error, /最多还能退 2/);
+  // 按实发数 2 退货并审核入库 -> 允许，且库存刚好回到 20（不会凭空多出）
+  const ret = await ok(admin, 'POST', '/api/orders/salesReturn', { partyId: c1.id, srcId: s.id, date: '2026-11-17', items: [{ productId: p2.id, qty: 2, price: 20 }] });
+  await ok(admin, 'POST', `/api/orders/salesReturn/${ret.id}/post`, { wh: 'w1', note: '实退 2 个' });
+  assert.equal((await data()).products.find(p => p.id === p2.id).stock, 20);
+  // 再退 1 个 -> 必须拒绝（剩余可退 0）
+  const over2 = await call(admin, 'POST', '/api/orders/salesReturn', { partyId: c1.id, srcId: s.id, date: '2026-11-17', items: [{ productId: p2.id, qty: 1, price: 20 }] });
+  assert.equal(over2.http, 400);
+  assert.match(over2.error, /最多还能退 0/);
+});

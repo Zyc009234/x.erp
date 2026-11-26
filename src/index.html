@@ -523,7 +523,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.15.4</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.15.5</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -3940,10 +3940,17 @@ function orderModal(kind, id, srcId0) {
   const party0 = o ? o[C.partyKey] : srcOf() ? srcOf()[S0.partyKey] : '';
   const partyAddr = pid => (byId(db[C.party], pid) || {}).address || '';
   let addressAuto = !o || !o.address || o.address === partyAddr(o[C.partyKey]);
-  // 原单每个商品还能退多少（基本单位），不算本单
+  // 原单每个商品还能退多少（基本单位），不算本单（按实际已发货 / 已入库数量封顶）
   const leftOf = s => {
-    const q = {}; s.items.forEach(i => { q[i.productId] = (q[i.productId] || 0) + i.qty; });
-    db[C.db].filter(r => r.srcId === s.id && r.status !== '已作废' && (!o || r.id !== o.id)).forEach(r => r.items.forEach(i => { if (i.productId in q) q[i.productId] -= i.qty; }));
+    const q = {};
+    const docs = (db.stockDocs || []).filter(d => d.srcOrderId === s.id && d.dir === (C.src === 'sales' ? 'out' : 'in') && d.status === '正常');
+    if (docs.length) {
+      docs.forEach(d => (d.items || []).forEach(i => { q[i.productId] = +((q[i.productId] || 0) + (+i.qty || 0)).toFixed(4); }));
+      (s.items || []).forEach(i => { if (!(i.productId in q)) q[i.productId] = 0; });
+    } else {
+      (s.items || []).forEach(i => { q[i.productId] = +((q[i.productId] || 0) + lineDoneQty(C.src, s, i)).toFixed(4); });
+    }
+    db[C.db].filter(r => r.srcId === s.id && r.status !== '已作废' && (!o || r.id !== o.id)).forEach(r => r.items.forEach(i => { if (i.productId in q) q[i.productId] = Math.max(0, +(q[i.productId] - i.qty).toFixed(4)); }));
     return q;
   };
   const fillFromSrc = s => { const q = leftOf(s); draft.items = Object.entries(q).filter(([, n]) => n > 0).map(([pid, n]) => ({productId:pid, unit:'', qty:n, price:+s.items.find(i => i.productId === pid).price.toFixed(4)})); };

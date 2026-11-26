@@ -56,17 +56,25 @@ let stopping = false;
 function ensureCompanyUser(c, u, role) {
   const db = companyDb(c);
   try {
+    const wantRole = role === 'admin' ? 'admin' : 'user';
     let row = db.prepare('SELECT * FROM users WHERE username = ?').get(u.username);
     if (!row) {
       const id = uid('u');
       const p = (u.salt && u.hash) ? { salt: u.salt, hash: u.hash } : hashPwd(rnd(12));
       const staff = db.prepare("SELECT id FROM roles WHERE id = 'r_staff'").get();
       db.prepare('INSERT INTO users (id, username, name, role, role_id, salt, hash, created_at) VALUES (?,?,?,?,?,?,?,?)')
-        .run(id, u.username, u.name || u.username, role === 'admin' ? 'admin' : 'user', role === 'admin' ? null : (staff ? 'r_staff' : null), p.salt, p.hash, new Date().toISOString());
+        .run(id, u.username, u.name || u.username, wantRole, wantRole === 'admin' ? null : (staff ? 'r_staff' : null), p.salt, p.hash, new Date().toISOString());
       row = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
-    } else if (u.salt && u.hash && (row.salt !== u.salt || row.hash !== u.hash)) {
-      db.prepare('UPDATE users SET salt = ?, hash = ? WHERE id = ?').run(u.salt, u.hash, row.id);
-      row.salt = u.salt; row.hash = u.hash;
+    } else {
+      if (u.salt && u.hash && (row.salt !== u.salt || row.hash !== u.hash)) {
+        db.prepare('UPDATE users SET salt = ?, hash = ? WHERE id = ?').run(u.salt, u.hash, row.id);
+        row.salt = u.salt; row.hash = u.hash;
+      }
+      if (row.role !== wantRole || row.disabled) {
+        const staff = wantRole === 'admin' ? null : (row.role_id || (db.prepare("SELECT id FROM roles WHERE id = 'r_staff'").get() || {}).id || null);
+        db.prepare('UPDATE users SET role = ?, role_id = ?, disabled = 0 WHERE id = ?').run(wantRole, staff, row.id);
+        row.role = wantRole; row.role_id = staff; row.disabled = 0;
+      }
     }
     if (row.role !== 'admin' && !row.role_id) {
       const staff = db.prepare("SELECT id FROM roles WHERE id = 'r_staff'").get();
@@ -74,6 +82,31 @@ function ensureCompanyUser(c, u, role) {
     }
     return row;
   } finally { db.close(); }
+}
+function syncCompanyMember(c, u, role, { disable = false, revoke = false } = {}) {
+  if (!c || !u || !fs.existsSync(path.join(c.dir, 'erp.db'))) return;
+  const db = companyDb(c);
+  try {
+    const row = db.prepare('SELECT * FROM users WHERE username = ?').get(u.username);
+    if (!row) return;
+    if (disable) {
+      db.prepare('UPDATE users SET disabled = 1 WHERE id = ?').run(row.id);
+      db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.id);
+      return;
+    }
+    const wantRole = role === 'admin' ? 'admin' : 'user';
+    const nextRoleId = wantRole === 'admin' ? null : (row.role_id || (db.prepare("SELECT id FROM roles WHERE id = 'r_staff'").get() || {}).id || null);
+    db.prepare('UPDATE users SET role = ?, role_id = ?, disabled = 0 WHERE id = ?').run(wantRole, nextRoleId, row.id);
+    if (revoke) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.id);
+  } catch (e) { log('同步账套成员权限失败', c.code, e.message); }
+  finally { db.close(); }
+}
+function revokeCompanyToken(c, token) {
+  if (!c || !token || !fs.existsSync(path.join(c.dir, 'erp.db'))) return;
+  const db = companyDb(c);
+  try { db.prepare('DELETE FROM sessions WHERE token = ?').run(token); }
+  catch (e) {}
+  finally { db.close(); }
 }
 function mintCompanyToken(c, userId) {
   const db = companyDb(c);
@@ -286,6 +319,8 @@ const server = http.createServer(async (req, res) => {
       if (!c) return json(res, 404, { error: '公司不存在' });
       const m = memberOf(user.id, c.id);
       if (!m && !user.admin) return json(res, 403, { error: '这个账号没有加入该公司' });
+      const oldCompany = companyById(sess.company_id);
+      if (oldCompany) revokeCompanyToken(oldCompany, sess.company_token);
       const cu = ensureCompanyUser(c, user, m ? m.role : 'admin');
       const ct = mintCompanyToken(c, cu.id);
       reg.prepare('UPDATE sessions SET company_id = ?, company_token = ? WHERE token = ?').run(c.id, ct, sess.token);
@@ -294,7 +329,10 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, out);
     }
     if (p === '/api/portal/logout' && req.method === 'POST') {
-      if (sess) reg.prepare('DELETE FROM sessions WHERE token = ?').run(sess.token);
+      if (sess) {
+        revokeCompanyToken(companyById(sess.company_id), sess.company_token);
+        reg.prepare('DELETE FROM sessions WHERE token = ?').run(sess.token);
+      }
       return json(res, 200, { ok: true });
     }
     if (p === '/api/portal/companies' && req.method === 'GET') {
@@ -351,7 +389,15 @@ const server = http.createServer(async (req, res) => {
         user = userByName(username);
       }
       const role = b.role === 'admin' ? 'admin' : 'user';
+      const prev = memberOf(user.id, c.id);
+      if (prev && prev.role === 'admin' && role !== 'admin') {
+        const admins = reg.prepare("SELECT COUNT(*) AS n FROM members WHERE company_id = ? AND role = 'admin'").get(c.id).n;
+        if (admins <= 1) return json(res, 400, { error: '公司至少要保留一个管理员' });
+      }
       reg.prepare('INSERT INTO members (user_id, company_id, role) VALUES (?,?,?) ON CONFLICT(user_id, company_id) DO UPDATE SET role = excluded.role').run(user.id, c.id, role);
+      const demoted = !!(prev && prev.role === 'admin' && role !== 'admin');
+      syncCompanyMember(c, user, role, { revoke: demoted });
+      if (demoted) reg.prepare('DELETE FROM sessions WHERE user_id = ? AND company_id = ?').run(user.id, c.id);
       return json(res, 200, { ok: true });
     }
     if (p === '/api/portal/members' && req.method === 'DELETE') {
@@ -362,17 +408,27 @@ const server = http.createServer(async (req, res) => {
       if (!canManage(me, c.id)) return json(res, 403, { error: '只有管理员能管理成员' });
       const u = userByName(String(url.searchParams.get('username') || ''));
       if (!u) return json(res, 404, { error: '账号不存在' });
-      if (u.id === me.id && memberOf(me.id, c.id) && memberOf(me.id, c.id).role === 'admin') {
+      const target = memberOf(u.id, c.id);
+      if (target && target.role === 'admin') {
         const admins = reg.prepare("SELECT COUNT(*) AS n FROM members WHERE company_id = ? AND role = 'admin'").get(c.id).n;
         if (admins <= 1) return json(res, 400, { error: '公司至少要保留一个管理员' });
       }
       reg.prepare('DELETE FROM members WHERE user_id = ? AND company_id = ?').run(u.id, c.id);
+      reg.prepare('DELETE FROM sessions WHERE user_id = ? AND company_id = ?').run(u.id, c.id);
+      syncCompanyMember(c, u, 'user', { disable: true, revoke: true });
       return json(res, 200, { ok: true });
     }
     const company = sess ? companyById(sess.company_id) : null;
     if (p.startsWith('/api/')) {
       if (p === '/api/ping') return proxy(req, res, company || ensureDefaultCompany(), null);
       if (!sess || !company) return json(res, 401, { error: '登录已失效，请重新登录' });
+      const me = reg.prepare('SELECT * FROM users WHERE id = ?').get(sess.user_id);
+      const m = me && memberOf(me.id, company.id);
+      if (!me || (!m && !me.admin)) {
+        revokeCompanyToken(company, sess.company_token);
+        reg.prepare('DELETE FROM sessions WHERE token = ?').run(sess.token);
+        return json(res, 401, { error: '登录已失效，请重新登录' });
+      }
       const syncAuth = req.method !== 'GET' && (p === '/api/users' || p.startsWith('/api/users/') || p === '/api/password');
       return proxy(req, res, company, sess.company_token, syncAuth ? () => syncCompanyUsers(company, true) : null);
     }
