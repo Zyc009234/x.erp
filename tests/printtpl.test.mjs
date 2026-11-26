@@ -90,3 +90,28 @@ test('每套模板最多 10 个', async () => {
   }
   assert.equal(r.http, 400);
 });
+
+test('套打拖拽坐标 pos 清洗、限幅、去零与未激活校验', async () => {
+  // 未激活套打时保存 preprint:true 必须拒绝
+  const denied = await call(admin, 'PUT', '/api/settings/print', { kind: 'sales', tpl: { ...tpl, preprint: true, pos: { 'meta.no': [10, 5] } } });
+  assert.equal(denied.http, 403);
+  // 普通保存 pos 字段清洗：有效键保留并保留 1 位小数，超范围限幅到 ±200，零偏移忽略，非法键名过滤
+  const saved = await ok(admin, 'PUT', '/api/settings/print', {
+    kind: 'sales',
+    tpl: {
+      ...tpl,
+      pos: {
+        'meta.no': [12.54, -3.5],
+        'meta.date': [0, 0],
+        'table': [0, 8.5],
+        'remark': [999, -999],
+        'bad key!': [5, 5],
+      },
+    },
+  });
+  assert.deepEqual(saved.sales.pos, {
+    'meta.no': [12.5, -3.5],
+    'table': [0, 8.5],
+    'remark': [200, -200],
+  });
+});

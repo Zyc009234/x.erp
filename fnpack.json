@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.15.6": {
+          "changelog": "新增「套打模板」功能（预印纸张只打数据、不打标题与表格框线，支持左/上偏移与固定行高毫米级微调及预览校准底图）；系统设置新增「功能激活」入口，支持一次性激活码联网绑定并生成离线凭证",
+          "updated_at": "2026-11-26T16:31:26+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.6.fpk",
+              "sha256": "ac9c65482ae5dea98ed72ebc6dd7a19bc503d102a67c1db98f18eec97a38f291",
+              "size": 787944
+            }
+          }
+        },
         "2.15.5": {
           "changelog": "新增「套打模板」功能（预印纸张只打数据、不打标题与表格框线，支持左/上偏移与固定行高毫米级微调及预览校准底图）；系统设置新增「功能激活」入口，支持一次性激活码联网绑定并生成离线凭证",
           "updated_at": "2026-11-26T15:52:01+08:00",
@@ -53,17 +64,6 @@
               "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.4.fpk",
               "sha256": "1fee8fb0551a4abdb7e0fbb68082954cff0e8e6959816501415a268afe16a2a7",
               "size": 785543
-            }
-          }
-        },
-        "2.15.3": {
-          "changelog": "打印纸张新增「一等分 241×280（可用215mm）」针式打印纸规格，支持在打印模板中自定义针式纸宽（120–300mm）并实时按纸宽预览，全单据打印与模板导入导出均已支持",
-          "updated_at": "2026-11-25T14:19:32+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.3.fpk",
-              "sha256": "607c345e6d01c74f9fea736fc278c609b105ccebc00825243ada91ff9d8b1c75",
-              "size": 782802
             }
           }
         }

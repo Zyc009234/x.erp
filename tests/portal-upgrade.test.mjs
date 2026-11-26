@@ -84,3 +84,38 @@ test('旧版直接升级：原管理员账号和商品数据都保留', async ()
   assert.ok(d.data.products.some(p => p.sku === 'OLD-001'));
   assert.equal(fs.existsSync(path.join(DATA, 'registry.db')), true);
 });
+
+test('保留数据卸载重装：安装向导写入的新管理员密码生效并清空旧会话，业务数据保留', async () => {
+  const oldLogin = await call(portalBase, null, 'POST', '/api/portal/login', { username: 'admin', password: 'admin123', company: 'default' });
+  portal.kill();
+  await new Promise(r => portal.once('exit', r));
+  await new Promise(r => setTimeout(r, 800));
+
+  const pwdFile = path.join(DATA, 'admin-password');
+  fs.writeFileSync(pwdFile, 'reinstall888');
+  const portalPort = await freePort(), basePort = await freePort();
+  portalBase = `http://127.0.0.1:${portalPort}`;
+  portal = spawn(process.execPath, [
+    path.join(ROOT, 'src', 'portal.js'), '--data', DATA, '--port', String(portalPort), '--base-port', String(basePort),
+    '--admin-password-file', pwdFile,
+  ], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, XERP_STATS_DELAY: '60000' } });
+  portal.stdout.on('data', d => { log += d; });
+  portal.stderr.on('data', d => { log += d; });
+  await waitPing(portalBase, portal);
+
+  // 密码文件读取后已删除
+  assert.equal(fs.existsSync(pwdFile), false);
+  // 旧会话与旧密码全部失效
+  const oldTokRes = await fetch(portalBase + '/api/data', { headers: { Authorization: 'Bearer ' + oldLogin.token } });
+  assert.equal(oldTokRes.status, 401);
+  const oldPwdRes = await fetch(portalBase + '/api/portal/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'admin123', company: 'default' }),
+  });
+  assert.equal(oldPwdRes.status, 401);
+  // 新密码可正常登录且原业务数据完整保留
+  const newLogin = await call(portalBase, null, 'POST', '/api/portal/login', { username: 'admin', password: 'reinstall888', company: 'default' });
+  const d = await call(portalBase, newLogin.token, 'GET', '/api/data');
+  assert.equal(d.user.username, 'admin');
+  assert.ok(d.data.products.some(p => p.sku === 'OLD-001'));
+});

@@ -20,7 +20,7 @@ const tls = require('tls');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.15.5';
+const VERSION = '2.15.6';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -3958,14 +3958,23 @@ if (!getMeta('initialized', false)) {
 tx(ensureWh);  // v1.0.3 升级：补默认仓库与分仓库存
 tx(ensureAccounts);  // v2.0.11 升级：补资金账户，旧流水按收付方式归到对应账户
 tx(ensureOrderFulfillment);  // v2.14.8 升级：同步分批关联出入库单的订单已执行 / 待审数量
+// --admin-password-file：安装向导写入的一次性管理员密码，读取后删除；空库时用于创建 admin，保留旧数据重装时重置 admin 密码
+let filePwd = '';
+try { if (arg('admin-password-file')) filePwd = fs.readFileSync(arg('admin-password-file'), 'utf8').trim(); } catch (e) {}
 if (!db.prepare('SELECT COUNT(*) AS n FROM users').get().n) {
-  // --admin-password-file：首次启动时从文件读取管理员初始密码（NAS 安装向导填写），读取后删除
-  let pwd = '';
-  try { if (arg('admin-password-file')) pwd = fs.readFileSync(arg('admin-password-file'), 'utf8').trim(); } catch (e) {}
-  if (pwd.length < 6) pwd = String(process.env.XERP_ADMIN_PASSWORD || '').trim();  // Docker：环境变量设初始密码
+  let pwd = filePwd;
+  if (pwd.length < 6) pwd = String(process.env.XERP_ADMIN_PASSWORD || '').trim();  // Docker：环境变量仅在首次空库建号时生效
   if (pwd.length < 6) pwd = 'admin123';
   createUser({ username: 'admin', name: '管理员', roleId: 'admin', password: pwd });
   log(pwd === 'admin123' ? '已创建默认管理员账号 admin / admin123' : '已创建管理员账号 admin（密码为安装时设置的密码）');
+} else if (filePwd.length >= 6) {
+  const adm = db.prepare("SELECT id FROM users WHERE username = 'admin' AND disabled = 0").get();
+  if (adm) {
+    const { salt, hash } = hashPwd(filePwd);
+    db.prepare('UPDATE users SET salt = ?, hash = ? WHERE id = ?').run(salt, hash, adm.id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(adm.id);
+    log('已按安装向导重置管理员 admin 密码');
+  }
 }
 try { if (arg('admin-password-file')) fs.unlinkSync(arg('admin-password-file')); } catch (e) {}
 if (argv.includes('--init')) { log('账套初始化完成'); process.exit(0); }
@@ -4205,8 +4214,17 @@ function cleanTpl(t) {
   const offsetY = Number.isFinite(+t.offsetY) ? Math.max(-30, Math.min(120, Math.round(+t.offsetY * 10) / 10)) : 0;
   const rowH = Number.isFinite(+t.rowH) && +t.rowH >= 4 && +t.rowH <= 20 ? Math.round(+t.rowH * 10) / 10 : 0;
   const preprintBg = typeof t.preprintBg === 'string' && t.preprintBg.length <= 260000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(t.preprintBg) ? t.preprintBg : '';
+  const pos = {};
+  if (t.pos && typeof t.pos === 'object' && !Array.isArray(t.pos)) {
+    for (const [k, v] of Object.entries(t.pos).slice(0, 40)) {
+      if (!/^[a-zA-Z0-9_.:-]{1,32}$/.test(k) || !Array.isArray(v) || v.length < 2) continue;
+      const x = Number.isFinite(+v[0]) ? Math.max(-200, Math.min(200, Math.round(+v[0] * 10) / 10)) : 0;
+      const y = Number.isFinite(+v[1]) ? Math.max(-200, Math.min(200, Math.round(+v[1] * 10) / 10)) : 0;
+      if (x || y) pos[k] = [x, y];
+    }
+  }
   return { title: str(t.title, 20), header: str(t.header, 300), footer: str(t.footer, 300), signs: str(t.signs, 100),
-    fontSize: Math.min(24, Math.max(10, size)), paper, paperW, font, logo, logoPos, preprint, offsetX, offsetY, rowH, preprintBg, upper: t.upper !== false, printer: t.printer !== false, cols, meta };
+    fontSize: Math.min(24, Math.max(10, size)), paper, paperW, font, logo, logoPos, preprint, offsetX, offsetY, rowH, preprintBg, pos, upper: t.upper !== false, printer: t.printer !== false, cols, meta };
 }
 // 商品分类 / 员工部门：列表存在设置里（没被用到的也能保留）；改名 / 删除同时改掉用到它的记录
 function namedList(ctx, { key, col, field, label, unit, empty }) {

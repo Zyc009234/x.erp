@@ -384,12 +384,17 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .slip-preview .s-meta{display:flex;justify-content:space-between;gap:2px 16px;margin:3px 0;flex-wrap:wrap}
 .slip-preview .s-sign{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 16px;margin-top:14px}.slip-preview .s-foot{margin-top:8px;font-size:.92em}
 .slip-preview .slip-wrap{position:relative}.slip-preview .slip-stamp{position:absolute;right:30px;top:10px;border:3px solid #c00;color:#c00;font-size:22px;font-weight:800;padding:2px 14px;transform:rotate(-12deg);letter-spacing:.3em}
-.slip-preview.is-preprint{position:relative;background-repeat:no-repeat;background-position:0 0;background-size:100% auto}
+.slip-preview.is-preprint{position:relative;background-repeat:no-repeat;background-position:0 0;background-size:100% auto;outline:none}
 .slip-preview .slip-preprint{transform:translate(var(--ox,0mm),var(--oy,0mm))}
 .slip-preview .slip-preprint .s-title,.slip-preview .slip-preprint thead,.slip-preview .slip-preprint .s-foot,.slip-preview .slip-preprint .slip-stamp{display:none}
 .slip-preview .slip-preprint .pp-lbl{color:#cbd5e1}
+.slip-preview .slip-preprint .s-meta>span,.slip-preview .slip-preprint .s-sign>span{display:inline-block}
+.slip-preview .slip-preprint .pp-line{margin-top:4px;padding:2px 4px;border:1px dashed #cbd5e1}
 .slip-preview .slip-preprint table,.slip-preview .slip-preprint th,.slip-preview .slip-preprint td{border:1px dashed #cbd5e1}
 .slip-preview .slip-preprint.has-rh tbody tr{height:var(--rh)}
+.slip-preview.is-preprint [data-pp]{cursor:move;user-select:none;touch-action:none;border-radius:3px}
+.slip-preview.is-preprint [data-pp]:hover{outline:1px dashed rgba(99,102,241,.65);background:rgba(99,102,241,.04)}
+.slip-preview.is-preprint [data-pp].pp-sel{outline:1.5px solid #6366f1;background:rgba(99,102,241,.08)}
 .tp-col{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:3px 0}.tp-col input[data-l]{flex:1;min-width:100px}.tp-col input[data-w]{width:58px;padding-left:4px;padding-right:2px}.tp-col select[data-al]{width:62px;padding-left:4px;padding-right:2px}
 .tp-grid{display:grid;grid-template-columns:minmax(300px,400px) minmax(0,1fr);gap:16px;align-items:start}.tp-form .field{margin-bottom:12px}.tp-grid .card-head h3{white-space:nowrap}
 @media(max-width:1180px){.tp-grid{grid-template-columns:1fr}}
@@ -523,7 +528,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.15.5</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.15.6</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -2402,6 +2407,7 @@ function slipTpl(kind, tplId) {
   const cols = saved.length ? [...saved, ...colKeys.filter(k => !saved.some(c => c.k === k)).map(k => ({k, label:'', on:false}))]
     : colKeys.map(k => ({k, label:'', on:k !== 'barcode'}));
   return {title:'', header:'', footer:'', signs:K.signs, fontSize:12, upper:true, printer:true, paper:'', paperW:0, font:'song', logo:'', logoPos:'inline', preprint:false, offsetX:0, offsetY:0, rowH:0, preprintBg:'', ...t,
+    pos:t.pos && typeof t.pos === 'object' ? {...t.pos} : {},
     cols:cols.map(c => ({...c})), meta:{...Object.fromEntries(K.meta.map(k => [k, true])), ...(t.meta || {})}};
 }
 function tplPickHtml(kind, id) {
@@ -2454,9 +2460,16 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
   for (let k = rows.length; k < minRows; k++) rows.push(`<tr>${'<td>&nbsp;</td>'.repeat(cols.length)}</tr>`);
   const amt = sum(d.items, i => i.amount), first = cols.findIndex(c => c.k === 'qty' || c.k === 'amount');
   const total = first < 0 ? '' : `<tr>${first ? `<td colspan="${first}" class="r"><b class="pp-lbl">合计</b></td>` : ''}${cols.slice(first).map(c => `<td class="r" style="${colStyle(c)}">${c.k === 'qty' ? `<b>${sum(d.items, i => i.qty)}</b>` : c.k === 'amount' ? `<b>${amt.toFixed(2)}</b>` : ''}</td>`).join('')}</tr>`;
+  const ppOn = !!tpl.preprint && hasFeat('preprint');
+  const ppPos = ppOn && tpl.pos && typeof tpl.pos === 'object' ? tpl.pos : {};
+  const ppTf = key => { const p = Array.isArray(ppPos[key]) ? ppPos[key] : null; return p && (+p[0] || +p[1]) ? `transform:translate(${+p[0] || 0}mm,${+p[1] || 0}mm);` : ''; };
+  const ppAttr = (key, label, extra = '') => {
+    const st = extra + (ppOn ? ppTf(key) : '');
+    return (ppOn ? ` data-pp="${key}" data-pp-name="${esc(label)}"` : '') + (st ? ` style="${st}"` : '');
+  };
   const meta = K.meta.filter(k => tpl.meta[k]).map(k => {
     const v = d.meta[k], [l, x] = Array.isArray(v) ? v : [SLIP_META[k], v];
-    return x ? `<span><span class="pp-lbl">${esc(l)}：</span>${k === 'no' ? `<b>${esc(x)}</b>` : esc(x)}</span>` : '';
+    return x ? `<span${ppAttr('meta.' + k, l)}><span class="pp-lbl">${esc(l)}：</span>${k === 'no' ? `<b>${esc(x)}</b>` : esc(x)}</span>` : '';
   }).join('');
   const auto = {'制单':d.creator, '制单人':d.creator, '经手':d.handler, '经手人':d.handler, '审核':d.approver || '', '审核人':d.approver || '', '审批':d.approver || '', '报销人':d.applicant || d.creator, '财务':d.payer || ''};
   const signs = String(tpl.signs || '').split(/[,，、]+/).map(x => x.trim()).filter(Boolean);
@@ -2467,20 +2480,33 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
     : lp === 'inline' ? `<div class="s-title s-logo-inline"><div class="s-title-row"><img class="s-logo" src="${tpl.logo}" alt=""><div class="s-title-txt">${headText}</div></div></div>`
     : lp === 'left' || lp === 'right' ? `<div class="s-title s-logo-${lp}"><img class="s-logo" src="${tpl.logo}" alt=""><div class="s-title-txt">${headText}</div></div>`
     : `<div class="s-title s-logo-top"><img class="s-logo" src="${tpl.logo}" alt="">${headText}</div>`;
-  const ppOn = !!tpl.preprint && hasFeat('preprint');
   const ppCls = ppOn ? (` slip-preprint` + (+tpl.rowH >= 4 ? ' has-rh' : '')) : '';
   const ppVars = ppOn ? `;--ox:${+tpl.offsetX || 0}mm;--oy:${+tpl.offsetY || 0}mm;--rh:${+tpl.rowH || 0}mm` : '';
+  const extraDiscount = showMoney && d.discount && cols.some(c => c.k === 'amount') ? `<span class="pp-lbl">优惠 </span>-${d.discount.toFixed(2)}　<span class="pp-lbl">实际合计 </span><b>${(amt - d.discount).toFixed(2)}</b>` : '';
+  const extraUpper = showMoney && tpl.upper && cols.some(c => c.k === 'amount') ? `<span class="pp-lbl">金额大写：</span>${rmbUpper(amt - (d.discount || 0))}` : '';
+  const extraReason = kind === 'expense' && d.reason ? `<span class="pp-lbl">事由：</span>${esc(d.reason)}` : '';
+  const extraRemark = d.remark ? `<span class="pp-lbl">备注：</span>${esc(d.remark)}` : '';
+  const tableTail = ppOn ? '' : [
+    extraDiscount ? `<tr><td colspan="${cols.length}" class="r">${extraDiscount}</td></tr>` : '',
+    extraUpper ? `<tr><td colspan="${cols.length}">${extraUpper}</td></tr>` : '',
+    extraReason ? `<tr><td colspan="${cols.length}">${extraReason}</td></tr>` : '',
+    extraRemark ? `<tr><td colspan="${cols.length}">${extraRemark}</td></tr>` : ''
+  ].join('');
+  const ppExtras = !ppOn ? '' : [
+    extraDiscount ? `<div class="pp-line r"${ppAttr('discount', '优惠/实际合计')}>${extraDiscount}</div>` : '',
+    extraUpper ? `<div class="pp-line"${ppAttr('upper', '金额大写')}>${extraUpper}</div>` : '',
+    extraReason ? `<div class="pp-line"${ppAttr('reason', '事由')}>${extraReason}</div>` : '',
+    extraRemark ? `<div class="pp-line"${ppAttr('remark', '备注')}>${extraRemark}</div>` : ''
+  ].join('');
   return `<div class="slip-wrap${ppCls}" style="font-family:${PRINT_FONTS[tpl.font] || PRINT_FONTS.song};font-size:${+tpl.fontSize || 12}px${ppVars}">${d.stamp ? `<div class="slip-stamp">${d.stamp}</div>` : ''}
   ${titleHtml}
   <div class="s-meta">${meta}</div>
-  <table style="${cols.some(c => c.w) ? 'table-layout:fixed;' : ''}"><thead><tr>${cols.map(c => `<th style="${colStyle(c)}">${esc(colLabel(K, c))}</th>`).join('')}</tr></thead>
+  <table${ppAttr('table', '明细表格', cols.some(c => c.w) ? 'table-layout:fixed;' : '')}><thead><tr>${cols.map(c => `<th style="${colStyle(c)}">${esc(colLabel(K, c))}</th>`).join('')}</tr></thead>
   <tbody>${rows.join('')}
   ${total}
-  ${showMoney && d.discount && cols.some(c => c.k === 'amount') ? `<tr><td colspan="${cols.length}" class="r"><span class="pp-lbl">优惠 </span>-${d.discount.toFixed(2)}　<span class="pp-lbl">实际合计 </span><b>${(amt - d.discount).toFixed(2)}</b></td></tr>` : ''}
-  ${showMoney && tpl.upper && cols.some(c => c.k === 'amount') ? `<tr><td colspan="${cols.length}"><span class="pp-lbl">金额大写：</span>${rmbUpper(amt - (d.discount || 0))}</td></tr>` : ''}
-  ${kind === 'expense' && d.reason ? `<tr><td colspan="${cols.length}"><span class="pp-lbl">事由：</span>${esc(d.reason)}</td></tr>` : ''}
-  ${d.remark ? `<tr><td colspan="${cols.length}"><span class="pp-lbl">备注：</span>${esc(d.remark)}</td></tr>` : ''}</tbody></table>
-  ${signs.length ? `<div class="s-sign">${signs.map(x => `<span><span class="pp-lbl">${esc(x)}：</span>${esc(auto[x] || '')}</span>`).join('')}</div>` : ''}
+  ${tableTail}</tbody></table>
+  ${ppExtras}
+  ${signs.length ? `<div class="s-sign">${signs.map((x, idx) => `<span${ppAttr('sign.' + idx, x)}><span class="pp-lbl">${esc(x)}：</span>${esc(auto[x] || '')}</span>`).join('')}</div>` : ''}
   ${d.payInfo ? `<div class="s-meta" style="margin-top:6px"><span>${esc(d.payInfo)}</span></div>` : ''}
   ${tpl.footer ? `<div class="s-foot">${lines(tpl.footer)}</div>` : ''}
   ${d.voided.length > 3 ? `<div class="s-meta" style="margin-top:6px"><span>${esc(d.voided)}</span></div>` : ''}</div>`;
@@ -2513,6 +2539,8 @@ function printFrame(title, body, paperKey, tpl) {
   .slip-preprint{transform:translate(var(--ox,0mm),var(--oy,0mm))}
   .slip-preprint .s-title,.slip-preprint thead,.slip-preprint .s-foot,.slip-preprint .slip-stamp{display:none!important}
   .slip-preprint .pp-lbl{visibility:hidden}
+  .slip-preprint .s-meta>span,.slip-preprint .s-sign>span{display:inline-block}
+  .slip-preprint .pp-line{margin-top:4px;padding:2px 4px}
   .slip-preprint table,.slip-preprint th,.slip-preprint td{border-color:transparent!important}
   .slip-preprint.has-rh tbody tr{height:var(--rh)}
   .foot{margin-top:6px;font-size:10px;color:#444;text-align:right}
@@ -6274,6 +6302,19 @@ function printTplPage(body) {
   const activeId = (db.settings.printTplActive || {})[kind] || '';
   const activeName = (tplList.find(x => x.id === activeId) || {}).name || '';
   let logoSrc = t.logo || '', bgSrc = t.preprintBg || '', showMoneyPrev = true;
+  const cleanPos = raw => {
+    const out = {};
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      for (const [k, v] of Object.entries(raw).slice(0, 40)) {
+        if (!/^[a-zA-Z0-9_.:-]{1,32}$/.test(k) || !Array.isArray(v) || v.length < 2) continue;
+        const x = Number.isFinite(+v[0]) ? Math.max(-200, Math.min(200, Math.round(+v[0] * 10) / 10)) : 0;
+        const y = Number.isFinite(+v[1]) ? Math.max(-200, Math.min(200, Math.round(+v[1] * 10) / 10)) : 0;
+        if (x || y) out[k] = [x, y];
+      }
+    }
+    return out;
+  };
+  let ppPos = cleanPos(t.pos), ppSel = '', ppSelName = '';
   const canPreprint = hasFeat('preprint');
   const adaptTpl = (raw, targetKind, keepTitle) => {
     const src = raw && typeof raw === 'object' ? raw : {}, K2 = SLIP_KINDS[targetKind], seen = new Set();
@@ -6299,6 +6340,7 @@ function printTplPage(body) {
       offsetY: Number.isFinite(+src.offsetY) ? Math.max(-30, Math.min(120, Math.round(+src.offsetY * 10) / 10)) : 0,
       rowH: Number.isFinite(+src.rowH) && +src.rowH >= 4 && +src.rowH <= 20 ? Math.round(+src.rowH * 10) / 10 : 0,
       preprintBg: typeof src.preprintBg === 'string' && src.preprintBg.length <= 260000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(src.preprintBg) ? src.preprintBg : '',
+      pos: canPreprint ? cleanPos(src.pos) : {},
       upper: src.upper !== false, printer: src.printer !== false, cols: fullCols, meta
     };
   };
@@ -6327,6 +6369,7 @@ function printTplPage(body) {
           <label class="field span2" style="margin:0"><span>明细固定行高（mm，0 = 自动；按预印横线间距填写，如 7.5）</span><input id="tpRowH" type="number" min="0" max="20" step="0.5" value="${t.rowH || 0}"></label>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px" id="tpBgBox">${bgSrc ? '<span class="badge green plain">已上传校准底图</span>' : '<span class="sub-t">可选：上传预印单据照片辅助预览对位（不打印）</span>'}<label class="btn sm">${ic('upload')}底图<input type="file" id="tpBg" accept="image/png,image/jpeg,image/webp" hidden></label>${bgSrc ? '<button class="btn sm danger-text" id="tpBgDel">清除底图</button>' : ''}</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)" id="tpPosBar"></div>
       </div>
     </div>` : ''}
     <label class="field"><span>打印字体</span><select id="tpFont"><option value="song" ${t.font === 'song' ? 'selected' : ''}>宋体（默认）</option><option value="hei" ${t.font === 'hei' ? 'selected' : ''}>微软雅黑</option><option value="kai" ${t.font === 'kai' ? 'selected' : ''}>楷体</option></select></label>
@@ -6346,8 +6389,19 @@ function printTplPage(body) {
   <div class="card"><div class="card-head"><h3>预览</h3><span class="sub-t">${sample.no === '示例单号' ? '示例数据' : '用最近一张' + K.name + '预览'}</span><label class="chk" style="margin-left:auto"><input type="checkbox" id="tpShowMoney" checked>显示金额</label></div><div class="card-body"><div class="slip-preview" id="tpPrev"></div></div></div></div>`;
   const isPinPaper = k => k === 'half' || k === 'full';
   const read = () => ({title:$('#tpTitle').value.trim(), header:$('#tpHeader').value.trim(), footer:$('#tpFooter').value.trim(), signs:$('#tpSigns').value.trim(), fontSize:+$('#tpFs').value, paper:$('#tpPaper').value, paperW:isPinPaper($('#tpPaper').value) ? Math.max(120, Math.min(300, Math.round(+$('#tpPaperW').value || 215))) : 0, font:$('#tpFont').value, logo:logoSrc, logoPos:$('#tpLogoPos').value,
-    preprint:canPreprint && !!$('#tpPreprint')?.checked, offsetX:canPreprint ? Math.max(-30, Math.min(80, Math.round((+(($('#tpOffX') || {}).value || 0)) * 10) / 10)) : 0, offsetY:canPreprint ? Math.max(-30, Math.min(120, Math.round((+(($('#tpOffY') || {}).value || 0)) * 10) / 10)) : 0, rowH:canPreprint && (+(($('#tpRowH') || {}).value || 0)) >= 4 ? Math.min(20, Math.round((+(($('#tpRowH') || {}).value || 0)) * 10) / 10) : 0, preprintBg:canPreprint ? bgSrc : '',
+    preprint:canPreprint && !!$('#tpPreprint')?.checked, offsetX:canPreprint ? Math.max(-30, Math.min(80, Math.round((+(($('#tpOffX') || {}).value || 0)) * 10) / 10)) : 0, offsetY:canPreprint ? Math.max(-30, Math.min(120, Math.round((+(($('#tpOffY') || {}).value || 0)) * 10) / 10)) : 0, rowH:canPreprint && (+(($('#tpRowH') || {}).value || 0)) >= 4 ? Math.min(20, Math.round((+(($('#tpRowH') || {}).value || 0)) * 10) / 10) : 0, preprintBg:canPreprint ? bgSrc : '', pos:canPreprint ? cleanPos(ppPos) : {},
     upper:$('#tpUpper').checked, printer:$('#tpPrinter').checked, meta:Object.fromEntries([...body.querySelectorAll('[data-meta]')].map(x => [x.dataset.meta, x.checked])), cols});
+  const drawPosBar = () => {
+    const bar = $('#tpPosBar'); if (!bar) return;
+    const cnt = Object.keys(ppPos).length;
+    const p = ppSel && Array.isArray(ppPos[ppSel]) ? ppPos[ppSel] : [0, 0];
+    const fmt = v => (v > 0 ? '+' : '') + v + 'mm';
+    const info = ppSel
+      ? `<span class="badge blue plain">已选：${esc(ppSelName || ppSel)} (${fmt(p[0])}, ${fmt(p[1])})</span><span class="sub-t">方向键微调 0.5mm，双击元素还原</span>`
+      : `<span class="sub-t">右侧预览中可直接拖拽任意文字/表格到对应位置（双击还原）</span>`;
+    bar.innerHTML = info + (cnt ? `<button class="btn sm danger-text" id="tpPosReset" style="margin-left:auto">重置全部位置（${cnt}）</button>` : '');
+    if ($('#tpPosReset')) $('#tpPosReset').onclick = () => { ppPos = {}; ppSel = ''; ppSelName = ''; prev(); };
+  };
   const prev = () => {
     const tpl = read();
     if ($('#tpPaperWBox')) $('#tpPaperWBox').style.display = isPinPaper(tpl.paper) ? '' : 'none';
@@ -6356,9 +6410,76 @@ function printTplPage(body) {
     box.style.maxWidth = isPinPaper(tpl.paper) ? (tpl.paperW || 215) + 'mm' : '';
     box.style.margin = isPinPaper(tpl.paper) ? '0 auto' : '';
     box.classList.toggle('is-preprint', !!tpl.preprint);
+    box.tabIndex = tpl.preprint ? 0 : -1;
     box.style.backgroundImage = tpl.preprint && tpl.preprintBg ? `url("${tpl.preprintBg}")` : '';
     box.innerHTML = slipRender(kind, sample, {showMoney:showMoneyPrev, tpl});
+    if (tpl.preprint && ppSel) {
+      const selEl = box.querySelector(`[data-pp="${CSS.escape(ppSel)}"]`);
+      if (selEl) selEl.classList.add('pp-sel');
+    }
+    drawPosBar();
   };
+  // 套打预览：单个元素拖拽定位 + 双击还原 + 方向键微调
+  const prevBox = $('#tpPrev'), PX_PER_MM = 96 / 25.4;
+  let ppDrag = null;
+  const setPos = (el, key, x, y) => {
+    const cx = Math.max(-200, Math.min(200, Math.round(x * 10) / 10));
+    const cy = Math.max(-200, Math.min(200, Math.round(y * 10) / 10));
+    if (cx || cy) ppPos[key] = [cx, cy]; else delete ppPos[key];
+    if (el) el.style.transform = (cx || cy) ? `translate(${cx}mm,${cy}mm)` : '';
+    drawPosBar();
+  };
+  const selectPp = el => {
+    prevBox.querySelectorAll('[data-pp].pp-sel').forEach(x => x.classList.remove('pp-sel'));
+    if (el) {
+      el.classList.add('pp-sel');
+      ppSel = el.dataset.pp || '';
+      ppSelName = el.dataset.ppName || ppSel;
+      prevBox.focus({ preventScroll: true });
+    } else {
+      ppSel = ''; ppSelName = '';
+    }
+    drawPosBar();
+  };
+  prevBox.addEventListener('pointerdown', e => {
+    if (!prevBox.classList.contains('is-preprint') || e.button !== 0) return;
+    const el = e.target.closest('[data-pp]');
+    if (!el || !prevBox.contains(el)) { selectPp(null); return; }
+    e.preventDefault();
+    selectPp(el);
+    const key = el.dataset.pp, cur = Array.isArray(ppPos[key]) ? ppPos[key] : [0, 0];
+    ppDrag = { el, key, sx: e.clientX, sy: e.clientY, ox: +cur[0] || 0, oy: +cur[1] || 0, pid: e.pointerId };
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  prevBox.addEventListener('pointermove', e => {
+    if (!ppDrag) return;
+    const step = e.shiftKey ? 0.1 : 0.5;
+    const snap = v => Math.round(v / step) * step;
+    const nx = snap(ppDrag.ox + (e.clientX - ppDrag.sx) / PX_PER_MM);
+    const ny = snap(ppDrag.oy + (e.clientY - ppDrag.sy) / PX_PER_MM);
+    setPos(ppDrag.el, ppDrag.key, nx, ny);
+  });
+  const endDrag = () => { if (ppDrag) { try { ppDrag.el.releasePointerCapture(ppDrag.pid); } catch (err) {} ppDrag = null; } };
+  prevBox.addEventListener('pointerup', endDrag);
+  prevBox.addEventListener('pointercancel', endDrag);
+  prevBox.addEventListener('dblclick', e => {
+    if (!prevBox.classList.contains('is-preprint')) return;
+    const el = e.target.closest('[data-pp]');
+    if (!el || !prevBox.contains(el)) return;
+    e.preventDefault();
+    selectPp(el);
+    setPos(el, el.dataset.pp, 0, 0);
+  });
+  prevBox.addEventListener('keydown', e => {
+    if (!prevBox.classList.contains('is-preprint') || !ppSel) return;
+    const map = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    const d = map[e.key]; if (!d) return;
+    e.preventDefault();
+    const step = e.altKey ? 0.1 : e.shiftKey ? 2 : 0.5;
+    const cur = Array.isArray(ppPos[ppSel]) ? ppPos[ppSel] : [0, 0];
+    const el = prevBox.querySelector(`[data-pp="${CSS.escape(ppSel)}"]`);
+    setPos(el, ppSel, (+cur[0] || 0) + d[0] * step, (+cur[1] || 0) + d[1] * step);
+  });
   const drawCols = () => {
     $('#tpCols').innerHTML = cols.map((c, i) => `<div class="tp-col"><input type="checkbox" data-c="${i}" ${c.on ? 'checked' : ''} title="打印这一列">
       <input data-l="${i}" maxlength="10" value="${esc(c.label)}" placeholder="${esc(colLabel(K, {k:c.k}))}">

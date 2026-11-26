@@ -438,15 +438,43 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+function resetAdminPassword(pwd) {
+  if (!pwd || pwd.length < 6) return;
+  const p = hashPwd(pwd);
+  const adm = userByName('admin');
+  let changed = false;
+  if (adm) {
+    reg.prepare('UPDATE users SET salt = ?, hash = ? WHERE id = ?').run(p.salt, p.hash, adm.id);
+    reg.prepare('DELETE FROM sessions WHERE user_id = ?').run(adm.id);
+    changed = true;
+  }
+  for (const c of reg.prepare('SELECT * FROM companies WHERE enabled = 1').all()) {
+    if (!fs.existsSync(path.join(c.dir, 'erp.db'))) continue;
+    const db = companyDb(c);
+    try {
+      const row = db.prepare("SELECT id FROM users WHERE username = 'admin' AND disabled = 0").get();
+      if (row) {
+        db.prepare('UPDATE users SET salt = ?, hash = ? WHERE id = ?').run(p.salt, p.hash, row.id);
+        db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.id);
+        changed = true;
+      }
+    } catch (e) { log('重置账套管理员密码失败', c.code, e.message); }
+    finally { db.close(); }
+  }
+  if (changed) log('已按安装向导重置管理员 admin 密码');
+}
+
 async function boot() {
   const def = ensureDefaultCompany();
   let adminPwd = '';
-  for (const f of [arg('admin-password-file'), path.join(DATA_DIR, 'admin-password'), path.join(DATA_DIR, 'admin-password.txt')]) {
+  const pwdFiles = [arg('admin-password-file'), path.join(DATA_DIR, 'admin-password'), path.join(DATA_DIR, 'admin-password.txt')];
+  for (const f of pwdFiles) {
     if (f && fs.existsSync(f)) { try { adminPwd = fs.readFileSync(f, 'utf8').trim(); } catch (e) {} break; }
   }
   initCompany(def, adminPwd);
-  if (adminPwd) { for (const f of [arg('admin-password-file'), path.join(DATA_DIR, 'admin-password'), path.join(DATA_DIR, 'admin-password.txt')]) { try { if (f && fs.existsSync(f)) fs.unlinkSync(f); } catch (e) {} } }
   migrateDefaultUsers(def);
+  if (adminPwd.length >= 6) resetAdminPassword(adminPwd);
+  for (const f of pwdFiles) { try { if (f && fs.existsSync(f)) fs.unlinkSync(f); } catch (e) {} }
   for (const c of reg.prepare('SELECT * FROM companies WHERE enabled = 1').all()) {
     if (c.id !== def.id) initCompany(c);
     if (!fs.existsSync(path.join(c.dir, 'erp.db'))) continue;
