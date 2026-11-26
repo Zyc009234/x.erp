@@ -384,6 +384,12 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .slip-preview .s-meta{display:flex;justify-content:space-between;gap:2px 16px;margin:3px 0;flex-wrap:wrap}
 .slip-preview .s-sign{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 16px;margin-top:14px}.slip-preview .s-foot{margin-top:8px;font-size:.92em}
 .slip-preview .slip-wrap{position:relative}.slip-preview .slip-stamp{position:absolute;right:30px;top:10px;border:3px solid #c00;color:#c00;font-size:22px;font-weight:800;padding:2px 14px;transform:rotate(-12deg);letter-spacing:.3em}
+.slip-preview.is-preprint{position:relative;background-repeat:no-repeat;background-position:0 0;background-size:100% auto}
+.slip-preview .slip-preprint{transform:translate(var(--ox,0mm),var(--oy,0mm))}
+.slip-preview .slip-preprint .s-title,.slip-preview .slip-preprint thead,.slip-preview .slip-preprint .s-foot,.slip-preview .slip-preprint .slip-stamp{display:none}
+.slip-preview .slip-preprint .pp-lbl{color:#cbd5e1}
+.slip-preview .slip-preprint table,.slip-preview .slip-preprint th,.slip-preview .slip-preprint td{border:1px dashed #cbd5e1}
+.slip-preview .slip-preprint.has-rh tbody tr{height:var(--rh)}
 .tp-col{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:3px 0}.tp-col input[data-l]{flex:1;min-width:100px}.tp-col input[data-w]{width:58px;padding-left:4px;padding-right:2px}.tp-col select[data-al]{width:62px;padding-left:4px;padding-right:2px}
 .tp-grid{display:grid;grid-template-columns:minmax(300px,400px) minmax(0,1fr);gap:16px;align-items:start}.tp-form .field{margin-bottom:12px}.tp-grid .card-head h3{white-space:nowrap}
 @media(max-width:1180px){.tp-grid{grid-template-columns:1fr}}
@@ -517,7 +523,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.15.3</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.15.4</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -2395,7 +2401,7 @@ function slipTpl(kind, tplId) {
   const saved = (t.cols || []).filter(c => colKeys.includes(c.k));
   const cols = saved.length ? [...saved, ...colKeys.filter(k => !saved.some(c => c.k === k)).map(k => ({k, label:'', on:false}))]
     : colKeys.map(k => ({k, label:'', on:k !== 'barcode'}));
-  return {title:'', header:'', footer:'', signs:K.signs, fontSize:12, upper:true, printer:true, paper:'', paperW:0, font:'song', logo:'', logoPos:'inline', ...t,
+  return {title:'', header:'', footer:'', signs:K.signs, fontSize:12, upper:true, printer:true, paper:'', paperW:0, font:'song', logo:'', logoPos:'inline', preprint:false, offsetX:0, offsetY:0, rowH:0, preprintBg:'', ...t,
     cols:cols.map(c => ({...c})), meta:{...Object.fromEntries(K.meta.map(k => [k, true])), ...(t.meta || {})}};
 }
 function tplPickHtml(kind, id) {
@@ -2447,10 +2453,10 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
   const rows = d.items.map((it, n) => `<tr>${cols.map(c => `<td style="${colStyle(c)}">${val(c.k, it, n)}</td>`).join('')}</tr>`);
   for (let k = rows.length; k < minRows; k++) rows.push(`<tr>${'<td>&nbsp;</td>'.repeat(cols.length)}</tr>`);
   const amt = sum(d.items, i => i.amount), first = cols.findIndex(c => c.k === 'qty' || c.k === 'amount');
-  const total = first < 0 ? '' : `<tr>${first ? `<td colspan="${first}" class="r"><b>合计</b></td>` : ''}${cols.slice(first).map(c => `<td class="r" style="${colStyle(c)}">${c.k === 'qty' ? `<b>${sum(d.items, i => i.qty)}</b>` : c.k === 'amount' ? `<b>${amt.toFixed(2)}</b>` : ''}</td>`).join('')}</tr>`;
+  const total = first < 0 ? '' : `<tr>${first ? `<td colspan="${first}" class="r"><b class="pp-lbl">合计</b></td>` : ''}${cols.slice(first).map(c => `<td class="r" style="${colStyle(c)}">${c.k === 'qty' ? `<b>${sum(d.items, i => i.qty)}</b>` : c.k === 'amount' ? `<b>${amt.toFixed(2)}</b>` : ''}</td>`).join('')}</tr>`;
   const meta = K.meta.filter(k => tpl.meta[k]).map(k => {
     const v = d.meta[k], [l, x] = Array.isArray(v) ? v : [SLIP_META[k], v];
-    return x ? `<span>${esc(l)}：${k === 'no' ? `<b>${esc(x)}</b>` : esc(x)}</span>` : '';
+    return x ? `<span><span class="pp-lbl">${esc(l)}：</span>${k === 'no' ? `<b>${esc(x)}</b>` : esc(x)}</span>` : '';
   }).join('');
   const auto = {'制单':d.creator, '制单人':d.creator, '经手':d.handler, '经手人':d.handler, '审核':d.approver || '', '审核人':d.approver || '', '审批':d.approver || '', '报销人':d.applicant || d.creator, '财务':d.payer || ''};
   const signs = String(tpl.signs || '').split(/[,，、]+/).map(x => x.trim()).filter(Boolean);
@@ -2461,17 +2467,20 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
     : lp === 'inline' ? `<div class="s-title s-logo-inline"><div class="s-title-row"><img class="s-logo" src="${tpl.logo}" alt=""><div class="s-title-txt">${headText}</div></div></div>`
     : lp === 'left' || lp === 'right' ? `<div class="s-title s-logo-${lp}"><img class="s-logo" src="${tpl.logo}" alt=""><div class="s-title-txt">${headText}</div></div>`
     : `<div class="s-title s-logo-top"><img class="s-logo" src="${tpl.logo}" alt="">${headText}</div>`;
-  return `<div class="slip-wrap" style="font-family:${PRINT_FONTS[tpl.font] || PRINT_FONTS.song};font-size:${+tpl.fontSize || 12}px">${d.stamp ? `<div class="slip-stamp">${d.stamp}</div>` : ''}
+  const ppOn = !!tpl.preprint && hasFeat('preprint');
+  const ppCls = ppOn ? (` slip-preprint` + (+tpl.rowH >= 4 ? ' has-rh' : '')) : '';
+  const ppVars = ppOn ? `;--ox:${+tpl.offsetX || 0}mm;--oy:${+tpl.offsetY || 0}mm;--rh:${+tpl.rowH || 0}mm` : '';
+  return `<div class="slip-wrap${ppCls}" style="font-family:${PRINT_FONTS[tpl.font] || PRINT_FONTS.song};font-size:${+tpl.fontSize || 12}px${ppVars}">${d.stamp ? `<div class="slip-stamp">${d.stamp}</div>` : ''}
   ${titleHtml}
   <div class="s-meta">${meta}</div>
   <table style="${cols.some(c => c.w) ? 'table-layout:fixed;' : ''}"><thead><tr>${cols.map(c => `<th style="${colStyle(c)}">${esc(colLabel(K, c))}</th>`).join('')}</tr></thead>
   <tbody>${rows.join('')}
   ${total}
-  ${showMoney && d.discount && cols.some(c => c.k === 'amount') ? `<tr><td colspan="${cols.length}" class="r">优惠 -${d.discount.toFixed(2)}　实际合计 <b>${(amt - d.discount).toFixed(2)}</b></td></tr>` : ''}
-  ${showMoney && tpl.upper && cols.some(c => c.k === 'amount') ? `<tr><td colspan="${cols.length}">金额大写：${rmbUpper(amt - (d.discount || 0))}</td></tr>` : ''}
-  ${kind === 'expense' && d.reason ? `<tr><td colspan="${cols.length}">事由：${esc(d.reason)}</td></tr>` : ''}
-  ${d.remark ? `<tr><td colspan="${cols.length}">备注：${esc(d.remark)}</td></tr>` : ''}</tbody></table>
-  ${signs.length ? `<div class="s-sign">${signs.map(x => `<span>${esc(x)}：${esc(auto[x] || '')}</span>`).join('')}</div>` : ''}
+  ${showMoney && d.discount && cols.some(c => c.k === 'amount') ? `<tr><td colspan="${cols.length}" class="r"><span class="pp-lbl">优惠 </span>-${d.discount.toFixed(2)}　<span class="pp-lbl">实际合计 </span><b>${(amt - d.discount).toFixed(2)}</b></td></tr>` : ''}
+  ${showMoney && tpl.upper && cols.some(c => c.k === 'amount') ? `<tr><td colspan="${cols.length}"><span class="pp-lbl">金额大写：</span>${rmbUpper(amt - (d.discount || 0))}</td></tr>` : ''}
+  ${kind === 'expense' && d.reason ? `<tr><td colspan="${cols.length}"><span class="pp-lbl">事由：</span>${esc(d.reason)}</td></tr>` : ''}
+  ${d.remark ? `<tr><td colspan="${cols.length}"><span class="pp-lbl">备注：</span>${esc(d.remark)}</td></tr>` : ''}</tbody></table>
+  ${signs.length ? `<div class="s-sign">${signs.map(x => `<span><span class="pp-lbl">${esc(x)}：</span>${esc(auto[x] || '')}</span>`).join('')}</div>` : ''}
   ${d.payInfo ? `<div class="s-meta" style="margin-top:6px"><span>${esc(d.payInfo)}</span></div>` : ''}
   ${tpl.footer ? `<div class="s-foot">${lines(tpl.footer)}</div>` : ''}
   ${d.voided.length > 3 ? `<div class="s-meta" style="margin-top:6px"><span>${esc(d.voided)}</span></div>` : ''}</div>`;
@@ -2501,6 +2510,11 @@ function printFrame(title, body, paperKey, tpl) {
   .s-meta{display:flex;justify-content:space-between;flex-wrap:wrap;gap:2px 16px;margin:2px 0}.s-sign{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 16px;margin-top:12px}.s-foot{margin-top:8px;font-size:.92em}
   .r{text-align:right}.c{text-align:center}.slip-wrap{position:relative}.page{page-break-after:always}.page:last-child{page-break-after:auto}
   .slip-stamp{position:absolute;right:30px;top:10px;border:3px solid #000;font-size:22px;font-weight:800;padding:2px 14px;transform:rotate(-12deg);letter-spacing:.3em}
+  .slip-preprint{transform:translate(var(--ox,0mm),var(--oy,0mm))}
+  .slip-preprint .s-title,.slip-preprint thead,.slip-preprint .s-foot,.slip-preprint .slip-stamp{display:none!important}
+  .slip-preprint .pp-lbl{visibility:hidden}
+  .slip-preprint table,.slip-preprint th,.slip-preprint td{border-color:transparent!important}
+  .slip-preprint.has-rh tbody tr{height:var(--rh)}
   .foot{margin-top:6px;font-size:10px;color:#444;text-align:right}
   img{max-width:100%;height:auto}`;
   // 打印文档不要 viewport：让它按纸张宽度排版，手机浏览器只负责缩放预览
@@ -4271,6 +4285,8 @@ function orderAct(action, kind, id) {
 }
 
 /* ================= 页面：物流运费 ================= */
+const hasFeat = k => (db.settings.features || []).includes(k);
+const FEAT_NAMES = { preprint: '套打模板' };
 const shipOn = () => (db.settings.modules || []).includes('shipping');
 const SHIP_STATUS = {'待对账':'orange', '已对账':'green', '申诉中':'red', '已作废':'gray'};
 const BILL_CAT = {diff:['金额差异', 'orange'], extra:['账单有、系统无', 'red'], dup:['重复计费', 'purple'], ok:['一致', 'green'], missing:['系统有、账单无', 'blue']};
@@ -6173,6 +6189,11 @@ function pageSettings() {
       <div class="tip-line" style="margin-top:12px">切换为 FIFO 时，现有库存会按当前成本价生成期初成本层；历史单据和已结转成本不重算，只影响切换之后的出入库。</div>
       <div style="margin-top:14px;text-align:right"><button class="btn primary" data-act="saveCostMethod">${ic('check')}保存成本设置</button></div>
     </div></div>
+    <div class="card" style="margin-top:16px"><div class="card-head"><h3>功能激活</h3>${st.deviceCode ? `<span class="sub-t">设备码：<code>${esc(st.deviceCode)}</code></span>` : ''}</div><div class="card-body">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><span class="sub-t">已激活功能：</span>${(st.features || []).length ? st.features.map(f => `<span class="badge green plain">${esc(FEAT_NAMES[f] || f)}</span>`).join('') : '<span class="sub-t">暂无</span>'}</div>
+      <div style="display:flex;gap:8px;max-width:460px"><input class="select" style="flex:1" id="sRedeemCode" placeholder="输入激活码，例如 XP-XXXX-XXXX-XXXX" autocomplete="off"><button class="btn primary" data-act="redeemCode" id="sRedeemBtn">激活</button></div>
+      <p class="sub-t" style="margin-top:8px">激活码一次有效并永久绑定本机，激活成功后可离线使用。</p>
+    </div></div>
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>版本更新</h3></div><div class="card-body">
       <div class="setting-row"><div class="sr-group"><b>当前版本</b><small>v${esc(st.version || '-')} · ${esc(platLabel)}</small></div><button class="btn" data-act="updateCheck" id="updCheck">${ic('refresh')}检查更新</button></div>
       ${NATIVE ? `<div class="setting-row"><div class="sr-group"><b>安卓客户端</b><small>当前 v${esc(NATIVE.version ? NATIVE.version() : '')} · 下载后由系统确认安装</small></div><button class="btn" data-act="apkUpdate">${ic('download')}检查客户端更新</button></div>` : ''}
@@ -6245,7 +6266,8 @@ function printTplPage(body) {
   const tplList = (db.settings.printTplList || {})[kind] || [];
   const activeId = (db.settings.printTplActive || {})[kind] || '';
   const activeName = (tplList.find(x => x.id === activeId) || {}).name || '';
-  let logoSrc = t.logo || '', showMoneyPrev = true;
+  let logoSrc = t.logo || '', bgSrc = t.preprintBg || '', showMoneyPrev = true;
+  const canPreprint = hasFeat('preprint');
   const adaptTpl = (raw, targetKind, keepTitle) => {
     const src = raw && typeof raw === 'object' ? raw : {}, K2 = SLIP_KINDS[targetKind], seen = new Set();
     const colKeys = K2.allowedCols || Object.keys(SLIP_COLS).filter(k => k !== 'category');
@@ -6265,6 +6287,11 @@ function printTplPage(body) {
       font: ['song', 'hei', 'kai'].includes(src.font) ? src.font : 'song',
       logo: typeof src.logo === 'string' && src.logo.length <= 180000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(src.logo) ? src.logo : '',
       logoPos: ['inline', 'left', 'right', 'top'].includes(src.logoPos) ? src.logoPos : 'inline',
+      preprint: canPreprint && !!src.preprint,
+      offsetX: Number.isFinite(+src.offsetX) ? Math.max(-30, Math.min(80, Math.round(+src.offsetX * 10) / 10)) : 0,
+      offsetY: Number.isFinite(+src.offsetY) ? Math.max(-30, Math.min(120, Math.round(+src.offsetY * 10) / 10)) : 0,
+      rowH: Number.isFinite(+src.rowH) && +src.rowH >= 4 && +src.rowH <= 20 ? Math.round(+src.rowH * 10) / 10 : 0,
+      preprintBg: typeof src.preprintBg === 'string' && src.preprintBg.length <= 260000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(src.preprintBg) ? src.preprintBg : '',
       upper: src.upper !== false, printer: src.printer !== false, cols: fullCols, meta
     };
   };
@@ -6274,6 +6301,7 @@ function printTplPage(body) {
     <div class="field span2"><span>模板</span><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <select id="tpPick" class="select" style="min-width:180px"><option value="">默认模板</option>${tplList.map(x => `<option value="${x.id}" ${x.id === activeId ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
       <button class="btn sm" id="tpNew">${ic('plus')}新建模板</button>
+      ${canPreprint ? `<button class="btn sm" id="tpNewPreprint">${ic('plus')}新建套打模板</button>` : ''}
       <button class="btn sm" id="tpCopyFrom">${ic('swap')}从其他单据复制</button>
       <button class="btn sm" id="tpExport">${ic('download')}导出模板</button>
       <label class="btn sm">${ic('upload')}导入模板<input type="file" id="tpImport" accept=".json,application/json" hidden></label>
@@ -6283,6 +6311,17 @@ function printTplPage(body) {
     <label class="field"><span>单据标题</span><input id="tpTitle" maxlength="20" value="${esc(t.title)}" placeholder="${K.name}（例如改成「送货单」）"></label>
     <label class="field"><span>打印纸张</span><select id="tpPaper"><option value="">跟随打印窗口（默认 A4 纵向）</option>${Object.entries(PAPERS).map(([k, v]) => `<option value="${k}" ${t.paper === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></label>
     <label class="field" id="tpPaperWBox" style="${t.paper === 'half' || t.paper === 'full' ? '' : 'display:none'}"><span>针式纸宽（mm，可用宽度默认 215）</span><input id="tpPaperW" type="number" min="120" max="300" step="1" value="${t.paperW || 215}"></label>
+    ${canPreprint ? `<div class="field" style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--panel2)">
+      <label class="chk"><input type="checkbox" id="tpPreprint" ${t.preprint ? 'checked' : ''}><b>套打模式（预印纸张只打数据，不打标题/表头/框线）</b></label>
+      <div id="tpPreprintBox" style="${t.preprint ? '' : 'display:none'};margin-top:8px">
+        <div class="form-grid" style="gap:8px 10px">
+          <label class="field" style="margin:0"><span>左偏移（mm）</span><input id="tpOffX" type="number" min="-30" max="80" step="0.5" value="${t.offsetX || 0}"></label>
+          <label class="field" style="margin:0"><span>上偏移（mm）</span><input id="tpOffY" type="number" min="-30" max="120" step="0.5" value="${t.offsetY || 0}"></label>
+          <label class="field span2" style="margin:0"><span>明细固定行高（mm，0 = 自动；按预印横线间距填写，如 7.5）</span><input id="tpRowH" type="number" min="0" max="20" step="0.5" value="${t.rowH || 0}"></label>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px" id="tpBgBox">${bgSrc ? '<span class="badge green plain">已上传校准底图</span>' : '<span class="sub-t">可选：上传预印单据照片辅助预览对位（不打印）</span>'}<label class="btn sm">${ic('upload')}底图<input type="file" id="tpBg" accept="image/png,image/jpeg,image/webp" hidden></label>${bgSrc ? '<button class="btn sm danger-text" id="tpBgDel">清除底图</button>' : ''}</div>
+      </div>
+    </div>` : ''}
     <label class="field"><span>打印字体</span><select id="tpFont"><option value="song" ${t.font === 'song' ? 'selected' : ''}>宋体（默认）</option><option value="hei" ${t.font === 'hei' ? 'selected' : ''}>微软雅黑</option><option value="kai" ${t.font === 'kai' ? 'selected' : ''}>楷体</option></select></label>
     <div class="field"><span>单据 LOGO 与位置</span><div id="tpLogoBox" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${logoSrc ? `<img id="tpLogoPrev" src="${logoSrc}" alt="LOGO" style="max-width:120px;max-height:50px;object-fit:contain">` : '<span class="sub-t" id="tpLogoPrev">未上传</span>'}<label class="btn sm">${ic('upload')}上传<input type="file" id="tpLogo" accept="image/png,image/jpeg,image/webp" hidden></label>${logoSrc ? '<button class="btn sm danger-text" id="tpLogoDel">删除</button>' : ''}</div>
       <select id="tpLogoPos" style="margin-top:6px"><option value="inline" ${(t.logoPos || 'inline') === 'inline' ? 'selected' : ''}>与标题同排（居中并列）</option><option value="left" ${t.logoPos === 'left' ? 'selected' : ''}>标题左侧（与标题同排）</option><option value="right" ${t.logoPos === 'right' ? 'selected' : ''}>标题右侧（与标题同排）</option><option value="top" ${t.logoPos === 'top' ? 'selected' : ''}>标题上方（独占一行）</option></select>
@@ -6300,13 +6339,17 @@ function printTplPage(body) {
   <div class="card"><div class="card-head"><h3>预览</h3><span class="sub-t">${sample.no === '示例单号' ? '示例数据' : '用最近一张' + K.name + '预览'}</span><label class="chk" style="margin-left:auto"><input type="checkbox" id="tpShowMoney" checked>显示金额</label></div><div class="card-body"><div class="slip-preview" id="tpPrev"></div></div></div></div>`;
   const isPinPaper = k => k === 'half' || k === 'full';
   const read = () => ({title:$('#tpTitle').value.trim(), header:$('#tpHeader').value.trim(), footer:$('#tpFooter').value.trim(), signs:$('#tpSigns').value.trim(), fontSize:+$('#tpFs').value, paper:$('#tpPaper').value, paperW:isPinPaper($('#tpPaper').value) ? Math.max(120, Math.min(300, Math.round(+$('#tpPaperW').value || 215))) : 0, font:$('#tpFont').value, logo:logoSrc, logoPos:$('#tpLogoPos').value,
+    preprint:canPreprint && !!$('#tpPreprint')?.checked, offsetX:canPreprint ? Math.max(-30, Math.min(80, Math.round((+(($('#tpOffX') || {}).value || 0)) * 10) / 10)) : 0, offsetY:canPreprint ? Math.max(-30, Math.min(120, Math.round((+(($('#tpOffY') || {}).value || 0)) * 10) / 10)) : 0, rowH:canPreprint && (+(($('#tpRowH') || {}).value || 0)) >= 4 ? Math.min(20, Math.round((+(($('#tpRowH') || {}).value || 0)) * 10) / 10) : 0, preprintBg:canPreprint ? bgSrc : '',
     upper:$('#tpUpper').checked, printer:$('#tpPrinter').checked, meta:Object.fromEntries([...body.querySelectorAll('[data-meta]')].map(x => [x.dataset.meta, x.checked])), cols});
   const prev = () => {
     const tpl = read();
     if ($('#tpPaperWBox')) $('#tpPaperWBox').style.display = isPinPaper(tpl.paper) ? '' : 'none';
+    if ($('#tpPreprintBox')) $('#tpPreprintBox').style.display = tpl.preprint ? '' : 'none';
     const box = $('#tpPrev');
     box.style.maxWidth = isPinPaper(tpl.paper) ? (tpl.paperW || 215) + 'mm' : '';
     box.style.margin = isPinPaper(tpl.paper) ? '0 auto' : '';
+    box.classList.toggle('is-preprint', !!tpl.preprint);
+    box.style.backgroundImage = tpl.preprint && tpl.preprintBg ? `url("${tpl.preprintBg}")` : '';
     box.innerHTML = slipRender(kind, sample, {showMoney:showMoneyPrev, tpl});
   };
   const drawCols = () => {
@@ -6319,6 +6362,9 @@ function printTplPage(body) {
   };
   const drawLogo = () => {
     $('#tpLogoBox').innerHTML = `${logoSrc ? `<img id="tpLogoPrev" src="${logoSrc}" alt="LOGO" style="max-width:120px;max-height:50px;object-fit:contain">` : '<span class="sub-t" id="tpLogoPrev">未上传</span>'}<label class="btn sm">${ic('upload')}上传<input type="file" id="tpLogo" accept="image/png,image/jpeg,image/webp" hidden></label>${logoSrc ? '<button class="btn sm danger-text" id="tpLogoDel">删除</button>' : ''}`;
+  };
+  const drawBg = () => {
+    $('#tpBgBox').innerHTML = `${bgSrc ? '<span class="badge green plain">已上传校准底图</span>' : '<span class="sub-t">可选：上传预印单据照片辅助预览对位（不打印）</span>'}<label class="btn sm">${ic('upload')}底图<input type="file" id="tpBg" accept="image/png,image/jpeg,image/webp" hidden></label>${bgSrc ? '<button class="btn sm danger-text" id="tpBgDel">清除底图</button>' : ''}`;
   };
   body.addEventListener('input', e => { const x = e.target; if (x.dataset.l != null) cols[+x.dataset.l].label = x.value.trim(); if (x.dataset.w != null) cols[+x.dataset.w].w = Math.max(0, Math.min(120, Math.round(+x.value || 0))); if (x.id !== 'tpKind') prev(); });
   body.addEventListener('change', e => {
@@ -6365,10 +6411,19 @@ function printTplPage(body) {
       r.readAsDataURL(f);
       return;
     }
+    if (x.id === 'tpBg') {
+      const f = x.files && x.files[0]; x.value = ''; if (!f) return;
+      shrinkImage(f, 1200, 250000).then(data => {
+        if (data.length > 250000) return toast('底图压缩后仍过大，请换一张小一点的图片', 'error');
+        bgSrc = data; drawBg(); prev();
+      }).catch(err => toast(err.message || '读取底图失败', 'error'));
+      return;
+    }
     if (x.id !== 'tpKind') prev();
   });
   body.addEventListener('click', e => {
     if (e.target.closest('#tpLogoDel')) { logoSrc = ''; drawLogo(); prev(); return; }
+    if (e.target.closest('#tpBgDel')) { bgSrc = ''; drawBg(); prev(); return; }
     const b = e.target.closest('[data-mv]'); if (!b) return;
     const [i, d] = b.dataset.mv.split('|').map(Number);
     [cols[i], cols[i + d]] = [cols[i + d], cols[i]]; drawCols();
@@ -6397,6 +6452,21 @@ function printTplPage(body) {
       try {
         await api('PUT', '/api/settings/print', { kind, create: true, name: v.name, tpl: cur });
         await reload(); render(); toast('模板已创建');
+      } catch (err) { toast(err.message, 'error'); }
+    }});
+  };
+  if ($('#tpNewPreprint')) $('#tpNewPreprint').onclick = () => {
+    const cur = read();
+    formModal({ title: '新建套打模板 · ' + K.name, okText: '创建并启用', data: { name: K.name + '套打模板', paper: isPinPaper(cur.paper) ? cur.paper : 'half', offsetY: 24, rowH: 7.5 }, fields: [
+      { n: 'name', l: '套打模板名称', req: 1, ph: '例如：二等分预印套打' },
+      { n: 'paper', l: '预印纸张规格', type: 'select', opts: Object.entries(PAPERS).map(([k, v]) => [k, v[0]]) },
+      { n: 'offsetY', l: '上偏移（mm，跳过预印抬头高度）', type: 'number' },
+      { n: 'rowH', l: '明细行高（mm，0 = 自动）', type: 'number' }
+    ], onSubmit: async v => {
+      const tpl = { ...cur, preprint: true, paper: v.paper || 'half', paperW: isPinPaper(v.paper) ? (cur.paperW || 215) : 0, offsetX: 0, offsetY: +v.offsetY || 0, rowH: +v.rowH || 0, printer: false };
+      try {
+        await api('PUT', '/api/settings/print', { kind, create: true, name: v.name, tpl });
+        await reload(); render(); toast('套打模板已创建，可按实测微调偏移和列宽');
       } catch (err) { toast(err.message, 'error'); }
     }});
   };
@@ -7697,6 +7767,17 @@ const A = {
     }
   }, { title: '下载更新包', danger: false, okText: '确认下载' }),
   saveCompany: () => mutate('PUT', '/api/settings', {company:$('#sCompany').value.trim()}, '公司名称已保存'),
+  redeemCode: async () => {
+    const code = ($('#sRedeemCode')?.value || '').trim().toUpperCase();
+    if (!code) return toast('请输入激活码', 'error');
+    const b = $('#sRedeemBtn'); if (b) b.disabled = true;
+    try {
+      const r = await api('POST', '/api/settings/redeem', { code });
+      await reload(); render();
+      toast('激活成功：' + (FEAT_NAMES[r.feature] || r.feature) + '已解锁');
+    } catch (e) { toast(e.message, 'error'); }
+    finally { if (b) b.disabled = false; }
+  },
   changePwd: () => formModal({title:'修改密码', okText:'确认修改', fields:[
     {n:'old', l:'当前密码', type:'password', req:1}, {n:'pwd', l:'新密码（至少 6 位）', type:'password', req:1}, {n:'pwd2', l:'确认新密码', type:'password', req:1}],
     onSubmit:async v => {

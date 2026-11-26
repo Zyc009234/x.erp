@@ -20,7 +20,7 @@ const tls = require('tls');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.15.3';
+const VERSION = '2.15.4';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -3965,11 +3965,47 @@ const publicSettings = ctx => {
   const safeNotify = notify ? { ...notify, mail: notify.mail ? { ...notify.mail, pass: '', hasPass: !!notify.mail.pass } : undefined } : notify;
   return ctx.user.role === 'admin' ? { ...s, backupPath: BACKUP_DIR, notify: safeNotify, expenseFlow: expenseFlow || {}, kdn: { ...pub, ebid: k.ebid || '', keySet: !!k.key, sender: k.sender || {} } } : { ...s, expenseFlow: expenseFlow || {}, kdn: pub };
 };
+const FEATURE_PUBKEY = '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA5LC5WoojcHAYW6IgpJSE9hoR3FeyO9wXvg0SPJkZrGY=\n-----END PUBLIC KEY-----';
+const REDEEM_URL = process.env.XERP_REDEEM_URL ?? 'https://www.zhaoyoucai.xyz/xerp/api/redeem';
+function ensureInstallId() {
+  let id = getMeta('installId', '');
+  if (!/^[0-9a-f]{32}$/.test(id)) { id = crypto.randomBytes(16).toString('hex'); setMeta('installId', id); }
+  return id;
+}
+function verifyFeatureCert(feat, cert) {
+  if (!cert || typeof cert.payload !== 'string' || typeof cert.sig !== 'string') return false;
+  try {
+    if (!crypto.verify(null, Buffer.from(cert.payload, 'utf8'), FEATURE_PUBKEY, Buffer.from(cert.sig, 'base64'))) return false;
+    const p = JSON.parse(cert.payload);
+    return !!(p && p.installId === ensureInstallId() && p.feature === feat);
+  } catch (e) { return false; }
+}
+const hasFeature = feat => verifyFeatureCert(feat, (getMeta('features', {}) || {})[feat]);
+const unlockedFeatures = () => { const all = getMeta('features', {}) || {}; return Object.keys(all).filter(k => verifyFeatureCert(k, all[k])); };
+
 route('GET', '/api/data', ctx => ({
-  version: VERSION, settings: { ...publicSettings(ctx), modules: enabledModules(), feedbackUnread: fbUnread(), platform: PLAT },
+  version: VERSION, settings: { ...publicSettings(ctx), modules: enabledModules(), feedbackUnread: fbUnread(), platform: PLAT, features: unlockedFeatures(), ...(ctx.user.role === 'admin' ? { deviceCode: ensureInstallId().slice(0, 12).toUpperCase() } : {}) },
   user: { ...publicUser(ctx.user), dept: userDept(ctx.user), perms: [...ctx.perms] }, data: visibleData(ctx),
   meta: { modules: MODULES, perms: PERMS, docTypes: DOC_TYPES, expCats: EXP_CATS, defaultWh: DEFAULT_WH, provinces: PROVINCES, regions: REGIONS }
 }));
+route('POST', '/api/settings/redeem', async ctx => {
+  if (DEMO) fail('演示环境不支持激活功能', 403);
+  const code = str(ctx.body && ctx.body.code, 40).toUpperCase();
+  if (!/^XP-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code)) fail('激活码格式不正确（应为 XP-XXXX-XXXX-XXXX）');
+  if (!REDEEM_URL) fail('未配置激活服务地址');
+  let r, j;
+  try {
+    r = await fetch(REDEEM_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, installId: ensureInstallId() }), signal: AbortSignal.timeout(10000) });
+    j = await r.json().catch(() => ({}));
+  } catch (e) { fail('无法连接激活服务器，请确认当前网络可访问外网'); }
+  if (!r.ok || !j.ok) fail(j.error || '激活失败（状态码 ' + r.status + '）', r.status >= 400 && r.status < 500 ? r.status : 400);
+  const cert = { payload: j.payload, sig: j.sig };
+  if (!verifyFeatureCert(j.feature, cert)) fail('激活凭证校验失败');
+  const all = { ...(getMeta('features', {}) || {}), [j.feature]: cert };
+  setMeta('features', all);
+  audit(ctx, '功能激活', `${j.feature}（${code}）`);
+  return { ok: true, feature: j.feature, features: unlockedFeatures() };
+}, { admin: true });
 route('PUT', '/api/settings/expiry', ctx => {
   const n = Math.round(Number(ctx.body.days));
   if (!(n >= 1 && n <= 365)) fail('临期提醒天数需在 1 ~ 365 之间');
@@ -4143,8 +4179,13 @@ function cleanTpl(t) {
   const font = ['song', 'hei', 'kai'].includes(t.font) ? t.font : 'song';
   const logo = typeof t.logo === 'string' && t.logo.length <= 180000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(t.logo) ? t.logo : '';
   const logoPos = ['inline', 'left', 'right', 'top'].includes(t.logoPos) ? t.logoPos : 'inline';
+  const preprint = !!t.preprint;
+  const offsetX = Number.isFinite(+t.offsetX) ? Math.max(-30, Math.min(80, Math.round(+t.offsetX * 10) / 10)) : 0;
+  const offsetY = Number.isFinite(+t.offsetY) ? Math.max(-30, Math.min(120, Math.round(+t.offsetY * 10) / 10)) : 0;
+  const rowH = Number.isFinite(+t.rowH) && +t.rowH >= 4 && +t.rowH <= 20 ? Math.round(+t.rowH * 10) / 10 : 0;
+  const preprintBg = typeof t.preprintBg === 'string' && t.preprintBg.length <= 260000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(t.preprintBg) ? t.preprintBg : '';
   return { title: str(t.title, 20), header: str(t.header, 300), footer: str(t.footer, 300), signs: str(t.signs, 100),
-    fontSize: Math.min(24, Math.max(10, size)), paper, paperW, font, logo, logoPos, upper: t.upper !== false, printer: t.printer !== false, cols, meta };
+    fontSize: Math.min(24, Math.max(10, size)), paper, paperW, font, logo, logoPos, preprint, offsetX, offsetY, rowH, preprintBg, upper: t.upper !== false, printer: t.printer !== false, cols, meta };
 }
 // 商品分类 / 员工部门：列表存在设置里（没被用到的也能保留）；改名 / 删除同时改掉用到它的记录
 function namedList(ctx, { key, col, field, label, unit, empty }) {
@@ -4230,6 +4271,7 @@ route('PUT', '/api/settings/print', ctx => {
     return save();
   }
   const t = cleanTpl(ctx.body.tpl);
+  if (t && t.preprint && !hasFeature('preprint')) fail('套打模板功能尚未激活，请先在「系统设置 → 常规设置 → 功能激活」中输入激活码', 403);
   if (ctx.body.create) {
     if (!name) fail('请填写模板名称');
     if (list.length >= 10) fail('每种单据最多 10 套模板');

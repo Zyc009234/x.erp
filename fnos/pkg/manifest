@@ -1,5 +1,5 @@
 appname               = xerp
-version               = 2.15.3
+version               = 2.15.4
 display_name          = x.erp
 desc                  = 轻量级企业资源计划（ERP）系统：商品与库存、销售、采购、客户/供应商往来、财务收支、人事与经营报表，多账号权限与操作日志，数据保存在 NAS 本地并每日自动备份。
 platform              = all
@@ -12,4 +12,4 @@ checkport             = true
 ctl_stop              = true
 desktop_uidir         = ui
 desktop_applaunchname = xerp.Application
-changelog             = 打印纸张新增「一等分 241×280（可用215mm）」针式打印纸规格，支持在打印模板中自定义针式纸宽（120–300mm）并实时按纸宽预览，全单据打印与模板导入导出均已支持
+changelog             = 新增「套打模板」功能（预印纸张只打数据、不打标题与表格框线，支持左/上偏移与固定行高毫米级微调及预览校准底图）；系统设置新增「功能激活」入口，支持一次性激活码联网绑定并生成离线凭证

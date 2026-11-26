@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.15.4": {
+          "changelog": "新增「套打模板」功能（预印纸张只打数据、不打标题与表格框线，支持左/上偏移与固定行高毫米级微调及预览校准底图）；系统设置新增「功能激活」入口，支持一次性激活码联网绑定并生成离线凭证",
+          "updated_at": "2026-11-26T12:45:33+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.4.fpk",
+              "sha256": "1fee8fb0551a4abdb7e0fbb68082954cff0e8e6959816501415a268afe16a2a7",
+              "size": 785543
+            }
+          }
+        },
         "2.15.3": {
           "changelog": "打印纸张新增「一等分 241×280（可用215mm）」针式打印纸规格，支持在打印模板中自定义针式纸宽（120–300mm）并实时按纸宽预览，全单据打印与模板导入导出均已支持",
           "updated_at": "2026-11-25T14:19:32+08:00",
@@ -53,17 +64,6 @@
               "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.2.fpk",
               "sha256": "a2f81f78877637def9d6672b7112a67f6bfd4ebe9141e790d006a3f2e5f9598a",
               "size": 783089
-            }
-          }
-        },
-        "2.15.1": {
-          "changelog": "销售/采购及退货单客户与供应商升级为可搜索下拉选择器并支持直接输入快捷新建；修复新增商品「包装规格与条码」表格排版间距与输入框溢出问题，非管理员彻底隐藏公司名称设置行；报销审批流程、新建报销单与备用金领用全部升级为弹出式/下拉选人与选部门，新增「报销审批流程设置」独立角色权限；修复安卓客户端与扫码助手连接自定义域名时自动拼接 8686 端口的问题",
-          "updated_at": "2026-11-25T10:42:22+08:00",
-          "packages": {
-            "all": {
-              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.1.fpk",
-              "sha256": "b2a10c220cefd4516ef3d226d9921c7d3a8ac29ef2e75b46abdcd6bfbd8e98c0",
-              "size": 782560
             }
           }
         }
