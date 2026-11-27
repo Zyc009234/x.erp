@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.16.1": {
+          "changelog": "打印模板预览随纸张自动撑大缩放并支持全宽切换；套打表格支持拖拽调列宽、总宽、行高与右下角自由缩放",
+          "updated_at": "2026-11-27T13:33:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.1.fpk",
+              "sha256": "ebbbceca85220448a61ed8910f2babb6efc1e00a747aa317be4e8f17d3fd8318",
+              "size": 827876
+            }
+          }
+        },
         "2.16.0": {
           "changelog": "新增合同管理、人事临工/考勤/月工资表、固定资产与折旧、工程结算、农业田间管理与粮食进出分摊、门店配送等 24 项功能，并修复 29 项安全/逻辑/权限/移动端审计问题",
           "updated_at": "2026-11-27T13:06:00+08:00",
