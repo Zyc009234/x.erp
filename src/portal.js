@@ -434,10 +434,14 @@ const server = http.createServer(async (req, res) => {
       const mine = memberOf(me.id, sess.company_id);
       if (!me.admin && (!mine || mine.role !== 'admin')) return json(res, 403, { error: '只有管理员能查看全局成员' });
       const users = reg.prepare('SELECT id, username, name, admin FROM users ORDER BY created').all();
-      const mems = reg.prepare('SELECT m.user_id, c.code, m.role FROM members m JOIN companies c ON c.id = m.company_id').all();
+      const mems = reg.prepare('SELECT m.user_id, m.company_id, c.code, m.role FROM members m JOIN companies c ON c.id = m.company_id').all();
       const byU = {};
-      for (const m of mems) { (byU[m.user_id] ||= {})[m.code] = m.role; }
-      return json(res, 200, { users: users.map(u => ({ username: u.username, name: u.name || u.username, admin: !!u.admin, companies: byU[u.id] || {} })) });
+      for (const m of mems) {
+        if (!canManage(me, m.company_id)) continue;
+        (byU[m.user_id] ||= {})[m.code] = m.role;
+      }
+      const visibleUsers = me.admin ? users : users.filter(u => u.id === me.id || Object.keys(byU[u.id] || {}).length > 0);
+      return json(res, 200, { users: visibleUsers.map(u => ({ username: u.username, name: u.name || u.username, admin: !!u.admin, companies: byU[u.id] || {} })) });
     }
     if (p === '/api/portal/members/batch' && req.method === 'POST') {
       if (!sess) return json(res, 401, { error: '登录已失效' });
@@ -448,39 +452,58 @@ const server = http.createServer(async (req, res) => {
       const username = String(b.username || '').trim();
       if (!/^[a-zA-Z0-9_.-]{2,32}$/.test(username)) return json(res, 400, { error: '用户名只能是 2-32 位字母、数字、. _ -' });
       let user = userByName(username);
-      if (!user) {
+      const isNewUser = !user;
+      if (isNewUser) {
         const pwd = String(b.password || '');
         if (pwd.length < 6) return json(res, 400, { error: '新账号需要设置至少 6 位密码' });
-        const hp = hashPwd(pwd);
-        reg.prepare('INSERT INTO users (id, username, name, salt, hash, admin, created) VALUES (?,?,?,?,?,0,?)')
-          .run(uid('gu'), username, String(b.name || '').trim() || username, hp.salt, hp.hash, new Date().toISOString());
-        user = userByName(username);
       }
-      const role = b.role === 'admin' ? 'admin' : 'user';
+      const roleMode = b.role === 'admin' ? 'admin' : b.role === 'user' ? 'user' : 'keep';
       const wantCodes = new Set(Array.isArray(b.companies) ? b.companies.map(x => String(x || '').trim()) : []);
-      const allCos = reg.prepare('SELECT * FROM companies').all();
+      const allCos = reg.prepare('SELECT * FROM companies').all().filter(c => canManage(me, c.id));
+      const plan = [];
       for (const c of allCos) {
-        if (!canManage(me, c.id)) continue;
-        const prev = memberOf(user.id, c.id);
+        const prev = user ? memberOf(user.id, c.id) : null;
         const want = wantCodes.has(c.code);
         if (want) {
-          if (prev && prev.role === 'admin' && role !== 'admin') {
+          const targetRole = roleMode === 'keep' ? (prev ? prev.role : 'user') : roleMode;
+          if (prev && prev.role === 'admin' && targetRole !== 'admin') {
             const admins = reg.prepare("SELECT COUNT(*) AS n FROM members WHERE company_id = ? AND role = 'admin'").get(c.id).n;
             if (admins <= 1) return json(res, 400, { error: `公司「${c.name}」至少要保留一个管理员` });
           }
-          reg.prepare('INSERT INTO members (user_id, company_id, role) VALUES (?,?,?) ON CONFLICT(user_id, company_id) DO UPDATE SET role = excluded.role').run(user.id, c.id, role);
-          const demoted = !!(prev && prev.role === 'admin' && role !== 'admin');
-          syncCompanyMember(c, user, role, { revoke: demoted });
-          if (demoted) reg.prepare('DELETE FROM sessions WHERE user_id = ? AND company_id = ?').run(user.id, c.id);
+          plan.push({ c, action: 'upsert', targetRole, demoted: !!(prev && prev.role === 'admin' && targetRole !== 'admin') });
         } else if (prev) {
           if (prev.role === 'admin') {
             const admins = reg.prepare("SELECT COUNT(*) AS n FROM members WHERE company_id = ? AND role = 'admin'").get(c.id).n;
             if (admins <= 1) return json(res, 400, { error: `公司「${c.name}」至少要保留一个管理员` });
           }
-          reg.prepare('DELETE FROM members WHERE user_id = ? AND company_id = ?').run(user.id, c.id);
-          reg.prepare('DELETE FROM sessions WHERE user_id = ? AND company_id = ?').run(user.id, c.id);
-          syncCompanyMember(c, user, 'user', { disable: true, revoke: true });
+          plan.push({ c, action: 'remove' });
         }
+      }
+      reg.exec('BEGIN IMMEDIATE');
+      try {
+        if (isNewUser) {
+          const hp = hashPwd(String(b.password || ''));
+          reg.prepare('INSERT INTO users (id, username, name, salt, hash, admin, created) VALUES (?,?,?,?,?,0,?)')
+            .run(uid('gu'), username, String(b.name || '').trim() || username, hp.salt, hp.hash, new Date().toISOString());
+          user = userByName(username);
+        }
+        for (const step of plan) {
+          if (step.action === 'upsert') {
+            reg.prepare('INSERT INTO members (user_id, company_id, role) VALUES (?,?,?) ON CONFLICT(user_id, company_id) DO UPDATE SET role = excluded.role').run(user.id, step.c.id, step.targetRole);
+            if (step.demoted) reg.prepare('DELETE FROM sessions WHERE user_id = ? AND company_id = ?').run(user.id, step.c.id);
+          } else {
+            reg.prepare('DELETE FROM members WHERE user_id = ? AND company_id = ?').run(user.id, step.c.id);
+            reg.prepare('DELETE FROM sessions WHERE user_id = ? AND company_id = ?').run(user.id, step.c.id);
+          }
+        }
+        reg.exec('COMMIT');
+      } catch (e) {
+        try { reg.exec('ROLLBACK'); } catch (x) {}
+        throw e;
+      }
+      for (const step of plan) {
+        if (step.action === 'upsert') syncCompanyMember(step.c, user, step.targetRole, { revoke: step.demoted });
+        else syncCompanyMember(step.c, user, 'user', { disable: true, revoke: true });
       }
       return json(res, 200, { ok: true });
     }

@@ -549,7 +549,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.16.2</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.16.3</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -5680,24 +5680,35 @@ function grainModal(dir = 'in') {
   <div class="o-total" style="margin-top:14px">毛净重 <b id="grRaw">0</b> &nbsp; 结算净重 <b id="grNet">0</b> &nbsp; 结算单价 <b id="grEffP">¥0.00</b> &nbsp; 结算总额 <b id="grTotal">¥0.00</b></div></div>
   <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="grSave">${ic('check')}保存并${isOut ? '出库' : '入库'}</button></div>`, 'lg');
 
+  const updateSplitsSummary = (net, grossAmt) => {
+    const sumS = splits.reduce((n, x) => n + (+x.selfWeight || 0), 0);
+    let remW = net, remA = grossAmt;
+    splits.forEach((s, i) => {
+      const isLast = i === splits.length - 1;
+      const ratio = sumS > 0 ? (+s.selfWeight || 0) / sumS : 0;
+      const aw = sumS > 0 ? (isLast ? +Math.max(0, remW).toFixed(3) : +(net * ratio).toFixed(3)) : 0;
+      const aa = sumS > 0 ? (isLast ? +Math.max(0, remA).toFixed(2) : +(grossAmt * ratio).toFixed(2)) : 0;
+      remW = +(remW - aw).toFixed(3); remA = +(remA - aa).toFixed(2);
+      const sa = Math.max(0, +(aa - (+s.freightFee || 0)).toFixed(2));
+      const cell = $(`#grSplits [data-sp-out="${i}"]`);
+      if (cell) cell.innerHTML = `${(ratio * 100).toFixed(1)}% · ${aw} · <b>${money(sa)}</b>`;
+    });
+  };
   const drawSplits = (net, grossAmt) => {
     const box = $('#grSplits'); if (!box) return;
     if (!splits.length) { box.innerHTML = '<div class="sub-t">若一车装多位客户粮食统一卖给粮站，可点击右上角添加各客户自称重量，系统按比例分摊粮站结算金额。</div>'; return; }
-    const sumS = splits.reduce((n, x) => n + (+x.selfWeight || 0), 0);
-    box.innerHTML = `<table class="tbl compact"><thead><tr><th>客户</th><th style="width:110px">自称过磅重</th><th style="width:90px">垫付运费</th><th>比例 / 分摊重 / 应结金额</th><th style="width:36px"></th></tr></thead><tbody>${splits.map((s, i) => {
-      const ratio = sumS > 0 ? (+s.selfWeight || 0) / sumS : 0;
-      const aw = +(net * ratio).toFixed(3), aa = +(grossAmt * ratio).toFixed(2), sa = Math.max(0, +(aa - (+s.freightFee || 0)).toFixed(2));
-      return `<tr><td><select data-sp-c="${i}" class="select"><option value="">选择客户</option>${db.customers.map(c => `<option value="${c.id}" ${c.id === s.customerId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></td>
+    box.innerHTML = `<div class="table-wrap"><table class="tbl compact"><thead><tr><th>客户</th><th style="width:110px">自称过磅重</th><th style="width:90px">垫付运费</th><th>比例 / 分摊重 / 应结金额</th><th style="width:36px"></th></tr></thead><tbody>${splits.map((s, i) => `<tr><td><select data-sp-c="${i}" class="select"><option value="">选择客户</option>${db.customers.map(c => `<option value="${c.id}" ${c.id === s.customerId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></td>
         <td><input data-sp-w="${i}" type="number" step="0.001" min="0" value="${s.selfWeight || ''}"></td>
         <td><input data-sp-f="${i}" type="number" step="0.01" min="0" value="${s.freightFee || 0}"></td>
-        <td class="sub-t">${(ratio * 100).toFixed(1)}% · ${aw} · <b>${money(sa)}</b></td>
-        <td><button type="button" class="icon-btn sm" data-sp-del="${i}">${ic('trash')}</button></td></tr>`;
-    }).join('')}</tbody></table>`;
+        <td class="sub-t" data-sp-out="${i}">-</td>
+        <td><button type="button" class="icon-btn sm" data-sp-del="${i}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table></div>`;
+    updateSplitsSummary(net, grossAmt);
   };
-  const calc = () => {
+  const calc = (rebuildSplits = false) => {
     const gross = +$('#grGross').value || 0, tare = +$('#grTare').value || 0;
     const rawNet = gross > 0 ? Math.max(0, +(gross - tare).toFixed(3)) : 0;
-    const m = Math.max(0, +$('#grMoist').value || 0), sm = Math.max(0, +$('#grStdMoist').value || 0), imp = Math.max(0, +$('#grImp').value || 0), ex = Math.max(0, +$('#grExtra').value || 0);
+    const smRaw = $('#grStdMoist').value.trim();
+    const m = Math.max(0, +$('#grMoist').value || 0), sm = smRaw === '' ? 14 : Math.max(0, +smRaw || 0), imp = Math.max(0, +$('#grImp').value || 0), ex = Math.max(0, +$('#grExtra').value || 0);
     const mode = $('#grMode').value, dev = isOut && $('#grDev') ? (+$('#grDev').value || 0) : 0;
     const mDiff = Math.max(0, +(m - sm).toFixed(2));
     document.querySelectorAll('.gr-pt').forEach(el => { el.style.display = mode === 'price' ? '' : 'none'; });
@@ -5718,8 +5729,11 @@ function grainModal(dir = 'in') {
     const fFee = Math.max(0, +$('#grFreight').value || 0), fPayer = $('#grFPayer').value;
     const total = fPayer === 'self' && fFee > 0 ? Math.max(0, +(grossAmt - fFee).toFixed(2)) : grossAmt;
     $('#grRaw').textContent = rawNet; $('#grNet').textContent = net; $('#grEffP').textContent = money(effP); $('#grTotal').textContent = money(total);
-    if (isOut) drawSplits(net, grossAmt);
-    return { rawNet, net, effP, grossAmt, total };
+    if (isOut) {
+      if (rebuildSplits || !$('#grSplits table')) drawSplits(net, grossAmt);
+      else updateSplitsSummary(net, grossAmt);
+    }
+    return { rawNet, net, effP, grossAmt, total, sm };
   };
   $('#grPartyId').onchange = () => {
     const rec = byId(partyList, $('#grPartyId').value);
@@ -5738,22 +5752,22 @@ function grainModal(dir = 'in') {
   };
   $('#grPhotoPrev').onclick = e => { const i = e.target.dataset.gpdel; if (i != null) { photos.splice(+i, 1); e.target.remove(); } };
   if ($('#grSplitAdd')) {
-    $('#grSplitAdd').onclick = () => { splits.push({ customerId:'', customerName:'', selfWeight:0, freightFee:0, freightPayer:'self' }); calc(); };
+    $('#grSplitAdd').onclick = () => { splits.push({ customerId:'', customerName:'', selfWeight:0, freightFee:0, freightPayer:'self' }); calc(true); };
     $('#grSplits').addEventListener('change', e => {
-      if (e.target.dataset.spC != null) { const i = +e.target.dataset.spC, c = byId(db.customers, e.target.value); splits[i].customerId = e.target.value; splits[i].customerName = c ? c.name : ''; calc(); }
+      if (e.target.dataset.spC != null) { const i = +e.target.dataset.spC, c = byId(db.customers, e.target.value); splits[i].customerId = e.target.value; splits[i].customerName = c ? c.name : ''; calc(false); }
     });
     $('#grSplits').addEventListener('input', e => {
-      if (e.target.dataset.spW != null) { splits[+e.target.dataset.spW].selfWeight = +e.target.value || 0; calc(); }
-      if (e.target.dataset.spF != null) { splits[+e.target.dataset.spF].freightFee = +e.target.value || 0; calc(); }
+      if (e.target.dataset.spW != null) { splits[+e.target.dataset.spW].selfWeight = +e.target.value || 0; calc(false); }
+      if (e.target.dataset.spF != null) { splits[+e.target.dataset.spF].freightFee = +e.target.value || 0; calc(false); }
     });
-    $('#grSplits').addEventListener('click', e => { const b = e.target.closest('[data-sp-del]'); if (b) { splits.splice(+b.dataset.spDel, 1); calc(); } });
+    $('#grSplits').addEventListener('click', e => { const b = e.target.closest('[data-sp-del]'); if (b) { splits.splice(+b.dataset.spDel, 1); calc(true); } });
   }
-  calc();
+  calc(true);
   $('#grSave').onclick = () => {
     const farmerName = $('#grFarmer').value.trim(); if (!farmerName) return toast('请填写往来方姓名', 'error');
     const grossWeight = +$('#grGross').value || 0, tareWeight = +$('#grTare').value || 0;
     if (!(grossWeight > 0) || tareWeight < 0 || tareWeight >= grossWeight) return toast('请正确填写毛重和皮重', 'error');
-    const { total, grossAmt, net } = calc();
+    const { total, grossAmt, net, sm } = calc(false);
     const unitPrice = +$('#grPrice').value; if (!Number.isFinite(unitPrice) || unitPrice < 0) return toast('请填写基准单价', 'error');
     const payNow = +$('#grPayNow').value || 0; if (payNow < 0 || payNow > total + 0.001) return toast('现结金额不能超过结算总额', 'error');
     return mutate('POST', '/api/graindocs', {
@@ -5764,7 +5778,7 @@ function grainModal(dir = 'in') {
       driverName:$('#grDriver').value.trim(), driverPhone:$('#grDriverPhone').value.trim(),
       handler:$('#grHandler').value.trim(), grossWeight, tareWeight,
       calcMode:$('#grMode').value, deviation: isOut && $('#grDev') ? (+$('#grDev').value || 0) : 0,
-      moisture:+$('#grMoist').value || 0, stdMoisture:+$('#grStdMoist').value || 14, impurity:+$('#grImp').value || 0, extraDeduct:+$('#grExtra').value || 0,
+      moisture:+$('#grMoist').value || 0, stdMoisture: sm, impurity:+$('#grImp').value || 0, extraDeduct:+$('#grExtra').value || 0,
       unitPrice, moisturePricePerPt:+$('#grMoistPt').value || 0, impurityPricePerPt:+$('#grImpPt').value || 0,
       freightFee:+$('#grFreight').value || 0, freightPayer:$('#grFPayer').value,
       stationWeight: net, stationAmount: grossAmt, splits: isOut ? splits : [], photos,
@@ -5812,8 +5826,41 @@ function grainPrint(id) {
 /* ---------- #11 田间管理（天地图 + KML/KMZ 导入 + 农事日历与导出） ---------- */
 async function extractKmlFromFile(file) {
   if (/\.kml$/i.test(file.name)) return await file.text();
-  // KMZ 本质为 ZIP，使用浏览器原生 DecompressionStream 解压其中的 .kml 文件
+  // KMZ 本质为 ZIP：优先从 Central Directory 读取准确压缩长度与偏移（兼容 data descriptor / flags bit 3）
   const buf = new Uint8Array(await file.arrayBuffer()), dv = new DataView(buf.buffer);
+  const inflateSlice = async (method, slice) => {
+    if (method === 0) return new TextDecoder().decode(slice);
+    if (method === 8 && typeof DecompressionStream !== 'undefined') {
+      const ds = new DecompressionStream('deflate-raw');
+      const w = ds.writable.getWriter(); w.write(slice); w.close();
+      return await new Response(ds.readable).text();
+    }
+    return null;
+  };
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd >= 0) {
+    const cdSize = dv.getUint32(eocd + 12, true), cdOff = dv.getUint32(eocd + 16, true);
+    let p = cdOff;
+    while (p + 46 <= cdOff + cdSize && p + 46 <= buf.length && dv.getUint32(p, true) === 0x02014b50) {
+      const method = dv.getUint16(p + 10, true), compSize = dv.getUint32(p + 20, true);
+      const nLen = dv.getUint16(p + 28, true), eLen = dv.getUint16(p + 30, true), cLen = dv.getUint16(p + 32, true);
+      const lOff = dv.getUint32(p + 42, true);
+      const name = new TextDecoder().decode(buf.subarray(p + 46, p + 46 + nLen));
+      if (/\.kml$/i.test(name) && compSize > 0 && lOff + 30 <= buf.length && dv.getUint32(lOff, true) === 0x04034b50) {
+        const lnLen = dv.getUint16(lOff + 26, true), leLen = dv.getUint16(lOff + 28, true);
+        const start = lOff + 30 + lnLen + leLen, end = start + compSize;
+        if (end <= buf.length) {
+          const text = await inflateSlice(method, buf.subarray(start, end));
+          if (text) return text;
+        }
+      }
+      p += 46 + nLen + eLen + cLen;
+    }
+  }
+  // 兜底：无 EOCD 时扫描本地头
   let pos = 0;
   while (pos + 30 < buf.length && dv.getUint32(pos, true) === 0x04034b50) {
     const method = dv.getUint16(pos + 8, true), compSize = dv.getUint32(pos + 18, true);
@@ -5821,14 +5868,10 @@ async function extractKmlFromFile(file) {
     const name = new TextDecoder().decode(buf.subarray(pos + 30, pos + 30 + nameLen));
     const dataStart = pos + 30 + nameLen + extraLen, dataEnd = dataStart + compSize;
     if (/\.kml$/i.test(name) && compSize > 0 && dataEnd <= buf.length) {
-      const slice = buf.subarray(dataStart, dataEnd);
-      if (method === 0) return new TextDecoder().decode(slice);
-      if (method === 8 && typeof DecompressionStream !== 'undefined') {
-        const ds = new DecompressionStream('deflate-raw');
-        const w = ds.writable.getWriter(); w.write(slice); w.close();
-        return await new Response(ds.readable).text();
-      }
+      const text = await inflateSlice(method, buf.subarray(dataStart, dataEnd));
+      if (text) return text;
     }
+    if (!compSize) break;
     pos = dataEnd;
   }
   throw new Error('未能从 KMZ 中解析出 KML 文件，请尝试直接导入 .kml');
@@ -5861,20 +5904,41 @@ function renderFieldPage(body) {
   const allPts = plots.flatMap(p => p.coords || []);
   let svgHtml = '<div class="empty">导入 KML / KMZ 地块文件或手动新增地块后，将在此展示地块分布图</div>';
   if (allPts.length) {
-    const minX = Math.min(...allPts.map(p => p[0])), maxX = Math.max(...allPts.map(p => p[0]));
-    const minY = Math.min(...allPts.map(p => p[1])), maxY = Math.max(...allPts.map(p => p[1]));
-    const padX = Math.max(0.0005, (maxX - minX) * 0.12), padY = Math.max(0.0005, (maxY - minY) * 0.12);
-    const W = 720, H = 260;
-    const proj = ([x, y]) => [((x - (minX - padX)) / (maxX - minX + 2 * padX)) * W, H - ((y - (minY - padY)) / (maxY - minY + 2 * padY)) * H];
-    // 如果填了天地图 Key，加载中心瓦片作为卫星底图背景
+    // 统一采用 Web Mercator (EPSG:3857) 瓦片坐标系投影，保证地块多边形与天地图卫星瓦片精确对齐
+    const toTile = (lng, lat, z) => {
+      const n = 1 << z, rad = Math.max(-85, Math.min(85, lat)) * Math.PI / 180;
+      return [(lng + 180) / 360 * n, (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * n];
+    };
+    const minLng = Math.min(...allPts.map(p => p[0])), maxLng = Math.max(...allPts.map(p => p[0]));
+    const minLat = Math.min(...allPts.map(p => p[1])), maxLat = Math.max(...allPts.map(p => p[1]));
+    const W = 720, H = 280;
+    let z = 17;
+    while (z > 8) {
+      const [x1, y1] = toTile(minLng, maxLat, z), [x2, y2] = toTile(maxLng, minLat, z);
+      if ((x2 - x1) * 256 <= W * 0.72 && (y2 - y1) * 256 <= H * 0.72) break;
+      z--;
+    }
+    const [cxT, cyT] = toTile((minLng + maxLng) / 2, (minLat + maxLat) / 2, z);
+    const originX = cxT * 256 - W / 2, originY = cyT * 256 - H / 2;
+    const proj = ([lng, lat]) => {
+      const [tx, ty] = toTile(lng, lat, z);
+      return [tx * 256 - originX, ty * 256 - originY];
+    };
     let bgTile = '';
     if (tdtKey) {
-      const cLng = (minX + maxX) / 2, cLat = (minY + maxY) / 2, z = 14;
-      const xt = Math.floor((cLng + 180) / 360 * (1 << z));
-      const yt = Math.floor((1 - Math.log(Math.tan(cLat * Math.PI / 180) + 1 / Math.cos(cLat * Math.PI / 180)) / Math.PI) / 2 * (1 << z));
-      bgTile = `<image href="https://t0.tianditu.gov.cn/img_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=img&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX=${z}&TILEROW=${yt}&TILECOL=${xt}&tk=${encodeURIComponent(tdtKey)}" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice" opacity="0.65"/>`;
+      const maxIdx = (1 << z) - 1;
+      const tX0 = Math.max(0, Math.floor(originX / 256)), tX1 = Math.min(maxIdx, Math.floor((originX + W) / 256));
+      const tY0 = Math.max(0, Math.floor(originY / 256)), tY1 = Math.min(maxIdx, Math.floor((originY + H) / 256));
+      const tiles = [];
+      for (let ty = tY0; ty <= tY1; ty++) {
+        for (let tx = tX0; tx <= tX1; tx++) {
+          const px = tx * 256 - originX, py = ty * 256 - originY;
+          tiles.push(`<image href="https://t0.tianditu.gov.cn/img_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=img&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX=${z}&TILEROW=${ty}&TILECOL=${tx}&tk=${encodeURIComponent(tdtKey)}" x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="256" height="256" opacity="0.78"/>`);
+        }
+      }
+      bgTile = tiles.join('');
     }
-    svgHtml = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:260px;border-radius:10px;background:#0f172a">${bgTile}${plots.map((pl, idx) => {
+    svgHtml = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:280px;border-radius:10px;background:#0f172a">${bgTile}${plots.map((pl, idx) => {
       if (!pl.coords || pl.coords.length < 3) return '';
       const ptsStr = pl.coords.map(p => proj(p).map(n => n.toFixed(1)).join(',')).join(' ');
       const c = proj(pl.center || pl.coords[0]);
@@ -5970,8 +6034,8 @@ function pageContracts() {
   <div id="ctBody"></div>`;
   const ctBody = $('#ctBody');
   if (ui.ctTab === 'tpl') {
-    ctBody.innerHTML = `<div class="card"><div class="card-head"><h3>合同模板</h3><span class="sub-t">支持变量：{{company}}、{{party}}、{{amount}}、{{date}}、{{no}}、{{orderNo}}</span><button class="btn primary" id="ctTplAdd" style="margin-left:auto">${ic('plus')}新建合同模板</button></div><div class="card-body">
-      ${tpls.length ? `<table class="tbl"><thead><tr><th>模板名称</th><th>类型</th><th>操作</th></tr></thead><tbody>${tpls.map(t => `<tr><td><b>${esc(t.name)}</b></td><td>${badge(t.kind, 'blue plain')}</td><td><div class="ops"><button class="tbtn" data-ctt-edit="${t.id}">编辑</button><button class="tbtn danger-text" data-ctt-del="${t.id}">删除</button></div></td></tr>`).join('')}</tbody></table>` : '<div class="empty">还没有自定义合同模板，点击右上角「新建合同模板」创建</div>'}
+    ctBody.innerHTML = `<div class="card"><div class="card-head" style="flex-wrap:wrap;gap:8px"><h3>合同模板</h3><span class="sub-t">支持变量：{{company}}、{{party}}、{{amount}}、{{date}}、{{no}}、{{orderNo}}</span><button class="btn primary" id="ctTplAdd" style="margin-left:auto">${ic('plus')}新建合同模板</button></div><div class="card-body">
+      ${tpls.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>模板名称</th><th>类型</th><th>操作</th></tr></thead><tbody>${tpls.map(t => `<tr><td><b>${esc(t.name)}</b></td><td>${badge(t.kind, 'blue plain')}</td><td><div class="ops"><button class="tbtn" data-ctt-edit="${t.id}">编辑</button><button class="tbtn danger-text" data-ctt-del="${t.id}">删除</button></div></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">还没有自定义合同模板，点击右上角「新建合同模板」创建</div>'}
     </div></div>`;
     const openTpl = t => formModal({
       title: t ? '编辑合同模板' : '新建合同模板',
@@ -6008,6 +6072,10 @@ function pageContracts() {
       ...db.purchases.slice(0, 80).map(o => ['purchase|' + o.id, `采购单 ${o.no} · ${partyName('purchase', o)}`]),
       ...(db.grainDocs || []).slice(0, 80).map(o => ['grain|' + o.id, `粮食单 ${o.no} · ${o.farmerName}`])
     ];
+    if (c && c.orderId && c.orderKind) {
+      const curVal = c.orderKind + '|' + c.orderId;
+      if (!orderOpts.some(x => x[0] === curVal)) orderOpts.splice(1, 0, [curVal, `${c.orderNo || c.orderId}（原关联单据）`]);
+    }
     openModal(`${modalHead(c ? '编辑合同 · ' + c.no : '新建合同')}<div class="m-body"><div class="form-grid">
       <label class="field"><span>合同标题 <i>*</i></span><input id="ctTitle" value="${esc(c ? c.title : '')}" placeholder="如：2026 年度玉米购销合同"></label>
       <label class="field"><span>合同类型</span><select id="ctKind">${['销售合同', '采购合同', '粮食购销合同', '通用合同'].map(k => `<option ${c && c.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
@@ -6027,7 +6095,7 @@ function pageContracts() {
         .replaceAll('{{party}}', $('#ctParty').value.trim())
         .replaceAll('{{amount}}', $('#ctAmt').value || '0')
         .replaceAll('{{date}}', $('#ctDate').value || today())
-        .replaceAll('{{no}}', c ? c.no : '自动生成')
+        .replaceAll('{{no}}', c ? c.no : '{{合同编号}}')
         .replaceAll('{{orderNo}}', ordNo);
     };
     $('#ctSave').onclick = () => {
@@ -6085,12 +6153,15 @@ function pageEngJobs() {
     <div class="line-head"><b>3. 杂项费用</b><button type="button" class="btn sm" id="egAddMisc">${ic('plus')}加杂项</button></div><div id="egMiscs"></div>
     <div class="o-total" style="margin-top:12px">工程合计 <b id="egTot">¥0.00</b></div></div>
     <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="egSave">${ic('check')}保存工程单并扣库</button></div>`, 'lg');
-    const draw = () => {
-      $('#egMats').innerHTML = items.length ? `<table class="tbl compact"><thead><tr><th>商品</th><th style="width:90px">数量</th><th style="width:100px">单价</th><th style="width:36px"></th></tr></thead><tbody>${items.map((it, i) => `<tr><td><select data-em-p="${i}" class="select"><option value="">选择商品</option>${db.products.filter(p => !p.serial).map(p => `<option value="${p.id}" ${p.id === it.productId ? 'selected' : ''}>${esc(p.name)}（库${p.stock}）</option>`).join('')}</select></td><td><input data-em-q="${i}" type="number" min="0.01" step="any" value="${it.qty}"></td><td><input data-em-pr="${i}" type="number" min="0" step="0.01" value="${it.price}"></td><td><button type="button" class="icon-btn sm" data-em-d="${i}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table>` : '<div class="sub-t">未添加材料</div>';
-      $('#egLabs').innerHTML = labors.length ? `<table class="tbl compact"><thead><tr><th>人工项目</th><th style="width:80px">工天</th><th style="width:90px">单价/天</th><th style="width:100px">小计</th><th style="width:36px"></th></tr></thead><tbody>${labors.map((l, i) => `<tr><td><input data-el-n="${i}" value="${esc(l.name)}"></td><td><input data-el-d="${i}" type="number" step="0.5" value="${l.days}"></td><td><input data-el-r="${i}" type="number" value="${l.rate}"></td><td><input data-el-a="${i}" type="number" value="${l.amount}"></td><td><button type="button" class="icon-btn sm" data-el-del="${i}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table>` : '<div class="sub-t">未添加人工费</div>';
-      $('#egMiscs').innerHTML = miscs.length ? `<table class="tbl compact"><thead><tr><th>杂项名称</th><th style="width:120px">金额</th><th style="width:36px"></th></tr></thead><tbody>${miscs.map((m, i) => `<tr><td><input data-ex-n="${i}" value="${esc(m.name)}" placeholder="如：机械租赁、辅材"></td><td><input data-ex-a="${i}" type="number" value="${m.amount}"></td><td><button type="button" class="icon-btn sm" data-ex-del="${i}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table>` : '<div class="sub-t">未添加杂项费用</div>';
+    const updTot = () => {
       const tot = sum(items, x => (+x.qty || 0) * (+x.price || 0)) + sum(labors, x => +x.amount || 0) + sum(miscs, x => +x.amount || 0);
-      $('#egTot').textContent = money(tot);
+      if ($('#egTot')) $('#egTot').textContent = money(tot);
+    };
+    const draw = () => {
+      $('#egMats').innerHTML = items.length ? `<div class="table-wrap"><table class="tbl compact"><thead><tr><th>商品</th><th style="width:90px">数量</th><th style="width:100px">单价</th><th style="width:36px"></th></tr></thead><tbody>${items.map((it, i) => `<tr><td><select data-em-p="${i}" class="select"><option value="">选择商品</option>${db.products.filter(p => !p.serial).map(p => `<option value="${p.id}" ${p.id === it.productId ? 'selected' : ''}>${esc(p.name)}（库${p.stock}）</option>`).join('')}</select></td><td><input data-em-q="${i}" type="number" min="0.01" step="any" value="${it.qty}"></td><td><input data-em-pr="${i}" type="number" min="0" step="0.01" value="${it.price}"></td><td><button type="button" class="icon-btn sm" data-em-d="${i}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="sub-t">未添加材料</div>';
+      $('#egLabs').innerHTML = labors.length ? `<div class="table-wrap"><table class="tbl compact"><thead><tr><th>人工项目</th><th style="width:80px">工天</th><th style="width:90px">单价/天</th><th style="width:100px">小计</th><th style="width:36px"></th></tr></thead><tbody>${labors.map((l, i) => `<tr><td><input data-el-n="${i}" value="${esc(l.name)}"></td><td><input data-el-d="${i}" type="number" step="0.5" value="${l.days}"></td><td><input data-el-r="${i}" type="number" value="${l.rate}"></td><td><input data-el-a="${i}" type="number" value="${l.amount}"></td><td><button type="button" class="icon-btn sm" data-el-del="${i}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="sub-t">未添加人工费</div>';
+      $('#egMiscs').innerHTML = miscs.length ? `<div class="table-wrap"><table class="tbl compact"><thead><tr><th>杂项名称</th><th style="width:120px">金额</th><th style="width:36px"></th></tr></thead><tbody>${miscs.map((m, i) => `<tr><td><input data-ex-n="${i}" value="${esc(m.name)}" placeholder="如：机械租赁、辅材"></td><td><input data-ex-a="${i}" type="number" value="${m.amount}"></td><td><button type="button" class="icon-btn sm" data-ex-del="${i}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="sub-t">未添加杂项费用</div>';
+      updTot();
     };
     $('#egAddMat').onclick = () => { items.push({ productId:'', qty:1, price:0 }); draw(); };
     $('#egAddLab').onclick = () => { labors.push({ name:'人工费', days:1, rate:300, amount:300 }); draw(); };
@@ -6100,14 +6171,14 @@ function pageEngJobs() {
     });
     $('.m-body').addEventListener('input', e => {
       const t = e.target;
-      if (t.dataset.emQ != null) { items[+t.dataset.emQ].qty = +t.value || 0; draw(); }
-      if (t.dataset.emPr != null) { items[+t.dataset.emPr].price = +t.value || 0; draw(); }
+      if (t.dataset.emQ != null) { items[+t.dataset.emQ].qty = +t.value || 0; updTot(); }
+      if (t.dataset.emPr != null) { items[+t.dataset.emPr].price = +t.value || 0; updTot(); }
       if (t.dataset.elN != null) labors[+t.dataset.elN].name = t.value;
-      if (t.dataset.elD != null) { const l = labors[+t.dataset.elD]; l.days = +t.value || 0; l.amount = +(l.days * l.rate).toFixed(2); draw(); }
-      if (t.dataset.elR != null) { const l = labors[+t.dataset.elR]; l.rate = +t.value || 0; l.amount = +(l.days * l.rate).toFixed(2); draw(); }
-      if (t.dataset.elA != null) { labors[+t.dataset.elA].amount = +t.value || 0; $('#egTot').textContent = money(sum(items, x => (+x.qty || 0) * (+x.price || 0)) + sum(labors, x => +x.amount || 0) + sum(miscs, x => +x.amount || 0)); }
+      if (t.dataset.elD != null) { const idx = +t.dataset.elD, l = labors[idx]; l.days = +t.value || 0; l.amount = +(l.days * l.rate).toFixed(2); const ai = $(`[data-el-a="${idx}"]`); if (ai) ai.value = l.amount; updTot(); }
+      if (t.dataset.elR != null) { const idx = +t.dataset.elR, l = labors[idx]; l.rate = +t.value || 0; l.amount = +(l.days * l.rate).toFixed(2); const ai = $(`[data-el-a="${idx}"]`); if (ai) ai.value = l.amount; updTot(); }
+      if (t.dataset.elA != null) { labors[+t.dataset.elA].amount = +t.value || 0; updTot(); }
       if (t.dataset.exN != null) miscs[+t.dataset.exN].name = t.value;
-      if (t.dataset.exA != null) { miscs[+t.dataset.exA].amount = +t.value || 0; $('#egTot').textContent = money(sum(items, x => (+x.qty || 0) * (+x.price || 0)) + sum(labors, x => +x.amount || 0) + sum(miscs, x => +x.amount || 0)); }
+      if (t.dataset.exA != null) { miscs[+t.dataset.exA].amount = +t.value || 0; updTot(); }
     });
     $('.m-body').addEventListener('click', e => {
       const a = e.target.closest('[data-em-d]'); if (a) { items.splice(+a.dataset.emD, 1); draw(); }
@@ -6510,7 +6581,7 @@ function pageEmployees() {
   }
   if (ui.hrTab === 'pay') {
     const pays = db.payrolls || [];
-    hrBody.innerHTML = `<div class="card"><div class="card-head"><h3>按月自动生成工资表</h3><div style="display:flex;gap:8px;align-items:center;margin-left:auto"><input id="prMonth" type="month" class="select" style="width:150px" value="${monthKey(today())}"><button class="btn primary" id="prGenBtn">${ic('plus')}生成 / 刷新工资表</button></div></div><div class="card-body">
+    hrBody.innerHTML = `<div class="card"><div class="card-head" style="flex-wrap:wrap;gap:8px"><h3>按月自动生成工资表</h3><div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap"><input id="prMonth" type="month" class="select" style="width:150px" value="${monthKey(today())}"><button class="btn primary" id="prGenBtn">${ic('plus')}生成 / 刷新工资表</button></div></div><div class="card-body">
       ${pays.length ? pays.map(p => {
         const repMap = {};
         (p.items || []).filter(i => i.tempRep).forEach(i => { repMap[i.tempRep] = (repMap[i.tempRep] || 0) + i.netPay; });
@@ -7029,10 +7100,10 @@ async function companiesPage(body) {
     const r = await api('GET', '/api/portal/companies');
     allCompanies = r.companies || [];
     const curCode = PORTAL_COMPANY && PORTAL_COMPANY.code;
-    $('#coList').innerHTML = `<table class="tbl"><thead><tr><th>名称</th><th>编码</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody>${allCompanies.map(c => `<tr><td><b>${esc(c.name)}</b>${c.code === curCode ? ' <span class="badge blue">当前</span>' : ''}</td><td>${esc(c.code)}</td><td>${badge(c.enabled ? '启用' : '停用', c.enabled ? 'green' : 'gray')}</td><td>${esc((c.created || '').slice(0, 10))}</td><td style="white-space:nowrap">
+    $('#coList').innerHTML = `<div class="table-wrap"><table class="tbl"><thead><tr><th>名称</th><th>编码</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody>${allCompanies.map(c => `<tr><td><b>${esc(c.name)}</b>${c.code === curCode ? ' <span class="badge blue">当前</span>' : ''}</td><td>${esc(c.code)}</td><td>${badge(c.enabled ? '启用' : '停用', c.enabled ? 'green' : 'gray')}</td><td>${esc((c.created || '').slice(0, 10))}</td><td style="white-space:nowrap">
       <button class="btn sm" data-mem="${esc(c.code)}" data-name="${esc(c.name)}">成员</button>
       ${c.code !== 'default' ? `<button class="btn sm" data-tog="${esc(c.code)}" data-en="${c.enabled ? 0 : 1}">${c.enabled ? '停用' : '启用'}</button><button class="btn sm danger-text" data-cdel="${esc(c.code)}" data-name="${esc(c.name)}">删除</button>` : ''}
-    </td></tr>`).join('')}</tbody></table>`;
+    </td></tr>`).join('')}</tbody></table></div>`;
     document.querySelectorAll('[data-mem]').forEach(b => b.onclick = () => companyMembers(b.dataset.mem, b.dataset.name));
     document.querySelectorAll('[data-tog]').forEach(b => b.onclick = async () => {
       const en = b.dataset.en === '1';
@@ -7075,7 +7146,7 @@ async function batchAssignCompanies(companies) {
       <label class="field"><span>选择已有账号（或直接输入新用户名）</span><select id="baPick"><option value="">-- 新建或手输用户名 --</option>${users.map(u => `<option value="${esc(u.username)}">${esc(u.username)}（${esc(u.name)}）</option>`).join('')}</select></label>
       <label class="field"><span>用户名 <i>*</i></span><input id="baUser" placeholder="例如 zhangsan"></label>
       <label class="field"><span>姓名</span><input id="baName" placeholder="新账号选填"></label>
-      <label class="field"><span>账套内角色</span><select id="baRole"><option value="user">普通用户</option><option value="admin">管理员</option></select></label>
+      <label class="field"><span>账套内角色</span><select id="baRole"><option value="keep">保留原角色（新增账套设为普通用户）</option><option value="user">统一设为普通用户</option><option value="admin">统一设为管理员</option></select></label>
       <label class="field span2"><span>初始密码（新账号必填，已有账号留空）</span><input id="baPass" type="password" placeholder="至少 6 位"></label>
     </div>
     <div style="margin-top:12px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><b style="font-size:13px">允许登录的公司账套</b><div style="display:flex;gap:6px"><button type="button" class="btn sm" id="baAll">全选</button><button type="button" class="btn sm" id="baNone">全不选</button></div></div>
@@ -7089,7 +7160,10 @@ async function batchAssignCompanies(companies) {
     const map = (u && u.companies) || {};
     document.querySelectorAll('#baCos input[type=checkbox]').forEach(cb => { cb.checked = !!map[cb.value]; });
     const roles = Object.values(map);
-    if (roles.length) $('#baRole').value = roles.every(r => r === 'admin') ? 'admin' : 'user';
+    if (roles.length) {
+      const uniq = new Set(roles);
+      $('#baRole').value = uniq.size > 1 ? 'keep' : roles[0];
+    } else $('#baRole').value = 'keep';
   };
   $('#baAll').onclick = () => document.querySelectorAll('#baCos input[type=checkbox]').forEach(cb => { cb.checked = true; });
   $('#baNone').onclick = () => document.querySelectorAll('#baCos input[type=checkbox]').forEach(cb => { cb.checked = false; });
@@ -7333,8 +7407,13 @@ function printTplPage(body) {
   const adaptTpl = (raw, targetKind, keepTitle) => {
     const src = raw && typeof raw === 'object' ? raw : {}, K2 = SLIP_KINDS[targetKind], seen = new Set();
     const colKeys = K2.allowedCols || Object.keys(SLIP_COLS).filter(k => k !== 'category');
-    const savedCols = (Array.isArray(src.cols) ? src.cols : []).filter(c => c && (colKeys.includes(c.k) || isCustomPrintCol(c.k)) && !seen.has(c.k) && seen.add(c.k))
-      .map(c => ({k:c.k, label:String(c.label || '').slice(0, 10), on:!!c.on, w:Number.isFinite(+c.w) && +c.w >= 5 && +c.w <= 200 ? Math.round(+c.w) : 0, al:['left', 'center', 'right'].includes(c.al) ? c.al : '', ...(isCustomPrintCol(c.k) && c.def ? {def:String(c.def).slice(0, 40)} : {})}));
+    let customCnt = 0;
+    const savedCols = (Array.isArray(src.cols) ? src.cols : []).filter(c => {
+      if (!c || seen.has(c.k)) return false;
+      if (colKeys.includes(c.k)) return seen.add(c.k);
+      if (isCustomPrintCol(c.k) && customCnt < 10) { customCnt++; return seen.add(c.k); }
+      return false;
+    }).map(c => ({k:c.k, label:String(c.label || '').slice(0, 10), on:!!c.on, w:Number.isFinite(+c.w) && +c.w >= 5 && +c.w <= 200 ? Math.round(+c.w) : 0, al:['left', 'center', 'right'].includes(c.al) ? c.al : '', ...(isCustomPrintCol(c.k) && c.def ? {def:String(c.def).slice(0, 40)} : {})}));
     const fullCols = savedCols.length ? [...savedCols, ...colKeys.filter(k => !seen.has(k)).map(k => ({k, label:'', on:false}))]
       : colKeys.map(k => ({k, label:'', on:!['barcode', 'brand'].includes(k)}));
     const meta = Object.fromEntries(K2.meta.map(k => [k, src.meta && k in src.meta ? !!src.meta[k] : true]));
@@ -7418,10 +7497,10 @@ function printTplPage(body) {
     const stage = $('#tpStage'), sbox = $('#tpScaleBox'), box = $('#tpPrev');
     if (!stage || !sbox || !box) return;
     box.style.transform = '';
-    const availW = Math.max(260, stage.clientWidth - 32);
+    const availW = Math.max(160, stage.clientWidth - 24);
     const natW = Math.max(box.offsetWidth, box.scrollWidth, 1);
     const natH = Math.max(box.offsetHeight, box.scrollHeight, 1);
-    prevScale = natW > availW ? Math.max(0.35, availW / natW) : 1;
+    prevScale = natW > availW ? Math.max(0.18, availW / natW) : 1;
     box.style.transform = prevScale < 0.999 ? `scale(${prevScale})` : '';
     sbox.style.width = Math.ceil(natW * prevScale) + 'px';
     sbox.style.height = Math.ceil(natH * prevScale) + 'px';
@@ -7603,11 +7682,29 @@ function printTplPage(body) {
   prevBox.addEventListener('pointercancel', endDrag);
   prevBox.addEventListener('dblclick', e => {
     if (!prevBox.classList.contains('is-preprint')) return;
+    const rz = e.target.closest('[data-rz]');
+    if (rz && prevBox.contains(rz)) {
+      e.preventDefault(); e.stopPropagation();
+      const mode = rz.dataset.rz;
+      if (mode === 'col') {
+        const idx = cols.findIndex(c => c.k === rz.dataset.col);
+        if (idx >= 0) { cols[idx].w = 0; const inp = body.querySelector(`[data-w="${idx}"]`); if (inp) inp.value = ''; }
+      }
+      if (mode === 'w' || mode === 'se') { if ($('#tpTableW')) $('#tpTableW').value = 0; }
+      if (mode === 'h' || mode === 'se') { if ($('#tpRowH')) $('#tpRowH').value = 0; }
+      prev();
+      return;
+    }
     const el = e.target.closest('[data-pp]');
     if (!el || !prevBox.contains(el)) return;
     e.preventDefault();
     selectPp(el);
     setPos(el, el.dataset.pp, 0, 0);
+    if (el.dataset.pp === 'table') {
+      if ($('#tpTableW')) $('#tpTableW').value = 0;
+      if ($('#tpRowH')) $('#tpRowH').value = 0;
+      prev();
+    }
   });
   prevBox.addEventListener('keydown', e => {
     if (!prevBox.classList.contains('is-preprint') || !ppSel) return;
@@ -9173,6 +9270,7 @@ if (NATIVE) {
       el.dispatchEvent(new Event('change', {bubbles:true}));
       if (el.isConnected) el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true}));
       if (el.id === 'ckQ' && $('#ckLoop') && $('#ckLoop').checked) setTimeout(() => { if ($('#ckQ')) { lastInput = $('#ckQ'); NATIVE.scan(); } }, 500);  // 盘点扫码累加：连续扫
+      if (el.id === 'dSnIn') setTimeout(() => { if ($('#dSnIn')) { lastInput = $('#dSnIn'); NATIVE.scan(); } }, 450);  // 序列号连续扫码：自动续扫
       return;
     }
     // 没有正在填的输入框：按条码 / 编码 / 农资二维码找商品

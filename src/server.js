@@ -20,7 +20,7 @@ const tls = require('tls');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.16.2';
+const VERSION = '2.16.3';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -336,6 +336,10 @@ function maskCheckDoc(ctx, o) {
   if (!o || !Array.isArray(o.lines) || seesCost(ctx.perms)) return o;
   return { ...o, lines: o.lines.map(({ cost, ...l }) => l) };
 }
+function maskEngJob(ctx, o) {
+  if (!o || !Array.isArray(o.items) || seesCost(ctx.perms)) return o;
+  return { ...o, items: o.items.map(({ cost, ...i }) => i) };
+}
 const maskCarrier = c => c && c.eo ? { ...c, eo: { ...c.eo, customerPwd: '', pwdSet: !!c.eo.customerPwd } } : c;
 // 净化快递鸟返回的电子面单 HTML：剥离脚本、危险嵌入元素、内联事件属性与危险协议
 function sanitizeLabelHtml(raw) {
@@ -529,7 +533,7 @@ function pickAccount(b, keep) {
 }
 const acctBalance = id => {
   const a = get('accounts', id); if (!a) return 0;
-  return round2((a.opening || 0) + sum(list('finance').filter(f => f.account === id), f => f.type === 'income' ? f.amount : -f.amount)
+  return round2((a.opening || 0) + sum(list('finance').filter(f => f.account === id && !f.nonCash && f.category !== '固定资产折旧'), f => f.type === 'income' ? f.amount : -f.amount)
     + sum(list('acctTransfers').filter(t => t.to === id), t => t.amount) - sum(list('acctTransfers').filter(t => t.from === id), t => t.amount));
 };
 function saveAccount(ctx, id) {
@@ -2244,6 +2248,7 @@ function voidStockDoc(ctx, id) {
     }
     if (!ctx.perms.has('inv.void')) fail('没有权限：' + PERM_LABEL['inv.void'], 403);
     if (o.srcOrderKind === 'grain') fail('粮食收购生成的入库单请在「粮食收购」页面作废');
+    if (o.srcOrderKind === 'eng') fail('工程单生成的出库单请在「工程结算」页面作废');
     const isRetDoc = o.srcOrderKind === 'salesReturn' || o.srcOrderKind === 'purchaseReturn';
     const retOrd = isRetDoc && o.srcOrderId ? get(ORD[o.srcOrderKind].col, o.srcOrderId) : null;
     if (retOrd && (retOrd.refunded || 0) > 0) fail('关联退货单已有退款或冲抵记录，不能作废此出入库单');
@@ -3094,6 +3099,7 @@ function visibleData(ctx) {
     data.transferDocs = data.transferDocs.map(o => ({ ...o, items: o.items.map(({ cost, ...i }) => i) }));
     data.stockLogs = data.stockLogs.map(({ cost, costAfter, ...l }) => l);
     data.checkDocs = data.checkDocs.map(o => ({ ...o, lines: o.lines.map(({ cost, ...l }) => l) }));
+    data.engJobs = data.engJobs.map(o => ({ ...o, items: (o.items || []).map(({ cost, ...i }) => i) }));
   }
   if (!seesSalePrice(P)) {
     data.products = data.products.map(({ price, ...p }) => p);
@@ -3114,6 +3120,9 @@ function visibleData(ctx) {
     data.customers = data.customers.filter(c => visCustIds.has(c.id));
     data.sales = data.sales.filter(o => visCustIds.has(o.customerId) || isOwnOrder(o, ctx));
     data.salesReturns = data.salesReturns.filter(o => visCustIds.has(o.customerId) || isOwnOrder(o, ctx));
+  }
+  if (data.contracts.length) {
+    data.contracts = data.contracts.filter(o => canSeeContract(o, ctx));
   }
   // 统计报表个人数据隔离（#130：无 reports.all 时只看个人相关，不暴露公司经营支出、采购成本或他人收款）
   if (ctx.user.role !== 'admin' && !P.has('reports.all')) {
@@ -3325,10 +3334,14 @@ function createGrainDoc(ctx) {
       if (sumSelf > 0) {
         const stationWeight = round3(Number(b.stationWeight || 0)) || netWeight;
         const stationAmount = round2(Number(b.stationAmount || 0)) || grossAmount;
-        splits = rawSplits.map(x => {
+        let remW = stationWeight, remA = stationAmount;
+        splits = rawSplits.map((x, idx) => {
+          const isLast = idx === rawSplits.length - 1;
           const ratio = round4(x.selfWeight / sumSelf);
-          const allocWeight = round3(stationWeight * ratio);
-          const allocAmount = round2(stationAmount * ratio);
+          const allocWeight = isLast ? round3(Math.max(0, remW)) : round3(stationWeight * x.selfWeight / sumSelf);
+          const allocAmount = isLast ? round2(Math.max(0, remA)) : round2(stationAmount * x.selfWeight / sumSelf);
+          remW = round3(remW - allocWeight);
+          remA = round2(remA - allocAmount);
           const settleAmount = x.freightPayer === 'self' && x.freightFee > 0 ? round2(Math.max(0, allocAmount - x.freightFee)) : allocAmount;
           return { ...x, ratio, allocWeight, allocAmount, settleAmount };
         });
@@ -3343,13 +3356,14 @@ function createGrainDoc(ctx) {
 
     const id = uid(), no = nextNo(dir === 'out' ? GRAIN_OUT : GRAIN);
     const stockType = dir === 'out' ? '销售出库' : '农产品收购';
-    moveStock(ctx, p, dir === 'out' ? -netWeight : netWeight, stockType, no, farmerName + (plateNo ? ' · ' + plateNo : ''), { price: unitPrice, wh, date });
+    const moved = moveStock(ctx, p, dir === 'out' ? -netWeight : netWeight, stockType, no, farmerName + (plateNo ? ' · ' + plateNo : ''), { price: unitPrice, wh, date });
+    const unitCost = dir === 'out' ? round4(moved.unit) : unitPrice;
     const stockDoc = {
       id: uid(), no: nextNo(DOC[dir]), dir, type: stockType, wh, date, time: hhmm(),
       party: farmerName + (plateNo ? ` (${plateNo})` : ''), handler: str(b.handler, 32) || ctx.user.name,
       remark: `${dir === 'out' ? '售粮单' : '收购单'} ${no}${category ? ' · ' + category : ''} · 净重 ${netWeight}${p.unit || ''}`,
       srcOrderId: id, srcOrderNo: no, srcOrderKind: 'grain',
-      items: [{ productId: p.id, unit: p.unit || '', qty: netWeight, price: unitPrice, note: `水分${moisture}% 杂质${impurity}%` }],
+      items: [{ productId: p.id, unit: p.unit || '', qty: netWeight, price: unitCost, ...(dir === 'out' ? { sale: unitPrice } : {}), note: `水分${moisture}% 杂质${impurity}%` }],
       status: '正常', creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString(), printCount: 0
     };
     put('stockDocs', stockDoc);
@@ -3373,7 +3387,7 @@ function createGrainDoc(ctx) {
       productId: p.id, productName: p.name, unit: p.unit || '', wh,
       grossWeight, tareWeight, rawNet, calcMode, deviation,
       moisture, stdMoisture, impurity, extraDeduct, deductWeight, netWeight,
-      baseUnitPrice, moisturePricePerPt, impurityPricePerPt, unitPrice,
+      baseUnitPrice, moisturePricePerPt, impurityPricePerPt, unitPrice, unitCost,
       grossAmount, freightFee, freightPayer, totalAmount, paid,
       ...(splits.length ? { splits } : {}),
       ...(photos.length ? { photos } : {}),
@@ -3434,7 +3448,7 @@ function voidGrainDoc(ctx, id) {
       if (!isOut && whQty(p, o.wh || DEFAULT_WH) < o.netWeight) fail(`库存不足（需扣回 ${o.netWeight}，${whName(o.wh)}现有 ${whQty(p, o.wh || DEFAULT_WH)}），无法作废`);
       list('stockLogs').filter(l => (l.ref === o.no || (o.stockDocNo && l.ref === o.stockDocNo)) && !l.voided)
         .forEach(l => put('stockLogs', { ...l, voided: true }));
-      moveStock(ctx, p, isOut ? o.netWeight : -o.netWeight, '作废冲回', o.no, reason || o.farmerName, isOut ? { price: o.unitPrice, wh: o.wh || DEFAULT_WH, voided: true } : { reversePrice: o.unitPrice, wh: o.wh || DEFAULT_WH, voided: true });
+      moveStock(ctx, p, isOut ? o.netWeight : -o.netWeight, '作废冲回', o.no, reason || o.farmerName, isOut ? { price: o.unitCost != null ? o.unitCost : (p.cost || 0), wh: o.wh || DEFAULT_WH, voided: true } : { reversePrice: o.unitPrice, wh: o.wh || DEFAULT_WH, voided: true });
     }
     const sd = o.stockDocId ? get('stockDocs', o.stockDocId) : null;
     if (sd && sd.status !== '已作废') {
@@ -3914,14 +3928,16 @@ function restore(ctx) {
       if (typeof inc.company === 'string' && inc.company.trim()) next.company = str(inc.company, 100);
       if (Array.isArray(inc.modules)) next.modules = inc.modules.filter(m => typeof m === 'string' && /^[a-z0-9_.-]{1,32}$/i.test(m));
       if (inc.docApprove && typeof inc.docApprove === 'object') next.docApprove = { in: !!inc.docApprove.in, out: !!inc.docApprove.out };
-      if (Number.isFinite(+inc.overTol) && +inc.overTol >= 0 && +inc.overTol <= 100) next.overTol = round2(+inc.overTol);
+      const tol = inc.overTolerance != null ? inc.overTolerance : inc.overTol;
+      if (Number.isFinite(+tol) && +tol >= 0 && +tol <= 100) next.overTolerance = round2(+tol);
       if (inc.printTpl && typeof inc.printTpl === 'object') next.printTpl = inc.printTpl;
       if (inc.printTplList && typeof inc.printTplList === 'object') next.printTplList = inc.printTplList;
       if (inc.printTplActive && typeof inc.printTplActive === 'object') next.printTplActive = inc.printTplActive;
       if (Array.isArray(inc.categories)) next.categories = inc.categories.map(x => str(x, 40)).filter(Boolean).slice(0, 200);
       if (Array.isArray(inc.departments)) next.departments = inc.departments.map(x => str(x, 40)).filter(Boolean).slice(0, 200);
       if (Array.isArray(inc.expCats)) next.expCats = inc.expCats.map(x => str(x, 40)).filter(Boolean).slice(0, 100);
-      if (Array.isArray(inc.expFlow)) next.expFlow = inc.expFlow;
+      const eflow = inc.expenseFlow || inc.expFlow;
+      if (eflow && typeof eflow === 'object') next.expenseFlow = eflow;
       if (Array.isArray(inc.bomCols)) next.bomCols = inc.bomCols;
       if (typeof inc.tiandituKey === 'string') next.tiandituKey = str(inc.tiandituKey, 128);
       setMeta('settings', next);
@@ -4433,7 +4449,13 @@ const PRINT_META = ['no', 'type', 'date', 'party', 'wh', 'handler', 'contact', '
 const isCustomPrintCol = k => typeof k === 'string' && /^custom_[a-zA-Z0-9_-]{1,20}$/.test(k);
 function cleanTpl(t) {
   if (!t || typeof t !== 'object') return null;
-  const cols = (Array.isArray(t.cols) ? t.cols : []).filter((c, i, a) => c && (PRINT_COLS.includes(c.k) || isCustomPrintCol(c.k)) && a.findIndex(x => x && x.k === c.k) === i).slice(0, 30)
+  let customCnt = 0;
+  const cols = (Array.isArray(t.cols) ? t.cols : []).filter((c, i, a) => {
+    if (!c || a.findIndex(x => x && x.k === c.k) !== i) return false;
+    if (PRINT_COLS.includes(c.k)) return true;
+    if (isCustomPrintCol(c.k)) return ++customCnt <= 10;
+    return false;
+  }).slice(0, 30)
     .map(c => ({
       k: c.k, label: str(c.label, 10), on: !!c.on,
       w: Number.isFinite(+c.w) && +c.w >= 5 && +c.w <= 200 ? Math.round(+c.w) : 0,
@@ -4750,27 +4772,53 @@ route('DELETE', '/api/contract-tpls/:id', ctx => tx(() => {
   const o = get('contractTpls', ctx.params.id) || fail('模板不存在', 404);
   del('contractTpls', o.id); audit(ctx, '删除合同模板', o.name); return { ok: true };
 }), { perm: contractPerm });
+function canSeeContractKind(kind, ctx) {
+  if (ctx.user.role === 'admin' || ctx.perms.has('finance')) return true;
+  if (kind === '销售合同') return ctx.perms.has('sales');
+  if (kind === '采购合同') return ctx.perms.has('purchase');
+  if (kind === '粮食购销合同') return ctx.perms.has('agri');
+  return ['sales', 'purchase', 'agri', 'finance'].some(k => ctx.perms.has(k));
+}
+function canSeeContract(o, ctx) {
+  if (!o) return false;
+  if (!canSeeContractKind(o.kind, ctx)) return false;
+  if (!allParties(ctx)) {
+    if (o.partyType === 'customer' && o.partyId) {
+      const c = get('customers', o.partyId);
+      if (c && !canSeeCustomer(c, ctx) && o.creatorId !== ctx.user.id) return false;
+    } else if (o.kind === '销售合同' && o.creatorId && o.creatorId !== ctx.user.id) {
+      return false;
+    }
+  }
+  return true;
+}
 function saveContract(ctx, id) {
   return tx(() => {
     const b = ctx.body || {}, old = id ? (get('contracts', id) || fail('合同不存在', 404)) : null;
+    if (old && !canSeeContract(old, ctx)) fail('无权修改该合同', 403);
     const title = str(b.title, 100) || fail('请填写合同标题');
     const kind = ['销售合同', '采购合同', '粮食购销合同', '通用合同'].includes(b.kind) ? b.kind : '通用合同';
+    if (!canSeeContractKind(kind, ctx)) fail(`没有权限创建或修改「${kind}」`, 403);
     const partyType = ['customer', 'supplier'].includes(b.partyType) ? b.partyType : '';
     const partyId = str(b.partyId, 64);
     const partyRec = partyId ? get(partyType === 'supplier' ? 'suppliers' : 'customers', partyId) : null;
+    if (partyRec && partyType === 'customer' && !canSeeCustomer(partyRec, ctx)) fail('只能为自己负责的客户签订合同', 403);
     const partyName = str(b.partyName, 100) || (partyRec ? partyRec.name : '') || fail('请填写对方单位 / 姓名');
     const orderKind = ['sales', 'purchase', 'grain'].includes(b.orderKind) ? b.orderKind : '';
     const orderId = str(b.orderId, 64);
     const orderRec = orderKind && orderId ? get(orderKind === 'grain' ? 'grainDocs' : ORD[orderKind].col, orderId) : null;
     const amount = round2(Math.max(0, Number(b.amount || 0)));
+    const base = old || { id: uid(), no: nextNo(CONTRACT), createdAt: new Date().toISOString(), creator: ctx.user.name, creatorId: ctx.user.id };
+    const rawContent = String(b.content || '').slice(0, 20000);
+    const content = rawContent.replace(/\{\{合同编号\}\}/g, base.no).replace(/(合同编号[：:]\s*)自动生成/g, '$1' + base.no);
     const rec = {
-      ...(old || { id: uid(), no: nextNo(CONTRACT), createdAt: new Date().toISOString(), creator: ctx.user.name, creatorId: ctx.user.id }),
+      ...base,
       title, kind, partyType, partyId: partyRec ? partyRec.id : '', partyName,
       orderKind: orderRec ? orderKind : '', orderId: orderRec ? orderRec.id : '', orderNo: orderRec ? orderRec.no : '',
       amount, date: isDate(b.date) ? b.date : (old ? old.date : today()),
       startDate: isDate(b.startDate) ? b.startDate : '', endDate: isDate(b.endDate) ? b.endDate : '',
       status: ['草稿', '执行中', '已完成', '已终止'].includes(b.status) ? b.status : (old ? old.status : '执行中'),
-      tplId: str(b.tplId, 64), content: String(b.content || '').slice(0, 20000), note: str(b.note, 300)
+      tplId: str(b.tplId, 64), content, note: str(b.note, 300)
     };
     put('contracts', rec); audit(ctx, old ? '修改合同' : '新建合同', `${rec.no} ${rec.title}`); return rec;
   });
@@ -4779,6 +4827,7 @@ route('POST', '/api/contracts', ctx => saveContract(ctx, null), { perm: contract
 route('PUT', '/api/contracts/:id', ctx => saveContract(ctx, ctx.params.id), { perm: contractPerm });
 route('DELETE', '/api/contracts/:id', ctx => tx(() => {
   const o = get('contracts', ctx.params.id) || fail('合同不存在', 404);
+  if (!canSeeContract(o, ctx)) fail('无权删除该合同', 403);
   del('contracts', o.id); audit(ctx, '删除合同', o.no); return { ok: true };
 }), { perm: contractPerm });
 
@@ -4810,19 +4859,21 @@ route('POST', '/api/payrolls/generate', ctx => tx(() => {
   if (!/^\d{4}-\d{2}$/.test(month)) fail('月份格式应为 YYYY-MM');
   const existing = list('payrolls').find(p => p.month === month);
   if (existing && existing.paid) fail(`${month} 工资表已发放，不能重新生成`);
-  const emps = list('employees').filter(e => e.status !== '离职');
-  if (!emps.length) fail('没有在职或临工员工可生成工资表');
   const atts = list('attendance').filter(a => String(a.date || '').startsWith(month));
+  const attEmpIds = new Set(atts.map(a => a.empId));
+  // 在职/临工全员参与；本月已有考勤/奖罚记录的离职员工/临工也必须纳入结算，避免漏发已发生工资
+  const emps = list('employees').filter(e => e.status !== '离职' || attEmpIds.has(e.id));
+  if (!emps.length) fail('没有在职、临工或本月有考勤记录的员工可生成工资表');
   const items = emps.map(e => {
     const mine = atts.filter(a => a.empId === e.id);
     const days = round2(mine.reduce((n, a) => n + (+a.days || 0), 0));
     const overtime = round2(mine.reduce((n, a) => n + (+a.overtime || 0), 0));
     const bonus = round2(mine.reduce((n, a) => n + (+a.bonus || 0), 0));
     const fine = round2(mine.reduce((n, a) => n + (+a.fine || 0), 0));
-    const isTemp = e.status === '临工';
+    const isTemp = e.status === '临工' || (e.status === '离职' && (+e.dailyWage > 0 || !!e.tempRep));
     const basePay = isTemp
       ? round2((+e.dailyWage > 0 ? +e.dailyWage : (+e.salary || 0) / 26) * days)
-      : round2(+e.salary || 0);
+      : (e.status === '离职' ? round2((+e.salary || 0) / 26 * days) : round2(+e.salary || 0));
     const netPay = round2(Math.max(0, basePay + overtime + bonus - fine));
     return { empId: e.id, empName: e.name, dept: e.dept || '', status: e.status || '在职', tempRep: isTemp ? (e.tempRep || '') : '', days, basePay, overtime, bonus, fine, netPay };
   });
@@ -4884,7 +4935,13 @@ route('DELETE', '/api/fixed-assets/:id', ctx => tx(() => {
 route('POST', '/api/fixed-assets/depreciate', ctx => tx(() => {
   const b = ctx.body || {}, month = str(b.month, 7);
   if (!/^\d{4}-\d{2}$/.test(month)) fail('折旧月份格式应为 YYYY-MM');
-  const assets = list('fixedAssets').filter(a => a.status === '使用中' && a.lastDepMonth !== month);
+  const assets = list('fixedAssets').filter(a => {
+    if (a.status !== '使用中') return false;
+    const doneMonths = Array.isArray(a.depMonths) ? a.depMonths : (a.lastDepMonth ? [a.lastDepMonth] : []);
+    if (doneMonths.includes(month)) return false;
+    if (a.buyDate && String(a.buyDate).slice(0, 7) > month) return false;
+    return true;
+  });
   let totalDep = 0, count = 0;
   for (const a of assets) {
     const salvage = round2(a.origValue * (a.salvageRate || 0) / 100);
@@ -4895,14 +4952,16 @@ route('POST', '/api/fixed-assets/depreciate', ctx => tx(() => {
     if (step <= 0) continue;
     a.accumDep = round2((a.accumDep || 0) + step);
     a.netValue = round2(Math.max(0, a.origValue - a.accumDep));
-    a.lastDepMonth = month;
+    const doneMonths = Array.isArray(a.depMonths) ? a.depMonths : (a.lastDepMonth ? [a.lastDepMonth] : []);
+    a.depMonths = [...new Set([...doneMonths, month])].sort();
+    a.lastDepMonth = a.depMonths[a.depMonths.length - 1];
     put('fixedAssets', a);
     totalDep = round2(totalDep + step);
     count++;
   }
-  if (!count) fail(`${month} 没有需要计提折旧的在用资产（可能本月已计提或已提足）`);
-  const acct = pickAccount(b);
-  put('finance', { id: uid(), date: today(), type: 'expense', category: '固定资产折旧', amount: totalDep, account: acct.id, method: acct.kind, ref: 'ZJ-' + month, note: `${month} 固定资产月度折旧（${count} 项）`, operator: ctx.user.name });
+  if (!count) fail(`${month} 没有需要计提折旧的在用资产（可能该月已计提、早于购置月份或已提足）`);
+  // 折旧属非现金费用：记入费用统计但不扣减任何资金账户余额
+  put('finance', { id: uid(), date: today(), type: 'expense', category: '固定资产折旧', amount: totalDep, account: '', method: '折旧摊销', nonCash: true, ref: 'ZJ-' + month, note: `${month} 固定资产月度折旧（${count} 项，非现金费用）`, operator: ctx.user.name });
   audit(ctx, '固定资产计提折旧', `${month} ${count}项 ¥${totalDep.toFixed(2)}`);
   return { month, count, totalDep };
 }), { perm: 'finance' });
@@ -4916,10 +4975,15 @@ route('POST', '/api/engjobs', ctx => tx(() => {
   const cust = b.customerId ? get('customers', str(b.customerId, 64)) : null;
   const partyName = str(b.partyName, 100) || (cust ? cust.name : '');
   const rawItems = (Array.isArray(b.items) ? b.items : []).filter(i => i && i.productId && Number(i.qty) > 0);
+  if (rawItems.length) {
+    if (!ctx.perms.has('inv.out')) fail('工程单包含材料出库，需要具备「出库」权限', 403);
+    if (needApprove('out')) fail('已开启出库审核，工程单暂不能直接扣减库存，请先在库存管理提交出库单审核');
+  }
   const items = rawItems.map(i => {
     const p = get('products', i.productId) || fail('商品不存在');
-    const uq = unitQty(p, i), price = round4(Math.max(0, Number(i.price ?? p.price ?? 0)));
-    return { productId: p.id, productName: p.name, unit: uq.unit || p.unit, qty: uq.qty, price, amount: round2(uq.qty * price) };
+    const uq = unitQty(p, i), rawPrice = round4(Math.max(0, Number(i.price ?? (uq.rate ? (p.price || 0) * uq.rate : p.price) ?? 0)));
+    const baseUnitPrice = basePrice(rawPrice, uq);
+    return { productId: p.id, productName: p.name, unit: uq.unit || p.unit, qty: uq.qty, ...(uq.rate ? { rate: uq.rate, uqty: uq.uqty, uprice: rawPrice } : {}), price: baseUnitPrice, amount: round2(uq.qty * baseUnitPrice) };
   });
   const labors = (Array.isArray(b.labors) ? b.labors : []).filter(l => l && str(l.name, 60)).map(l => ({
     name: str(l.name, 60), days: round2(Math.max(0, Number(l.days || 1))), rate: round2(Math.max(0, Number(l.rate || 0))),
@@ -4958,7 +5022,7 @@ route('POST', '/api/engjobs', ctx => tx(() => {
     stockDocId, stockDocNo, status: '施工中', note: str(b.note, 300),
     creator: ctx.user.name, creatorId: ctx.user.id, createdAt: new Date().toISOString()
   };
-  put('engJobs', rec); audit(ctx, '新建工程单', `${no} ${name} ¥${totalAmount.toFixed(2)}`); return rec;
+  put('engJobs', rec); audit(ctx, '新建工程单', `${no} ${name} ¥${totalAmount.toFixed(2)}`); return maskEngJob(ctx, rec);
 }), { perm: engPerm });
 route('PUT', '/api/engjobs/:id', ctx => tx(() => {
   const o = get('engJobs', ctx.params.id) || fail('工程单不存在', 404), b = ctx.body || {};
@@ -4973,8 +5037,10 @@ route('PUT', '/api/engjobs/:id', ctx => tx(() => {
     o.miscs = b.miscs.filter(m => m && str(m.name, 60)).map(m => ({ name: str(m.name, 60), amount: round2(Math.max(0, Number(m.amount || 0))), note: str(m.note, 100) }));
     o.miscTotal = round2(o.miscs.reduce((n, i) => n + i.amount, 0));
   }
-  o.totalAmount = round2((o.matTotal || 0) + (o.laborTotal || 0) + (o.miscTotal || 0));
-  put('engJobs', o); audit(ctx, '更新工程单', `${o.no} ${o.status}`); return o;
+  const nextTotal = round2((o.matTotal || 0) + (o.laborTotal || 0) + (o.miscTotal || 0));
+  if (nextTotal + 0.001 < (o.paid || 0)) fail(`工程单已收款 ¥${(o.paid || 0).toFixed(2)}，修改后的工程总额不能低于已收金额`);
+  o.totalAmount = nextTotal;
+  put('engJobs', o); audit(ctx, '更新工程单', `${o.no} ${o.status}`); return maskEngJob(ctx, o);
 }), { perm: engPerm });
 route('POST', '/api/engjobs/:id/pay', ctx => tx(() => {
   const o = get('engJobs', ctx.params.id) || fail('工程单不存在', 404), b = ctx.body || {};
@@ -4984,19 +5050,23 @@ route('POST', '/api/engjobs/:id/pay', ctx => tx(() => {
   const acct = pickAccount(b);
   o.paid = round2((o.paid || 0) + amount);
   put('finance', { id: uid(), date: isDate(b.date) ? b.date : today(), type: 'income', category: '工程收款', amount, account: acct.id, method: acct.kind, ref: o.no, note: str(b.note, 200) || `工程结算 · ${o.name}`, operator: ctx.user.name });
-  put('engJobs', o); audit(ctx, '工程收款', `${o.no} ¥${amount.toFixed(2)}`); return o;
+  put('engJobs', o); audit(ctx, '工程收款', `${o.no} ¥${amount.toFixed(2)}`); return maskEngJob(ctx, o);
 }), { perm: engPerm });
 route('POST', '/api/engjobs/:id/void', ctx => tx(() => {
   const o = get('engJobs', ctx.params.id) || fail('工程单不存在', 404);
   if (o.status === '已作废') fail('工程单已作废');
   if ((o.paid || 0) > 0) fail('已有收款记录，无法直接作废');
-  for (const i of o.items || []) {
-    const p = get('products', i.productId);
-    if (p) moveStock(ctx, p, i.qty, '作废冲回', o.no, o.name, { price: i.cost != null ? i.cost : p.cost || 0, wh: o.wh || DEFAULT_WH, voided: true });
-  }
   const sd = o.stockDocId ? get('stockDocs', o.stockDocId) : null;
-  if (sd && sd.status !== '已作废') { Object.assign(sd, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString() }); put('stockDocs', sd); }
-  o.status = '已作废'; put('engJobs', o); audit(ctx, '作废工程单', o.no); return o;
+  if (!sd || sd.status !== '已作废') {
+    list('stockLogs').filter(l => (l.ref === o.no || (o.stockDocNo && l.ref === o.stockDocNo)) && !l.voided)
+      .forEach(l => put('stockLogs', { ...l, voided: true }));
+    for (const i of o.items || []) {
+      const p = get('products', i.productId);
+      if (p) moveStock(ctx, p, i.qty, '作废冲回', o.no, o.name, { price: i.cost != null ? i.cost : p.cost || 0, wh: o.wh || DEFAULT_WH, voided: true });
+    }
+    if (sd) { Object.assign(sd, { status: '已作废', voidBy: ctx.user.name, voidAt: new Date().toISOString() }); put('stockDocs', sd); }
+  }
+  o.status = '已作废'; put('engJobs', o); audit(ctx, '作废工程单', o.no); return maskEngJob(ctx, o);
 }), { perm: engPerm });
 
 /* ---------- #11 田间管理（地块 KML/KMZ 导入 + 农事记录日历） ---------- */
