@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.16.2": {
+          "changelog": "打印模板明细列支持自定义添加自定义列（最多 10 列，可填固定内容或留空占位）并新增商品品牌可选列",
+          "updated_at": "2026-11-27T16:19:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.2.fpk",
+              "sha256": "7f5a7e07d1078d14ad11cb7f3a10a09a875a6f63d068d99403ba168de4c3a2c4",
+              "size": 828586
+            }
+          }
+        },
         "2.16.1": {
           "changelog": "打印模板预览随纸张自动撑大缩放并支持全宽切换；套打表格支持拖拽调列宽、总宽、行高与右下角自由缩放",
           "updated_at": "2026-11-27T13:33:00+08:00",
