@@ -549,7 +549,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.16.1</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.16.2</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -2526,7 +2526,7 @@ function rmbUpper(v) {
 const PAPERS = {a4:['A4 纵向', 'A4 portrait', 12], a4l:['A4 横向', 'A4 landscape', 0], full:['一等分 241×280（可用215mm）', '215mm 280mm', 12], half:['二等分 241×140（可用215mm）', '215mm 140mm', 6], a5:['A5 横向', 'A5 landscape', 7]};
 const PRINT_ONLY = {a4l:['A4 横向', 'A4 landscape', 0]};
 /* ---------- 单据打印：入库 / 出库 / 调拨 / 销售 / 采购 / 费用报销单共用一套排版，样式在 系统设置 → 打印模板 里调整 ---------- */
-const SLIP_COLS = {idx:'序号', sku:'商品编码', barcode:'条码', name:'商品名称', spec:'规格型号', unit:'单位', qty:'数量', price:'单价', amount:'金额', category:'类别', batch:'批次', regNo:'注册证号', regHolder:'注册人', manufacturer:'生产厂家', expiry:'失效日期', note:'备注'};
+const SLIP_COLS = {idx:'序号', sku:'商品编码', barcode:'条码', name:'商品名称', brand:'品牌', spec:'规格型号', unit:'单位', qty:'数量', price:'单价', amount:'金额', category:'类别', batch:'批次', regNo:'注册证号', regHolder:'注册人', manufacturer:'生产厂家', expiry:'失效日期', note:'备注'};
 const PRINT_FONTS = {song:"'SimSun','Songti SC','Microsoft YaHei',serif", hei:"'Microsoft YaHei','PingFang SC',sans-serif", kai:"'KaiTi','STKaiti',serif"};
 const SLIP_META = {no:'单号', type:'类型', date:'日期', party:'往来单位', contact:'联系人', address:'地址', wh:'仓库', handler:'经手人', express:'快递', project:'项目', applicant:'报销人', dept:'部门'};
 const SLIP_KINDS = {
@@ -2539,7 +2539,8 @@ const SLIP_KINDS = {
   purchaseReturn:{name:'采购退货单', meta:['no', 'date', 'party', 'contact', 'address', 'wh'], party:'供应商', signs:'制单，审核，发货，供应商签收'},
   expense:{name:'费用报销单', meta:['no', 'date', 'applicant', 'dept'], signs:'报销人，审批，财务，领款人', allowedCols:['idx', 'category', 'note', 'amount']}
 };
-const colLabel = (K, c) => c.label || (c.k === 'price' && K.price) || (c.k === 'amount' && K.amount) || SLIP_COLS[c.k];
+const isCustomPrintCol = k => /^custom_[a-zA-Z0-9_-]{1,20}$/.test(String(k || ''));
+const colLabel = (K, c) => c.label || (c.k === 'price' && K.price) || (c.k === 'amount' && K.amount) || SLIP_COLS[c.k] || '自定义列';
 // 当前生效的模板（可传指定模板 id）：保存过的设置 + 默认值；以后新增的列补在后面（默认不打印）
 function slipTpl(kind, tplId) {
   const K = SLIP_KINDS[kind], activeId = (db.settings.printTplActive || {})[kind] || '';
@@ -2547,9 +2548,9 @@ function slipTpl(kind, tplId) {
   const t = tplId === undefined || tplId === activeId
     ? ((db.settings.printTpl || {})[kind] || {})
     : (tplId ? (((db.settings.printTplList || {})[kind] || []).find(x => x.id === tplId)?.tpl || {}) : {});
-  const saved = (t.cols || []).filter(c => colKeys.includes(c.k));
+  const saved = (t.cols || []).filter(c => colKeys.includes(c.k) || isCustomPrintCol(c.k));
   const cols = saved.length ? [...saved, ...colKeys.filter(k => !saved.some(c => c.k === k)).map(k => ({k, label:'', on:false}))]
-    : colKeys.map(k => ({k, label:'', on:k !== 'barcode'}));
+    : colKeys.map(k => ({k, label:'', on:!['barcode', 'brand'].includes(k)}));
   return {title:'', header:'', footer:'', signs:K.signs, fontSize:12, upper:true, printer:true, paper:'', paperW:0, font:'song', logo:'', logoPos:'inline', preprint:false, offsetX:0, offsetY:0, rowH:0, tableW:0, preprintBg:'', ...t,
     pos:t.pos && typeof t.pos === 'object' ? {...t.pos} : {},
     cols:cols.map(c => ({...c})), meta:{...Object.fromEntries(K.meta.map(k => [k, true])), ...(t.meta || {})}};
@@ -2586,6 +2587,7 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
   const K = SLIP_KINDS[kind], d = slipData(kind, o), hasBatch = d.items.some(i => i.batch);
   const batchInNote = hasBatch && !tpl.cols.some(c => c.on && c.k === 'batch');  // 没有单独的批次列时，批次写进备注
   const blankCol = k => kind === 'expense' ? false
+    : k === 'brand' ? d.items.every(i => !i.p.brand)
     : k === 'spec' ? d.items.every(i => !i.p.spec)
     : k === 'barcode' ? d.items.every(i => !i.p.barcode)
     : k === 'batch' ? !hasBatch
@@ -2596,13 +2598,16 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
     : k === 'note' ? d.items.every(i => !i.note && !(batchInNote && i.batch))
     : false;
   const cols = tpl.cols.filter(c => c.on && (showMoney || !['price', 'amount'].includes(c.k)) && !blankCol(c.k));
-  const val = (k, it, n) => ({idx:n + 1, sku:esc(it.p.sku), barcode:esc(it.p.barcode || ''), name:esc(it.p.name), spec:esc(it.p.spec || ''), unit:esc(it.unit), qty:it.qty,
-    price:fmtPrice(it.price), amount:it.amount.toFixed(2), category:esc(it.category || ''), batch:esc(it.batch), regNo:esc(it.regNo), regHolder:esc(it.regHolder), manufacturer:esc(it.manufacturer), expiry:esc(it.expiry),
-    note:esc(batchInNote ? [it.batch && '批次 ' + it.batch, it.note].filter(Boolean).join('；') : it.note)})[k];
+  const val = (c, it, n) => {
+    if (isCustomPrintCol(c.k)) return c.def ? esc(c.def) : '&nbsp;';
+    return ({idx:n + 1, sku:esc(it.p.sku), barcode:esc(it.p.barcode || ''), name:esc(it.p.name), brand:esc(it.p.brand || ''), spec:esc(it.p.spec || ''), unit:esc(it.unit), qty:it.qty,
+      price:fmtPrice(it.price), amount:it.amount.toFixed(2), category:esc(it.category || ''), batch:esc(it.batch), regNo:esc(it.regNo), regHolder:esc(it.regHolder), manufacturer:esc(it.manufacturer), expiry:esc(it.expiry),
+      note:esc(batchInNote ? [it.batch && '批次 ' + it.batch, it.note].filter(Boolean).join('；') : it.note)})[c.k];
+  };
   const safeW = w => Number.isFinite(+w) && +w >= 5 && +w <= 200 ? Math.round(+w) : 0;
   const safeAl = al => ['left', 'center', 'right'].includes(al) ? al : '';
   const colStyle = c => [safeW(c.w) ? `width:${safeW(c.w)}mm` : '', `text-align:${safeAl(c.al) || (c.k === 'idx' || c.k === 'unit' ? 'center' : ['qty', 'price', 'amount'].includes(c.k) ? 'right' : 'left')}`].join(';');
-  const rows = d.items.map((it, n) => `<tr>${cols.map(c => `<td data-col="${c.k}" style="${colStyle(c)}">${val(c.k, it, n)}</td>`).join('')}</tr>`);
+  const rows = d.items.map((it, n) => `<tr>${cols.map(c => `<td data-col="${c.k}" style="${colStyle(c)}">${val(c, it, n)}</td>`).join('')}</tr>`);
   for (let k = rows.length; k < minRows; k++) rows.push(`<tr>${'<td>&nbsp;</td>'.repeat(cols.length)}</tr>`);
   const amt = sum(d.items, i => i.amount), first = cols.findIndex(c => c.k === 'qty' || c.k === 'amount');
   const total = first < 0 ? '' : `<tr>${first ? `<td colspan="${first}" class="r"><b class="pp-lbl">合计</b></td>` : ''}${cols.slice(first).map(c => `<td class="r" style="${colStyle(c)}">${c.k === 'qty' ? `<b>${sum(d.items, i => i.qty)}</b>` : c.k === 'amount' ? `<b>${amt.toFixed(2)}</b>` : ''}</td>`).join('')}</tr>`;
@@ -7328,10 +7333,10 @@ function printTplPage(body) {
   const adaptTpl = (raw, targetKind, keepTitle) => {
     const src = raw && typeof raw === 'object' ? raw : {}, K2 = SLIP_KINDS[targetKind], seen = new Set();
     const colKeys = K2.allowedCols || Object.keys(SLIP_COLS).filter(k => k !== 'category');
-    const savedCols = (Array.isArray(src.cols) ? src.cols : []).filter(c => c && colKeys.includes(c.k) && !seen.has(c.k) && seen.add(c.k))
-      .map(c => ({k:c.k, label:String(c.label || '').slice(0, 10), on:!!c.on, w:Number.isFinite(+c.w) && +c.w >= 5 && +c.w <= 200 ? Math.round(+c.w) : 0, al:['left', 'center', 'right'].includes(c.al) ? c.al : ''}));
+    const savedCols = (Array.isArray(src.cols) ? src.cols : []).filter(c => c && (colKeys.includes(c.k) || isCustomPrintCol(c.k)) && !seen.has(c.k) && seen.add(c.k))
+      .map(c => ({k:c.k, label:String(c.label || '').slice(0, 10), on:!!c.on, w:Number.isFinite(+c.w) && +c.w >= 5 && +c.w <= 200 ? Math.round(+c.w) : 0, al:['left', 'center', 'right'].includes(c.al) ? c.al : '', ...(isCustomPrintCol(c.k) && c.def ? {def:String(c.def).slice(0, 40)} : {})}));
     const fullCols = savedCols.length ? [...savedCols, ...colKeys.filter(k => !seen.has(k)).map(k => ({k, label:'', on:false}))]
-      : colKeys.map(k => ({k, label:'', on:k !== 'barcode'}));
+      : colKeys.map(k => ({k, label:'', on:!['barcode', 'brand'].includes(k)}));
     const meta = Object.fromEntries(K2.meta.map(k => [k, src.meta && k in src.meta ? !!src.meta[k] : true]));
     return {
       title: keepTitle ? String(src.title || '').slice(0, 20) : '',
@@ -7389,7 +7394,7 @@ function printTplPage(body) {
       <small class="sub-t">建议使用透明 PNG，最大 120 KB。</small></div>
     <label class="field"><span>抬头附加信息（公司名下方，可多行）</span><textarea id="tpHeader" rows="2" maxlength="300" placeholder="地址：…  电话：…">${esc(t.header)}</textarea></label>
     <div class="field"><span>表头项目</span><div style="display:flex;flex-wrap:wrap;gap:4px 16px">${K.meta.map(k => `<label class="chk"><input type="checkbox" data-meta="${k}" ${t.meta[k] ? 'checked' : ''}>${k === 'party' ? K.party : SLIP_META[k]}</label>`).join('')}</div></div>
-    <div class="field"><span>明细列：勾选要打印的列，可以改列名、用箭头调顺序</span><div id="tpCols"></div></div>
+    <div class="field"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px"><span>明细列：勾选要打印的列，可以改列名、用箭头调顺序</span><button class="btn sm" id="tpAddCol" type="button">${ic('plus')}添加自定义列</button></div><div id="tpCols"></div></div>
     <p class="sub-t" style="margin:-4px 0 8px">列宽单位 mm，留空自动；A4 纵向内容宽度约 190 mm，一等分 / 二等分默认按实际可用 215 mm 排版。空白表头字段和整列都为空的可选明细列不会打印。</p>
     <label class="field"><span>签字栏（逗号分隔；「制单」「经手」会自动填上名字）</span><input id="tpSigns" maxlength="100" value="${esc(t.signs)}"></label>
     <label class="field"><span>底部说明（可多行）</span><textarea id="tpFooter" rows="2" maxlength="300" placeholder="例如：货物当面点清，质量问题请于 3 日内联系">${esc(t.footer)}</textarea></label>
@@ -7615,12 +7620,24 @@ function printTplPage(body) {
     setPos(el, ppSel, (+cur[0] || 0) + d[0] * step, (+cur[1] || 0) + d[1] * step);
   });
   const drawCols = () => {
-    $('#tpCols').innerHTML = cols.map((c, i) => `<div class="tp-col"><input type="checkbox" data-c="${i}" ${c.on ? 'checked' : ''} title="打印这一列">
+    $('#tpCols').innerHTML = cols.map((c, i) => {
+      const custom = isCustomPrintCol(c.k);
+      return `<div class="tp-col"><input type="checkbox" data-c="${i}" ${c.on ? 'checked' : ''} title="打印这一列">
       <input data-l="${i}" maxlength="10" value="${esc(c.label)}" placeholder="${esc(colLabel(K, {k:c.k}))}">
+      ${custom ? `<input data-def="${i}" maxlength="40" value="${esc(c.def || '')}" placeholder="留空(手写/占位)" title="每行显示的固定文字，留空则打印空白单元格" style="width:92px">` : ''}
       <input data-w="${i}" type="number" min="5" max="200" value="${c.w || ''}" placeholder="自动" title="列宽，单位 mm；留空自动">
       <select data-al="${i}" title="单元格对齐"><option value="" ${!c.al ? 'selected' : ''}>默认</option><option value="left" ${c.al === 'left' ? 'selected' : ''}>左</option><option value="center" ${c.al === 'center' ? 'selected' : ''}>中</option><option value="right" ${c.al === 'right' ? 'selected' : ''}>右</option></select>
-      <button class="icon-btn sm" data-mv="${i}|-1" ${i ? '' : 'disabled'} title="上移">↑</button><button class="icon-btn sm" data-mv="${i}|1" ${i < cols.length - 1 ? '' : 'disabled'} title="下移">↓</button></div>`).join('');
+      <button class="icon-btn sm" data-mv="${i}|-1" ${i ? '' : 'disabled'} title="上移">↑</button><button class="icon-btn sm" data-mv="${i}|1" ${i < cols.length - 1 ? '' : 'disabled'} title="下移">↓</button>${custom ? `<button class="icon-btn sm danger-text" data-delc="${i}" title="删除自定义列">×</button>` : ''}</div>`;
+    }).join('');
     prev();
+  };
+  if ($('#tpAddCol')) $('#tpAddCol').onclick = () => {
+    const customCnt = cols.filter(c => isCustomPrintCol(c.k)).length;
+    if (customCnt >= 10) return toast('单个模板最多添加 10 个自定义列', 'error');
+    let n = customCnt + 1;
+    while (cols.some(c => c.k === 'custom_' + n)) n++;
+    cols.push({ k: 'custom_' + n, label: '自定义列' + n, on: true, w: 20, al: '', def: '' });
+    drawCols();
   };
   const drawLogo = () => {
     $('#tpLogoBox').innerHTML = `${logoSrc ? `<img id="tpLogoPrev" src="${logoSrc}" alt="LOGO" style="max-width:120px;max-height:50px;object-fit:contain">` : '<span class="sub-t" id="tpLogoPrev">未上传</span>'}<label class="btn sm">${ic('upload')}上传<input type="file" id="tpLogo" accept="image/png,image/jpeg,image/webp" hidden></label>${logoSrc ? '<button class="btn sm danger-text" id="tpLogoDel">删除</button>' : ''}`;
@@ -7628,7 +7645,7 @@ function printTplPage(body) {
   const drawBg = () => {
     $('#tpBgBox').innerHTML = `${bgSrc ? '<span class="badge green plain">已上传校准底图</span>' : '<span class="sub-t">可选：上传预印单据照片辅助预览对位（不打印）</span>'}<label class="btn sm">${ic('upload')}底图<input type="file" id="tpBg" accept="image/png,image/jpeg,image/webp" hidden></label>${bgSrc ? '<button class="btn sm danger-text" id="tpBgDel">清除底图</button>' : ''}`;
   };
-  body.addEventListener('input', e => { const x = e.target; if (x.dataset.l != null) cols[+x.dataset.l].label = x.value.trim(); if (x.dataset.w != null) cols[+x.dataset.w].w = Math.max(0, Math.min(200, Math.round(+x.value || 0))); if (x.id !== 'tpKind') prev(); });
+  body.addEventListener('input', e => { const x = e.target; if (x.dataset.l != null) cols[+x.dataset.l].label = x.value.trim(); if (x.dataset.def != null) cols[+x.dataset.def].def = x.value.slice(0, 40); if (x.dataset.w != null) cols[+x.dataset.w].w = Math.max(0, Math.min(200, Math.round(+x.value || 0))); if (x.id !== 'tpKind') prev(); });
   body.addEventListener('change', e => {
     const x = e.target;
     if (x.dataset.c != null) cols[+x.dataset.c].on = x.checked;
@@ -7686,6 +7703,8 @@ function printTplPage(body) {
   body.addEventListener('click', e => {
     if (e.target.closest('#tpLogoDel')) { logoSrc = ''; drawLogo(); prev(); return; }
     if (e.target.closest('#tpBgDel')) { bgSrc = ''; drawBg(); prev(); return; }
+    const delc = e.target.closest('[data-delc]');
+    if (delc) { const idx = +delc.dataset.delc; if (cols[idx] && isCustomPrintCol(cols[idx].k)) { cols.splice(idx, 1); drawCols(); } return; }
     const b = e.target.closest('[data-mv]'); if (!b) return;
     const [i, d] = b.dataset.mv.split('|').map(Number);
     [cols[i], cols[i + d]] = [cols[i + d], cols[i]]; drawCols();

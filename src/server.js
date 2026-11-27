@@ -20,7 +20,7 @@ const tls = require('tls');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.16.1';
+const VERSION = '2.16.2';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -4428,15 +4428,17 @@ route('GET', '/api/settings/notify/preview', () => notifyText(), { admin: true }
 
 // 打印模板：每种单据一份（标题、抬头、表头项目、明细列的显示 / 顺序 / 名称、签字栏、底部说明、字号），所有用户共用
 const PRINT_KINDS = { in: '入库单', out: '出库单', transfer: '调拨单', sales: '销售单', purchase: '采购单', salesReturn: '销售退货单', purchaseReturn: '采购退货单', expense: '费用报销单' };
-const PRINT_COLS = ['idx', 'sku', 'barcode', 'name', 'spec', 'unit', 'qty', 'price', 'amount', 'category', 'batch', 'regNo', 'regHolder', 'manufacturer', 'expiry', 'note'];
+const PRINT_COLS = ['idx', 'sku', 'barcode', 'name', 'brand', 'spec', 'unit', 'qty', 'price', 'amount', 'category', 'batch', 'regNo', 'regHolder', 'manufacturer', 'expiry', 'note'];
 const PRINT_META = ['no', 'type', 'date', 'party', 'wh', 'handler', 'contact', 'address', 'express', 'project', 'applicant', 'dept'];
+const isCustomPrintCol = k => typeof k === 'string' && /^custom_[a-zA-Z0-9_-]{1,20}$/.test(k);
 function cleanTpl(t) {
   if (!t || typeof t !== 'object') return null;
-  const cols = (Array.isArray(t.cols) ? t.cols : []).filter((c, i, a) => c && PRINT_COLS.includes(c.k) && a.findIndex(x => x && x.k === c.k) === i)
+  const cols = (Array.isArray(t.cols) ? t.cols : []).filter((c, i, a) => c && (PRINT_COLS.includes(c.k) || isCustomPrintCol(c.k)) && a.findIndex(x => x && x.k === c.k) === i).slice(0, 30)
     .map(c => ({
       k: c.k, label: str(c.label, 10), on: !!c.on,
       w: Number.isFinite(+c.w) && +c.w >= 5 && +c.w <= 200 ? Math.round(+c.w) : 0,
-      al: ['left', 'center', 'right'].includes(c.al) ? c.al : ''
+      al: ['left', 'center', 'right'].includes(c.al) ? c.al : '',
+      ...(isCustomPrintCol(c.k) && str(c.def, 40) ? { def: str(c.def, 40) } : {})
     }));
   const meta = {};
   for (const k of PRINT_META) if (t.meta && k in t.meta) meta[k] = !!t.meta[k];
