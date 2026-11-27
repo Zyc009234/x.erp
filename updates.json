@@ -1,44 +1,44 @@
 {
   "schema": 1,
-  "latest": "2.15.6",
-  "publishedAt": "2026-11-26T16:33:18+08:00",
+  "latest": "2.16.0",
+  "publishedAt": "2026-11-27T13:06:00+08:00",
   "notes": [
-    "新增「套打模板」功能（预印纸张只打数据、不打标题与表格框线，支持左/上偏移与固定行高毫米级微调及预览校准底图）",
-    "系统设置新增「功能激活」入口，支持一次性激活码联网绑定并生成离线凭证"
+    "新增合同管理、人事临工/考勤/月工资表、固定资产与折旧、工程结算、农业田间管理（KML/KMZ地块+天地图）、粮食进出单与多客户分摊、门店自有配送与退货取货等 24 项功能",
+    "修复 29 项安全/逻辑/权限/移动端布局审计问题（8 项 XSS 防护、采购退货与提前完结优惠计算、往来对账单合并收付款、应收应付期初汇总、权限隔离脱敏等）并完成 4 处 SQL 参数化加固"
   ],
   "packages": {
     "fnos": {
-      "version": "2.15.6",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.6.fpk",
-      "sha256": "ac9c65482ae5dea98ed72ebc6dd7a19bc503d102a67c1db98f18eec97a38f291",
-      "size": 787944,
-      "file": "xerp-2.15.6.fpk",
+      "version": "2.16.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.0.fpk",
+      "sha256": "37dd02d8c009b89235f977cf58195f4dcf5592e74945d40526fef17b67d10111",
+      "size": 868864,
+      "file": "xerp-2.16.0.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.15.6",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.6-windows-x64-setup.exe",
-      "sha256": "660aae73f60915cc15bfac65e5676bf7e2cb2b274186a8fa2555f9e94331f6f0",
-      "size": 23861959,
-      "file": "xerp-2.15.6-windows-x64-setup.exe",
+      "version": "2.16.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.0-windows-x64-setup.exe",
+      "sha256": "d90db3f2926f2e5510943189182c1ebae73897148b15011942a666f284d2b522",
+      "size": 23891820,
+      "file": "xerp-2.16.0-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.15.6",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.6-android.apk",
-      "sha256": "fd9e35cd6f47f4425beb20c2fdf15868c659e68c5689c5e2c86142f98c8e49b6",
+      "version": "2.16.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.0-android.apk",
+      "sha256": "ffdcfd71b6d7b5ea0ae2115d3111ae7894cf318421c6b8c528af2e47c4321d0f",
       "size": 279329,
-      "file": "xerp-2.15.6-android.apk",
+      "file": "xerp-2.16.0-android.apk",
       "kind": "apk",
-      "versionCode": 21506
+      "versionCode": 21600
     },
     "docker": {
-      "version": "2.15.6",
+      "version": "2.16.0",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.15.6",
+      "image": "ghcr.io/zyc009234/xerp:2.16.0",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.6-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.15.6-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.0-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.0-docker-arm64.tar.gz"
       ],
       "note": "也可以下载离线包 docker load"
     }
