@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.16.3": {
+          "changelog": "修复 29 项工程结算、粮食分摊与作废成本、固定资产折旧、离职临工工资、合同隔离、天地图/KMZ、多账套与移动端适配问题",
+          "updated_at": "2026-11-27T23:50:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.3.fpk",
+              "sha256": "fedb8197eb9608099587a1a6d6f496c26f8f81ef6b1728357f5441016b3fe3cd",
+              "size": 832004
+            }
+          }
+        },
         "2.16.2": {
           "changelog": "打印模板明细列支持自定义添加自定义列（最多 10 列，可填固定内容或留空占位）并新增商品品牌可选列",
           "updated_at": "2026-11-27T16:19:00+08:00",
