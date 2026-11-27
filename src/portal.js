@@ -124,8 +124,26 @@ function startCompany(c) {
   });
   child.stdout.on('data', d => process.stdout.write(`[${c.code}] ${d}`));
   child.stderr.on('data', d => process.stderr.write(`[${c.code}] ${d}`));
-  child.on('exit', code => { childOf.delete(c.id); log('账套进程退出', c.code, code); setTimeout(() => startCompany(c), 3000).unref?.(); });
+  child.on('exit', code => {
+    childOf.delete(c.id);
+    log('账套进程退出', c.code, code);
+    setTimeout(() => {
+      const fresh = companyById(c.id);
+      if (fresh && fresh.enabled) startCompany(fresh);
+    }, 3000).unref?.();
+  });
   childOf.set(c.id, child);
+}
+function stopCompany(c) {
+  const child = c && childOf.get(c.id);
+  if (!child) return Promise.resolve();
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; childOf.delete(c.id); resolve(); } };
+    child.once('exit', finish);
+    try { child.kill(); } catch (e) { finish(); }
+    setTimeout(() => { try { child.kill('SIGKILL'); } catch (e) {} finish(); }, 2500).unref?.();
+  });
 }
 function stopChildren() {
   stopping = true;
@@ -360,6 +378,111 @@ const server = http.createServer(async (req, res) => {
       startCompany(c);
       if (!await waitCompany(c.port)) return json(res, 500, { error: '新公司已创建，但账套服务启动失败，请查看服务器日志' });
       return json(res, 200, { ok: true, company: { id, code, name }, companies: memberships(me.id).map(x => ({ code: x.code, name: x.name })) });
+    }
+    const coMatch = /^\/api\/portal\/companies\/([a-z0-9_-]{2,20})$/.exec(p);
+    if (coMatch && req.method === 'PUT') {
+      if (!sess) return json(res, 401, { error: '登录已失效' });
+      const me = reg.prepare('SELECT * FROM users WHERE id = ?').get(sess.user_id);
+      const c = reg.prepare('SELECT * FROM companies WHERE code = ?').get(coMatch[1]);
+      if (!c) return json(res, 404, { error: '公司不存在' });
+      if (!canManage(me, c.id)) return json(res, 403, { error: '只有管理员能管理公司' });
+      const b = await body(req);
+      const nextName = b.name != null ? String(b.name).trim().slice(0, 40) : c.name;
+      if (!nextName) return json(res, 400, { error: '公司名称不能为空' });
+      const nextEnabled = b.enabled != null ? (b.enabled ? 1 : 0) : c.enabled;
+      if (c.code === 'default' && !nextEnabled) return json(res, 400, { error: '默认公司不能停用' });
+      if (c.id === sess.company_id && !nextEnabled) return json(res, 400, { error: '不能停用当前正在使用的公司，请先切换到其他公司' });
+      reg.prepare('UPDATE companies SET name = ?, enabled = ? WHERE id = ?').run(nextName, nextEnabled, c.id);
+      const updated = companyById(c.id);
+      if (c.enabled && !nextEnabled) {
+        reg.prepare('DELETE FROM sessions WHERE company_id = ?').run(c.id);
+        await stopCompany(updated);
+      } else if (!c.enabled && nextEnabled) {
+        const port = await nextPort(updated.id, updated.port);
+        if (port !== updated.port) {
+          reg.prepare('UPDATE companies SET port = ? WHERE id = ?').run(port, updated.id);
+          updated.port = port;
+        }
+        startCompany(updated);
+        if (!await waitCompany(updated.port)) return json(res, 500, { error: '公司已启用，但账套服务启动失败' });
+      }
+      return json(res, 200, { ok: true, companies: memberships(me.id).map(x => ({ code: x.code, name: x.name })) });
+    }
+    if (coMatch && req.method === 'DELETE') {
+      if (!sess) return json(res, 401, { error: '登录已失效' });
+      const me = reg.prepare('SELECT * FROM users WHERE id = ?').get(sess.user_id);
+      const c = reg.prepare('SELECT * FROM companies WHERE code = ?').get(coMatch[1]);
+      if (!c) return json(res, 404, { error: '公司不存在' });
+      if (!me.admin && !canManage(me, c.id)) return json(res, 403, { error: '只有管理员能删除公司' });
+      if (c.code === 'default') return json(res, 400, { error: '默认公司不能删除' });
+      if (c.id === sess.company_id) return json(res, 400, { error: '不能删除当前正在使用的公司，请先切换到其他公司' });
+      reg.prepare('UPDATE companies SET enabled = 0 WHERE id = ?').run(c.id);
+      reg.prepare('DELETE FROM sessions WHERE company_id = ?').run(c.id);
+      reg.prepare('DELETE FROM members WHERE company_id = ?').run(c.id);
+      await stopCompany(c);
+      reg.prepare('DELETE FROM companies WHERE id = ?').run(c.id);
+      const safeBase = path.resolve(DATA_DIR, 'companies') + path.sep;
+      const targetDir = path.resolve(c.dir);
+      if (targetDir.startsWith(safeBase)) {
+        try { fs.rmSync(targetDir, { recursive: true, force: true }); } catch (e) {}
+      }
+      return json(res, 200, { ok: true, companies: memberships(me.id).map(x => ({ code: x.code, name: x.name })) });
+    }
+    if (p === '/api/portal/users' && req.method === 'GET') {
+      if (!sess) return json(res, 401, { error: '登录已失效' });
+      const me = reg.prepare('SELECT * FROM users WHERE id = ?').get(sess.user_id);
+      const mine = memberOf(me.id, sess.company_id);
+      if (!me.admin && (!mine || mine.role !== 'admin')) return json(res, 403, { error: '只有管理员能查看全局成员' });
+      const users = reg.prepare('SELECT id, username, name, admin FROM users ORDER BY created').all();
+      const mems = reg.prepare('SELECT m.user_id, c.code, m.role FROM members m JOIN companies c ON c.id = m.company_id').all();
+      const byU = {};
+      for (const m of mems) { (byU[m.user_id] ||= {})[m.code] = m.role; }
+      return json(res, 200, { users: users.map(u => ({ username: u.username, name: u.name || u.username, admin: !!u.admin, companies: byU[u.id] || {} })) });
+    }
+    if (p === '/api/portal/members/batch' && req.method === 'POST') {
+      if (!sess) return json(res, 401, { error: '登录已失效' });
+      const me = reg.prepare('SELECT * FROM users WHERE id = ?').get(sess.user_id);
+      const mine = memberOf(me.id, sess.company_id);
+      if (!me.admin && (!mine || mine.role !== 'admin')) return json(res, 403, { error: '只有管理员能分配账套权限' });
+      const b = await body(req);
+      const username = String(b.username || '').trim();
+      if (!/^[a-zA-Z0-9_.-]{2,32}$/.test(username)) return json(res, 400, { error: '用户名只能是 2-32 位字母、数字、. _ -' });
+      let user = userByName(username);
+      if (!user) {
+        const pwd = String(b.password || '');
+        if (pwd.length < 6) return json(res, 400, { error: '新账号需要设置至少 6 位密码' });
+        const hp = hashPwd(pwd);
+        reg.prepare('INSERT INTO users (id, username, name, salt, hash, admin, created) VALUES (?,?,?,?,?,0,?)')
+          .run(uid('gu'), username, String(b.name || '').trim() || username, hp.salt, hp.hash, new Date().toISOString());
+        user = userByName(username);
+      }
+      const role = b.role === 'admin' ? 'admin' : 'user';
+      const wantCodes = new Set(Array.isArray(b.companies) ? b.companies.map(x => String(x || '').trim()) : []);
+      const allCos = reg.prepare('SELECT * FROM companies').all();
+      for (const c of allCos) {
+        if (!canManage(me, c.id)) continue;
+        const prev = memberOf(user.id, c.id);
+        const want = wantCodes.has(c.code);
+        if (want) {
+          if (prev && prev.role === 'admin' && role !== 'admin') {
+            const admins = reg.prepare("SELECT COUNT(*) AS n FROM members WHERE company_id = ? AND role = 'admin'").get(c.id).n;
+            if (admins <= 1) return json(res, 400, { error: `公司「${c.name}」至少要保留一个管理员` });
+          }
+          reg.prepare('INSERT INTO members (user_id, company_id, role) VALUES (?,?,?) ON CONFLICT(user_id, company_id) DO UPDATE SET role = excluded.role').run(user.id, c.id, role);
+          const demoted = !!(prev && prev.role === 'admin' && role !== 'admin');
+          syncCompanyMember(c, user, role, { revoke: demoted });
+          if (demoted) reg.prepare('DELETE FROM sessions WHERE user_id = ? AND company_id = ?').run(user.id, c.id);
+        } else if (prev) {
+          if (prev.role === 'admin') {
+            const admins = reg.prepare("SELECT COUNT(*) AS n FROM members WHERE company_id = ? AND role = 'admin'").get(c.id).n;
+            if (admins <= 1) return json(res, 400, { error: `公司「${c.name}」至少要保留一个管理员` });
+          }
+          reg.prepare('DELETE FROM members WHERE user_id = ? AND company_id = ?').run(user.id, c.id);
+          reg.prepare('DELETE FROM sessions WHERE user_id = ? AND company_id = ?').run(user.id, c.id);
+          syncCompanyMember(c, user, 'user', { disable: true, revoke: true });
+        }
+      }
+      return json(res, 200, { ok: true });
     }
     if (p === '/api/portal/members' && req.method === 'GET') {
       if (!sess) return json(res, 401, { error: '登录已失效' });

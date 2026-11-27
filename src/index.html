@@ -81,10 +81,11 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .app.collapsed .nav-label,.app.collapsed .nav-group,.app.collapsed .brand-name,.app.collapsed .side-foot,.app.collapsed .nav-badge{display:none}
 .app.collapsed .nav-item{justify-content:center}
 
-.topbar{height:64px;display:flex;align-items:center;gap:14px;padding:0 24px;background:var(--panel);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:30}
-.crumb{font-weight:600;font-size:16px;white-space:nowrap}
+.topbar{min-height:64px;display:flex;align-items:center;gap:10px 14px;padding:8px 24px;background:var(--panel);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:30;flex-wrap:wrap}
+.crumb{font-weight:600;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .crumb small{color:var(--muted);font-weight:400;font-size:13px;margin-left:8px}
-.top-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+.top-actions{margin-left:auto;display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;justify-content:flex-end}
+.top-actions .select{max-width:160px;min-width:0}
 .icon-btn{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--muted);position:relative;transition:.15s}
 .icon-btn:hover{background:var(--gray-soft);color:var(--text)}
 .icon-btn.sm{width:30px;height:30px}
@@ -95,7 +96,7 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#f472b6,#8b5cf6);color:#fff;display:grid;place-items:center;font-weight:600}
 .user b{display:block;font-size:13px}.user small{color:var(--muted);font-size:12px}
 .bell-wrap{position:relative}
-.dropdown{position:absolute;right:0;top:46px;width:320px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.15);display:none;overflow:hidden}
+.dropdown{position:absolute;right:0;top:46px;width:320px;max-width:calc(100vw - 24px);background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.15);display:none;overflow:hidden}
 .dropdown.show{display:block}
 .dd-head{padding:12px 16px;font-weight:600;border-bottom:1px solid var(--border)}
 .dd-item{padding:10px 16px;display:flex;gap:10px;align-items:flex-start;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px}
@@ -126,11 +127,12 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .fb-item{padding:14px 0;border-bottom:1px solid var(--border)}.fb-item:first-child{padding-top:0}.fb-item:last-child{border-bottom:0}.fb-meta{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:12px;color:var(--muted)}
 .fb-text{white-space:pre-wrap;word-break:break-word;margin-top:6px}.fb-reply{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--primary-soft)}.fb-reply b{margin-right:8px}
 .mb{margin-bottom:16px}
-.kpi{padding:18px 20px;display:flex;gap:14px;align-items:flex-start}
+.kpi{padding:18px 20px;display:flex;gap:14px;align-items:flex-start;min-width:0}
+.kpi>div{min-width:0;flex:1}
 .kpi-ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;flex-shrink:0}
 .kpi-ic svg.i{width:22px;height:22px}
 .kpi label{color:var(--muted);font-size:13px}
-.kpi .v{font-size:22px;font-weight:700;margin:2px 0;letter-spacing:-.01em;white-space:nowrap}
+.kpi .v{font-size:22px;font-weight:700;margin:2px 0;letter-spacing:-.01em;overflow-wrap:anywhere;word-break:break-word;line-height:1.25}
 .trend{font-size:12px;font-weight:500}
 .trend.up{color:var(--green)}.trend.down{color:var(--red)}.trend span{color:var(--muted);font-weight:400}
 .c-primary{background:var(--primary-soft);color:var(--primary)}.c-green{background:var(--green-soft);color:var(--green)}
@@ -178,8 +180,8 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 /* 手机上表格很窄时，数量 / 单价等输入框保持最小宽度，表格改为左右滑动，不被挤成一两位数 */
 .tbl.items input{min-width:72px}.tbl.items input[type=checkbox]{min-width:0;width:auto}.tbl.items [data-k=price],.tbl.items [data-k=note]{min-width:100px}.tbl.items [data-k=product]{min-width:180px}
 .sub-t{color:var(--muted);font-size:12px}
-.pager{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;color:var(--muted);font-size:13px}
-.pager>div{display:flex;gap:4px}
+.pager{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;color:var(--muted);font-size:13px;flex-wrap:wrap;gap:8px}
+.pager>div{display:flex;gap:4px;flex-wrap:wrap;max-width:100%}
 .pg{min-width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--panel)}
 .pg.on{background:var(--primary);color:#fff;border-color:var(--primary)}
 .pg:disabled{opacity:.4;cursor:not-allowed}
@@ -306,7 +308,7 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .confirm-ic{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;margin-bottom:12px}
 
 .toasts{position:fixed;top:72px;right:20px;z-index:200;display:flex;flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none}.toasts>*{pointer-events:auto}
-.toast{background:var(--panel);border:1px solid var(--border);box-shadow:0 10px 30px rgba(0,0,0,.15);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:8px;animation:pop .2s;font-weight:500}
+.toast{background:var(--panel);border:1px solid var(--border);box-shadow:0 10px 30px rgba(0,0,0,.15);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:8px;max-width:min(420px,calc(100vw - 24px));overflow-wrap:anywhere;word-break:break-word;animation:pop .2s;font-weight:500}
 .toast.success svg{color:var(--green)}.toast.error svg{color:var(--red)}.toast.info svg{color:var(--blue)}
 .setting-row{display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-bottom:1px solid var(--border);gap:16px}
 .setting-row:last-child{border-bottom:none}
@@ -433,7 +435,11 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
   .tbl td:first-child{background:var(--panel)}
   .tbl th:first-child{background:var(--panel2)}
   .tbl.list-tbl th:last-child,.tbl.list-tbl td:last-child{position:static;box-shadow:none}
+  .topbar{padding:6px 12px;gap:6px 8px}
+  .top-actions .select{max-width:116px;height:32px;font-size:12px}
+  .dropdown{position:fixed;left:12px;right:12px;top:60px;width:auto;max-width:none}
   .toasts{top:12px;right:12px;left:12px;align-items:center}
+  .toast{max-width:100%}
   .toolbar{padding:12px;gap:8px;flex-direction:column;align-items:stretch}
   .toolbar .tb-left,.toolbar .tb-right{width:100%;flex-wrap:wrap;gap:8px}
   .toolbar .search{width:100%;height:34px}
@@ -472,7 +478,9 @@ html.mobile .app.open .backdrop{display:block;position:fixed;inset:0;background:
 html.mobile .main,html.mobile .app.collapsed .main{margin-left:0}
 html.mobile .app.collapsed .sidebar{width:236px}
 html.mobile .content{padding:16px}
-html.mobile .topbar{padding:0 16px}
+html.mobile.native .content{padding-bottom:84px}
+html.mobile .topbar{padding:6px 12px;gap:6px 8px}
+html.mobile .dropdown{position:fixed;left:12px;right:12px;top:60px;width:auto;max-width:none}
 html.mobile .g2,html.mobile .g4,html.mobile .g5{grid-template-columns:repeat(2,minmax(0,1fr))}
 html.mobile .user div:last-child,html.mobile .crumb small{display:none}
 html.mobile .form-grid,html.mobile .doc-info{grid-template-columns:1fr}
@@ -520,7 +528,7 @@ html.mobile .doc-sum b{font-size:14px}
     <label class="field"><span>用户名</span><input id="lUser" autocomplete="username"></label>
     <label class="field"><span>密码</span><input id="lPass" type="password" autocomplete="current-password"></label>
     <button class="btn primary" id="lBtn">登 录</button>
-    <p style="color:var(--muted);font-size:12px;text-align:center;margin-top:16px">首次使用默认账号 admin / admin123，登录后请及时修改密码</p>
+    <p id="loginHint" style="color:var(--muted);font-size:12px;text-align:center;margin-top:16px">首次使用默认账号 admin / admin123，登录后请及时修改密码</p>
     <p style="color:var(--muted);font-size:12px;text-align:center;margin-top:8px"><a class="link" href="https://www.zhaoyoucai.xyz/xerp/" target="_blank">☕ 请作者喝杯咖啡</a></p>
   </form>
 </div>
@@ -528,7 +536,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.15.6</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.16.0</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -721,7 +729,7 @@ async function reload() {
   ME = d.user; META = d.meta || META;
   const sig = JSON.stringify(d.data) + JSON.stringify(d.settings) + JSON.stringify(ME.perms);
   const changed = sig !== dataSig; dataSig = sig;
-  db = {warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[], deliveries:[], expenses:[], advances:[], partyPayments:[], projects:[], ...d.data, settings:{...d.settings, version:d.version, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
+  db = {warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[], deliveries:[], expenses:[], advances:[], partyPayments:[], projects:[], contracts:[], contractTpls:[], attendance:[], payrolls:[], fixedAssets:[], engJobs:[], fieldPlots:[], farmLogs:[], ...d.data, settings:{...d.settings, version:d.version, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
   return changed;
 }
 // 发起写操作 → 成功后重新拉取数据并刷新界面；失败则提示错误并保持弹窗
@@ -789,8 +797,8 @@ async function enterApp() {
   PEOPLE = null; ROLES = [];
   await reload();
   $('#login').classList.remove('show');
-  applyTheme(); render();
   setupPortalUI();
+  applyTheme(); render();
 }
 function setupPortalUI() {
   const btn = document.getElementById('portalCo');
@@ -800,10 +808,10 @@ function setupPortalUI() {
   try { PORTAL_COMPANY = JSON.parse(LS.get('portalCompany', 'null')); } catch (e) { PORTAL_COMPANY = null; }
   PORTAL_ADMIN = LS.get('portalAdmin', '') === '1';
   if (!PORTAL_COMPANY) PORTAL_COMPANY = (PORTAL.companies || [])[0] || null;
-  if (PORTAL_COMPANIES.length > 1) {
+  if (PORTAL_COMPANIES.length > 0) {
     btn.style.display = '';
     btn.innerHTML = ic('warehouse') + esc(PORTAL_COMPANY ? PORTAL_COMPANY.name : '切换公司');
-    btn.title = '切换公司（账套）';
+    btn.title = PORTAL_COMPANIES.length > 1 ? '切换公司（账套）' : '当前公司账套';
     btn.onclick = openCompanySwitch;
   } else btn.style.display = 'none';
 }
@@ -834,6 +842,15 @@ async function boot() {
     const beat = () => fetch('/local/heartbeat', {method:'POST'}).catch(() => {});
     beat(); setInterval(beat, 20000);
   } else { $('#srvBox').style.display = 'none'; SERVER_ADDR = location.origin; }
+  if (!window.XERP_DEMO) {
+    try {
+      const pr0 = await fetch('/api/ping');
+      if (pr0.ok) {
+        const pd = await pr0.json();
+        if (pd && pd.defaultPwd === false && $('#loginHint')) $('#loginHint').style.display = 'none';
+      }
+    } catch (e) {}
+  }
   try {
     const pr = await fetch('/api/portal/info');
     if (pr.ok) {
@@ -865,7 +882,7 @@ const ppAllocs = p => (Array.isArray(p.appliedOrders) && p.appliedOrders.length)
 const ppApplied = p => +sum(ppAllocs(p), a => +a.amount || 0).toFixed(2);
 const ppRemaining = p => +Math.max(0, (+p.amount || 0) - ppApplied(p)).toFixed(2);
 const unappliedParty = (kind, pid) => sum((db.partyPayments || []).filter(p => p.partyType === (kind === 'sales' ? 'customer' : 'supplier') && (!pid || p.partyId === pid)), ppRemaining);
-const partyDue = (kind, pid) => { const C = ORD[kind], party = pid && byId(db[C.party], pid); return +((party ? +party.openingBalance || 0 : 0) + sum(db[C.db].filter(o => o.status !== '已作废' && (!pid || o[C.partyKey] === pid)), o => unpaidOf(kind, o)) - retUnpaid(kind, pid) - unappliedParty(kind, pid)).toFixed(2); };
+const partyDue = (kind, pid) => { const C = ORD[kind], openBal = pid ? (+((byId(db[C.party], pid) || {}).openingBalance) || 0) : sum(db[C.party], p => +p.openingBalance || 0); return +(openBal + sum(db[C.db].filter(o => o.status !== '已作废' && (!pid || o[C.partyKey] === pid)), o => unpaidOf(kind, o)) - retUnpaid(kind, pid) - unappliedParty(kind, pid)).toFixed(2); };
 const isSalesKind = kind => kind === 'sales' || kind === 'salesReturn';
 const lineDoneQty = (kind, o, i) => {
   if (i.fulfilledQty != null) return +i.fulfilledQty || 0;
@@ -1130,7 +1147,9 @@ const ENT = {
     {n:'remark', l:'备注', type:'textarea', span:1}]},
   customers: {title:'客户', fields:[
     {n:'name', l:'客户名称', req:1, span:1}, {n:'contact', l:'联系人', req:1}, {n:'phone', l:'联系电话', req:1}, {n:'email', l:'邮箱'},
-    {n:'level', l:'客户等级（可选择或直接输入）', type:'combo', opts:() => custLevels(), ph:'如：VIP、批发、零售'}, {n:'openingBalance', l:'期初应收（元，选填）', type:'number', money:1, ph:'接管旧账时填写客户还欠多少'}, {n:'address', l:'地址', span:1}, {n:'remark', l:'备注', type:'textarea', span:1},
+    {n:'level', l:'客户等级（可选择或直接输入）', type:'combo', opts:() => custLevels(), ph:'如：VIP、批发、零售'}, {n:'openingBalance', l:'期初应收（元，选填）', type:'number', money:1, ph:'接管旧账时填写客户还欠多少'}, {n:'address', l:'地址', span:1},
+    {n:'invoiceTitle', l:'开票抬头（选填，留空默认用客户名称）'}, {n:'taxId', l:'纳税人识别号 / 税号（选填）'}, {n:'bankName', l:'开户银行（选填）'}, {n:'bankAccount', l:'银行账号（选填）'}, {n:'regAddress', l:'开票注册地址（选填）'}, {n:'regPhone', l:'开票注册电话（选填）'},
+    {n:'remark', l:'备注', type:'textarea', span:1},
     {n:'bizLicense', l:'营业执照号（选填）', med:1}, {n:'licenseNo', l:'经营许可证 / 备案号（选填）', span:1, med:1}, {n:'licenseExp', l:'许可证有效期至（选填）', type:'date', med:1},
     {n:'firstStatus', l:'首营企业状态', type:'select', opts:[['', '不标记'], ['待审核', '首营待审核'], ['已通过', '首营已审核']], med:1}]},
   suppliers: {title:'供应商', fields:[
@@ -1142,11 +1161,17 @@ const ENT = {
     {n:'no', l:'工号', ph:'留空自动生成'}, {n:'name', l:'姓名', req:1}, {n:'gender', l:'性别', type:'select', opts:['男', '女']},
     {n:'dept', l:'部门（可选择或直接输入）', type:'combo', opts:() => depts(), ph:'如：生产部、售后部'}, {n:'position', l:'职位', req:1}, {n:'phone', l:'手机号'},
     {n:'idCard', l:'身份证号（仅人事可见）', ph:'用于生日提醒，列表会脱敏'},
-    {n:'salary', l:'月薪（元）', type:'number'}, {n:'joinDate', l:'入职日期', type:'date', def:today()},
-    {n:'status', l:'状态', type:'select', opts:['在职', '试用期', '离职']}]},
-  deliveries: {title:'临时送货', fields:[
-    {n:'date', l:'送货日期', type:'date', def:today()}, {n:'driver', l:'司机 / 送货人', req:1},
-    {n:'phone', l:'联系电话'}, {n:'amount', l:'本次运费（元）', type:'number', money:1, def:0},
+    {n:'salary', l:'月薪（元，正式/试用期）', type:'number'}, {n:'dailyWage', l:'日薪（元，临工按考勤天数计薪）', type:'number'},
+    {n:'tempRep', l:'临工代表（选填，填写后可由代表统一领薪）', ph:'例如：王班长'},
+    {n:'joinDate', l:'入职日期', type:'date', def:today()},
+    {n:'status', l:'状态', type:'select', opts:['在职', '试用期', '临工', '离职']}]},
+  deliveries: {title:'门店配送 / 临时送货', fields:[
+    {n:'date', l:'日期', type:'date', def:today()},
+    {n:'mode', l:'配送方式', type:'select', opts:['小工送货', '客户自提', '退货取货', '临时送货']},
+    {n:'status', l:'状态', type:'select', opts:['待派送', '配送中', '已完成']},
+    {n:'driver', l:'送货小工 / 司机', req:1, type:'combo', opts:() => (db.employees || []).filter(e => e.status !== '离职').map(e => e.name)},
+    {n:'phone', l:'联系电话'}, {n:'party', l:'客户 / 收件人'}, {n:'address', l:'送货 / 取货地址', span:1},
+    {n:'amount', l:'运费（元，选填）', type:'number', money:1, def:0},
     {n:'paid', l:'付款状态', type:'select', opts:[['', '未付款'], ['1', '已付款']]},
     {n:'note', l:'备注（路线、货物、结算说明）', type:'textarea', span:1}]}
 };
@@ -1177,7 +1202,7 @@ function mountPackEditor(rec) {
       <td><input id="pkBaseBarcode" value="${esc(baseBarcode)}" placeholder="基本单位条码"></td><td class="num sub-t">上方基本价</td>
       <td><span class="pk-def"><label class="chk" title="默认采购单位"><input type="radio" name="pkBuy" value="__base" ${buySel === '__base' ? 'checked' : ''}>采</label><label class="chk" title="默认销售单位"><input type="radio" name="pkSale" value="__base" ${saleSel === '__base' ? 'checked' : ''}>销</label></span></td><td></td></tr>`
       + rows.map((u, i) => `<tr data-id="${u.id}"><td><span class="badge gray plain">包装</span></td><td><input data-pk="name" data-i="${i}" value="${esc(u.name)}" placeholder="如 箱 / 盒"></td>
-        <td><input data-pk="rate" data-i="${i}" type="number" min="2" step="1" value="${esc(u.rate)}" placeholder="如 10"></td>
+        <td><input data-pk="rate" data-i="${i}" type="number" min="0.0001" step="any" value="${esc(u.rate)}" placeholder="如 12 或 0.5"></td>
         <td><input data-pk="barcode" data-i="${i}" value="${esc(u.barcode)}" placeholder="包装条码"></td>
         <td><input data-pk="price" data-i="${i}" type="number" min="0" step="0.01" value="${esc(u.price)}" placeholder="按换算"></td>
         <td><span class="pk-def"><label class="chk" title="默认采购单位"><input type="radio" name="pkBuy" value="${u.id}" ${buySel === u.id ? 'checked' : ''}>采</label><label class="chk" title="默认销售单位"><input type="radio" name="pkSale" value="${u.id}" ${saleSel === u.id ? 'checked' : ''}>销</label></span></td>
@@ -1188,7 +1213,7 @@ function mountPackEditor(rec) {
     const b = ($('#mform [name="unit"]')?.value || '个').trim() || '个';
     $('#pkBaseUnit').textContent = b;
     const parts = rows.filter(u => u.name && +u.rate > 0).map(u => `1${u.name}=${+u.rate}${b}`);
-    $('#pkHint').textContent = parts.length ? parts.join(' · ') + '。开单、扫码和打印按所选单位显示，库存仍按 ' + b + ' 记。' : '只有基本单位时，开单和扫码都按 ' + b + ' 记。';
+    $('#pkHint').textContent = (parts.length ? parts.join(' · ') + '。' : '') + '支持整数和小数换算（如 1箱=12个，或 1包=0.5箱；若 2包=16箱 则填 8），库存始终按 ' + b + ' 记。';
   };
   draw();
   $('#mform [name="unit"]').addEventListener('input', sync);
@@ -1214,7 +1239,7 @@ function mountPackEditor(rec) {
       const name = String(u.name || '').trim(), rate = Number(u.rate), bc = String(u.barcode || '').trim();
       if (!name && !u.rate && !bc && (u.price === '' || u.price == null)) continue;
       if (!name) throw new Error('包装单位名称不能为空');
-      if (!Number.isInteger(rate) || rate < 2) throw new Error(`1 ${name} 等于多少 ${base}？请填大于 1 的整数`);
+      if (!Number.isFinite(rate) || rate < 0.0001 || rate > 100000 || Math.abs(rate - 1) < 1e-6) throw new Error(`1 ${name} 等于多少 ${base}？请填 0.0001 ~ 100000 之间的换算数（不能为 1）`);
       const hasPrice = u.price !== '' && u.price != null, price = Number(u.price);
       if (hasPrice && (!Number.isFinite(price) || price < 0)) throw new Error(`「${name}」的销售价不正确`);
       units.push({ name, rate, ...(bc ? { barcode:bc } : {}), ...(hasPrice ? { price:+price.toFixed(2) } : {}) });
@@ -1279,7 +1304,46 @@ async function editEntity(type, id) {
     readPack = mountPackEditor(rec);
     $('#mform').insertAdjacentHTML('afterbegin', `<div class="span2" style="display:flex;gap:8px;align-items:center;padding:8px 12px;background:var(--panel2);border-radius:10px;margin-bottom:4px">
       <input id="pAgriQr" class="select" style="flex:1" placeholder="扫描/粘贴农资二维码、农药追溯链接或 PD 证号，自动填充名称、规格、条码、批号等">
+      <button type="button" class="btn sm" id="pAgriCam">${ic('scan')}扫码</button>
       <button type="button" class="btn sm" id="pAgriBtn">解析填充</button></div>`);
+    $('#pAgriCam').onclick = async () => {
+      if (NATIVE) { lastInput = $('#pAgriQr'); $('#pAgriQr').focus(); NATIVE.scan(); return; }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return toast('当前网页为非 HTTPS 地址，手机浏览器出于安全限制禁止调用摄像头；请改用 HTTPS 访问或安装 x.erp 安卓客户端，也可扫码后粘贴到左侧输入框', 'error');
+      }
+      if (!('BarcodeDetector' in window)) {
+        return toast('当前浏览器不支持网页识别二维码，请使用 Chrome/Edge 或安装 x.erp 安卓客户端扫码，也可扫码后粘贴到左侧输入框', 'error');
+      }
+      let stream = null, raf = 0, box = null;
+      const stop = () => { if (raf) cancelAnimationFrame(raf); if (stream) stream.getTracks().forEach(t => t.stop()); if (box) box.remove(); };
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        box = document.createElement('div');
+        box.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px';
+        box.innerHTML = '<video autoplay playsinline muted style="max-width:100%;max-height:70vh;border-radius:12px"></video><div style="color:#fff;font-size:13px">请将农资二维码对准取景框</div><button class="btn" id="camClose">取消</button>';
+        document.body.appendChild(box);
+        const video = box.querySelector('video');
+        video.srcObject = stream;
+        box.querySelector('#camClose').onclick = stop;
+        const det = new BarcodeDetector({ formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39'] });
+        const tick = async () => {
+          if (!stream) return;
+          try {
+            if (video.readyState >= 2) {
+              const res = await det.detect(video);
+              if (res && res[0] && res[0].rawValue) {
+                const raw = res[0].rawValue;
+                stop();
+                if ($('#pAgriQr')) { $('#pAgriQr').value = raw; fillAgri(); }
+                return;
+              }
+            }
+          } catch (e) {}
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+      } catch (e) { stop(); toast('无法打开摄像头：' + (e.message || '请检查摄像头权限'), 'error'); }
+    };
     const fillAgri = () => {
       const qr = parseAgriQr($('#pAgriQr').value);
       if (!qr) return toast('未识别到农资二维码字段', 'error');
@@ -1343,11 +1407,21 @@ async function editEntity(type, id) {
 }
 function delEntity(type, id) {
   const rec = byId(db[type], id), cfg = ENT[type];
+  if (type === 'employees' && rec && rec.userId && isAdmin() && rec.userId !== ME.id) {
+    openModal(`${modalHead('确认删除')}<div class="m-body"><p style="font-size:14px;line-height:1.7">确定删除员工「${esc(rec.name)}」吗？此操作不可撤销。</p>
+      <label class="chk" style="margin-top:10px"><input type="checkbox" id="empDelUser" checked>同时删除关联的登录账号${rec.username ? `（${esc(rec.username)}）` : ''}</label></div>
+      <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn danger" id="empDelOk">确定删除</button></div>`, 'sm');
+    $('#empDelOk').onclick = async () => {
+      const delU = $('#empDelUser') && $('#empDelUser').checked;
+      await mutate('DELETE', `/api/${type}/${id}` + (delU ? '?delUser=1' : ''), undefined, delU ? '员工及关联账号已删除' : '已删除');
+    };
+    return;
+  }
   confirmBox(`确定删除${cfg.title}「${esc(rec.name)}」吗？此操作不可撤销。`, () => mutate('DELETE', `/api/${type}/${id}`, undefined, '已删除'));
 }
 function costAdjust(id) {
   const p = byId(db.products, id); if (!p) return;
-  formModal({title:'修正商品成本 · ' + p.name, okText:'确认修正', fields:[
+  formModal({title:'修正商品成本 · ' + esc(p.name), okText:'确认修正', fields:[
     {n:'cost', l:'新成本价（元）', type:'number', req:1},
     {n:'reason', l:'修正原因', req:1, span:1}
   ], data:{cost:p.cost || 0}, onSubmit:v => mutate('PUT', `/api/products/${id}/cost`, v, '商品成本已修正')});
@@ -1863,9 +1937,9 @@ function stockModal(mode, id) {
 }
 function prodLogs(id) {
   const p = byId(db.products, id), logs = db.stockLogs.filter(l => l.productId === id).slice(0, 50);
-  openModal(`${modalHead('库存流水 · ' + esc(p.name))}<div class="m-body" style="padding:0"><table class="tbl compact"><thead><tr><th>时间</th><th>类型</th><th class="num">数量</th><th>单据</th><th>操作人</th></tr></thead><tbody>
-  ${logs.map(l => { const d = l.ref && docByNo(l.ref); return `<tr><td>${l.date} ${l.time || ''}</td><td>${badge(l.kind, l.qty > 0 ? 'green' : 'orange')}</td><td class="num ${l.qty > 0 ? 'pos' : 'neg'}">${l.qty > 0 ? '+' : ''}${l.qty}</td><td>${d ? `<a class="link" data-act="docView" data-id="${d.id}">${esc(l.ref)}</a>` : `<span class="sub-t">${esc(l.ref) || '-'}</span>`}</td><td>${esc(l.operator || '-')}</td></tr>`; }).join('') || '<tr><td colspan="5"><div class="empty">暂无流水</div></td></tr>'}
-  </tbody></table></div>`, 'lg');
+  openModal(`${modalHead('库存流水 · ' + esc(p.name))}<div class="m-body" style="padding:0"><div class="table-wrap"><table class="tbl compact"><thead><tr><th>时间</th><th>类型</th><th class="num">数量</th><th>单据</th><th>操作人</th></tr></thead><tbody>
+  ${logs.map(l => { const d = l.ref && docByNo(l.ref); return `<tr><td>${esc(l.date)} ${esc(l.time || '')}</td><td>${badge(l.kind, l.qty > 0 ? 'green' : 'orange')}</td><td class="num ${l.qty > 0 ? 'pos' : 'neg'}">${l.qty > 0 ? '+' : ''}${l.qty}</td><td>${d ? `<a class="link" data-act="docView" data-id="${esc(d.id)}">${esc(l.ref)}</a>` : `<span class="sub-t">${esc(l.ref) || '-'}</span>`}</td><td>${esc(l.operator || '-')}</td></tr>`; }).join('') || '<tr><td colspan="5"><div class="empty">暂无流水</div></td></tr>'}
+  </tbody></table></div></div>`, 'lg');
 }
 
 /* ---------- 出入库单：开单 ---------- */
@@ -2153,6 +2227,12 @@ function docModal(dir, productId, type0, src, editDoc) {
     ${dir === 'out' ? `<label class="field span2"><span>收货地址${estOn ? '（填了自动估算运费）' : ''}</span><input id="dAddr" value="${esc(pre ? pre.address || '' : '')}" placeholder="省 市 区 详细地址；选了客户会自动带出"></label>` : ''}
   </div>
   <div class="line-head"><b>商品明细</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称搜索，支持扫码枪录入后回车</span><button class="btn sm" id="dPick">${ic('search')}选择商品</button><button class="btn sm" id="dAdd">${ic('plus')}添加一行</button></div>
+  ${snCol ? `<div id="dSnBar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 12px;margin-bottom:8px;border-radius:10px;background:var(--panel2);border:1px solid var(--border)">
+    <span style="font-size:12px;font-weight:600;white-space:nowrap">序列号连续扫${dir === 'in' ? '入' : '出'}：</span>
+    <select id="dSnProd" class="select" style="max-width:220px"><option value="">选择序列号商品</option>${db.products.filter(p => p.serial).map(p => `<option value="${p.id}" ${p0 && p0.id === p.id ? 'selected' : ''}>${esc(p.name)}${p.sku ? ' (' + esc(p.sku) + ')' : ''}</option>`).join('')}</select>
+    <input id="dSnIn" class="select" style="flex:1;min-width:160px" placeholder="扫码枪连续扫序列号后回车，自动累加数量">
+    <span id="dSnCnt" class="badge blue plain">已扫 0 件</span>
+  </div>` : ''}
   <datalist id="dProdList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
   <div class="table-wrap"><table class="tbl items"><thead><tr><th style="min-width:190px">商品</th><th style="width:60px">单位</th><th class="num" style="width:72px">库存</th><th style="width:88px">数量</th>${dir === 'in' ? (co ? '<th style="width:100px">单价</th><th class="num" style="width:100px">金额</th>' : '') : `${co ? '<th style="width:96px">成本单价</th>' : ''}${showAmt ? '<th style="width:120px" title="默认销售价（有客户专属价优先按专属价）；影响单据金额、打印和对账，库存成本仍按加权成本">出库单价(售价)</th><th class="num" style="width:100px">金额</th>' : ''}`}${batchCol ? `<th style="min-width:${dir === 'in' ? 280 : 170}px">${dir === 'in' ? '批号 / 生产日期 / 有效期至' : '出库批次（先到期先出）'}</th>` : ''}${snCol ? '<th style="min-width:160px">序列号</th>' : ''}<th style="width:110px">备注</th><th style="width:40px"></th></tr></thead><tbody id="dItems"></tbody></table></div>
   <label class="field" style="margin-top:16px"><span>单据备注</span><textarea id="dRemark" rows="2">${esc(pre ? pre.remark : '')}</textarea></label>
@@ -2332,6 +2412,56 @@ function docModal(dir, productId, type0, src, editDoc) {
   });
   $('#dAdd').onclick = () => { draft.items.push(blank()); renderItems(true); };
   $('#dPick').onclick = () => productPicker({wh:draft.wh, have:draft.items.map(i => i.productId), onPick:ids => addPicked(draft, blank, pick, ids)});
+  if ($('#dSnIn')) {
+    const updSnCnt = () => {
+      const pid = $('#dSnProd').value;
+      const total = draft.items.filter(x => x.productId && (!pid || x.productId === pid) && (byId(db.products, x.productId) || {}).serial).reduce((n, x) => n + snList(x.serials).length, 0);
+      if ($('#dSnCnt')) $('#dSnCnt').textContent = `已扫 ${total} 件`;
+    };
+    $('#dSnProd').onchange = updSnCnt;
+    $('#dSnIn').addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const sn = $('#dSnIn').value.trim(); if (!sn) return;
+      $('#dSnIn').value = '';
+      let pid = $('#dSnProd').value;
+      // 出库时若未选商品，按在库序列号自动反查所属商品
+      if (!pid && dir === 'out') {
+        const hit = db.serials.find(r => r.sn === sn && r.status === '在库');
+        if (hit) { pid = hit.productId; $('#dSnProd').value = pid; }
+      }
+      if (!pid) {
+        const firstSn = draft.items.find(x => x.productId && (byId(db.products, x.productId) || {}).serial);
+        if (firstSn) { pid = firstSn.productId; $('#dSnProd').value = pid; }
+      }
+      const p = pid && byId(db.products, pid);
+      if (!p || !p.serial) return toast('请先选择要连续扫码的序列号商品', 'error');
+      if (dir === 'out') {
+        const sr = db.serials.find(r => r.productId === p.id && r.sn === sn && r.status === '在库' && r.wh === draft.wh);
+        if (!sr) return toast(`序列号 ${sn} 不在${whName(draft.wh)}在库列表中`, 'error');
+      } else {
+        const sr = db.serials.find(r => r.productId === p.id && r.sn === sn && r.status === '在库');
+        if (sr) return toast(`序列号 ${sn} 已在库（${whName(sr.wh)}），不能重复入库`, 'error');
+      }
+      const allUsed = new Set(draft.items.flatMap(x => snList(x.serials)));
+      if (allUsed.has(sn)) return toast(`序列号 ${sn} 已在本单扫描过`, 'error');
+      let row = draft.items.find(x => x.productId === p.id);
+      if (!row) {
+        const emptyIdx = draft.items.findIndex(x => !x.productId);
+        const idx = emptyIdx >= 0 ? emptyIdx : (draft.items.push(blank()) - 1);
+        Object.assign(draft.items[idx], { productId:p.id, unit:p.unit, qty:0, price:dir === 'in' ? (p.cost || '') : '', sale:dir === 'out' ? outSalePrice(p, p.unit) : '', saleAuto:dir === 'out', serials:'' });
+        row = draft.items[idx];
+      }
+      const list = [...snList(row.serials), sn];
+      row.serials = list.join('\n');
+      row.unit = p.unit;
+      row.qty = list.length;
+      renderItems();
+      updSnCnt();
+      $('#dSnIn').focus();
+    });
+    setTimeout(updSnCnt, 0);
+  }
   const save = async andPrint => {
     const items = draft.items.filter(i => i.productId);
     if (!items.length) return toast('请至少添加一个商品', 'error');
@@ -2351,7 +2481,8 @@ function docModal(dir, productId, type0, src, editDoc) {
     const body = {dir, type:$('#dType').value, ...(dir === 'in' && $('#dType').value === '生产入库' && $('#dUseBom') && $('#dUseBom').checked ? {bom:true} : {}), ...(draft.srcOrderId ? {srcOrderId:draft.srcOrderId, srcOrderKind:draft.srcOrderKind, allowOver:true} : {}), wh:draft.wh, date:$('#dDate').value, party:$('#dParty').value.trim(), handler:$('#dHandler').value.trim(), project:$('#dProject').value.trim(), remark:$('#dRemark').value.trim(),
       address:$('#dAddr') ? $('#dAddr').value.trim() : '', items:items.map(i => ({productId:i.productId, unit:i.unit, qty:+i.qty, ...(dir === 'in' && (co || draft.srcOrderId) && i.price !== '' ? {price:i.price} : {}), ...(showAmt && dir === 'out' && i.sale !== '' ? {sale:i.sale} : {}), note:i.note, batchNo:i.batchNo, prodDate:i.prodDate, expDate:i.expDate, ...(dir === 'out' && i.preferBatch ? {preferBatch:{id:i.preferBatch}} : {}), ...(byId(db.products, i.productId).serial ? {serials:snList(i.serials)} : {})}))};
     $('#dSave').disabled = true; if ($('#dSavePrint')) $('#dSavePrint').disabled = true;
-    const r = await mutate(editDoc ? 'PUT' : 'POST', editDoc ? '/api/stockdocs/' + editDoc.id : '/api/stockdocs', body, r => docTitle(dir) + (editDoc ? '已修改：' : r.status === '待审核' ? '已提交审核：' : '已保存：') + r.no);
+    const snTotal = items.reduce((n, i) => n + ((byId(db.products, i.productId) || {}).serial ? snList(i.serials).length : 0), 0);
+    const r = await mutate(editDoc ? 'PUT' : 'POST', editDoc ? '/api/stockdocs/' + editDoc.id : '/api/stockdocs', body, r => docTitle(dir) + (editDoc ? '已修改：' : r.status === '待审核' ? '已提交审核：' : '已保存：') + r.no + (snTotal ? `（共${dir === 'in' ? '入库' : '出库'}序列号 ${snTotal} 件）` : ''));
     if (!r) { $('#dSave').disabled = false; if ($('#dSavePrint')) $('#dSavePrint').disabled = false; return; }
     ui.invTab = 'docs'; if (current() === 'inventory') render();
     if (andPrint) docPrint(r.id);
@@ -2455,7 +2586,9 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
   const val = (k, it, n) => ({idx:n + 1, sku:esc(it.p.sku), barcode:esc(it.p.barcode || ''), name:esc(it.p.name), spec:esc(it.p.spec || ''), unit:esc(it.unit), qty:it.qty,
     price:fmtPrice(it.price), amount:it.amount.toFixed(2), category:esc(it.category || ''), batch:esc(it.batch), regNo:esc(it.regNo), regHolder:esc(it.regHolder), manufacturer:esc(it.manufacturer), expiry:esc(it.expiry),
     note:esc(batchInNote ? [it.batch && '批次 ' + it.batch, it.note].filter(Boolean).join('；') : it.note)})[k];
-  const colStyle = c => [c.w ? `width:${c.w}mm` : '', `text-align:${c.al || (c.k === 'idx' || c.k === 'unit' ? 'center' : ['qty', 'price', 'amount'].includes(c.k) ? 'right' : 'left')}`].join(';');
+  const safeW = w => Number.isFinite(+w) && +w >= 10 && +w <= 120 ? Math.round(+w) : 0;
+  const safeAl = al => ['left', 'center', 'right'].includes(al) ? al : '';
+  const colStyle = c => [safeW(c.w) ? `width:${safeW(c.w)}mm` : '', `text-align:${safeAl(c.al) || (c.k === 'idx' || c.k === 'unit' ? 'center' : ['qty', 'price', 'amount'].includes(c.k) ? 'right' : 'left')}`].join(';');
   const rows = d.items.map((it, n) => `<tr>${cols.map(c => `<td style="${colStyle(c)}">${val(c.k, it, n)}</td>`).join('')}</tr>`);
   for (let k = rows.length; k < minRows; k++) rows.push(`<tr>${'<td>&nbsp;</td>'.repeat(cols.length)}</tr>`);
   const amt = sum(d.items, i => i.amount), first = cols.findIndex(c => c.k === 'qty' || c.k === 'amount');
@@ -2475,11 +2608,12 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
   const signs = String(tpl.signs || '').split(/[,，、]+/).map(x => x.trim()).filter(Boolean);
   const lines = t => String(t || '').split('\n').filter(x => x.trim()).map(x => `<div>${esc(x)}</div>`).join('');
   const headText = `<h1>${esc(db.settings.company)}</h1>${tpl.header ? `<div class="s-head">${lines(tpl.header)}</div>` : ''}<h2>${esc(tpl.title || K.name)}</h2>`;
-  const lp = tpl.logoPos || 'inline';
-  const titleHtml = !tpl.logo ? `<div class="s-title">${headText}</div>`
-    : lp === 'inline' ? `<div class="s-title s-logo-inline"><div class="s-title-row"><img class="s-logo" src="${tpl.logo}" alt=""><div class="s-title-txt">${headText}</div></div></div>`
-    : lp === 'left' || lp === 'right' ? `<div class="s-title s-logo-${lp}"><img class="s-logo" src="${tpl.logo}" alt=""><div class="s-title-txt">${headText}</div></div>`
-    : `<div class="s-title s-logo-top"><img class="s-logo" src="${tpl.logo}" alt="">${headText}</div>`;
+  const safeLogo = typeof tpl.logo === 'string' && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(tpl.logo) ? tpl.logo : '';
+  const lp = ['inline', 'left', 'right', 'top'].includes(tpl.logoPos) ? tpl.logoPos : 'inline';
+  const titleHtml = !safeLogo ? `<div class="s-title">${headText}</div>`
+    : lp === 'inline' ? `<div class="s-title s-logo-inline"><div class="s-title-row"><img class="s-logo" src="${safeLogo}" alt=""><div class="s-title-txt">${headText}</div></div></div>`
+    : lp === 'left' || lp === 'right' ? `<div class="s-title s-logo-${lp}"><img class="s-logo" src="${safeLogo}" alt=""><div class="s-title-txt">${headText}</div></div>`
+    : `<div class="s-title s-logo-top"><img class="s-logo" src="${safeLogo}" alt="">${headText}</div>`;
   const ppCls = ppOn ? (` slip-preprint` + (+tpl.rowH >= 4 ? ' has-rh' : '')) : '';
   const ppVars = ppOn ? `;--ox:${+tpl.offsetX || 0}mm;--oy:${+tpl.offsetY || 0}mm;--rh:${+tpl.rowH || 0}mm` : '';
   const extraDiscount = showMoney && d.discount && cols.some(c => c.k === 'amount') ? `<span class="pp-lbl">优惠 </span>-${d.discount.toFixed(2)}　<span class="pp-lbl">实际合计 </span><b>${(amt - d.discount).toFixed(2)}</b>` : '';
@@ -3001,14 +3135,17 @@ function statementData(name, from, to, priceBy) {
   for (const [kind, coll] of [['sales', 'customers'], ['purchase', 'suppliers']]) {
     const C = ORD[kind], party = can(kind) && db[coll].find(x => x.name === name); if (!party) continue;
     const orders = db[C.db].filter(o => o[C.partyKey] === party.id && o.status !== '已作废'), nos = new Set(orders.map(o => o.no));
-    const pays = db.finance.filter(f => nos.has(f.ref) && f.category === (kind === 'sales' ? '销售收款' : '采购付款'));
+    const pps = (db.partyPayments || []).filter(p => p.partyType === (kind === 'sales' ? 'customer' : 'supplier') && p.partyId === party.id);
+    const ppFinIds = new Set(pps.map(p => p.financeId).filter(Boolean));
+    const pays = db.finance.filter(f => !ppFinIds.has(f.id) && nos.has(f.ref) && f.category === (kind === 'sales' ? '销售收款' : '采购付款'));
     // 退货冲减应收 / 应付，退款（现金退回）再加回来；冲抵原单不走现金，两边自然抵平
     const R = ORD[kind + 'Return'], rets = db[R.db].filter(o => o[R.partyKey] === party.id && o.status !== '已作废'), rnos = new Set(rets.map(o => o.no));
     const refunds = db.finance.filter(f => rnos.has(f.ref) && f.category === (kind === 'sales' ? '销售退款' : '采购退款'));
-    const open = (+party.openingBalance || 0) + sum(orders.filter(o => o.date < from), orderTotal) - sum(pays.filter(f => f.date < from), f => f.amount) - sum(rets.filter(o => o.date < from), orderTotal) + sum(refunds.filter(f => f.date < from), f => f.amount);
+    const open = (+party.openingBalance || 0) + sum(orders.filter(o => o.date < from), orderTotal) - sum(pays.filter(f => f.date < from), f => f.amount) - sum(pps.filter(p => p.date < from), p => +p.amount || 0) - sum(rets.filter(o => o.date < from), orderTotal) + sum(refunds.filter(f => f.date < from), f => f.amount);
     const inP = x => x.date >= from && x.date <= to;
     const ev = [...orders.filter(inP).map(o => ({date:o.date, no:o.no, text:C.doc, add:orderTotal(o), sub:0})),
       ...pays.filter(inP).map(f => ({date:f.date, no:f.ref, text:C.payWord + '（' + acctName(f) + '）', add:0, sub:f.amount})),
+      ...pps.filter(inP).map(p => { const refs = ppAllocs(p).map(a => a.no).filter(Boolean); return {date:p.date, no:refs.slice(0, 3).join('、') + (refs.length > 3 ? `等${refs.length}单` : '') || '往来款', text:(kind === 'sales' ? '往来收款' : '往来付款') + '（' + acctName({account:p.account}) + '）' + (p.note ? ' ' + p.note : ''), add:0, sub:+p.amount || 0}; }),
       ...rets.filter(inP).map(o => ({date:o.date, no:o.no, text:R.doc, add:0, sub:orderTotal(o)})),
       ...refunds.filter(inP).map(f => ({date:f.date, no:f.ref, text:'退款（' + acctName(f) + '）', add:f.amount, sub:0}))].sort((a, b) => a.date.localeCompare(b.date));
     let bal = open; ev.forEach(e => { bal += e.add - e.sub; e.bal = bal; });
@@ -3991,7 +4128,7 @@ function orderModal(kind, id, srcId0) {
     <div class="field"><span>${C.partyLabel} <i>*</i></span><div class="pcombo" id="oPartyBox"><input type="hidden" id="oParty" value="${esc(party0)}"><input id="oPartyIn" autocomplete="off" value="${esc((byId(db[C.party], party0) || {}).name || '')}" placeholder="搜索${C.partyLabel}名称 / 联系人 / 电话${can('parties') ? '，或直接输入新建' : ''}"><button type="button" class="pcombo-clr" title="清空" ${party0 ? '' : 'hidden'}>×</button><div class="pcombo-drop"></div></div></div>
     <label class="field"><span>单据日期 <i>*</i></span><input type="date" id="oDate" value="${o ? o.date : today()}"></label>
     <label class="field"><span>${kind === 'sales' ? '业务员' : kind === 'purchase' ? '采购员' : '经手人'}</span><input id="oHandler" list="oHList" maxlength="32" value="${esc(o ? o.handler || o.creator || '' : ME.name)}" placeholder="默认开单人"><datalist id="oHList">${handlerNames().map(n => `<option value="${esc(n)}">`).join('')}</datalist></label>
-    ${kind === 'sales' ? `<label class="field span2"><span>收货地址（选填）</span><input id="oAddress" maxlength="200" value="${esc(o ? o.address || '' : '')}" placeholder="默认带出客户档案地址，可改成这次订单的收货地址"></label>` : ''}
+    ${kind === 'sales' ? `<div class="field span2"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px"><span>收货地址（选填）</span><div style="display:flex;gap:6px;align-items:center"><input id="oAddrPaste" class="select" style="width:240px;font-size:12px" placeholder="粘贴姓名+电话+地址，自动识别"><button type="button" class="btn sm" id="oAddrParse">智能识别</button></div></div><input id="oAddress" maxlength="200" value="${esc(o ? o.address || '' : '')}" placeholder="默认带出客户档案地址，可改成这次订单的收货地址"></div>` : ''}
     ${C.src ? `<label class="field span2"><span>关联原${S0.doc}（只列出${C.srcOk.join(' / ')}的单子；选了按原单带出商品，限退未退的数量）</span><select id="oSrc">${srcOpts(party0)}</select></label>` : ''}
   </div>
   <div class="line-head"><b>${C.src ? '退货明细' : '商品明细'}</b><span class="sub-t" style="margin-left:10px;margin-right:auto">可输入编码 / 条码 / 名称搜索，支持扫码枪录入后回车</span><button class="btn sm" id="oPick">${ic('search')}选择商品</button><button class="btn sm" id="oAdd">${ic('plus')}添加一行</button></div>
@@ -4086,6 +4223,20 @@ function orderModal(kind, id, srcId0) {
     fillAddress();
     $('#oParty').addEventListener('change', fillAddress);
     $('#oAddress').addEventListener('input', () => { addressAuto = false; });
+    if ($('#oAddrParse')) {
+      const doParse = () => {
+        const raw = $('#oAddrPaste').value.trim(); if (!raw) return toast('请先粘贴收货信息', 'error');
+        const r = parseSmartAddr(raw);
+        if (!r.address && !r.name && !r.phone) return toast('未能识别收货信息', 'error');
+        addressAuto = false;
+        const formatted = [r.address, r.name && '收件人:' + r.name, r.phone].filter(Boolean).join(' ');
+        $('#oAddress').value = formatted.slice(0, 200);
+        $('#oAddrPaste').value = '';
+        toast('已识别：' + [r.province, r.city, r.district, r.name, r.phone].filter(Boolean).join(' / '), 'success');
+      };
+      $('#oAddrParse').onclick = doParse;
+      $('#oAddrPaste').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doParse(); } });
+    }
   }
   if (C.src) {
     $('#oParty').onchange = e => { const s = srcOf(); if (s && s[S0.partyKey] !== e.target.value) draft.srcId = ''; $('#oSrc').innerHTML = srcOpts(e.target.value); reprice(e.target.value); renderItems(); };
@@ -4150,6 +4301,7 @@ function orderView(kind, id) {
       ${o.offset ? `<tr><td>-</td><td>退货冲抵</td><td class="num">${money(o.offset)}</td><td class="sub-t">${C.src ? '抵扣原单 ' + esc(o.srcNo) + ' 的欠款' : '由退货单抵扣'}</td><td></td></tr>` : ''}</tbody></table>` : ''}
     ${(() => { const R = ORD[kind + 'Return'], rs = R ? db[R.db].filter(r => r.srcId === o.id) : []; return rs.length ? `<h4 style="margin:18px 0 8px">退货记录</h4><table class="tbl compact"><tbody>${rs.map(r => `<tr><td><a class="link" data-act="orderView" data-id="${kind}Return|${r.id}">${r.no}</a></td><td>${r.date}</td><td>${badge(r.status)}</td><td class="num">${money(orderTotal(r))}</td></tr>`).join('')}</tbody></table>` : ''; })()}
     ${kind === 'sales' && o.status !== '待发货' ? shipBlock('sales', o, o.status !== '已作废') : ''}
+    ${(kind === 'sales' || kind === 'salesReturn') ? deliveryBlock(kind, o, o.status !== '已作废') : ''}
   </div></div>
   <div class="m-foot" style="flex-wrap:wrap"><div class="ops" style="margin-right:auto">${orderOps(kind, o).replace(tbtn('查看', 'orderView', kind + '|' + o.id), '')}</div>
     <select class="select" id="oPaper">${Object.entries(PAPERS).map(([k, v]) => `<option value="${k}" ${(prefs.paper || 'a4') === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select>${tplPickHtml(kind, 'oTpl')}
@@ -4227,6 +4379,9 @@ function orderFulfillModal(kind, o) {
   const defaultWh = pickFulfillWh(lines, isSales);
   const tolPct = db.settings.overTolerancePct != null ? +db.settings.overTolerancePct : 0;
   const serialCol = lines.some(x => x.p.serial), batchCol = dir === 'in' && lines.some(x => x.p.batch);
+  const canInlineShip = isSales && shipOn() && can('ship.edit') && db.carriers.some(c => c.enabled);
+  const enabledCarriers = canInlineShip ? db.carriers.filter(c => c.enabled) : [];
+  const activeEmps = (db.employees || []).filter(e => e.status !== '离职');
   openModal(`${modalHead((isSales ? '分批发货' : '分批入库') + ' · ' + o.no)}<div class="m-body">
     <p class="sub-t" style="margin:0 0 10px">${isSales ? '本次发多少就填多少，未发数量留在订单里，可以以后再发。' : '本次到多少就填多少，未到数量留在订单里，可以以后再入库。'}${tolPct > 0 ? `（允许超量容差 ${tolPct}%）` : ''}确认后会生成一张关联${isSales ? '销售出库单' : '采购入库单'}，库存只在这里扣减一次。</p>
     ${multiWh() ? `<label class="field" style="max-width:320px"><span>${isSales ? '发货' : '入库'}仓库</span><select id="ofWh">${whOpts(defaultWh)}</select></label>` : ''}
@@ -4235,8 +4390,37 @@ function orderFulfillModal(kind, o) {
         <td><input data-of-qty="${x.k}" type="number" min="${x.p.dec ? '0.01' : '1'}" step="${x.p.dec ? '0.01' : '1'}" value="${+x.qty.toFixed(4)}"></td><td class="num of-stock">${inUnit(whQty(x.p, defaultWh), x.p, x.unit)}</td>
         ${serialCol ? `<td>${x.p.serial ? `<textarea data-of-sn="${x.k}" rows="2" placeholder="每行一个，共 ${x.left} 个"></textarea>` : '-'}</td>` : ''}
         ${batchCol ? `<td>${x.p.batch ? `<div style="display:flex;gap:4px"><input data-of-bno="${x.k}" value="${esc(o.no)}" placeholder="批号" style="min-width:90px"><input data-of-pd="${x.k}" type="date"><input data-of-ed="${x.k}" type="date"></div>` : '-'}</td>` : ''}
-      </tr>`; }).join('')}</tbody></table></div></div>
+      </tr>`; }).join('')}</tbody></table></div>
+    ${isSales ? `<div style="margin-top:14px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--panel2)">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:600">${ic('truck')}配送 / 发货方式（选填）</span>
+        <select id="ofDelivMode" class="select" style="width:180px">
+          <option value="none">暂不登记配送</option>
+          ${canInlineShip ? '<option value="express">快递发货（填单号）</option>' : ''}
+          <option value="worker">门店小工送货（派任务）</option>
+          <option value="pickup">客户自提</option>
+        </select>
+      </div>
+      ${canInlineShip ? `<div id="ofExpressBox" class="form-grid" style="display:none;gap:8px 10px">
+        <label class="field" style="margin:0"><span>快递公司</span><select id="ofCarrier">${enabledCarriers.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></label>
+        <label class="field" style="margin:0"><span>主快递单号</span><input id="ofTrackNo" placeholder="扫码或输入快递单号"></label>
+        <label class="field" style="margin:0"><span>称重 kg（选填）</span><input id="ofWeight" type="number" step="any" min="0" placeholder="留空按商品估重"></label>
+        <label class="field" style="margin:0"><span>子单号（一票多件，逗号分隔）</span><input id="ofSubTracks" placeholder="选填"></label>
+      </div>` : ''}
+      <div id="ofWorkerBox" class="form-grid" style="display:none;gap:8px 10px">
+        <label class="field" style="margin:0"><span>指派送货小工</span><input id="ofWorker" list="ofWorkerList" placeholder="选择员工或输入姓名"><datalist id="ofWorkerList">${activeEmps.map(e => `<option value="${esc(e.name)}">`).join('')}</datalist></label>
+        <label class="field" style="margin:0"><span>送货备注</span><input id="ofDelivNote" placeholder="如：今日下午送到、放冷库"></label>
+      </div>
+    </div>` : ''}</div>
     <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="ofOk">${isSales ? '确认发货' : '确认入库'}</button></div>`, 'lg');
+  if ($('#ofDelivMode')) {
+    const syncDeliv = () => {
+      const m = $('#ofDelivMode').value;
+      if ($('#ofExpressBox')) $('#ofExpressBox').style.display = m === 'express' ? '' : 'none';
+      if ($('#ofWorkerBox')) $('#ofWorkerBox').style.display = m === 'worker' ? '' : 'none';
+    };
+    $('#ofDelivMode').onchange = syncDeliv;
+  }
   const whOf = () => $('#ofWh') ? $('#ofWh').value : defaultWh;
   if ($('#ofWh')) $('#ofWh').onchange = () => { const w = whOf(); document.querySelectorAll('#ofRows tr[data-k]').forEach(tr => { const x = lines.find(y => y.k === +tr.dataset.k); tr.querySelector('.of-stock').textContent = inUnit(whQty(x.p, w), x.p, x.unit); }); };
   $('#ofOk').onclick = async () => {
@@ -4260,7 +4444,51 @@ function orderFulfillModal(kind, o) {
       const lack = Object.entries(need).map(([pid, q]) => ({ p:byId(db.products, pid), q })).filter(x => !x.p || whQty(x.p, wh) < x.q);
       if (lack.length) return toast((multiWh() ? whName(wh) : '') + '库存不足：' + lack.map(x => x.p ? x.p.name + '（缺 ' + (x.q - whQty(x.p, wh)) + '）' : '商品已删除').join('、'), 'error');
     }
-    await mutate('POST', `/api/orders/${kind}/${o.id}/${isSales ? 'ship' : 'inbound'}`, { wh, items, allowOver:true }, docApproveOn(dir) ? '本次' + (isSales ? '发货' : '入库') + '已提交审核，请到库存管理审核对应单据' : (isSales ? '本次发货已提交，已生成销售出库单并同步库存' : '本次入库已提交，已生成采购入库单并同步库存'));
+    const dMode = isSales && $('#ofDelivMode') ? $('#ofDelivMode').value : 'none';
+    const trackNo = dMode === 'express' && $('#ofTrackNo') ? $('#ofTrackNo').value.trim() : '';
+    const cust = byId(db.customers, o.customerId) || {};
+    const shipPayload = dMode === 'express' && trackNo ? {
+      carrierId: $('#ofCarrier').value,
+      srcType: 'sales', srcId: o.id, customerId: o.customerId || '',
+      address: o.address || cust.address || '',
+      party: cust.name || '',
+      mobile: cust.phone || '',
+      subTracks: $('#ofSubTracks') ? $('#ofSubTracks').value.trim() : '',
+      packages: [{ trackNo, weight: $('#ofWeight') ? $('#ofWeight').value : '' }]
+    } : null;
+    const workerName = dMode === 'worker' ? ($('#ofWorker').value.trim() || '') : '';
+    if (dMode === 'worker' && !workerName) return toast('请填写或选择送货小工姓名', 'error');
+    const delivPayload = dMode === 'worker' || dMode === 'pickup' ? {
+      date: today(),
+      mode: dMode === 'pickup' ? '客户自提' : '小工送货',
+      status: dMode === 'pickup' ? '已完成' : '待派送',
+      driver: dMode === 'pickup' ? '客户自提' : workerName,
+      empId: dMode === 'worker' ? ((activeEmps.find(e => e.name === workerName) || {}).id || '') : '',
+      phone: dMode === 'worker' ? ((activeEmps.find(e => e.name === workerName) || {}).phone || cust.phone || '') : (cust.phone || ''),
+      party: cust.name || '', customerId: o.customerId || '',
+      address: o.address || cust.address || '',
+      srcType: 'sales', srcId: o.id, srcNo: o.no,
+      amount: 0, paid: false,
+      note: (dMode === 'worker' && $('#ofDelivNote') ? $('#ofDelivNote').value.trim() : '') || `销售单 ${o.no} ${dMode === 'pickup' ? '客户自提' : '小工配送'}`
+    } : null;
+    const res = await mutate('POST', `/api/orders/${kind}/${o.id}/${isSales ? 'ship' : 'inbound'}`, { wh, items, allowOver:true }, docApproveOn(dir) ? '本次' + (isSales ? '发货' : '入库') + '已提交审核，请到库存管理审核对应单据' : (isSales ? '本次发货已提交，已生成销售出库单并同步库存' : '本次入库已提交，已生成采购入库单并同步库存'));
+    if (res && shipPayload) {
+      try {
+        await api('POST', '/api/shipments', shipPayload);
+        await reload(); render();
+        toast(`已同步登记快递单号 ${trackNo}`, 'success');
+      } catch (err) {
+        toast('发货已完成，但快递登记失败：' + err.message + '（可在订单详情补充登记）', 'error');
+      }
+    } else if (res && delivPayload) {
+      try {
+        await api('POST', '/api/deliveries', delivPayload);
+        await reload(); render();
+        toast(dMode === 'pickup' ? '已记录客户自提' : `已派发给小工「${workerName}」送货`, 'success');
+      } catch (err) {
+        toast('发货已完成，但配送任务创建失败：' + err.message, 'error');
+      }
+    }
   };
 }
 function orderAct(action, kind, id) {
@@ -4331,6 +4559,56 @@ const shipText = (type, id) => shipsOf(type, id).map(s => carrierLabel(s.carrier
 const shipFee = s => s.billFee != null ? s.billFee : s.estFee;  // 对过账的按账单金额，否则按估算
 const diffHtml = d => Math.abs(d) < 0.005 ? '<span class="sub-t">0</span>' : `<span class="${d > 0 ? 'neg' : 'pos'}">${d > 0 ? '+' : ''}${d.toFixed(2)}</span>`;
 const provOpts = (sel, blank = '按地址自动识别') => `<option value="">${blank}</option>` + (META.provinces || []).map(p => `<option ${p === sel ? 'selected' : ''}>${p}</option>`).join('');
+// 收货信息智能解析：从粘贴文本中提取姓名、电话、省/市/区县和详细地址
+function parseSmartAddr(raw) {
+  let s = String(raw || '').replace(/[\r\n\t]+/g, ' ').replace(/[，,;；|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const out = { name: '', phone: '', province: '', city: '', district: '', address: '' };
+  if (!s) return out;
+  // 提取手机号或固话
+  const telM = s.match(/(?:\+?86[- ]?)?(1[3-9]\d[\s-]?\d{4}[\s-]?\d{4}|0\d{2,3}[-\s]?\d{7,8}(?:-\d{1,4})?)/);
+  if (telM) {
+    out.phone = telM[1].replace(/\s+/g, '');
+    s = (s.slice(0, telM.index) + ' ' + s.slice(telM.index + telM[0].length)).trim();
+  }
+  // 清理常见标签前缀
+  s = s.replace(/(?:收件人|收货人|联系人|姓名|电话|手机号|手机|联系方式|收货地址|收件地址|详细地址|地址)\s*[:：]\s*/g, ' ').replace(/\s+/g, ' ').trim();
+  const provs = META.provinces || ['北京','天津','上海','重庆','河北','山西','辽宁','吉林','黑龙江','江苏','浙江','安徽','福建','江西','山东','河南','湖北','湖南','广东','海南','四川','贵州','云南','陕西','甘肃','青海','内蒙古','广西','西藏','宁夏','新疆'];
+  const tokens = s.split(' ').filter(Boolean);
+  let addrIdx = -1;
+  for (let i = 0; i < tokens.length; i++) {
+    const tk = tokens[i];
+    if (provs.some(p => tk.startsWith(p)) || /[省市区县镇乡路街道号巷弄村组幢栋楼室]/.test(tk)) { addrIdx = i; break; }
+  }
+  let nameTokens = [], addrTokens = [];
+  if (addrIdx >= 0) {
+    nameTokens = tokens.slice(0, addrIdx);
+    addrTokens = tokens.slice(addrIdx);
+    // 如果末尾还有一个短中文姓名（地址在前、姓名在后）
+    if (!nameTokens.length && addrTokens.length > 1) {
+      const last = addrTokens[addrTokens.length - 1];
+      if (/^[\u4e00-\u9fa5]{2,4}$/.test(last) && !/[省市区县镇乡路街道号楼室]/.test(last)) {
+        nameTokens = [addrTokens.pop()];
+      }
+    }
+  } else if (tokens.length >= 2) {
+    nameTokens = [tokens[0]];
+    addrTokens = tokens.slice(1);
+  } else {
+    addrTokens = tokens;
+  }
+  out.name = nameTokens.join(' ').slice(0, 30);
+  out.address = addrTokens.join('').trim();
+  if (out.address) {
+    for (const p of provs) {
+      if (out.address.includes(p)) { out.province = p; break; }
+    }
+    const cm = out.address.match(/([\u4e00-\u9fa5]{2,8}(?:市|自治州|地区|盟))/);
+    if (cm) out.city = cm[1];
+    const dm = out.address.match(/([\u4e00-\u9fa5]{2,8}(?:区|县|旗|市辖区))/);
+    if (dm && dm[1] !== out.city) out.district = dm[1];
+  }
+  return out;
+}
 function shipSrcLink(s) {
   if (!s.srcNo) return '<span class="sub-t">-</span>';
   if (s.srcType === 'sales') return byId(db.sales, s.srcId) ? `<a class="link" data-act="orderView" data-id="sales|${s.srcId}">${esc(s.srcNo)}</a>` : esc(s.srcNo);
@@ -4351,6 +4629,49 @@ function shipBlock(type, o, canAdd) {
   return `<div class="line-head"><b>快递</b>${add}</div>` + (rows.length ? `<table class="tbl compact"><thead><tr><th>快递单号</th><th>快递</th><th>省份</th><th class="num">计费重</th><th class="num">运费</th><th>状态</th></tr></thead><tbody>
     ${rows.map(s => `<tr><td><a class="link" data-act="shipView" data-id="${s.id}">${esc(s.trackNo)}</a></td><td>${esc(carrierLabel(s.carrierId))}</td><td>${esc(s.province)}</td><td class="num">${s.chargeWeight}kg</td>
       <td class="num">${money(shipFee(s))}${s.billFee != null ? '' : ' <span class="sub-t">估</span>'}</td><td>${badge(s.status, SHIP_STATUS[s.status])}</td></tr>`).join('')}</tbody></table>` : '<p class="sub-t">还没有登记快递单号</p>');
+}
+function deliveryBlock(type, o, canAdd) {
+  const rows = (db.deliveries || []).filter(d => d.srcType === type && d.srcId === o.id);
+  const canDispatch = canAdd && (can('sales') || can('ship.edit'));
+  if (!rows.length && !canDispatch) return '';
+  const btnLabel = type === 'salesReturn' ? '派小工取货 / 客户自送' : '门店派送 / 自提';
+  const stClr = { '待派送': 'orange', '配送中': 'blue', '已完成': 'green' };
+  return `<div class="line-head"><b>${type === 'salesReturn' ? '退货取货 / 门店配送' : '门店配送 / 客户自提'}</b>${canDispatch ? `<button class="btn sm" data-act="deliveryNew" data-id="${type}|${o.id}">${ic('truck')}${btnLabel}</button>` : ''}</div>` + (rows.length ? `<table class="tbl compact"><thead><tr><th>日期</th><th>方式</th><th>送/取货人</th><th>地址</th><th>状态</th><th style="width:1%"></th></tr></thead><tbody>
+    ${rows.map(d => `<tr><td>${esc(d.date || '')}</td><td>${badge(d.mode || '临时送货', 'blue')}</td><td>${esc(d.driver || '-')}${d.phone ? ` <span class="sub-t">${esc(d.phone)}</span>` : ''}</td><td style="white-space:normal">${esc(d.address || '-')}</td><td>${badge(d.status || '已完成', stClr[d.status || '已完成'] || 'gray')}</td><td>${canDispatch && d.status && d.status !== '已完成' ? `<button class="btn sm" data-act="adhocDone" data-id="${esc(d.id)}">标记送达</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '');
+}
+function deliveryDispatchModal(type, id) {
+  const isRet = type === 'salesReturn', o = byId(db[ORD[type].db], id); if (!o) return;
+  const c = byId(db.customers, o.customerId) || {};
+  const emps = (db.employees || []).filter(e => e.status !== '离职');
+  const modes = isRet ? ['退货取货', '客户自送'] : ['小工送货', '客户自提'];
+  openModal(`${modalHead(isRet ? `退货取货派单 · ${o.no}` : `门店派送 · ${o.no}`)}<div class="m-body">
+    <div class="grid g2">
+      <label class="field"><span>配送方式</span><select id="ddMode">${modes.map(m => `<option value="${m}">${m}</option>`).join('')}</select></label>
+      <label class="field"><span>日期</span><input type="date" id="ddDate" value="${today()}"></label>
+      <label class="field"><span>指派小工 / 员工</span><select id="ddEmp"><option value="">手动填写</option>${emps.map(e => `<option value="${e.id}" data-phone="${esc(e.phone || '')}">${esc(e.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>送/取货人姓名</span><input id="ddDriver" placeholder="如：王师傅（自送/自提可留空）"></label>
+      <label class="field"><span>联系电话</span><input id="ddPhone" value="${esc(c.phone || '')}"></label>
+      <label class="field"><span>补贴 / 运费</span><input type="number" step="0.01" id="ddFee" value="0"></label>
+    </div>
+    <label class="field" style="margin-top:8px"><span>${isRet ? '取货' : '送货'}地址</span><input id="ddAddr" value="${esc(o.address || c.address || '')}"></label>
+    <label class="field" style="margin-top:8px"><span>备注</span><input id="ddNote" placeholder="${isRet ? '如：预约下午取货' : '如：送货上门电话联系'}"></label>
+  </div><div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="ddSave">确认派单</button></div>`);
+  $('#ddEmp').onchange = () => {
+    const opt = $('#ddEmp').selectedOptions[0];
+    if (opt && opt.value) { $('#ddDriver').value = opt.textContent; if (opt.dataset.phone) $('#ddPhone').value = opt.dataset.phone; }
+  };
+  $('#ddSave').onclick = async () => {
+    const mode = $('#ddMode').value, driver = $('#ddDriver').value.trim() || (mode.includes('客户') ? (c.name || mode) : '');
+    if (!driver) return toast('请填写或选择送/取货人', 'error');
+    const body = {
+      date: $('#ddDate').value || today(), mode, status: mode.includes('客户') ? '已完成' : '待派送',
+      empId: $('#ddEmp').value || '', driver, phone: $('#ddPhone').value.trim(),
+      amount: +$('#ddFee').value || 0, paid: false,
+      party: c.name || '', customerId: o.customerId || '', address: $('#ddAddr').value.trim(),
+      srcType: type, srcId: o.id, srcNo: o.no, note: $('#ddNote').value.trim()
+    };
+    if (await mutate('POST', '/api/deliveries', body, '已登记' + mode)) { closeModal(); orderView(type, o.id); }
+  };
 }
 function shipOps(s, inView) {
   const b = inView ? [] : [tbtn('查看', 'shipView', s.id)];
@@ -4376,15 +4697,17 @@ function pageShipping() {
   <div class="card" id="shipCard"></div>`;
   const card = $('#shipCard'), carOpts = db.carriers.map(c => [c.id, c.name]);
   if (ui.shipTab === 'list') {
+    const custOpts = db.customers.map(c => [c.id, c.name]);
     const filters = [
       {key:'car', label:'全部快递', options:carOpts, test:(s, v) => s.carrierId === v},
+      ...(custOpts.length ? [{key:'cust', label:'全部客户', options:custOpts, test:(s, v) => s.customerId === v || (byId(db.customers, v) || {}).name === s.party}] : []),
       {key:'st', label:'全部状态', options:Object.keys(SHIP_STATUS), test:(s, v) => s.status === v},
       {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(s, v) => monthKey(s.date) === v},
       {key:'prov', label:'全部省份', options:META.provinces || [], test:(s, v) => s.province === v}];
     filters.push({key:'track', label:'物流状态', options:[['3', '已签收'], ['4', '问题件'], ['open', '未签收'], ['none', '未查询']], test:(s, v) => v === 'open' ? !(s.track && s.track.state === '3') : v === 'none' ? !s.track : s.track && s.track.state === v});
-    card.innerHTML = toolbar('ships', {placeholder:'搜索快递单号 / 单据 / 收件人 / 地址', filters, buttons:(kdn().ready ? `<button class="btn" data-act="trackAll" title="最近 30 天未签收的运单，每次最多 50 单">${ic('refresh')}刷新物流</button>` : '') + `<button class="btn" data-act="export" data-id="ships">${ic('download')}导出</button>`}) + '<div id="list-ships"></div>';
-    mountList('ships', {rows:() => db.shipments, search:s => s.trackNo + s.no + (s.srcNo || '') + (s.party || '') + (s.address || ''), filters, empty:'暂无运单。开出库单时勾选「保存后登记快递单号」，或点右上角「登记运单」', columns:[
-      {t:'快递单号', r:s => `<a class="link" data-act="shipView" data-id="${s.id}">${esc(s.trackNo)}</a><div class="sub-t">${esc(carrierLabel(s.carrierId))}</div>`, s:s => s.trackNo},
+    card.innerHTML = toolbar('ships', {placeholder:'搜索快递单号 / 子单号 / 单据 / 客户 / 地址', filters, buttons:(kdn().ready ? `<button class="btn" data-act="trackAll" title="最近 30 天未签收的运单，每次最多 50 单">${ic('refresh')}刷新物流</button>` : '') + `<button class="btn" data-act="export" data-id="ships">${ic('download')}导出</button>`}) + '<div id="list-ships"></div>';
+    mountList('ships', {rows:() => db.shipments, search:s => s.trackNo + (s.subTracks || []).join('') + s.no + (s.srcNo || '') + (s.party || '') + (s.address || ''), filters, empty:'暂无运单。开出库单时勾选「保存后登记快递单号」，或点右上角「登记运单」', columns:[
+      {t:'快递单号', r:s => `<a class="link" data-act="shipView" data-id="${s.id}">${esc(s.trackNo)}</a>${s.subTracks && s.subTracks.length ? ` <span class="badge blue plain">一票${s.subTracks.length + 1}件</span>` : ''}<div class="sub-t">${esc(carrierLabel(s.carrierId))}</div>`, s:s => s.trackNo},
       {t:'发货日期', r:s => s.date, s:s => s.date},
       {t:'来源单据', r:shipSrcLink},
       {t:'收件', r:s => `<b>${esc(s.province)}</b> ${esc(s.party || '')}<div class="sub-t" style="max-width:240px;overflow:hidden;text-overflow:ellipsis">${esc(s.address || '')}</div>`},
@@ -4413,19 +4736,34 @@ function pageShipping() {
       {t:'状态', r:b => badge(b.status, b.status === '草稿' ? 'orange' : 'green')},
       {t:'操作', r:b => `<div class="ops">${tbtn(b.status === '草稿' && can('ship.bill') ? '对账' : '查看', 'billView', b.id, b.status === '草稿' ? 'primary' : '')}</div>`}], bulk:can('ship.bill') ? {label:'快递账单', remove:id => '/api/shipbills/' + id} : undefined});
   } else if (ui.shipTab === 'adhoc') {
-    const canEdit = can('ship.edit');
-    card.innerHTML = toolbar('adhoc', { placeholder:'搜索司机 / 电话 / 备注', buttons: (can('ship.view') ? `<button class="btn" data-act="export" data-id="adhoc">${ic('download')}导出</button>` : '') + (canEdit ? `<button class="btn primary" data-act="add" data-id="deliveries">${ic('plus')}新增临时送货</button>` : '') }) + '<div id="list-adhoc"></div>';
-    mountList('adhoc', { rows: () => db.deliveries, search: d => (d.driver || '') + ' ' + (d.phone || '') + ' ' + (d.note || ''), empty: '还没有临时送货记录。临时找车、短途送货，只登记日期、司机、运费和备注就行，不进快递计费。', columns: [
-      {t:'日期', r:d => d.date || '', s:d => d.date || ''},
-      {t:'司机 / 送货人', r:d => `<b>${esc(d.driver || '')}</b>${d.phone ? `<div class="sub-t">${esc(d.phone)}</div>` : ''}`, s:d => d.driver || ''},
+    const canEdit = can('ship.edit') || can('sales');
+    const stClr = { '待派送': 'orange', '配送中': 'blue', '已完成': 'green' };
+    const modeOpts = ['临时送货', '小工送货', '客户自提', '退货取货', '客户自送'];
+    const filters = [
+      { key: 'mode', label: '全部方式', options: modeOpts, test: (d, v) => (d.mode || '临时送货') === v },
+      { key: 'st', label: '全部状态', options: ['待派送', '配送中', '已完成'], test: (d, v) => (d.status || '已完成') === v }
+    ];
+    card.innerHTML = toolbar('adhoc', { placeholder:'搜索司机 / 客户 / 地址 / 单号 / 备注', filters, buttons: (can('ship.view') ? `<button class="btn" data-act="export" data-id="adhoc">${ic('download')}导出</button>` : '') + (canEdit ? `<button class="btn primary" data-act="add" data-id="deliveries">${ic('plus')}新增临时送货</button>` : '') }) + '<div id="list-adhoc"></div>';
+    mountList('adhoc', { rows: () => db.deliveries, search: d => (d.driver || '') + ' ' + (d.phone || '') + ' ' + (d.party || '') + ' ' + (d.address || '') + ' ' + (d.srcNo || '') + ' ' + (d.note || ''), filters, empty: '还没有临时送货 / 门店配送记录。', columns: [
+      {t:'日期', r:d => esc(d.date || ''), s:d => d.date || ''},
+      {t:'方式', r:d => badge(d.mode || '临时送货', d.mode === '退货取货' ? 'orange' : d.mode === '客户自提' ? 'gray' : 'blue')},
+      {t:'送/取货人', r:d => `<b>${esc(d.driver || '')}</b>${d.phone ? `<div class="sub-t">${esc(d.phone)}</div>` : ''}`, s:d => d.driver || ''},
+      {t:'客户 / 关联单据', r:d => `${d.party ? `<b>${esc(d.party)}</b>` : '<span class="sub-t">-</span>'}${d.srcNo ? ` <span class="sub-t">${esc(d.srcNo)}</span>` : ''}${d.address ? `<div class="sub-t">${esc(d.address)}</div>` : ''}`},
       {t:'运费', cls:'num', r:d => money(d.amount || 0), s:d => d.amount || 0},
+      {t:'配送状态', r:d => badge(d.status || '已完成', stClr[d.status || '已完成'] || 'gray')},
       {t:'付款', r:d => badge(d.paid ? '已付款' : '未付款', d.paid ? 'green' : 'orange')},
       {t:'备注', r:d => `<span class="sub-t">${esc(d.note || '-')}</span>`},
-      {t:'操作', r:d => `<div class="ops">${canEdit && !d.paid ? `<button class="btn sm" data-act="adhocPay" data-id="${d.id}">标记已付</button>` : ''}${canEdit ? tbtn('编辑', 'edit', 'deliveries|' + d.id) : ''}${canEdit ? tbtn('删除', 'del', 'deliveries|' + d.id, 'danger-text') : ''}</div>`}
-    ], bulk:canEdit ? { label:'临时送货', remove:id => '/api/deliveries/' + id, actions:[{ label:'批量标记已付', run:async ids => {
-      for (const id of ids) { const d = byId(db.deliveries, id); if (d && !d.paid) await api('PUT', '/api/deliveries/' + id, { ...d, paid:true }); }
-      toast(`已标记 ${ids.length} 条为已付款`, 'success');
-    }}] } : undefined, exp:{name:'临时送货', cols:[['日期', d => d.date], ['司机', d => d.driver], ['电话', d => d.phone || ''], ['运费', d => d.amount || 0], ['付款', d => d.paid ? '已付款' : '未付款'], ['备注', d => d.note || '']]}});
+      {t:'操作', r:d => `<div class="ops">${canEdit && d.status && d.status !== '已完成' ? `<button class="btn sm primary" data-act="adhocDone" data-id="${d.id}">标记送达</button>` : ''}${canEdit && !d.paid && (+d.amount || 0) > 0 ? `<button class="btn sm" data-act="adhocPay" data-id="${d.id}">标记已付</button>` : ''}${canEdit ? tbtn('编辑', 'edit', 'deliveries|' + d.id) : ''}${canEdit ? tbtn('删除', 'del', 'deliveries|' + d.id, 'danger-text') : ''}</div>`}
+    ], bulk:canEdit ? { label:'门店配送', remove:id => '/api/deliveries/' + id, actions:[
+      { label:'批量标记送达', run:async ids => {
+        for (const id of ids) { const d = byId(db.deliveries, id); if (d && d.status !== '已完成') await api('PUT', '/api/deliveries/' + id, { ...d, status:'已完成' }); }
+        toast(`已标记 ${ids.length} 条为已完成`, 'success');
+      }},
+      { label:'批量标记已付', run:async ids => {
+        for (const id of ids) { const d = byId(db.deliveries, id); if (d && !d.paid) await api('PUT', '/api/deliveries/' + id, { ...d, paid:true }); }
+        toast(`已标记 ${ids.length} 条为已付款`, 'success');
+      }}
+    ] } : undefined, exp:{name:'门店配送与临时送货', cols:[['日期', d => d.date], ['方式', d => d.mode || '临时送货'], ['送/取货人', d => d.driver], ['电话', d => d.phone || ''], ['客户', d => d.party || ''], ['关联单号', d => d.srcNo || ''], ['地址', d => d.address || ''], ['运费', d => d.amount || 0], ['配送状态', d => d.status || '已完成'], ['付款', d => d.paid ? '已付款' : '未付款'], ['备注', d => d.note || '']]}});
   } else if (ui.shipTab === 'stats') shipStats(card, S);
   else {
     card.innerHTML = `<div class="toolbar"><div class="tb-left"><span class="sub-t">每家快递按省份分区报价：可以按重量段（0.5kg / 1kg / 2kg…）或首重 + 续重计价，也可以直接导入快递给的 Excel 报价表</span></div>
@@ -4469,8 +4807,8 @@ function shipStats(card, S) {
 
 /* ---------- 登记 / 修改运单 ---------- */
 function shipSrc(type, id) {
-  if (type === 'out') { const o = byId(db.stockDocs, id), c = o && db.customers.find(x => x.name === o.party) || {}; return o && {type, id, no:o.no, party:o.party || '', address:o.address || c.address || '', mobile:c.phone || ''}; }
-  if (type === 'sales') { const o = byId(db.sales, id), c = o && byId(db.customers, o.customerId) || {}; return o && {type, id, no:o.no, party:c.name || '', address:c.address || '', mobile:c.phone || ''}; }
+  if (type === 'out') { const o = byId(db.stockDocs, id), c = o && db.customers.find(x => x.name === o.party) || {}; return o && {type, id, no:o.no, customerId:c.id || '', party:o.party || '', address:o.address || c.address || '', mobile:c.phone || ''}; }
+  if (type === 'sales') { const o = byId(db.sales, id), c = o && byId(db.customers, o.customerId) || {}; return o && {type, id, no:o.no, customerId:o.customerId || '', party:c.name || '', address:o.address || c.address || '', mobile:c.phone || ''}; }
   return null;
 }
 // 报价选择列表：点一行选中这家快递
@@ -4489,11 +4827,17 @@ function shipModal(o = {}) {
   const st = {carrierId:edit ? edit.carrierId : o.carrierId || '', q:null, seq:0, timer:0};
   const pk = edit ? [{trackNo:edit.trackNo, weight:edit.weight}] : [{trackNo:o.trackNo || '', weight:o.weight || ''}];
   const eo = !edit && !o.trackNo && kdn().eorder && can('ship.edit');  // 快递鸟配好了：可以直接下电子面单
+  const initCustId = edit ? (edit.customerId || '') : (o.customerId || (src && src.customerId) || '');
   openModal(`${modalHead(edit ? '修改运单 · ' + esc(edit.trackNo) : '登记快递运单')}<div class="m-body">
     ${src ? `<p class="sub-t" style="margin-bottom:12px">来源单据 <b>${esc(src.no)}</b>${src.party ? ' · ' + esc(src.party) : ''}${edit ? '' : ' · 没称重时按单据商品的重量估算'}</p>` : ''}
+    <div style="display:flex;gap:8px;align-items:center;padding:8px 12px;margin-bottom:12px;border-radius:10px;background:var(--panel2);border:1px solid var(--border)">
+      <input id="sPaste" class="select" style="flex:1" placeholder="粘贴收件人 + 电话 + 省市区详细地址，一键智能识别填充">
+      <button type="button" class="btn sm" id="sParse">智能识别</button>
+    </div>
     <div class="form-grid">
-      <label class="field span2"><span>收件地址</span><input id="sAddr" value="${esc(edit ? edit.address : o.address || (src && src.address) || '')}" placeholder="省 市 区 详细地址（用来识别省份）"></label>
+      <label class="field"><span>关联客户（选填，便于按客户月结对账）</span><select id="sCustId"><option value="">不关联客户</option>${db.customers.map(c => `<option value="${c.id}" ${c.id === initCustId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
       <label class="field"><span>收件省份</span><select id="sProv">${provOpts(edit ? edit.province : o.province || '')}</select></label>
+      <label class="field span2"><span>收件地址</span><input id="sAddr" value="${esc(edit ? edit.address : o.address || (src && src.address) || '')}" placeholder="省 市 区 详细地址（用来识别省份）"></label>
       <label class="field"><span>收件人 / 单位</span><input id="sParty" value="${esc(edit ? edit.party || '' : o.party || (src && src.party) || '')}"></label>
       <label class="field"><span>收件电话${eo ? '（电子面单必填）' : ''}</span><input id="sTel" value="${esc(edit ? edit.mobile || '' : o.mobile || (src && src.mobile) || '')}"></label>
       <label class="field"><span>保价金额 ¥（选填）</span><input id="sDecl" type="number" step="any" min="0" value="${edit && edit.declared ? edit.declared : ''}"></label>
@@ -4504,7 +4848,8 @@ function shipModal(o = {}) {
     <div class="line-head"><b>包裹</b>${edit ? '' : `<button class="btn sm" id="sAdd">${ic('plus')}加一个包裹</button>`}</div>
     <p class="sub-t" style="margin:-4px 0 8px">${edit ? '改了重量会重新计算运费' : '扫快递单号后回车自动加下一行；只有一个包裹时称重可以留空（按商品重量估算）'}</p>
     <div class="table-wrap"><table class="tbl items"><thead><tr><th>快递单号 <i style="color:var(--red);font-style:normal">*</i></th><th style="width:110px">称重 kg</th><th style="width:44px"></th></tr></thead><tbody id="sPk"></tbody></table></div>
-    <label class="field" style="margin-top:12px"><span>备注</span><input id="sNote" value="${esc(edit ? edit.note || '' : '')}"></label>
+    <label class="field" style="margin-top:10px"><span>一票多件子单号（选填，多个子单号用逗号或换行分隔）</span><textarea id="sSubTracks" rows="2" placeholder="例如：SF1001001, SF1001002">${esc(edit && edit.subTracks ? edit.subTracks.join('\n') : '')}</textarea></label>
+    <label class="field" style="margin-top:10px"><span>备注</span><input id="sNote" value="${esc(edit ? edit.note || '' : '')}"></label>
   </div><div class="m-foot">${eo ? `<span class="sub-t" style="margin-right:auto">电子面单：自动取快递单号并打印面单，单号不用填</span>` : ''}<button class="btn" data-act="closeModal">取消</button><button class="btn ${eo ? '' : 'primary'}" id="sSave">${ic('check')}${eo ? '手工登记' : '保存'}</button>${eo ? `<button class="btn primary" id="sEo">${ic('printer')}电子面单下单并打印</button>` : ''}</div>`, 'lg');
   const drawQ = () => {
     const q = st.q;
@@ -4538,12 +4883,33 @@ function shipModal(o = {}) {
   $('#sQuotes').addEventListener('click', e => { const r = e.target.closest('[data-car]'); if (r) { st.carrierId = r.dataset.car; drawQ(); } });
   ['#sAddr', '#sDecl'].forEach(s => $(s).addEventListener('input', requote));
   $('#sProv').onchange = requote;
+  $('#sCustId').onchange = () => {
+    const cu = byId(db.customers, $('#sCustId').value);
+    if (!cu) return;
+    if (!$('#sParty').value.trim()) $('#sParty').value = cu.contact || cu.name;
+    if (!$('#sTel').value.trim() && cu.phone) $('#sTel').value = cu.phone;
+    if (!$('#sAddr').value.trim() && cu.address) { $('#sAddr').value = cu.address; requote(); }
+  };
+  const doShipParse = () => {
+    const raw = $('#sPaste').value.trim(); if (!raw) return toast('请先粘贴收件信息', 'error');
+    const r = parseSmartAddr(raw);
+    if (!r.address && !r.name && !r.phone) return toast('未能识别收件信息', 'error');
+    if (r.name) $('#sParty').value = r.name;
+    if (r.phone) $('#sTel').value = r.phone;
+    if (r.address) $('#sAddr').value = r.address;
+    if (r.province) $('#sProv').value = r.province;
+    $('#sPaste').value = '';
+    requote();
+    toast('已识别：' + [r.name, r.phone, r.province, r.city, r.district].filter(Boolean).join(' / '), 'success');
+  };
+  $('#sParse').onclick = doShipParse;
+  $('#sPaste').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doShipParse(); } });
   $('#sSave').onclick = async () => {
     if (!st.carrierId) return toast('请选择快递公司', 'error');
     const rows = pk.filter(p => String(p.trackNo).trim() || p.weight !== '');
     if (!rows.length || rows.some(p => !String(p.trackNo).trim())) return toast('请填写快递单号', 'error');
     if (rows.some(p => p.weight !== '' && !(+p.weight > 0))) return toast('称重必须大于 0', 'error');
-    const common = {carrierId:st.carrierId, address:$('#sAddr').value.trim(), province:$('#sProv').value, party:$('#sParty').value.trim(), mobile:$('#sTel').value.trim(), declared:$('#sDecl').value, date:$('#sDate').value, note:$('#sNote').value.trim()};
+    const common = {carrierId:st.carrierId, customerId:$('#sCustId').value, address:$('#sAddr').value.trim(), province:$('#sProv').value, party:$('#sParty').value.trim(), mobile:$('#sTel').value.trim(), declared:$('#sDecl').value, date:$('#sDate').value, subTracks:$('#sSubTracks').value.trim(), note:$('#sNote').value.trim()};
     $('#sSave').disabled = true;
     const r = edit ? await mutate('PUT', '/api/shipments/' + edit.id, {...common, trackNo:rows[0].trackNo, weight:rows[0].weight}, '运单已修改')
       : await mutate('POST', '/api/shipments', {...common, srcType:src ? src.type : '', srcId:src ? src.id : '', packages:rows}, r => `已登记 ${r.length} 个运单，估算运费 ${money(sum(r, s => s.estFee))}`);
@@ -4574,6 +4940,7 @@ function shipView(id) {
   openModal(`${modalHead('运单 · ' + esc(s.trackNo) + ' ' + badge(s.status, SHIP_STATUS[s.status]))}<div class="m-body"><div class="doc-info">
     ${row('快递', esc(carrierLabel(s.carrierId)))}${row('登记号', esc(s.no))}${row('发货日期', s.date)}${row('来源单据', shipSrcLink(s))}
     ${row('收件人', esc(s.party || '-') + (s.mobile ? ' · ' + esc(s.mobile) : ''))}${row('省份 / 分区', esc(s.province) + (s.zone ? ' · ' + esc(s.zone) : ''))}${row('地址', esc(s.address || '-'), 1)}
+    ${s.subTracks && s.subTracks.length ? row('一票多件子单号', `${esc(s.subTracks.join('、'))}（共 ${s.subTracks.length + 1} 件）`, 1) : ''}
     ${s.eorder ? row('电子面单', `快递鸟订单号 ${esc(s.eorder.orderCode)}${s.eorder.canceled ? ' <span class="badge gray">已取消</span>' : ''}`, 1) : ''}
     ${row('实重', s.weight + 'kg（' + (s.weighed ? '称重' : '按商品估算，含包材') + '）')}${row('计费重量', s.chargeWeight + 'kg' + (s.volWeight > s.weight ? '（体积重 ' + s.volWeight + 'kg）' : ''))}
     ${s.declared ? row('保价金额', money(s.declared)) : ''}${row('估算运费', money(s.estFee))}
@@ -4925,10 +5292,21 @@ function kdnCard(k) {
 }
 const kdnBody = () => ({ebid:$('#kdEbid').value.trim(), key:$('#kdKey').value.trim(), sandbox:$('#kdSandbox').checked, autoTrack:$('#kdAuto').checked,
   sender:{name:$('#kdName').value.trim(), mobile:$('#kdMobile').value.trim(), tel:$('#kdTel').value.trim(), company:$('#kdCompany').value.trim(), province:$('#kdProv').value.trim(), city:$('#kdCity').value.trim(), area:$('#kdArea').value.trim(), postCode:$('#kdPost').value.trim(), address:$('#kdAddr').value.trim()}});
-// 打印电子面单：快递鸟返回的是 HTML，按热敏面单 100×180mm 打印
+// 打印电子面单：快递鸟返回的是 HTML，按热敏面单 100×180mm 打印（先净化脚本和内联事件）
+function sanitizeLabelHtmlClient(raw) {
+  const doc = new DOMParser().parseFromString(String(raw || ''), 'text/html');
+  doc.querySelectorAll('script,iframe,object,embed,applet,base,form,meta[http-equiv]').forEach(el => el.remove());
+  doc.querySelectorAll('*').forEach(el => {
+    for (const a of [...el.attributes]) {
+      if (/^on/i.test(a.name) || (/^(href|src|action|formaction)$/i.test(a.name) && /^\s*(javascript|vbscript|data\s*:\s*text\/html)/i.test(a.value))) el.removeAttribute(a.name);
+    }
+  });
+  return '<!doctype html>' + doc.documentElement.outerHTML;
+}
 async function printLabel(id) {
   let r; try { r = await api('GET', `/api/shipments/${id}/label`); } catch (e) { return toast(e.message, 'error'); }
-  const html = /<html/i.test(r.html) ? r.html : `<!doctype html><html><head><meta charset="utf-8"><title>面单 ${esc(r.trackNo)}</title><style>@page{size:100mm 180mm;margin:0}body{margin:0}</style></head><body>${r.html}</body></html>`;
+  const clean = sanitizeLabelHtmlClient(r.html);
+  const html = /<html/i.test(r.html) ? clean : `<!doctype html><html><head><meta charset="utf-8"><title>面单 ${esc(r.trackNo)}</title><style>@page{size:100mm 180mm;margin:0}body{margin:0}</style></head><body>${clean}</body></html>`;
   printHtml('面单 ' + r.trackNo, html);
 }
 async function shipTrack(id) {
@@ -4971,7 +5349,7 @@ function priceManage(type, id) {
       <td><button class="icon-btn sm" data-rm="${i}" title="删除">${ic('trash')}</button></td></tr>`; }).join('')
       : `<tr><td colspan="4" class="sub-t" style="text-align:center;padding:20px">还没有专属价，开单时用商品档案里的${word}</td></tr>`;
   };
-  openModal(`${modalHead('专属价 · ' + r.name)}<div class="m-body">
+  openModal(`${modalHead('专属价 · ' + esc(r.name))}<div class="m-body">
     <p class="sub-t" style="margin-bottom:10px">给这个${isC ? '客户' : '供应商'}单独定价的商品，开${isC ? '销售' : '采购'}单时自动按专属价填，单价后面会标红色 *；没设的商品照常用商品档案里的${word}。价格按基本单位填，用辅助单位开单会按换算比例算。</p>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap"><input class="select" style="flex:2;min-width:180px" id="spProd" list="spList" placeholder="商品编码 / 条码 / 名称"><datalist id="spList">${db.products.map(p => `<option value="${esc(prodLabel(p))}">`).join('')}</datalist>
       <input class="select" style="flex:1;min-width:90px" id="spPrice" type="number" min="0" step="0.01" placeholder="专属价"><button class="btn primary" id="spAdd">${ic('plus')}添加</button></div>
@@ -5196,121 +5574,208 @@ function pageParty(type) {
   ], bulk:{label:ENT[type].title, remove:id => `/api/${type}/${id}`}, exp:{name:ENT[type].title + '列表', cols:[['名称', r => r.name], ['联系人', r => r.contact], ['电话', r => r.phone], ['邮箱', r => r.email], [isC ? '等级' : '类目', r => isC ? r.level : r.category], ...(isC ? [['负责人', r => r.ownerName || r.creator || '']] : []), ['地址', r => r.address], ['订单数', r => orders(r.id).length], ['累计金额', r => sum(orders(r.id), orderTotal).toFixed(2)]]}});
 }
 
-/* ================= 页面：农业 / 粮食收购（#135） ================= */
-const grainFinPays = o => db.finance.filter(f => f.ref === o.no && f.category === '农产品收购');
+/* ================= 页面：农业 / 粮食购销过磅（#135 + #141/#147/#148/#155） ================= */
+const grainFinPays = o => db.finance.filter(f => f.ref === o.no && f.category === (o.dir === 'out' ? '粮食销售' : '农产品收购'));
 function pageAgri() {
+  if (!ui.agriTab) ui.agriTab = 'grain';
   const rows = db.grainDocs || [], ok = rows.filter(o => o.status !== '已作废');
-  const totNet = sum(ok, o => o.netWeight), totAmt = sum(ok, o => o.totalAmount), totPaid = sum(ok, o => o.paid || 0), totUnpaid = Math.max(0, totAmt - totPaid);
+  const inOk = ok.filter(o => o.dir !== 'out'), outOk = ok.filter(o => o.dir === 'out');
+  const totInNet = sum(inOk, o => o.netWeight), totOutNet = sum(outOk, o => o.netWeight);
+  const totAmt = sum(ok, o => o.totalAmount), totPaid = sum(ok, o => o.paid || 0), totUnpaid = Math.max(0, totAmt - totPaid);
+  $('#view').innerHTML = pageHead('农业与粮食管理', '粮食购销过磅结算、田间地块（天地图 + KML/KMZ）与农事日历') + `
+  ${tabs('agriTab', [['grain', '粮食购销过磅'], ['field', '田间管理（天地图 / 地块农事）']])}
+  <div id="agriBody"></div>`;
+  const agriBody = $('#agriBody');
+  if (ui.agriTab === 'field') return renderFieldPage(agriBody);
   const filters = [
+    {key:'dir', label:'全部方向', options:[['in', '过磅入库（收购）'], ['out', '过磅出库（销售）']], test:(r, v) => (r.dir || 'in') === v},
+    {key:'cat', label:'全部类别', options:['自产', '外购', '烘干', '代售'], test:(r, v) => r.category === v},
     {key:'prod', label:'全部品种', options:uniq(rows.map(r => r.productName)), test:(r, v) => r.productName === v},
     {key:'st', label:'全部状态', options:['正常', '已作废'], test:(r, v) => r.status === v},
     {key:'pay', label:'结算状态', options:[['unpaid', '待结算'], ['paid', '已结清']], test:(r, v) => v === 'unpaid' ? r.status !== '已作废' && (r.totalAmount - (r.paid || 0)) > 0.001 : (r.totalAmount - (r.paid || 0)) <= 0.001},
     ...(multiWh() ? [{key:'wh', label:'全部仓库', options:whs().map(w => [w.id, w.name]), test:(r, v) => (r.wh || META.defaultWh) === v}] : [])
   ];
-  const btns = `<button class="btn" data-act="export" data-id="grain">${ic('download')}导出</button><button class="btn primary" data-act="grainNew">${ic('plus')}新建收粮单</button>`;
-  $('#view').innerHTML = pageHead('粮食收购', '登记车牌过磅、扣水扣杂、入库建档与农户结算') + `
-  <div class="grid g4 mb">
-    ${kpi('收购总净重', num(totNet), 'box', 'primary', `<div class="trend"><span>有效 ${ok.length} 车</span></div>`)}
-    ${kpi('应付总额', moneyK(totAmt), 'coin', 'blue')}
-    ${kpi('已结算', moneyK(totPaid), 'wallet', 'green')}
+  const btns = `<button class="btn" data-act="export" data-id="grain">${ic('download')}导出</button><button class="btn" data-act="grainOutNew">${ic('upload')}新建售粮出库</button><button class="btn primary" data-act="grainNew">${ic('plus')}新建收粮入库</button>`;
+  agriBody.innerHTML = `<div class="grid g4 mb">
+    ${kpi('入库总净重', num(totInNet), 'box', 'primary', `<div class="trend"><span>入库 ${inOk.length} 车</span></div>`)}
+    ${kpi('出库总净重', num(totOutNet), 'truck', 'blue', `<div class="trend"><span>出库 ${outOk.length} 车</span></div>`)}
+    ${kpi('已结算金额', moneyK(totPaid), 'wallet', 'green', `<div class="trend"><span>总额 ${moneyK(totAmt)}</span></div>`)}
     ${kpi('待结算尾款', `<span class="${totUnpaid > 0.001 ? 'neg' : 'pos'}">${moneyK(totUnpaid)}</span>`, 'wallet', 'orange')}
   </div>
-  <div class="card">${toolbar('grain', {placeholder:'搜索单号 / 农户 / 电话 / 车牌 / 品种', filters, buttons:btns})}<div id="list-grain"></div></div>`;
-  mountList('grain', {rows:() => rows, search:o => o.no + o.farmerName + (o.farmerPhone || '') + (o.plateNo || '') + o.productName, filters, empty:'暂无收购记录，点击「新建收粮单」开始收粮', columns:[
-    {t:'单号', r:o => `<a class="link" data-act="grainView" data-id="${o.id}">${esc(o.no)}</a>`, s:o => o.no},
+  <div class="card">${toolbar('grain', {placeholder:'搜索单号 / 农户客户 / 电话 / 车牌 / 品种', filters, buttons:btns})}<div id="list-grain"></div></div>`;
+  mountList('grain', {rows:() => rows, search:o => o.no + o.farmerName + (o.farmerPhone || '') + (o.plateNo || '') + o.productName + (o.category || ''), filters, empty:'暂无粮食过磅记录，点击右上角「新建收粮入库」或「新建售粮出库」开始', columns:[
+    {t:'单号', r:o => `<a class="link" data-act="grainView" data-id="${o.id}">${esc(o.no)}</a><div>${badge(o.dir === 'out' ? '出库' : '入库', o.dir === 'out' ? 'blue plain' : 'green plain')}${o.category ? ' ' + badge(o.category, 'gray plain') : ''}</div>`, s:o => o.no},
     {t:'日期', r:o => `${o.date}<div class="sub-t">${o.time || ''}</div>`, s:o => o.date + (o.time || '')},
-    {t:'农户', r:o => `<b>${esc(o.farmerName)}</b>${o.farmerPhone ? `<div class="sub-t">${esc(o.farmerPhone)}</div>` : ''}`},
-    {t:'车牌号', r:o => o.plateNo ? badge(o.plateNo, 'blue plain') : '<span class="sub-t">-</span>'},
+    {t:'往来 / 车牌', r:o => `<b>${esc(o.farmerName)}</b>${o.plateNo ? ' ' + badge(o.plateNo, 'blue plain') : ''}${o.farmerPhone ? `<div class="sub-t">${esc(o.farmerPhone)}</div>` : ''}`},
     {t:'品种', r:o => `<b>${esc(o.productName)}</b>${multiWh() ? `<div class="sub-t">${esc(whName(o.wh))}</div>` : ''}`},
-    {t:'毛重 / 皮重', cls:'num', r:o => o.grossWeight > 0 ? `${num(o.grossWeight)} / ${num(o.tareWeight)}<div class="sub-t">毛净 ${num(o.rawNet)}</div>` : `${num(o.rawNet)} ${esc(o.unit)}`},
-    {t:'扣水扣杂', cls:'num', r:o => `${o.moisture}%水 / ${o.impurity}%杂<div class="sub-t">扣重 ${num(o.deductWeight)}</div>`},
-    {t:'结算净重', cls:'num', r:o => `<b>${num(o.netWeight)}</b> ${esc(o.unit)}`, s:o => o.netWeight},
+    {t:'过磅 / 折算', cls:'num', r:o => `${num(o.rawNet)} → <b>${num(o.netWeight)}</b> ${esc(o.unit)}<div class="sub-t">${o.moisture}%水 / ${o.impurity}%杂${o.calcMode === 'dry' ? ' · 干粮' : o.calcMode === 'price' ? ' · 扣价' : ''}</div>`, s:o => o.netWeight},
     {t:'单价', cls:'num', r:o => money(o.unitPrice), s:o => o.unitPrice},
-    {t:'应付 / 已结', cls:'num', r:o => { const up = Math.max(0, +(o.totalAmount - (o.paid || 0)).toFixed(2)); return `<b>${money(o.totalAmount)}</b><div class="sub-t ${up > 0.001 ? 'neg' : 'pos'}">已付 ${money(o.paid || 0)}</div>`; }, s:o => o.totalAmount},
-    {t:'状态', r:o => badge(o.status)},
-    {t:'操作', r:o => { const up = o.totalAmount - (o.paid || 0); return `<div class="ops">${tbtn('查看', 'grainView', o.id)}${o.status === '正常' && up > 0.001 ? tbtn('付款', 'grainPay', o.id, 'primary') : ''}${tbtn('打印', 'grainPrint', o.id)}${o.status === '正常' && !(o.paid > 0.001) ? tbtn('作废', 'grainVoid', o.id, 'danger-text') : ''}</div>`; }}
-  ], exp:{name:'粮食收购台账', cols:[['单号', o => o.no], ['日期', o => o.date], ['农户', o => o.farmerName], ['电话', o => o.farmerPhone], ['车牌号', o => o.plateNo], ['品种', o => o.productName], ['单位', o => o.unit], ['仓库', o => whName(o.wh)], ['毛重', o => o.grossWeight], ['皮重', o => o.tareWeight], ['水份%', o => o.moisture], ['标准水份%', o => o.stdMoisture], ['杂质%', o => o.impurity], ['总扣重', o => o.deductWeight], ['结算净重', o => o.netWeight], ['单价', o => o.unitPrice], ['应付金额', o => o.totalAmount], ['已付金额', o => o.paid], ['状态', o => o.status], ['备注', o => o.note]]}});
+    {t:'运费', cls:'num', r:o => o.freightFee > 0 ? `${money(o.freightFee)}<div class="sub-t">${o.freightPayer === 'self' ? '垫付已扣' : '客户自付'}</div>` : '<span class="sub-t">-</span>'},
+    {t:'结算 / 已结', cls:'num', r:o => { const up = Math.max(0, +(o.totalAmount - (o.paid || 0)).toFixed(2)); return `<b>${money(o.totalAmount)}</b><div class="sub-t ${up > 0.001 ? 'neg' : 'pos'}">已结 ${money(o.paid || 0)}</div>`; }, s:o => o.totalAmount},
+    {t:'状态', r:o => badge(o.status) + (o.photos && o.photos.length ? ` <span class="badge blue plain">图${o.photos.length}</span>` : '') + (o.splits && o.splits.length ? ` <span class="badge purple plain">混售${o.splits.length}户</span>` : '')},
+    {t:'操作', r:o => { const up = o.totalAmount - (o.paid || 0); return `<div class="ops">${tbtn('查看', 'grainView', o.id)}${o.status === '正常' && up > 0.001 ? tbtn(o.dir === 'out' ? '收款' : '付款', 'grainPay', o.id, 'primary') : ''}${tbtn('打印', 'grainPrint', o.id)}${o.status === '正常' && !(o.paid > 0.001) ? tbtn('作废', 'grainVoid', o.id, 'danger-text') : ''}</div>`; }}
+  ], exp:{name:'粮食购销过磅台账', cols:[['单号', o => o.no], ['方向', o => o.dir === 'out' ? '出库' : '入库'], ['类别', o => o.category || ''], ['日期', o => o.date], ['往来方', o => o.farmerName], ['电话', o => o.farmerPhone], ['车牌号', o => o.plateNo], ['品种', o => o.productName], ['单位', o => o.unit], ['仓库', o => whName(o.wh)], ['毛重', o => o.grossWeight], ['皮重', o => o.tareWeight], ['水份%', o => o.moisture], ['标准水份%', o => o.stdMoisture], ['杂质%', o => o.impurity], ['结算净重', o => o.netWeight], ['单价', o => o.unitPrice], ['运费', o => o.freightFee || 0], ['结算总额', o => o.totalAmount], ['已结金额', o => o.paid], ['状态', o => o.status], ['备注', o => o.note]]}});
 }
-function grainModal() {
+function grainModal(dir = 'in') {
+  const isOut = dir === 'out';
   const prods = db.products.filter(p => !p.serial);
   if (!prods.length) return toast('请先在商品管理中添加非序列号的粮食品种商品', 'error');
-  const pOpts = prods.map(p => `<option value="${esc(p.id)}" data-cost="${p.cost || 0}" data-u="${esc(p.unit || '')}">${esc(p.name)}${p.spec ? ' · ' + esc(p.spec) : ''}（${esc(p.unit || '')}）</option>`).join('');
-  openModal(`${modalHead('新建收粮单')}<div class="m-body"><div class="form-grid">
-    <label class="field"><span>收购日期 <i>*</i></span><input type="date" id="grDate" value="${today()}" max="${today()}"></label>
+  const pOpts = prods.map(p => `<option value="${esc(p.id)}" data-cost="${isOut ? (p.price || p.cost || 0) : (p.cost || 0)}" data-u="${esc(p.unit || '')}">${esc(p.name)}${p.spec ? ' · ' + esc(p.spec) : ''}（${esc(p.unit || '')}）</option>`).join('');
+  const partyList = isOut ? db.customers : db.suppliers;
+  const partyOpts = `<option value="">-- 不关联档案 / 手填 --</option>` + partyList.map(x => `<option value="${esc(x.id)}">${esc(x.name)}${x.phone ? ' · ' + esc(x.phone) : ''}</option>`).join('');
+  let photos = [], splits = [];
+  openModal(`${modalHead(isOut ? '新建粮食销售出库过磅单' : '新建粮食收购入库过磅单')}<div class="m-body"><div class="form-grid">
+    <label class="field"><span>过磅日期 <i>*</i></span><input type="date" id="grDate" value="${today()}" max="${today()}"></label>
     <label class="field"><span>粮食品种 <i>*</i></span><select id="grProd">${pOpts}</select></label>
-    ${multiWh() ? `<label class="field"><span>入库仓库 <i>*</i></span><select id="grWh">${whOpts(META.defaultWh)}</select></label>` : ''}
-    <label class="field"><span>农户姓名 <i>*</i></span><input id="grFarmer" placeholder="售粮人姓名"></label>
+    ${!isOut ? `<label class="field"><span>入库类别</span><select id="grCat"><option value="外购">外购</option><option value="自产">自产</option><option value="烘干">烘干</option><option value="代售">代售</option></select></label>` : ''}
+    ${multiWh() ? `<label class="field"><span>${isOut ? '出库' : '入库'}仓库 <i>*</i></span><select id="grWh">${whOpts(META.defaultWh)}</select></label>` : ''}
+    <label class="field"><span>关联${isOut ? '客户' : '供应商'}档案</span><select id="grPartyId">${partyOpts}</select></label>
+    <label class="field"><span>${isOut ? '购粮客户 / 粮站' : '农户 / 售粮人'} <i>*</i></span><input id="grFarmer" placeholder="选档案自动填入，也可手输"></label>
     <label class="field"><span>联系电话</span><input id="grPhone" placeholder="选填"></label>
-    <label class="field"><span>身份证号</span><input id="grIdCard" placeholder="选填"></label>
-    <label class="field"><span>送粮车牌号</span><input id="grPlate" placeholder="如：鲁A12345"></label>
-    <label class="field"><span>经手人 / 司磅员</span><input id="grHandler" value="${esc(ME.name)}"></label>
-    <label class="field"><span>毛重（过磅重）</span><input type="number" step="0.001" min="0" id="grGross" placeholder="车辆过磅总重"></label>
+    <label class="field"><span>车牌号</span><input id="grPlate" placeholder="如：川A12345"></label>
+    <label class="field"><span>司机姓名</span><input id="grDriver" placeholder="选填"></label>
+    <label class="field"><span>司机电话</span><input id="grDriverPhone" placeholder="选填"></label>
+    <label class="field"><span>折算方式</span><select id="grMode"><option value="deduct">比例扣重（超标水分+杂质%）</option><option value="dry">干粮折算公式：潮重×(1−实水)÷(1−标水)</option><option value="price">水分/杂质按点扣价</option></select></label>
+    <label class="field"><span>司磅员 / 经手人</span><input id="grHandler" value="${esc(ME.name)}"></label>
+    <label class="field"><span>毛重（过磅总重）</span><input type="number" step="0.001" min="0" id="grGross" placeholder="车辆过磅总重"></label>
     <label class="field"><span>皮重（空车重）</span><input type="number" step="0.001" min="0" id="grTare" value="0"></label>
     <label class="field"><span>实测水份（%）</span><input type="number" step="0.1" min="0" max="99" id="grMoist" value="14"></label>
     <label class="field"><span>标准水份（%）</span><input type="number" step="0.1" min="0" max="99" id="grStdMoist" value="14"></label>
     <label class="field"><span>杂质比例（%）</span><input type="number" step="0.1" min="0" max="99" id="grImp" value="0"></label>
     <label class="field"><span>其他扣重（<span id="grUnitEx">${esc(prods[0].unit || '')}</span>）</span><input type="number" step="0.001" min="0" id="grExtra" value="0"></label>
-    <label class="field"><span>收购单价（元/<span id="grUnitPr">${esc(prods[0].unit || '')}</span>） <i>*</i></span><input type="number" step="0.0001" min="0" id="grPrice" value="${prods[0].cost || ''}"></label>
-    <label class="field"><span>现结付款（元）</span><div style="display:flex;gap:6px"><input type="number" step="0.01" min="0" id="grPayNow" value="0" style="flex:1"><button type="button" class="btn sm" id="grPayAll">全额现结</button></div></label>
-    <label class="field"><span>付款账户</span><select id="grAcct">${acctOpts().map(([id, n]) => `<option value="${esc(id)}" ${id === acctDefault() ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+    ${isOut ? `<label class="field"><span>干粮出库偏差（正负均可）</span><input type="number" step="0.001" id="grDev" value="0" placeholder="如 -5 或 +3"></label>` : ''}
+    <label class="field"><span>基准单价（元/<span id="grUnitPr">${esc(prods[0].unit || '')}</span>） <i>*</i></span><input type="number" step="0.0001" min="0" id="grPrice" value="${isOut ? (prods[0].price || prods[0].cost || '') : (prods[0].cost || '')}"></label>
+    <label class="field gr-pt" style="display:none"><span>水分超 1 点扣价（元）</span><input type="number" step="0.001" min="0" id="grMoistPt" value="0.02"></label>
+    <label class="field gr-pt" style="display:none"><span>杂质每 1 点扣价（元）</span><input type="number" step="0.001" min="0" id="grImpPt" value="0.02"></label>
+    <label class="field"><span>运费金额（元，选填）</span><input type="number" step="0.01" min="0" id="grFreight" value="0"></label>
+    <label class="field"><span>运费承担方式</span><select id="grFPayer"><option value="">无运费 / 不扣减</option><option value="self">我方垫付（结算自动扣除）</option><option value="customer">对方自付（不扣结算款）</option></select></label>
+    <label class="field"><span>现结${isOut ? '收款' : '付款'}（元）</span><div style="display:flex;gap:6px"><input type="number" step="0.01" min="0" id="grPayNow" value="0" style="flex:1"><button type="button" class="btn sm" id="grPayAll">全额现结</button></div></label>
+    <label class="field"><span>结算账户</span><select id="grAcct">${acctOpts().map(([id, n]) => `<option value="${esc(id)}" ${id === acctDefault() ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
     <label class="field span2"><span>备注</span><input id="grNote" placeholder="选填"></label>
   </div>
-  <div class="o-total" style="margin-top:14px">毛净重 <b id="grRaw">0</b> &nbsp; 扣水扣杂 <b id="grDeduct">0</b> &nbsp; 结算净重 <b id="grNet">0</b> &nbsp; 应付金额 <b id="grTotal">¥0.00</b></div></div>
-  <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="grSave">${ic('check')}保存收粮单并入库</button></div>`, 'lg');
+  <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><label class="btn sm">${ic('upload')}上传 / 拍照过磅单（最多 4 张）<input type="file" id="grPhotos" accept="image/*" capture="environment" multiple hidden></label><div id="grPhotoPrev" style="display:flex;gap:6px;flex-wrap:wrap"></div></div>
+  ${isOut ? `<div style="margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--panel2)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-size:13px">客户混合销售按过磅比例分摊（选填）</b><button type="button" class="btn sm" id="grSplitAdd">${ic('plus')}添加分摊客户</button></div>
+    <div id="grSplits"></div>
+  </div>` : ''}
+  <div class="o-total" style="margin-top:14px">毛净重 <b id="grRaw">0</b> &nbsp; 结算净重 <b id="grNet">0</b> &nbsp; 结算单价 <b id="grEffP">¥0.00</b> &nbsp; 结算总额 <b id="grTotal">¥0.00</b></div></div>
+  <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="grSave">${ic('check')}保存并${isOut ? '出库' : '入库'}</button></div>`, 'lg');
 
+  const drawSplits = (net, grossAmt) => {
+    const box = $('#grSplits'); if (!box) return;
+    if (!splits.length) { box.innerHTML = '<div class="sub-t">若一车装多位客户粮食统一卖给粮站，可点击右上角添加各客户自称重量，系统按比例分摊粮站结算金额。</div>'; return; }
+    const sumS = splits.reduce((n, x) => n + (+x.selfWeight || 0), 0);
+    box.innerHTML = `<table class="tbl compact"><thead><tr><th>客户</th><th style="width:110px">自称过磅重</th><th style="width:90px">垫付运费</th><th>比例 / 分摊重 / 应结金额</th><th style="width:36px"></th></tr></thead><tbody>${splits.map((s, i) => {
+      const ratio = sumS > 0 ? (+s.selfWeight || 0) / sumS : 0;
+      const aw = +(net * ratio).toFixed(3), aa = +(grossAmt * ratio).toFixed(2), sa = Math.max(0, +(aa - (+s.freightFee || 0)).toFixed(2));
+      return `<tr><td><select data-sp-c="${i}" class="select"><option value="">选择客户</option>${db.customers.map(c => `<option value="${c.id}" ${c.id === s.customerId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></td>
+        <td><input data-sp-w="${i}" type="number" step="0.001" min="0" value="${s.selfWeight || ''}"></td>
+        <td><input data-sp-f="${i}" type="number" step="0.01" min="0" value="${s.freightFee || 0}"></td>
+        <td class="sub-t">${(ratio * 100).toFixed(1)}% · ${aw} · <b>${money(sa)}</b></td>
+        <td><button type="button" class="icon-btn sm" data-sp-del="${i}">${ic('trash')}</button></td></tr>`;
+    }).join('')}</tbody></table>`;
+  };
   const calc = () => {
     const gross = +$('#grGross').value || 0, tare = +$('#grTare').value || 0;
     const rawNet = gross > 0 ? Math.max(0, +(gross - tare).toFixed(3)) : 0;
     const m = Math.max(0, +$('#grMoist').value || 0), sm = Math.max(0, +$('#grStdMoist').value || 0), imp = Math.max(0, +$('#grImp').value || 0), ex = Math.max(0, +$('#grExtra').value || 0);
+    const mode = $('#grMode').value, dev = isOut && $('#grDev') ? (+$('#grDev').value || 0) : 0;
     const mDiff = Math.max(0, +(m - sm).toFixed(2));
-    const deduct = +(rawNet * (mDiff + imp) / 100 + ex).toFixed(3);
-    const net = Math.max(0, +(rawNet - deduct).toFixed(3));
-    const price = Math.max(0, +$('#grPrice').value || 0);
-    const total = +(net * price).toFixed(2);
-    $('#grRaw').textContent = rawNet; $('#grDeduct').textContent = deduct; $('#grNet').textContent = net; $('#grTotal').textContent = money(total);
-    return { rawNet, deduct, net, total };
+    document.querySelectorAll('.gr-pt').forEach(el => { el.style.display = mode === 'price' ? '' : 'none'; });
+    let net = 0;
+    if (mode === 'dry') {
+      const dryW = rawNet * (1 - m / 100) / Math.max(0.01, 1 - sm / 100);
+      net = Math.max(0, +(dryW * (1 - imp / 100) - ex + dev).toFixed(3));
+    } else if (mode === 'price') {
+      net = Math.max(0, +(rawNet - ex + dev).toFixed(3));
+    } else {
+      net = Math.max(0, +(rawNet - (rawNet * (mDiff + imp) / 100 + ex) + dev).toFixed(3));
+    }
+    const bp = Math.max(0, +$('#grPrice').value || 0);
+    const mp = mode === 'price' ? Math.max(0, +$('#grMoistPt').value || 0) : 0;
+    const ip = mode === 'price' ? Math.max(0, +$('#grImpPt').value || 0) : 0;
+    const effP = mode === 'price' ? Math.max(0, +(bp - mDiff * mp - imp * ip).toFixed(4)) : bp;
+    const grossAmt = +(net * effP).toFixed(2);
+    const fFee = Math.max(0, +$('#grFreight').value || 0), fPayer = $('#grFPayer').value;
+    const total = fPayer === 'self' && fFee > 0 ? Math.max(0, +(grossAmt - fFee).toFixed(2)) : grossAmt;
+    $('#grRaw').textContent = rawNet; $('#grNet').textContent = net; $('#grEffP').textContent = money(effP); $('#grTotal').textContent = money(total);
+    if (isOut) drawSplits(net, grossAmt);
+    return { rawNet, net, effP, grossAmt, total };
   };
-  $('#grProd').onchange = () => { const p = byId(db.products, $('#grProd').value); if (p) { if ($('#grUnitEx')) $('#grUnitEx').textContent = p.unit || ''; if ($('#grUnitPr')) $('#grUnitPr').textContent = p.unit || ''; if (!$('#grPrice').value && p.cost) $('#grPrice').value = p.cost; } };
-  ['#grGross', '#grTare', '#grMoist', '#grStdMoist', '#grImp', '#grExtra', '#grPrice'].forEach(k => { $(k).oninput = calc; });
+  $('#grPartyId').onchange = () => {
+    const rec = byId(partyList, $('#grPartyId').value);
+    if (rec) { $('#grFarmer').value = rec.name; if (rec.phone) $('#grPhone').value = rec.phone; }
+  };
+  $('#grProd').onchange = () => { const p = byId(db.products, $('#grProd').value); if (p) { if ($('#grUnitEx')) $('#grUnitEx').textContent = p.unit || ''; if ($('#grUnitPr')) $('#grUnitPr').textContent = p.unit || ''; if (!$('#grPrice').value) $('#grPrice').value = isOut ? (p.price || p.cost || '') : (p.cost || ''); } };
+  ['#grGross', '#grTare', '#grMoist', '#grStdMoist', '#grImp', '#grExtra', '#grPrice', '#grMoistPt', '#grImpPt', '#grFreight', '#grDev'].forEach(k => { if ($(k)) $(k).oninput = calc; });
+  ['#grMode', '#grFPayer'].forEach(k => { if ($(k)) $(k).onchange = calc; });
   $('#grPayAll').onclick = () => { $('#grPayNow').value = calc().total.toFixed(2); };
+  $('#grPhotos').onchange = async e => {
+    for (const f of [...e.target.files].slice(0, 4 - photos.length)) {
+      try { photos.push(await shrinkImage(f, 1200, 350000)); } catch (err) {}
+    }
+    e.target.value = '';
+    $('#grPhotoPrev').innerHTML = photos.map((src, i) => `<img src="${src}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer" title="点击移除" data-gpdel="${i}">`).join('');
+  };
+  $('#grPhotoPrev').onclick = e => { const i = e.target.dataset.gpdel; if (i != null) { photos.splice(+i, 1); e.target.remove(); } };
+  if ($('#grSplitAdd')) {
+    $('#grSplitAdd').onclick = () => { splits.push({ customerId:'', customerName:'', selfWeight:0, freightFee:0, freightPayer:'self' }); calc(); };
+    $('#grSplits').addEventListener('change', e => {
+      if (e.target.dataset.spC != null) { const i = +e.target.dataset.spC, c = byId(db.customers, e.target.value); splits[i].customerId = e.target.value; splits[i].customerName = c ? c.name : ''; calc(); }
+    });
+    $('#grSplits').addEventListener('input', e => {
+      if (e.target.dataset.spW != null) { splits[+e.target.dataset.spW].selfWeight = +e.target.value || 0; calc(); }
+      if (e.target.dataset.spF != null) { splits[+e.target.dataset.spF].freightFee = +e.target.value || 0; calc(); }
+    });
+    $('#grSplits').addEventListener('click', e => { const b = e.target.closest('[data-sp-del]'); if (b) { splits.splice(+b.dataset.spDel, 1); calc(); } });
+  }
   calc();
   $('#grSave').onclick = () => {
-    const farmerName = $('#grFarmer').value.trim(); if (!farmerName) return toast('请填写农户姓名', 'error');
+    const farmerName = $('#grFarmer').value.trim(); if (!farmerName) return toast('请填写往来方姓名', 'error');
     const grossWeight = +$('#grGross').value || 0, tareWeight = +$('#grTare').value || 0;
     if (!(grossWeight > 0) || tareWeight < 0 || tareWeight >= grossWeight) return toast('请正确填写毛重和皮重', 'error');
-    const { total } = calc();
-    const unitPrice = +$('#grPrice').value; if (!Number.isFinite(unitPrice) || unitPrice < 0) return toast('请填写收购单价', 'error');
-    const payNow = +$('#grPayNow').value || 0; if (payNow < 0 || payNow > total + 0.001) return toast('现结金额不能超过应付总额', 'error');
+    const { total, grossAmt, net } = calc();
+    const unitPrice = +$('#grPrice').value; if (!Number.isFinite(unitPrice) || unitPrice < 0) return toast('请填写基准单价', 'error');
+    const payNow = +$('#grPayNow').value || 0; if (payNow < 0 || payNow > total + 0.001) return toast('现结金额不能超过结算总额', 'error');
     return mutate('POST', '/api/graindocs', {
+      dir, category: $('#grCat') ? $('#grCat').value : '',
+      partyType: $('#grPartyId').value ? (isOut ? 'customer' : 'supplier') : '', partyId: $('#grPartyId').value || '',
       date:$('#grDate').value || today(), productId:$('#grProd').value, wh:$('#grWh') ? $('#grWh').value : META.defaultWh,
-      farmerName, farmerPhone:$('#grPhone').value.trim(), farmerIdCard:$('#grIdCard').value.trim(), plateNo:$('#grPlate').value.trim(),
+      farmerName, farmerPhone:$('#grPhone').value.trim(), plateNo:$('#grPlate').value.trim(),
+      driverName:$('#grDriver').value.trim(), driverPhone:$('#grDriverPhone').value.trim(),
       handler:$('#grHandler').value.trim(), grossWeight, tareWeight,
+      calcMode:$('#grMode').value, deviation: isOut && $('#grDev') ? (+$('#grDev').value || 0) : 0,
       moisture:+$('#grMoist').value || 0, stdMoisture:+$('#grStdMoist').value || 14, impurity:+$('#grImp').value || 0, extraDeduct:+$('#grExtra').value || 0,
-      unitPrice, payNow, account:$('#grAcct').value, note:$('#grNote').value.trim()
-    }, r => '收粮单已保存：' + r.no);
+      unitPrice, moisturePricePerPt:+$('#grMoistPt').value || 0, impurityPricePerPt:+$('#grImpPt').value || 0,
+      freightFee:+$('#grFreight').value || 0, freightPayer:$('#grFPayer').value,
+      stationWeight: net, stationAmount: grossAmt, splits: isOut ? splits : [], photos,
+      payNow, account:$('#grAcct').value, note:$('#grNote').value.trim()
+    }, r => (isOut ? '售粮单' : '收粮单') + '已保存：' + r.no);
   };
 }
 function grainView(id) {
-  const o = byId(db.grainDocs || [], id); if (!o) return toast('收粮单不存在', 'error');
-  const pays = grainFinPays(o), up = Math.max(0, +(o.totalAmount - (o.paid || 0)).toFixed(2));
-  openModal(`${modalHead('收粮单详情 · ' + o.no + ' ' + badge(o.status))}
+  const o = byId(db.grainDocs || [], id); if (!o) return toast('粮食单据不存在', 'error');
+  const isOut = o.dir === 'out', pays = grainFinPays(o), up = Math.max(0, +(o.totalAmount - (o.paid || 0)).toFixed(2));
+  openModal(`${modalHead((isOut ? '售粮单详情' : '收粮单详情') + ' · ' + o.no + ' ' + badge(o.status))}
   <div class="m-body"><div class="print-area doc">
-    <h2>${esc(db.settings.company)}</h2><div class="doc-sub">农产品 / 粮食收购过磅结算单 · ${esc(o.no)}</div>
+    <h2>${esc(db.settings.company)}</h2><div class="doc-sub">粮食${isOut ? '销售出库' : '收购入库'}过磅结算单 · ${esc(o.no)}${o.category ? ' · ' + esc(o.category) : ''}</div>
     <div class="doc-info">
-      <div><span>农户 / 售粮人：</span>${esc(o.farmerName)} ${esc(o.farmerPhone || '')}</div><div><span>收购日期：</span>${o.date} ${o.time || ''}</div>
-      <div><span>车牌号：</span>${esc(o.plateNo || '-')}</div><div><span>品种：</span>${esc(o.productName)}（${esc(o.unit)}）</div>
-      <div><span>入库仓库：</span>${esc(whName(o.wh))}</div><div><span>司磅 / 经手：</span>${esc(o.handler || o.creator || '-')}</div>
-      ${o.farmerIdCard ? `<div><span>身份证号：</span>${esc(o.farmerIdCard)}</div>` : ''}
-      ${o.stockDocNo ? `<div><span>关联入库单：</span><a class="link" data-act="docView" data-id="${esc(o.stockDocId)}">${esc(o.stockDocNo)}</a></div>` : ''}
+      <div><span>${isOut ? '购粮客户' : '农户 / 供应商'}：</span>${esc(o.farmerName)} ${esc(o.farmerPhone || '')}</div><div><span>过磅日期：</span>${o.date} ${o.time || ''}</div>
+      <div><span>车牌 / 司机：</span>${esc(o.plateNo || '-')} ${esc(o.driverName || '')} ${esc(o.driverPhone || '')}</div><div><span>品种：</span>${esc(o.productName)}（${esc(o.unit)}）</div>
+      <div><span>${isOut ? '出库' : '入库'}仓库：</span>${esc(whName(o.wh))}</div><div><span>司磅 / 经手：</span>${esc(o.handler || o.creator || '-')}</div>
+      ${o.freightFee > 0 ? `<div><span>运费：</span>${money(o.freightFee)}（${o.freightPayer === 'self' ? '我方垫付，已从结算扣除' : '对方自付'}）</div>` : ''}
+      ${o.stockDocNo ? `<div><span>关联出入库单：</span><a class="link" data-act="docView" data-id="${esc(o.stockDocId)}">${esc(o.stockDocNo)}</a></div>` : ''}
     </div>
-    <table class="tbl compact"><thead><tr><th>毛重</th><th>皮重</th><th>毛净重</th><th>实测/标准水份</th><th>杂质%</th><th>扣水扣杂总重</th><th>结算净重</th><th>单价</th><th>应付总额</th></tr></thead>
-      <tbody><tr><td>${num(o.grossWeight)}</td><td>${num(o.tareWeight)}</td><td>${num(o.rawNet)}</td><td>${o.moisture}% / ${o.stdMoisture}%</td><td>${o.impurity}%</td><td>${num(o.deductWeight)}</td><td><b>${num(o.netWeight)} ${esc(o.unit)}</b></td><td>${money(o.unitPrice)}</td><td><b>${money(o.totalAmount)}</b></td></tr></tbody></table>
-    <div class="doc-sum"><div>已付结算：<b class="pos">${money(o.paid || 0)}</b></div><div>待付尾款：<b class="${up > 0.001 ? 'neg' : 'pos'}">${money(up)}</b></div></div>
+    <table class="tbl compact"><thead><tr><th>毛重</th><th>皮重</th><th>毛净重</th><th>实测/标准水份</th><th>杂质%</th><th>结算净重</th><th>结算单价</th><th>结算总额</th></tr></thead>
+      <tbody><tr><td>${num(o.grossWeight)}</td><td>${num(o.tareWeight)}</td><td>${num(o.rawNet)}</td><td>${o.moisture}% / ${o.stdMoisture}%</td><td>${o.impurity}%</td><td><b>${num(o.netWeight)} ${esc(o.unit)}</b></td><td>${money(o.unitPrice)}</td><td><b>${money(o.totalAmount)}</b></td></tr></tbody></table>
+    ${o.splits && o.splits.length ? `<h4 style="margin:14px 0 6px">混合销售客户分摊明细</h4><table class="tbl compact"><thead><tr><th>客户</th><th class="num">自称过磅重</th><th class="num">占比</th><th class="num">分摊重量</th><th class="num">分摊金额</th><th class="num">垫付运费</th><th class="num">应结金额</th></tr></thead><tbody>${o.splits.map(s => `<tr><td><b>${esc(s.customerName)}</b></td><td class="num">${num(s.selfWeight)}</td><td class="num">${(s.ratio * 100).toFixed(2)}%</td><td class="num">${num(s.allocWeight)}</td><td class="num">${money(s.allocAmount)}</td><td class="num">${money(s.freightFee || 0)}</td><td class="num"><b>${money(s.settleAmount)}</b></td></tr>`).join('')}</tbody></table>` : ''}
+    ${o.photos && o.photos.length ? `<h4 style="margin:14px 0 6px">过磅照片存档</h4><div style="display:flex;gap:8px;flex-wrap:wrap">${o.photos.map(src => `<a href="${src}" target="_blank"><img src="${src}" style="width:110px;height:82px;object-fit:cover;border-radius:8px;border:1px solid var(--border)"></a>`).join('')}</div>` : ''}
+    <div class="doc-sum"><div>已结金额：<b class="pos">${money(o.paid || 0)}</b></div><div>待结尾款：<b class="${up > 0.001 ? 'neg' : 'pos'}">${money(up)}</b></div></div>
     ${o.note ? `<p style="margin-top:10px;color:var(--muted)">备注：${esc(o.note)}</p>` : ''}
-    ${pays.length ? `<h4 style="margin:16px 0 8px">结算付款记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(acctName(f))}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td><td style="width:1%"><div class="ops">${o.status === '正常' ? tbtn('删除', 'grainDelPay', o.id + '|' + f.id, 'danger-text') : ''}</div></td></tr>`).join('')}</tbody></table>` : ''}
+    ${pays.length ? `<h4 style="margin:16px 0 8px">结算记录</h4><table class="tbl compact"><tbody>${pays.map(f => `<tr><td>${f.date}</td><td>${esc(acctName(f))}</td><td class="num">${money(f.amount)}</td><td class="sub-t">${esc(f.note || '')}</td><td style="width:1%"><div class="ops">${o.status === '正常' ? tbtn('删除', 'grainDelPay', o.id + '|' + f.id, 'danger-text') : ''}</div></td></tr>`).join('')}</tbody></table>` : ''}
   </div></div>
-  <div class="m-foot" style="flex-wrap:wrap"><span style="margin-right:auto;display:flex;gap:8px">${o.status === '正常' && !(o.paid > 0.001) ? `<button class="btn danger-text" data-act="grainVoid" data-id="${o.id}">作废</button>` : ''}${o.status === '正常' && up > 0.001 ? `<button class="btn primary" data-act="grainPay" data-id="${o.id}">${ic('coin')}登记付款</button>` : ''}</span>
-    <button class="btn" data-act="grainPrint" data-id="${o.id}">${ic('printer')}打印收购单</button><button class="btn" data-act="closeModal">关闭</button></div>`, 'lg');
+  <div class="m-foot" style="flex-wrap:wrap"><span style="margin-right:auto;display:flex;gap:8px">${o.status === '正常' && !(o.paid > 0.001) ? `<button class="btn danger-text" data-act="grainVoid" data-id="${o.id}">作废</button>` : ''}${o.status === '正常' && up > 0.001 ? `<button class="btn primary" data-act="grainPay" data-id="${o.id}">${ic('coin')}登记${isOut ? '收款' : '付款'}</button>` : ''}</span>
+    <button class="btn" data-act="grainPrint" data-id="${o.id}">${ic('printer')}打印过磅单</button><button class="btn" data-act="closeModal">关闭</button></div>`, 'lg');
 }
 function grainPrint(id) {
   const o = byId(db.grainDocs || [], id); if (!o) return;
@@ -5323,6 +5788,329 @@ function grainPrint(id) {
   <div class="s-sign" style="margin-top:24px"><span>司磅员：${esc(o.handler || o.creator || '')}</span><span>检验员：</span><span>农户签字：</span></div>
   <div class="foot">打印时间：${fmtTime(new Date())}</div>`;
   printFrame(o.no, body, prefs.paper || 'a4');
+}
+
+/* ---------- #11 田间管理（天地图 + KML/KMZ 导入 + 农事日历与导出） ---------- */
+async function extractKmlFromFile(file) {
+  if (/\.kml$/i.test(file.name)) return await file.text();
+  // KMZ 本质为 ZIP，使用浏览器原生 DecompressionStream 解压其中的 .kml 文件
+  const buf = new Uint8Array(await file.arrayBuffer()), dv = new DataView(buf.buffer);
+  let pos = 0;
+  while (pos + 30 < buf.length && dv.getUint32(pos, true) === 0x04034b50) {
+    const method = dv.getUint16(pos + 8, true), compSize = dv.getUint32(pos + 18, true);
+    const nameLen = dv.getUint16(pos + 26, true), extraLen = dv.getUint16(pos + 28, true);
+    const name = new TextDecoder().decode(buf.subarray(pos + 30, pos + 30 + nameLen));
+    const dataStart = pos + 30 + nameLen + extraLen, dataEnd = dataStart + compSize;
+    if (/\.kml$/i.test(name) && compSize > 0 && dataEnd <= buf.length) {
+      const slice = buf.subarray(dataStart, dataEnd);
+      if (method === 0) return new TextDecoder().decode(slice);
+      if (method === 8 && typeof DecompressionStream !== 'undefined') {
+        const ds = new DecompressionStream('deflate-raw');
+        const w = ds.writable.getWriter(); w.write(slice); w.close();
+        return await new Response(ds.readable).text();
+      }
+    }
+    pos = dataEnd;
+  }
+  throw new Error('未能从 KMZ 中解析出 KML 文件，请尝试直接导入 .kml');
+}
+function parseKmlPolygons(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+  const pms = [...doc.querySelectorAll('Placemark')];
+  const out = [];
+  for (const pm of pms) {
+    const name = (pm.querySelector('name')?.textContent || '').trim() || ('地块 ' + (out.length + 1));
+    const coordEl = pm.querySelector('Polygon coordinates, coordinates');
+    if (!coordEl) continue;
+    const pts = coordEl.textContent.trim().split(/\s+/).map(s => s.split(',').map(Number)).filter(a => a.length >= 2 && Number.isFinite(a[0]) && Number.isFinite(a[1])).map(a => [a[0], a[1]]);
+    if (pts.length < 3) continue;
+    // 球面近似计算亩数（1 亩 = 666.667 平方米）
+    const lat0 = pts.reduce((s, p) => s + p[1], 0) / pts.length, kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+    let area2 = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length];
+      area2 += (x1 * kx) * (y2 * ky) - (x2 * kx) * (y1 * ky);
+    }
+    const areaMu = +(Math.abs(area2) / 2 / 666.667).toFixed(2);
+    out.push({ name, coords: pts, areaMu });
+  }
+  return out;
+}
+function renderFieldPage(body) {
+  const plots = db.fieldPlots || [], logs = db.farmLogs || [], tdtKey = db.settings.tiandituKey || '';
+  const totMu = sum(plots, p => p.areaMu || 0);
+  const allPts = plots.flatMap(p => p.coords || []);
+  let svgHtml = '<div class="empty">导入 KML / KMZ 地块文件或手动新增地块后，将在此展示地块分布图</div>';
+  if (allPts.length) {
+    const minX = Math.min(...allPts.map(p => p[0])), maxX = Math.max(...allPts.map(p => p[0]));
+    const minY = Math.min(...allPts.map(p => p[1])), maxY = Math.max(...allPts.map(p => p[1]));
+    const padX = Math.max(0.0005, (maxX - minX) * 0.12), padY = Math.max(0.0005, (maxY - minY) * 0.12);
+    const W = 720, H = 260;
+    const proj = ([x, y]) => [((x - (minX - padX)) / (maxX - minX + 2 * padX)) * W, H - ((y - (minY - padY)) / (maxY - minY + 2 * padY)) * H];
+    // 如果填了天地图 Key，加载中心瓦片作为卫星底图背景
+    let bgTile = '';
+    if (tdtKey) {
+      const cLng = (minX + maxX) / 2, cLat = (minY + maxY) / 2, z = 14;
+      const xt = Math.floor((cLng + 180) / 360 * (1 << z));
+      const yt = Math.floor((1 - Math.log(Math.tan(cLat * Math.PI / 180) + 1 / Math.cos(cLat * Math.PI / 180)) / Math.PI) / 2 * (1 << z));
+      bgTile = `<image href="https://t0.tianditu.gov.cn/img_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=img&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX=${z}&TILEROW=${yt}&TILECOL=${xt}&tk=${encodeURIComponent(tdtKey)}" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice" opacity="0.65"/>`;
+    }
+    svgHtml = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:260px;border-radius:10px;background:#0f172a">${bgTile}${plots.map((pl, idx) => {
+      if (!pl.coords || pl.coords.length < 3) return '';
+      const ptsStr = pl.coords.map(p => proj(p).map(n => n.toFixed(1)).join(',')).join(' ');
+      const c = proj(pl.center || pl.coords[0]);
+      return `<g data-plot-id="${pl.id}" style="cursor:pointer"><polygon points="${ptsStr}" fill="${PALETTE[idx % PALETTE.length]}" fill-opacity="0.42" stroke="#fff" stroke-width="1.5"/><text x="${c[0].toFixed(1)}" y="${c[1].toFixed(1)}" fill="#fff" font-size="12" font-weight="600" text-anchor="middle">${esc(pl.name)} (${pl.areaMu}亩)</text></g>`;
+    }).join('')}</svg>`;
+  }
+  const lf = [
+    {key:'plot', label:'全部地块', options:plots.map(p => [p.id, p.name]), test:(l, v) => l.plotId === v},
+    {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(l, v) => String(l.date || '').startsWith(v)}
+  ];
+  body.innerHTML = `<div class="grid g3 mb">
+    ${kpi('地块数量', plots.length + ' 块', 'dashboard', 'primary')}
+    ${kpi('总种植面积', num(totMu) + ' 亩', 'box', 'green')}
+    ${kpi('农事记录', logs.length + ' 条', 'clock', 'blue')}
+  </div>
+  <div class="card mb"><div class="card-head"><h3>地块地图与 KML / KMZ 导入</h3>
+    <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
+      ${isAdmin() ? `<input id="tdtKeyIn" class="select" style="width:210px" value="${esc(tdtKey)}" placeholder="输入天地图 Key（tk）"><button class="btn sm" id="tdtKeySave">保存Key</button>` : ''}
+      <label class="btn sm">${ic('upload')}导入 KML / KMZ<input type="file" id="kmlIn" accept=".kml,.kmz" hidden></label>
+      <button class="btn sm primary" id="plotAddBtn">${ic('plus')}手动新增地块</button>
+    </div></div>
+    <div class="card-body">${svgHtml}
+      ${plots.length ? `<div class="table-wrap" style="margin-top:12px"><table class="tbl compact"><thead><tr><th>地块名称</th><th class="num">面积(亩)</th><th>作物</th><th>种植时间</th><th>负责人</th><th>操作</th></tr></thead><tbody>${plots.map(p => `<tr><td><b>${esc(p.name)}</b></td><td class="num">${p.areaMu || 0}</td><td>${esc(p.crop || '-')}</td><td>${esc(p.plantDate || '-')}</td><td>${esc(p.owner || '-')}</td><td><div class="ops"><button class="tbtn" data-pl-log="${p.id}">记农事</button><button class="tbtn" data-pl-edit="${p.id}">编辑</button><button class="tbtn danger-text" data-pl-del="${p.id}">删除</button></div></td></tr>`).join('')}</tbody></table></div>` : ''}
+    </div></div>
+  <div class="card">${toolbar('farmLogs', {placeholder:'搜索地块 / 作物 / 农事安排 / 负责人 / 备注', filters:lf, buttons:`<button class="btn" data-act="export" data-id="farmLogs">${ic('download')}导出农事表</button><button class="btn primary" id="farmLogAdd">${ic('plus')}登记农事</button>`})}<div id="list-farmLogs"></div></div>`;
+  mountList('farmLogs', {rows:() => logs, search:l => (l.plotName || '') + (l.crop || '') + (l.task || '') + (l.owner || '') + (l.note || ''), filters:lf, empty:'暂无农事记录，点击右上角「登记农事」开始记录', columns:[
+    {t:'日期', r:l => l.date, s:l => l.date},
+    {t:'地块', r:l => `<b>${esc(l.plotName || '-')}</b>`},
+    {t:'作物', r:l => esc(l.crop || '-')},
+    {t:'农事安排', r:l => `<b>${esc(l.task)}</b>${l.note ? `<div class="sub-t">${esc(l.note)}</div>` : ''}`},
+    {t:'负责人', r:l => esc(l.owner || '-')},
+    {t:'照片', r:l => l.photos && l.photos.length ? l.photos.map(s => `<a href="${s}" target="_blank"><img src="${s}" style="width:36px;height:28px;object-fit:cover;border-radius:4px;margin-right:3px"></a>`).join('') : '<span class="sub-t">-</span>'},
+    {t:'操作', r:l => `<div class="ops"><button class="tbtn danger-text" data-fl-del="${l.id}">删除</button></div>`}
+  ], exp:{name:'农事日历记录', cols:[['日期', l => l.date], ['地块', l => l.plotName], ['作物', l => l.crop], ['农事安排', l => l.task], ['负责人', l => l.owner], ['备注', l => l.note]]}});
+  if ($('#tdtKeySave')) $('#tdtKeySave').onclick = () => mutate('PUT', '/api/settings', { tiandituKey: $('#tdtKeyIn').value.trim() }, '天地图 Key 已保存');
+  $('#kmlIn').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try {
+      const xml = await extractKmlFromFile(f), polys = parseKmlPolygons(xml);
+      if (!polys.length) return toast('文件中未找到有效的多边形地块坐标', 'error');
+      for (const pl of polys) await api('POST', '/api/field-plots', pl);
+      await reload(); render(); toast(`成功导入 ${polys.length} 块地块`, 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  };
+  const openPlotModal = p => formModal({
+    title: p ? '编辑地块 · ' + p.name : '新增地块',
+    data: p ? {...p} : { plantDate: today(), owner: ME.name, areaMu: 0 },
+    fields:[
+      {n:'name', l:'地块名称', req:1}, {n:'areaMu', l:'面积（亩）', type:'number'},
+      {n:'crop', l:'当前作物', ph:'如：水稻、玉米'}, {n:'plantDate', l:'种植时间', type:'date'},
+      {n:'owner', l:'负责人'}, {n:'note', l:'备注', span:1}
+    ],
+    onSubmit: v => mutate(p ? 'PUT' : 'POST', '/api/field-plots' + (p ? '/' + p.id : ''), v, p ? '地块已更新' : '地块已新增')
+  });
+  const openFarmLogModal = plotId => {
+    let photos = [];
+    const pl = plotId ? byId(plots, plotId) : null;
+    openModal(`${modalHead('登记农事记录')}<div class="m-body"><div class="form-grid">
+      <label class="field"><span>地块</span><select id="flPlot"><option value="">-- 选择地块 --</option>${plots.map(p => `<option value="${p.id}" ${p.id === plotId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>日期 <i>*</i></span><input type="date" id="flDate" value="${today()}"></label>
+      <label class="field"><span>作物</span><input id="flCrop" value="${esc(pl ? pl.crop || '' : '')}" placeholder="如：水稻"></label>
+      <label class="field"><span>负责人</span><input id="flOwner" value="${esc((pl && pl.owner) || ME.name)}"></label>
+      <label class="field span2"><span>农事安排 / 内容 <i>*</i></span><input id="flTask" placeholder="如：播种、施肥、无人机飞防打药、灌溉"></label>
+      <label class="field span2"><span>备注</span><textarea id="flNote" rows="2"></textarea></label>
+    </div><div style="margin-top:8px;display:flex;gap:8px;align-items:center"><label class="btn sm">${ic('upload')}上传现场照片（最多 4 张）<input type="file" id="flPhotos" accept="image/*" multiple hidden></label><div id="flPhotoPrev" style="display:flex;gap:6px"></div></div></div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="flSave">${ic('check')}保存农事</button></div>`);
+    $('#flPhotos').onchange = async e => {
+      for (const f of [...e.target.files].slice(0, 4 - photos.length)) { try { photos.push(await shrinkImage(f, 1200, 350000)); } catch (err) {} }
+      e.target.value = '';
+      $('#flPhotoPrev').innerHTML = photos.map(s => `<img src="${s}" style="width:44px;height:44px;object-fit:cover;border-radius:6px">`).join('');
+    };
+    $('#flSave').onclick = () => {
+      const task = $('#flTask').value.trim(); if (!task) return toast('请填写农事安排', 'error');
+      return mutate('POST', '/api/farm-logs', { plotId: $('#flPlot').value, date: $('#flDate').value || today(), crop: $('#flCrop').value.trim(), owner: $('#flOwner').value.trim(), task, note: $('#flNote').value.trim(), photos }, '农事记录已保存');
+    };
+  };
+  $('#plotAddBtn').onclick = () => openPlotModal(null);
+  $('#farmLogAdd').onclick = () => openFarmLogModal('');
+  body.addEventListener('click', e => {
+    const a = e.target.closest('[data-pl-log]'); if (a) openFarmLogModal(a.dataset.plLog);
+    const b = e.target.closest('[data-pl-edit]'); if (b) openPlotModal(byId(plots, b.dataset.plEdit));
+    const c = e.target.closest('[data-pl-del]'); if (c) confirmBox('确定删除该地块吗？', () => mutate('DELETE', '/api/field-plots/' + c.dataset.plDel, undefined, '地块已删除'));
+    const d = e.target.closest('[data-fl-del]'); if (d) confirmBox('确定删除该农事记录吗？', () => mutate('DELETE', '/api/farm-logs/' + d.dataset.flDel, undefined, '农事记录已删除'));
+  });
+}
+
+/* ================= #8 合同管理 ================= */
+function pageContracts() {
+  if (!ui.ctTab) ui.ctTab = 'list';
+  const rows = db.contracts || [], tpls = db.contractTpls || [];
+  $('#view').innerHTML = pageHead('合同管理', '销售、采购与粮食购销合同台账，支持自定义合同模板与一键打印') + `
+  ${tabs('ctTab', [['list', '合同台账'], ['tpl', '自定义合同模板']])}
+  <div id="ctBody"></div>`;
+  const ctBody = $('#ctBody');
+  if (ui.ctTab === 'tpl') {
+    ctBody.innerHTML = `<div class="card"><div class="card-head"><h3>合同模板</h3><span class="sub-t">支持变量：{{company}}、{{party}}、{{amount}}、{{date}}、{{no}}、{{orderNo}}</span><button class="btn primary" id="ctTplAdd" style="margin-left:auto">${ic('plus')}新建合同模板</button></div><div class="card-body">
+      ${tpls.length ? `<table class="tbl"><thead><tr><th>模板名称</th><th>类型</th><th>操作</th></tr></thead><tbody>${tpls.map(t => `<tr><td><b>${esc(t.name)}</b></td><td>${badge(t.kind, 'blue plain')}</td><td><div class="ops"><button class="tbtn" data-ctt-edit="${t.id}">编辑</button><button class="tbtn danger-text" data-ctt-del="${t.id}">删除</button></div></td></tr>`).join('')}</tbody></table>` : '<div class="empty">还没有自定义合同模板，点击右上角「新建合同模板」创建</div>'}
+    </div></div>`;
+    const openTpl = t => formModal({
+      title: t ? '编辑合同模板' : '新建合同模板',
+      data: t ? {...t} : { kind:'通用合同', body:'甲方：{{company}}\n乙方：{{party}}\n合同编号：{{no}}   签订日期：{{date}}\n关联单据：{{orderNo}}\n合同金额：人民币 {{amount}} 元\n\n一、甲乙双方本着平等互利原则签订本合同……' },
+      fields:[
+        {n:'name', l:'模板名称', req:1}, {n:'kind', l:'合同类型', type:'select', opts:['销售合同', '采购合同', '粮食购销合同', '通用合同']},
+        {n:'body', l:'合同正文模板（支持 {{company}} / {{party}} / {{amount}} / {{date}} / {{no}} / {{orderNo}}）', type:'textarea', span:1}
+      ],
+      onSubmit: v => mutate(t ? 'PUT' : 'POST', '/api/contract-tpls' + (t ? '/' + t.id : ''), v, t ? '模板已更新' : '合同模板已创建')
+    });
+    $('#ctTplAdd').onclick = () => openTpl(null);
+    ctBody.addEventListener('click', e => {
+      const a = e.target.closest('[data-ctt-edit]'); if (a) openTpl(byId(tpls, a.dataset.cttEdit));
+      const b = e.target.closest('[data-ctt-del]'); if (b) confirmBox('删除该合同模板吗？', () => mutate('DELETE', '/api/contract-tpls/' + b.dataset.cttDel, undefined, '已删除'));
+    });
+    return;
+  }
+  const f = [{key:'kind', label:'全部类型', options:['销售合同', '采购合同', '粮食购销合同', '通用合同'], test:(r, v) => r.kind === v}, {key:'st', label:'全部状态', options:['草稿', '执行中', '已完成', '已终止'], test:(r, v) => r.status === v}];
+  ctBody.innerHTML = `<div class="card">${toolbar('ctList', {placeholder:'搜索合同编号 / 标题 / 对方单位 / 关联单号', filters:f, buttons:`<button class="btn primary" id="ctAddBtn">${ic('plus')}新建合同</button>`})}<div id="list-ctList"></div></div>`;
+  mountList('ctList', {rows:() => rows, search:r => r.no + r.title + r.partyName + (r.orderNo || ''), filters:f, empty:'暂无合同记录，点击右上角「新建合同」创建', columns:[
+    {t:'合同编号', r:r => `<b>${esc(r.no)}</b>`, s:r => r.no},
+    {t:'合同标题', r:r => `<b>${esc(r.title)}</b><div class="sub-t">${esc(r.kind)}</div>`},
+    {t:'对方单位', r:r => esc(r.partyName)},
+    {t:'关联单据', r:r => r.orderNo ? `<span class="badge blue plain">${esc(r.orderNo)}</span>` : '<span class="sub-t">-</span>'},
+    {t:'合同金额', cls:'num', r:r => money(r.amount), s:r => r.amount},
+    {t:'签订日期', r:r => r.date, s:r => r.date},
+    {t:'状态', r:r => badge(r.status, r.status === '执行中' ? 'blue' : r.status === '已完成' ? 'green' : 'gray')},
+    {t:'操作', r:r => `<div class="ops"><button class="tbtn" data-ct-pr="${r.id}">打印</button><button class="tbtn" data-ct-ed="${r.id}">编辑</button><button class="tbtn danger-text" data-ct-del="${r.id}">删除</button></div>`}
+  ]});
+  const openCt = c => {
+    const orderOpts = [
+      ['', '不关联业务单据'],
+      ...db.sales.slice(0, 80).map(o => ['sales|' + o.id, `销售单 ${o.no} · ${partyName('sales', o)}`]),
+      ...db.purchases.slice(0, 80).map(o => ['purchase|' + o.id, `采购单 ${o.no} · ${partyName('purchase', o)}`]),
+      ...(db.grainDocs || []).slice(0, 80).map(o => ['grain|' + o.id, `粮食单 ${o.no} · ${o.farmerName}`])
+    ];
+    openModal(`${modalHead(c ? '编辑合同 · ' + c.no : '新建合同')}<div class="m-body"><div class="form-grid">
+      <label class="field"><span>合同标题 <i>*</i></span><input id="ctTitle" value="${esc(c ? c.title : '')}" placeholder="如：2026 年度玉米购销合同"></label>
+      <label class="field"><span>合同类型</span><select id="ctKind">${['销售合同', '采购合同', '粮食购销合同', '通用合同'].map(k => `<option ${c && c.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
+      <label class="field"><span>对方单位 / 姓名 <i>*</i></span><input id="ctParty" value="${esc(c ? c.partyName : '')}"></label>
+      <label class="field"><span>合同金额（元）</span><input type="number" step="0.01" id="ctAmt" value="${c ? c.amount : 0}"></label>
+      <label class="field"><span>关联单据（销售/采购/粮食）</span><select id="ctOrd">${orderOpts.map(([v, l]) => `<option value="${esc(v)}" ${c && c.orderId && (c.orderKind + '|' + c.orderId) === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
+      <label class="field"><span>套用合同模板</span><select id="ctTpl"><option value="">-- 不套用 / 手写 --</option>${tpls.map(t => `<option value="${t.id}" ${c && c.tplId === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>签订日期</span><input type="date" id="ctDate" value="${c ? c.date : today()}"></label>
+      <label class="field"><span>状态</span><select id="ctSt">${['草稿', '执行中', '已完成', '已终止'].map(s => `<option ${c && c.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
+      <label class="field span2"><span>合同正文内容</span><textarea id="ctBodyIn" rows="8">${esc(c ? c.content || '' : '')}</textarea></label>
+    </div></div><div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="ctSave">${ic('check')}保存合同</button></div>`, 'lg');
+    $('#ctTpl').onchange = () => {
+      const tp = byId(tpls, $('#ctTpl').value); if (!tp) return;
+      const ordVal = $('#ctOrd').value, ordNo = ordVal ? (orderOpts.find(x => x[0] === ordVal)?.[1] || '').split(' ')[1] || '' : '';
+      $('#ctBodyIn').value = tp.body
+        .replaceAll('{{company}}', db.settings.company || '')
+        .replaceAll('{{party}}', $('#ctParty').value.trim())
+        .replaceAll('{{amount}}', $('#ctAmt').value || '0')
+        .replaceAll('{{date}}', $('#ctDate').value || today())
+        .replaceAll('{{no}}', c ? c.no : '自动生成')
+        .replaceAll('{{orderNo}}', ordNo);
+    };
+    $('#ctSave').onclick = () => {
+      const [orderKind, orderId] = $('#ctOrd').value ? split($('#ctOrd').value) : ['', ''];
+      return mutate(c ? 'PUT' : 'POST', '/api/contracts' + (c ? '/' + c.id : ''), {
+        title: $('#ctTitle').value.trim(), kind: $('#ctKind').value, partyName: $('#ctParty').value.trim(),
+        amount: +$('#ctAmt').value || 0, orderKind, orderId, tplId: $('#ctTpl').value,
+        date: $('#ctDate').value || today(), status: $('#ctSt').value, content: $('#ctBodyIn').value
+      }, c ? '合同已更新' : '合同已创建');
+    };
+  };
+  $('#ctAddBtn').onclick = () => openCt(null);
+  ctBody.addEventListener('click', e => {
+    const a = e.target.closest('[data-ct-ed]'); if (a) openCt(byId(rows, a.dataset.ctEd));
+    const b = e.target.closest('[data-ct-del]'); if (b) confirmBox('确定删除这份合同吗？', () => mutate('DELETE', '/api/contracts/' + b.dataset.ctDel, undefined, '合同已删除'));
+    const p = e.target.closest('[data-ct-pr]');
+    if (p) {
+      const r = byId(rows, p.dataset.ctPr); if (!r) return;
+      printFrame(r.no, `<div class="s-title"><h1>${esc(r.title)}</h1><div class="s-head">合同编号：${esc(r.no)} · 签订日期：${r.date}</div></div><div style="white-space:pre-wrap;line-height:1.8;margin-top:16px;font-size:14px">${esc(r.content || '')}</div>`, 'a4');
+    }
+  });
+}
+
+/* ================= #21 工程结算（人工费 + 商品材料扣库存 + 杂项费用） ================= */
+function pageEngJobs() {
+  const rows = db.engJobs || [], ok = rows.filter(r => r.status !== '已作废');
+  const totAmt = sum(ok, r => r.totalAmount), totPaid = sum(ok, r => r.paid || 0);
+  $('#view').innerHTML = pageHead('工程结算', '工程用料直接扣减库存，同步核算人工费、杂项费用与工程收款') + `
+  <div class="grid g4 mb">
+    ${kpi('工程总数', ok.length, 'dashboard', 'primary')}
+    ${kpi('工程总额', moneyK(totAmt), 'coin', 'blue')}
+    ${kpi('已收工程款', moneyK(totPaid), 'wallet', 'green')}
+    ${kpi('待收尾款', moneyK(Math.max(0, totAmt - totPaid)), 'wallet', 'orange')}
+  </div>
+  <div class="card">${toolbar('engList', {placeholder:'搜索单号 / 工程名称 / 客户', buttons:`<button class="btn primary" id="engAddBtn">${ic('plus')}新建工程单</button>`})}<div id="list-engList"></div></div>`;
+  mountList('engList', {rows:() => rows, search:r => r.no + r.name + (r.partyName || ''), empty:'暂无工程结算单，点击右上角「新建工程单」录入', columns:[
+    {t:'工程编号', r:r => `<b>${esc(r.no)}</b>`, s:r => r.no},
+    {t:'工程名称', r:r => `<b>${esc(r.name)}</b><div class="sub-t">${esc(r.partyName || '-')}</div>`},
+    {t:'日期', r:r => r.date, s:r => r.date},
+    {t:'材料 / 人工 / 杂项', cls:'num', r:r => `材 ${money(r.matTotal)} · 工 ${money(r.laborTotal)} · 杂 ${money(r.miscTotal)}`},
+    {t:'工程总额', cls:'num', r:r => `<b>${money(r.totalAmount)}</b><div class="sub-t pos">已收 ${money(r.paid || 0)}</div>`, s:r => r.totalAmount},
+    {t:'状态', r:r => badge(r.status, r.status === '已完工' ? 'green' : r.status === '施工中' ? 'blue' : 'gray')},
+    {t:'操作', r:r => `<div class="ops">${r.status !== '已作废' && r.totalAmount - (r.paid || 0) > 0.001 ? `<button class="tbtn primary" data-eg-pay="${r.id}">收款</button>` : ''}${r.status === '施工中' ? `<button class="tbtn" data-eg-done="${r.id}">完工</button>` : ''}${r.status !== '已作废' && !(r.paid > 0) ? `<button class="tbtn danger-text" data-eg-void="${r.id}">作废</button>` : ''}</div>`}
+  ]});
+  $('#engAddBtn').onclick = () => {
+    const items = [], labors = [{ name:'施工人工', days:1, rate:300, amount:300 }], miscs = [];
+    openModal(`${modalHead('新建工程结算单')}<div class="m-body"><div class="form-grid">
+      <label class="field"><span>工程名称 <i>*</i></span><input id="egName" placeholder="如：XX小区水电改造工程"></label>
+      <label class="field"><span>客户</span><select id="egCust"><option value="">-- 选择客户（选填） --</option>${db.customers.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>日期</span><input type="date" id="egDate" value="${today()}"></label>
+      ${multiWh() ? `<label class="field"><span>出库仓库</span><select id="egWh">${whOpts(META.defaultWh)}</select></label>` : ''}
+    </div>
+    <div class="line-head"><b>1. 商品材料清单（保存直接扣库存）</b><button type="button" class="btn sm" id="egAddMat">${ic('plus')}加材料</button></div><div id="egMats"></div>
+    <div class="line-head"><b>2. 人工费</b><button type="button" class="btn sm" id="egAddLab">${ic('plus')}加人工</button></div><div id="egLabs"></div>
+    <div class="line-head"><b>3. 杂项费用</b><button type="button" class="btn sm" id="egAddMisc">${ic('plus')}加杂项</button></div><div id="egMiscs"></div>
+    <div class="o-total" style="margin-top:12px">工程合计 <b id="egTot">¥0.00</b></div></div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="egSave">${ic('check')}保存工程单并扣库</button></div>`, 'lg');
+    const draw = () => {
+      $('#egMats').innerHTML = items.length ? `<table class="tbl compact"><thead><tr><th>商品</th><th style="width:90px">数量</th><th style="width:100px">单价</th><th style="width:36px"></th></tr></thead><tbody>${items.map((it, i) => `<tr><td><select data-em-p="${i}" class="select"><option value="">选择商品</option>${db.products.filter(p => !p.serial).map(p => `<option value="${p.id}" ${p.id === it.productId ? 'selected' : ''}>${esc(p.name)}（库${p.stock}）</option>`).join('')}</select></td><td><input data-em-q="${i}" type="number" min="0.01" step="any" value="${it.qty}"></td><td><input data-em-pr="${i}" type="number" min="0" step="0.01" value="${it.price}"></td><td><button type="button" class="icon-btn sm" data-em-d="${i}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table>` : '<div class="sub-t">未添加材料</div>';
+      $('#egLabs').innerHTML = labors.length ? `<table class="tbl compact"><thead><tr><th>人工项目</th><th style="width:80px">工天</th><th style="width:90px">单价/天</th><th style="width:100px">小计</th><th style="width:36px"></th></tr></thead><tbody>${labors.map((l, i) => `<tr><td><input data-el-n="${i}" value="${esc(l.name)}"></td><td><input data-el-d="${i}" type="number" step="0.5" value="${l.days}"></td><td><input data-el-r="${i}" type="number" value="${l.rate}"></td><td><input data-el-a="${i}" type="number" value="${l.amount}"></td><td><button type="button" class="icon-btn sm" data-el-del="${i}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table>` : '<div class="sub-t">未添加人工费</div>';
+      $('#egMiscs').innerHTML = miscs.length ? `<table class="tbl compact"><thead><tr><th>杂项名称</th><th style="width:120px">金额</th><th style="width:36px"></th></tr></thead><tbody>${miscs.map((m, i) => `<tr><td><input data-ex-n="${i}" value="${esc(m.name)}" placeholder="如：机械租赁、辅材"></td><td><input data-ex-a="${i}" type="number" value="${m.amount}"></td><td><button type="button" class="icon-btn sm" data-ex-del="${i}">${ic('trash')}</button></td></tr>`).join('')}</tbody></table>` : '<div class="sub-t">未添加杂项费用</div>';
+      const tot = sum(items, x => (+x.qty || 0) * (+x.price || 0)) + sum(labors, x => +x.amount || 0) + sum(miscs, x => +x.amount || 0);
+      $('#egTot').textContent = money(tot);
+    };
+    $('#egAddMat').onclick = () => { items.push({ productId:'', qty:1, price:0 }); draw(); };
+    $('#egAddLab').onclick = () => { labors.push({ name:'人工费', days:1, rate:300, amount:300 }); draw(); };
+    $('#egAddMisc').onclick = () => { miscs.push({ name:'', amount:0 }); draw(); };
+    $('.m-body').addEventListener('change', e => {
+      if (e.target.dataset.emP != null) { const i = +e.target.dataset.emP, p = byId(db.products, e.target.value); items[i].productId = e.target.value; if (p) items[i].price = p.price || 0; draw(); }
+    });
+    $('.m-body').addEventListener('input', e => {
+      const t = e.target;
+      if (t.dataset.emQ != null) { items[+t.dataset.emQ].qty = +t.value || 0; draw(); }
+      if (t.dataset.emPr != null) { items[+t.dataset.emPr].price = +t.value || 0; draw(); }
+      if (t.dataset.elN != null) labors[+t.dataset.elN].name = t.value;
+      if (t.dataset.elD != null) { const l = labors[+t.dataset.elD]; l.days = +t.value || 0; l.amount = +(l.days * l.rate).toFixed(2); draw(); }
+      if (t.dataset.elR != null) { const l = labors[+t.dataset.elR]; l.rate = +t.value || 0; l.amount = +(l.days * l.rate).toFixed(2); draw(); }
+      if (t.dataset.elA != null) { labors[+t.dataset.elA].amount = +t.value || 0; $('#egTot').textContent = money(sum(items, x => (+x.qty || 0) * (+x.price || 0)) + sum(labors, x => +x.amount || 0) + sum(miscs, x => +x.amount || 0)); }
+      if (t.dataset.exN != null) miscs[+t.dataset.exN].name = t.value;
+      if (t.dataset.exA != null) { miscs[+t.dataset.exA].amount = +t.value || 0; $('#egTot').textContent = money(sum(items, x => (+x.qty || 0) * (+x.price || 0)) + sum(labors, x => +x.amount || 0) + sum(miscs, x => +x.amount || 0)); }
+    });
+    $('.m-body').addEventListener('click', e => {
+      const a = e.target.closest('[data-em-d]'); if (a) { items.splice(+a.dataset.emD, 1); draw(); }
+      const b = e.target.closest('[data-el-del]'); if (b) { labors.splice(+b.dataset.elDel, 1); draw(); }
+      const c = e.target.closest('[data-ex-del]'); if (c) { miscs.splice(+c.dataset.exDel, 1); draw(); }
+    });
+    draw();
+    $('#egSave').onclick = () => mutate('POST', '/api/engjobs', {
+      name: $('#egName').value.trim(), customerId: $('#egCust').value, date: $('#egDate').value || today(),
+      wh: $('#egWh') ? $('#egWh').value : META.defaultWh, items: items.filter(x => x.productId && x.qty > 0), labors, miscs
+    }, r => '工程单已保存：' + r.no);
+  };
+  $('#view').addEventListener('click', e => {
+    const p = e.target.closest('[data-eg-pay]');
+    if (p) {
+      const o = byId(rows, p.dataset.egPay); if (!o) return;
+      const up = +(o.totalAmount - (o.paid || 0)).toFixed(2);
+      formModal({ title:'工程收款 · ' + o.no, data:{ amount: up, account: acctDefault(), date: today() }, fields:[{n:'amount', l:'本次收款（元）', type:'number', req:1}, {n:'account', l:'收款账户', type:'select', opts:acctOpts()}, {n:'date', l:'日期', type:'date'}], onSubmit: v => mutate('POST', `/api/engjobs/${o.id}/pay`, v, '工程收款已登记') });
+    }
+    const d = e.target.closest('[data-eg-done]'); if (d) mutate('PUT', `/api/engjobs/${d.dataset.egDone}`, { status:'已完工' }, '已标记完工');
+    const v = e.target.closest('[data-eg-void]'); if (v) confirmBox('确定作废该工程单吗？已扣减的材料库存将自动冲回。', () => mutate('POST', `/api/engjobs/${v.dataset.egVoid}/void`, {}, '工程单已作废，库存已冲回'));
+  });
 }
 
 /* ================= 页面：财务 ================= */
@@ -5339,7 +6127,7 @@ function pageFinance() {
     ${kpi('应收账款', moneyK(recv), 'wallet', 'orange')}
     ${kpi('应付账款', moneyK(pay), 'wallet', 'purple')}
   </div>
-  ${tabs('finTab', [['flow', '收支流水'], ['acct', '资金账户'], ['recv', '应收账款'], ['pay', '应付账款'], ['inv', '发票管理'], ['chart', '收支分析']])}
+  ${tabs('finTab', [['flow', '收支流水'], ['acct', '资金账户'], ['recv', '应收账款'], ['pay', '应付账款'], ['inv', '发票管理'], ['assets', '固定资产'], ['chart', '收支分析']])}
   <div class="card" id="finCard"></div>`;
   const card = $('#finCard');
   if (ui.finTab === 'flow') {
@@ -5419,6 +6207,53 @@ function pageFinance() {
       {t:'状态', r:x => badge(x.status)},
       {t:'操作', r:x => `<div class="ops">${x.status !== '已作废' ? tbtn('编辑', 'invEdit', x.id) : ''}${x.status === '待开具' ? tbtn('已开具', 'invDone', x.id, 'primary') : ''}${x.status === '待收票' ? tbtn('已收票', 'invDone', x.id, 'primary') : ''}${x.status === '已开具' || x.status === '已收票' ? tbtn('作废', 'invVoid', x.id, 'danger-text') : tbtn('删除', 'invDel', x.id, 'danger-text')}</div>`}
     ], exp:{name:'发票台账', cols:[['系统编号', x => x.no], ['方向', x => x.dir === 'out' ? '销项' : '进项'], ['类型', x => x.invType], ['发票号码', x => x.invNo], ['发票代码', x => x.invCode], ['日期', x => x.date], ['往来单位', x => x.partyName], ['税号', x => x.taxId], ['关联订单', x => x.orderNo], ['税率%', x => x.taxRate], ['含税金额', x => x.amount], ['不含税金额', x => x.netAmount], ['税额', x => x.taxAmount], ['状态', x => x.status], ['备注', x => x.note]]}});
+  } else if (ui.finTab === 'assets') {
+    const assets = db.fixedAssets || [];
+    const origSum = sum(assets, a => a.origValue), depSum = sum(assets, a => a.accumDep || 0), netSum = sum(assets, a => a.netValue ?? (a.origValue - (a.accumDep || 0)));
+    const btns = `<button class="btn" id="faDepBtn">${ic('coin')}按月计提折旧</button><button class="btn primary" id="faAddBtn">${ic('plus')}新增固定资产</button>`;
+    card.innerHTML = `<div class="grid g3" style="gap:12px;padding:16px 20px 0">
+      <div class="todo" style="cursor:default"><div><small>资产原值合计</small><b>${money(origSum)}</b></div></div>
+      <div class="todo" style="cursor:default"><div><small>累计已提折旧</small><b class="neg">${money(depSum)}</b></div></div>
+      <div class="todo" style="cursor:default"><div><small>当前资产净值</small><b class="pos">${money(netSum)}</b></div></div></div>`
+      + toolbar('faList', {placeholder:'搜索编号 / 资产名称 / 类别 / 部门 / 保管人', buttons:btns}) + '<div id="list-faList"></div>';
+    mountList('faList', {rows:() => assets, search:a => a.no + a.name + (a.category || '') + (a.dept || '') + (a.keeper || ''), empty:'暂无固定资产，点击右上角「新增固定资产」建档', columns:[
+      {t:'编号', r:a => `<b>${esc(a.no)}</b>`, s:a => a.no},
+      {t:'资产名称', r:a => `<b>${esc(a.name)}</b><div class="sub-t">${esc(a.category || '')}${a.dept ? ' · ' + esc(a.dept) : ''}</div>`},
+      {t:'购置日期', r:a => a.buyDate || a.date || '-', s:a => a.buyDate || ''},
+      {t:'原值', cls:'num', r:a => money(a.origValue), s:a => a.origValue},
+      {t:'年限 / 残值', cls:'num', r:a => `${a.lifeMonths} 月<div class="sub-t">残值 ${a.salvageRate}%</div>`},
+      {t:'累计折旧', cls:'num', r:a => money(a.accumDep || 0) + (a.lastDepMonth ? `<div class="sub-t">计至 ${a.lastDepMonth}</div>` : '')},
+      {t:'净值', cls:'num', r:a => `<b>${money(a.netValue)}</b>`, s:a => a.netValue},
+      {t:'状态', r:a => badge(a.status, a.status === '使用中' ? 'green' : a.status === '闲置' ? 'orange' : 'gray')},
+      {t:'操作', r:a => `<div class="ops"><button class="tbtn" data-fa-edit="${a.id}">编辑</button><button class="tbtn danger-text" data-fa-del="${a.id}">删除</button></div>`}
+    ]});
+    const faModal = a => formModal({
+      title: a ? '编辑固定资产 · ' + a.no : '新增固定资产',
+      data: a ? {...a} : { category:'机械设备', buyDate:today(), salvageRate:5, lifeMonths:36, accumDep:0, status:'使用中' },
+      fields: [
+        {n:'name', l:'资产名称', req:1}, {n:'category', l:'类别', ph:'如：农机设备、办公电脑、运输车辆'},
+        {n:'buyDate', l:'购置日期', type:'date', req:1}, {n:'origValue', l:'资产原值（元）', type:'number', req:1},
+        {n:'lifeMonths', l:'折旧月数（如 36 个月）', type:'number', req:1}, {n:'salvageRate', l:'预计残值率（%）', type:'number'},
+        {n:'accumDep', l:'期初已提折旧（元）', type:'number'}, {n:'dept', l:'使用部门'},
+        {n:'keeper', l:'保管人'}, {n:'status', l:'状态', type:'select', opts:['使用中', '闲置', '已报废']},
+        {n:'note', l:'备注', span:1}
+      ],
+      onSubmit: v => mutate(a ? 'PUT' : 'POST', '/api/fixed-assets' + (a ? '/' + a.id : ''), v, a ? '固定资产已更新' : '固定资产已新增')
+    });
+    $('#faAddBtn').onclick = () => faModal(null);
+    $('#faDepBtn').onclick = () => formModal({
+      title:'按月计提固定资产折旧', okText:'计提并记入财务支出',
+      data:{ month: monthKey(today()), account: acctDefault() },
+      fields:[
+        {n:'month', l:'折旧月份（YYYY-MM）', req:1, ph:'如 2026-11'},
+        {n:'account', l:'财务挂账账户', type:'select', opts:acctOpts()}
+      ],
+      onSubmit: v => mutate('POST', '/api/fixed-assets/depreciate', v, r => `${r.month} 已计提 ${r.count} 项资产折旧，共 ${money(r.totalDep)}，已同步记入财务`)
+    });
+    card.addEventListener('click', e => {
+      const eb = e.target.closest('[data-fa-edit]'); if (eb) faModal(byId(assets, eb.dataset.faEdit));
+      const dbBtn = e.target.closest('[data-fa-del]'); if (dbBtn) { const a = byId(assets, dbBtn.dataset.faDel); confirmBox(`确定删除固定资产「${esc(a ? a.name : '')}」吗？`, () => mutate('DELETE', '/api/fixed-assets/' + dbBtn.dataset.faDel, undefined, '固定资产已删除')); }
+    });
   } else {
     card.innerHTML = `<div class="card-body grid g2"><div><h3 style="margin-bottom:12px">月度收支（近 6 个月）</h3><div class="chart-box"><canvas id="f1"></canvas></div></div><div><h3 style="margin-bottom:12px">支出结构（近 6 个月）</h3><div class="chart-box"><canvas id="f2"></canvas></div></div></div>`;
     const ms = lastMonths(6), fm = (mk, t) => sum(db.finance.filter(f => f.type === t && monthKey(f.date) === mk), f => f.amount);
@@ -5489,6 +6324,7 @@ function invModal(id) {
     <label class="field"><span>选择档案单位</span><select id="ivPartyId">${partyListHtml(d0.dir)}</select></label>
     <label class="field"><span>单位名称 <i>*</i></span><input id="ivPartyName" value="${esc(d0.partyName || '')}" placeholder="选单位自动填入，也可手输"></label>
     <label class="field"><span>纳税人识别号（税号）</span><input id="ivTaxId" value="${esc(d0.taxId || '')}" placeholder="选填"></label>
+    <div class="span2" id="ivCustInfo" style="display:none;padding:8px 12px;border-radius:8px;background:var(--panel2);font-size:12px;color:var(--muted);line-height:1.6"></div>
     <label class="field"><span>关联订单（选填）</span><select id="ivOrder">${orderOptsFor(d0.dir)}</select></label>
     <label class="field"><span>含税金额（元） <i>*</i></span><input type="number" step="0.01" min="0.01" id="ivAmt" value="${d0.amount ?? ''}"></label>
     <label class="field"><span>税率（%）</span><div style="display:flex;gap:6px"><input type="number" step="0.1" min="0" max="100" id="ivRate" value="${d0.taxRate ?? 13}" style="flex:1">
@@ -5510,9 +6346,24 @@ function invModal(id) {
     $('#ivStatus').innerHTML = statusOpts(dir).map(s => `<option>${s}</option>`).join('');
     $('#ivStatus').value = dir === 'out' ? '已开具' : '待收票';
   };
+  const showPartyInvInfo = p => {
+    const box = $('#ivCustInfo'); if (!box) return;
+    const parts = p ? [p.bankName && '开户行：' + p.bankName, p.bankAccount && '账号：' + p.bankAccount, p.regAddress && '注册地址：' + p.regAddress, p.regPhone && '电话：' + p.regPhone].filter(Boolean) : [];
+    if (!parts.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    const copyTxt = [p.invoiceTitle || p.name, p.taxId && '税号：' + p.taxId, ...parts].filter(Boolean).join('\n');
+    box.style.display = '';
+    box.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span><b>客户开票资料：</b>${esc(parts.join('　|　'))}</span><button type="button" class="btn sm" id="ivCopyInfo">复制开票资料</button></div>`;
+    $('#ivCopyInfo').onclick = () => navigator.clipboard ? navigator.clipboard.writeText(copyTxt).then(() => toast('开票资料已复制')) : toast(copyTxt, 'info');
+  };
+  const applyParty = p => {
+    if (!p) { showPartyInvInfo(null); return; }
+    $('#ivPartyName').value = p.invoiceTitle || p.name;
+    if (p.taxId) $('#ivTaxId').value = p.taxId;
+    showPartyInvInfo(p);
+  };
   $('#ivPartyId').onchange = () => {
     const p = byId(db[$('#ivDir').value === 'out' ? 'customers' : 'suppliers'], $('#ivPartyId').value);
-    if (p) { $('#ivPartyName').value = p.name; if (p.taxId) $('#ivTaxId').value = p.taxId; }
+    applyParty(p);
   };
   $('#ivOrder').onchange = () => {
     const v = $('#ivOrder').value; if (!v) return;
@@ -5522,10 +6373,16 @@ function invModal(id) {
     if (!$('#ivAmt').value) $('#ivAmt').value = (ok === 'grain' ? o.totalAmount : orderTotal(o)).toFixed(2);
     if (!$('#ivPartyName').value) {
       if (ok === 'grain') $('#ivPartyName').value = o.farmerName || '';
-      else { const pid = o[ORD[ok].partyKey]; $('#ivPartyId').value = pid || ''; $('#ivPartyName').value = partyName(ok, o); }
+      else {
+        const pid = o[ORD[ok].partyKey];
+        $('#ivPartyId').value = pid || '';
+        const p = pid && byId(db[$('#ivDir').value === 'out' ? 'customers' : 'suppliers'], pid);
+        if (p) applyParty(p); else $('#ivPartyName').value = partyName(ok, o);
+      }
     }
     calc();
   };
+  if (d0.partyId) showPartyInvInfo(byId(db[d0.dir === 'out' ? 'customers' : 'suppliers'], d0.partyId));
   $('#ivRatePick').onchange = () => { if ($('#ivRatePick').value !== '') { $('#ivRate').value = $('#ivRatePick').value; calc(); } };
   $('#ivAmt').oninput = calc; $('#ivRate').oninput = calc;
   calc();
@@ -5586,31 +6443,101 @@ function empTpl() {
   }).catch(e => toast(e.message, 'error'));
 }
 function pageEmployees() {
+  if (!ui.hrTab) ui.hrTab = 'list';
   const on = db.employees.filter(e => e.status !== '离职');
-  const filters = [{key:'dept', label:'全部部门', options:[...depts(), ...(db.employees.some(e => !e.dept) ? ['未分配部门'] : [])], test:(e, v) => (e.dept || '未分配部门') === v}, {key:'st', label:'全部状态', options:['在职', '试用期', '离职'], test:(e, v) => e.status === v}];
-  $('#view').innerHTML = pageHead('人事管理', '员工档案、部门、登录账号关联与薪资') + `
+  const filters = [{key:'dept', label:'全部部门', options:[...depts(), ...(db.employees.some(e => !e.dept) ? ['未分配部门'] : [])], test:(e, v) => (e.dept || '未分配部门') === v}, {key:'st', label:'全部状态', options:['在职', '试用期', '临工', '离职'], test:(e, v) => e.status === v}];
+  $('#view').innerHTML = pageHead('人事管理', '员工档案（含临工与代表）、考勤打卡奖惩与按月工资表') + `
   <div class="grid g4 mb">
-    ${kpi('在职人数', on.length, 'users', 'primary')}
+    ${kpi('在职 / 临工', on.length, 'users', 'primary', `<div class="trend"><span>临工 ${on.filter(e => e.status === '临工').length} 人</span></div>`)}
     ${kpi('部门数', new Set(on.map(e => e.dept)).size, 'dashboard', 'purple')}
-    ${kpi('月薪资总额', moneyK(sum(on, e => e.salary)), 'coin', 'green')}
-    ${kpi('平均月薪', money(on.length ? sum(on, e => e.salary) / on.length : 0), 'chart', 'blue')}
+    ${kpi('月薪资基数', moneyK(sum(on, e => e.salary)), 'coin', 'green')}
+    ${kpi('已生成工资表', (db.payrolls || []).length + ' 期', 'chart', 'blue')}
   </div>
-  <div class="grid g-2-1">
-    <div class="card">${toolbar('employees', {placeholder:'搜索姓名 / 工号 / 职位', filters, buttons:`<button class="btn" data-act="deptManage">${ic('dashboard')}部门</button><button class="btn" data-act="empImport">${ic('upload')}导入</button><button class="btn" data-act="export" data-id="employees">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="employees">${ic('plus')}新增员工</button>`})}<div id="list-employees"></div></div>
+  ${tabs('hrTab', [['list', '员工档案'], ['att', '考勤打卡 / 奖惩'], ['pay', '月度工资表']])}
+  <div id="hrBody"></div>`;
+  const hrBody = $('#hrBody');
+  if (ui.hrTab === 'att') {
+    const atts = db.attendance || [];
+    const af = [{key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(a, v) => String(a.date || '').startsWith(v)}];
+    hrBody.innerHTML = `<div class="card">${toolbar('attList', {placeholder:'搜索员工姓名 / 部门 / 备注', filters:af, buttons:`<button class="btn primary" id="attAddBtn">${ic('plus')}考勤打卡 / 奖惩</button>`})}<div id="list-attList"></div></div>`;
+    mountList('attList', {rows:() => atts, search:a => a.empName + (a.dept || '') + (a.note || ''), filters:af, empty:'暂无考勤记录，点击右上角「考勤打卡 / 奖惩」录入', columns:[
+      {t:'日期', r:a => a.date, s:a => a.date},
+      {t:'员工', r:a => `<b>${esc(a.empName)}</b><div class="sub-t">${esc(a.dept || '')}</div>`},
+      {t:'出勤天数', cls:'num', r:a => a.days + ' 天'},
+      {t:'加班费', cls:'num', r:a => a.overtime ? money(a.overtime) : '-'},
+      {t:'奖金', cls:'num', r:a => a.bonus ? `<span class="pos">+${money(a.bonus)}</span>` : '-'},
+      {t:'罚款', cls:'num', r:a => a.fine ? `<span class="neg">-${money(a.fine)}</span>` : '-'},
+      {t:'备注', r:a => esc(a.note || '-')},
+      {t:'操作', r:a => `<div class="ops"><button class="tbtn danger-text" data-att-del="${a.id}">删除</button></div>`}
+    ]});
+    $('#attAddBtn').onclick = () => {
+      const opts = on.map(e => [e.id, `${e.name}${e.status === '临工' ? ' [临工]' : ''}${e.dept ? ' · ' + e.dept : ''}`]);
+      if (!opts.length) return toast('请先在员工档案添加员工', 'error');
+      formModal({
+        title:'登记考勤打卡 / 奖金 / 罚款', data:{ empId:opts[0][0], date:today(), days:1, overtime:0, bonus:0, fine:0 },
+        fields:[
+          {n:'empId', l:'员工', type:'select', opts, req:1}, {n:'date', l:'日期', type:'date', req:1},
+          {n:'days', l:'出勤天数（支持 0.5）', type:'number', req:1}, {n:'overtime', l:'加班费（元）', type:'number'},
+          {n:'bonus', l:'奖金（元）', type:'number'}, {n:'fine', l:'罚款（元）', type:'number'},
+          {n:'note', l:'备注', span:1}
+        ],
+        onSubmit: v => mutate('POST', '/api/attendance', v, '考勤已登记')
+      });
+    };
+    hrBody.addEventListener('click', e => {
+      const b = e.target.closest('[data-att-del]'); if (b) confirmBox('删除这条考勤记录吗？', () => mutate('DELETE', '/api/attendance/' + b.dataset.attDel, undefined, '已删除'));
+    });
+    return;
+  }
+  if (ui.hrTab === 'pay') {
+    const pays = db.payrolls || [];
+    hrBody.innerHTML = `<div class="card"><div class="card-head"><h3>按月自动生成工资表</h3><div style="display:flex;gap:8px;align-items:center;margin-left:auto"><input id="prMonth" type="month" class="select" style="width:150px" value="${monthKey(today())}"><button class="btn primary" id="prGenBtn">${ic('plus')}生成 / 刷新工资表</button></div></div><div class="card-body">
+      ${pays.length ? pays.map(p => {
+        const repMap = {};
+        (p.items || []).filter(i => i.tempRep).forEach(i => { repMap[i.tempRep] = (repMap[i.tempRep] || 0) + i.netPay; });
+        const repSummary = Object.entries(repMap).map(([r, amt]) => `${esc(r)} 代领 <b>${money(amt)}</b>`).join('　|　');
+        return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+            <b>${esc(p.month)} 工资表（${esc(p.no)}）</b>${badge(p.paid ? '已发放' : '待发放', p.paid ? 'green' : 'orange')}
+            <span>共 ${(p.items || []).length} 人 · 实发合计 <b class="pos">${money(p.totalPay)}</b></span>
+            <div style="margin-left:auto;display:flex;gap:6px">
+              ${!p.paid ? `<button class="btn sm primary" data-pr-pay="${p.id}">发薪并记入财务</button><button class="btn sm danger-text" data-pr-del="${p.id}">删除</button>` : `<span class="sub-t">发放日 ${p.payDate || ''}</span>`}
+            </div>
+          </div>
+          ${repSummary ? `<div style="padding:6px 10px;margin-bottom:8px;border-radius:6px;background:var(--panel2);font-size:12px"><b>临工代表统一领薪汇总：</b>${repSummary}</div>` : ''}
+          <div class="table-wrap"><table class="tbl compact"><thead><tr><th>姓名</th><th>状态 / 代表</th><th class="num">出勤天</th><th class="num">基本薪资</th><th class="num">加班</th><th class="num">奖金</th><th class="num">罚款</th><th class="num">实发工资</th></tr></thead><tbody>
+            ${(p.items || []).map(i => `<tr><td><b>${esc(i.empName)}</b></td><td>${badge(i.status)}${i.tempRep ? ` <span class="sub-t">代:${esc(i.tempRep)}</span>` : ''}</td><td class="num">${i.days}</td><td class="num">${money(i.basePay)}</td><td class="num">${money(i.overtime)}</td><td class="num pos">${money(i.bonus)}</td><td class="num neg">${money(i.fine)}</td><td class="num"><b>${money(i.netPay)}</b></td></tr>`).join('')}
+          </tbody></table></div></div>`;
+      }).join('') : '<div class="empty">还没有生成工资表，请在右上角选择月份并点击「生成 / 刷新工资表」</div>'}
+    </div></div>`;
+    $('#prGenBtn').onclick = () => {
+      const m = $('#prMonth').value; if (!m) return toast('请选择月份', 'error');
+      mutate('POST', '/api/payrolls/generate', { month: m }, `${m} 工资表已生成`);
+    };
+    hrBody.addEventListener('click', e => {
+      const pb = e.target.closest('[data-pr-pay]');
+      if (pb) formModal({ title:'发放月工资并记入财务', okText:'确认发薪', data:{ account: acctDefault() }, fields:[{n:'account', l:'付款账户', type:'select', opts:acctOpts()}], onSubmit: v => mutate('POST', `/api/payrolls/${pb.dataset.prPay}/pay`, v, '工资已发放并生成财务支出流水') });
+      const dbBtn = e.target.closest('[data-pr-del]');
+      if (dbBtn) confirmBox('确定删除这份未发放的工资表吗？', () => mutate('DELETE', '/api/payrolls/' + dbBtn.dataset.prDel, undefined, '工资表已删除'));
+    });
+    return;
+  }
+  hrBody.innerHTML = `<div class="grid g-2-1">
+    <div class="card">${toolbar('employees', {placeholder:'搜索姓名 / 工号 / 职位 / 临工代表', filters, buttons:`<button class="btn" data-act="deptManage">${ic('dashboard')}部门</button><button class="btn" data-act="empImport">${ic('upload')}导入</button><button class="btn" data-act="export" data-id="employees">${ic('download')}导出</button><button class="btn primary" data-act="add" data-id="employees">${ic('plus')}新增员工</button>`})}<div id="list-employees"></div></div>
     <div class="card"><div class="card-head"><h3>部门人数分布</h3></div><div class="card-body"><div class="chart-box"><canvas id="e1"></canvas></div></div></div>
   </div>`;
-  mountList('employees', {rows:() => db.employees, search:e => e.no + e.name + e.position + e.phone + (e.username || ''), filters, columns:[
-    {t:'员工', r:e => `<div style="display:flex;gap:10px;align-items:center"><div class="avatar" style="width:32px;height:32px;font-size:13px;background:${e.gender === '女' ? 'linear-gradient(135deg,#f472b6,#fb7185)' : 'linear-gradient(135deg,#60a5fa,#6366f1)'}">${esc(e.name.slice(-1))}</div><div><b>${esc(e.name)}</b><div class="sub-t">${esc(e.no)}</div></div></div>`, s:e => e.no},
+  mountList('employees', {rows:() => db.employees, search:e => e.no + e.name + e.position + e.phone + (e.username || '') + (e.tempRep || ''), filters, columns:[
+    {t:'员工', r:e => `<div style="display:flex;gap:10px;align-items:center"><div class="avatar" style="width:32px;height:32px;font-size:13px;background:${e.gender === '女' ? 'linear-gradient(135deg,#f472b6,#fb7185)' : 'linear-gradient(135deg,#60a5fa,#6366f1)'}">${esc(e.name.slice(-1))}</div><div><b>${esc(e.name)}</b><div class="sub-t">${esc(e.no)}${e.tempRep ? ' · 代表:' + esc(e.tempRep) : ''}</div></div></div>`, s:e => e.no},
     {t:'部门', r:e => e.dept ? esc(e.dept) : '<span class="sub-t">未分配</span>', s:e => e.dept},
     {t:'职位', r:e => esc(e.position)},
     {t:'登录账号', r:e => e.username ? badge(e.username, 'blue plain') : '<span class="sub-t">未开账号</span>', s:e => e.username || ''},
     {t:'手机', r:e => esc(e.phone || '-')},
-    {t:'月薪', cls:'num', r:e => money(e.salary), s:e => e.salary},
+    {t:'薪资', cls:'num', r:e => e.status === '临工' && e.dailyWage ? `${money(e.dailyWage)}/天` : money(e.salary), s:e => e.salary},
     {t:'生日', r:e => { const b = idBirthday(e.idCard); return b ? `<span title="${esc(maskIdCard(e.idCard))}">${b.slice(5)} <span class="sub-t">${birthdayDays(b)} 天后</span></span>` : '<span class="sub-t">-</span>'; }, s:e => idBirthday(e.idCard)},
     {t:'入职日期', r:e => esc(e.joinDate), s:e => e.joinDate},
-    {t:'状态', r:e => badge(e.status)},
+    {t:'状态', r:e => badge(e.status, e.status === '临工' ? 'purple' : '')},
     {t:'操作', r:e => `<div class="ops">${tbtn('编辑', 'edit', 'employees|' + e.id)}${tbtn('删除', 'del', 'employees|' + e.id, 'danger-text')}</div>`}
-  ], bulk:{label:'员工', remove:id => '/api/employees/' + id}, exp:{name:'员工名单', cols:[['工号', e => e.no], ['姓名', e => e.name], ['性别', e => e.gender], ['部门', e => e.dept], ['职位', e => e.position], ['手机', e => e.phone], ['身份证号', e => maskIdCard(e.idCard)], ['生日', e => idBirthday(e.idCard)], ['月薪', e => e.salary], ['入职日期', e => e.joinDate], ['状态', e => e.status]]}});
+  ], bulk:{label:'员工', remove:id => '/api/employees/' + id}, exp:{name:'员工名单', cols:[['工号', e => e.no], ['姓名', e => e.name], ['性别', e => e.gender], ['部门', e => e.dept], ['职位', e => e.position], ['手机', e => e.phone], ['身份证号', e => maskIdCard(e.idCard)], ['生日', e => idBirthday(e.idCard)], ['月薪', e => e.salary], ['日薪', e => e.dailyWage || ''], ['临工代表', e => e.tempRep || ''], ['入职日期', e => e.joinDate], ['状态', e => e.status]]}});
   const dl = [...depts(), '未分配部门'].filter(d => on.some(e => (e.dept || '未分配部门') === d));
   const dc = dl.map(d => on.filter(e => (e.dept || '未分配部门') === d).length);
   chart('e1', {type:'doughnut', data:{labels:dl, datasets:[{data:dc, backgroundColor:dl.map((_, i) => PALETTE[i % PALETTE.length]), borderWidth:0}]}, options:{cutout:'62%'}});
@@ -5619,7 +6546,7 @@ function pageEmployees() {
   const near = bdays.filter(x => x.days <= remindDays);
   const mm = today().slice(5, 7);
   const thisMonth = bdays.filter(x => x.b.slice(5, 7) === mm).sort((a, b) => a.b.slice(5).localeCompare(b.b.slice(5)));
-  $('#view').insertAdjacentHTML('beforeend', `<div class="card" style="margin-top:16px"><div class="card-head"><h3>生日提醒</h3><span class="sub-t">仅人事可见 · 提前 <select id="bdDays" class="select" style="width:auto;padding:3px 6px">${[7, 15, 30].map(n => `<option value="${n}" ${remindDays === n ? 'selected' : ''}>${n}</option>`).join('')}</select> 天提醒</span></div><div class="card-body">
+  hrBody.insertAdjacentHTML('beforeend', `<div class="card" style="margin-top:16px"><div class="card-head"><h3>生日提醒</h3><span class="sub-t">仅人事可见 · 提前 <select id="bdDays" class="select" style="width:auto;padding:3px 6px">${[7, 15, 30].map(n => `<option value="${n}" ${remindDays === n ? 'selected' : ''}>${n}</option>`).join('')}</select> 天提醒</span></div><div class="card-body">
     ${near.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>员工</th><th>部门</th><th>生日</th><th class="num">还有</th></tr></thead><tbody>${near.map(x => `<tr><td><b>${esc(x.e.name)}</b><div class="sub-t">${esc(x.e.no)}</div></td><td>${esc(x.e.dept || '-')}</td><td>${x.b}</td><td class="num">${x.days === 0 ? '<b style="color:var(--red)">今天</b>' : x.days + ' 天'}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">未来 ${remindDays} 天没有员工生日。</div>`}
     <div class="line-head" style="margin-top:16px"><b>本月生日</b><span class="sub-t" style="margin-left:10px">本月共 ${thisMonth.length} 人</span></div>
     ${thisMonth.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>员工</th><th>部门</th><th>生日</th><th class="num">还有</th></tr></thead><tbody>${thisMonth.map(x => `<tr><td><b>${esc(x.e.name)}</b></td><td>${esc(x.e.dept || '-')}</td><td>${x.b.slice(5).replace('-', ' 月 ')} 日</td><td class="num">${x.b.slice(5) < today().slice(5) ? '已过' : x.days === 0 ? '今天' : x.days + ' 天'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="sub-t">本月没有员工生日。</p>'}
@@ -6064,29 +6991,97 @@ function parseUDI(code) {
   return (di || exp || batch) ? { di, batch, exp } : null;
 }
 async function companiesPage(body) {
-  body.innerHTML = `<div class="card"><div class="card-head"><h3>公司管理</h3><span class="sub-t">每家公司独立数据库，右上角可切换</span></div><div class="card-body">
+  body.innerHTML = `<div class="card"><div class="card-head"><h3>公司管理</h3><span class="sub-t">每家公司独立数据库，顶部可随时切换</span><button class="btn sm" id="coBatchBtn" style="margin-left:auto">${ic('users')}批量分配员工账套权限</button></div><div class="card-body">
     <div id="coList">加载中…</div>
     <h4 style="margin:18px 0 10px">新建公司</h4>
     <div class="form-grid"><label class="field"><span>公司名称</span><input id="coName" placeholder="例如 广州分公司"></label>
       <label class="field"><span>公司编码（字母 / 数字）</span><input id="coCode" placeholder="例如 gz"></label></div>
     <div style="text-align:right"><button class="btn primary" id="coAdd">${ic('plus')}新建公司</button></div>
     <p class="sub-t" style="margin-top:10px">新建后会生成一套独立数据库和备份目录，当前账号自动成为该公司管理员，商品、客户等数据互不影响。</p></div></div>`;
+  let allCompanies = [];
+  const syncCos = list => {
+    if (!Array.isArray(list)) return;
+    PORTAL_COMPANIES = list;
+    LS.set('portalCompanies', JSON.stringify(PORTAL_COMPANIES));
+    if (PORTAL) PORTAL.multi = PORTAL_COMPANIES.length > 1;
+    setupPortalUI();
+  };
   try {
     const r = await api('GET', '/api/portal/companies');
-    $('#coList').innerHTML = `<table class="tbl"><thead><tr><th>名称</th><th>编码</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody>${r.companies.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.code)}</td><td>${badge(c.enabled ? '启用' : '停用', c.enabled ? 'green' : 'gray')}</td><td>${esc((c.created || '').slice(0, 10))}</td><td><button class="btn sm" data-mem="${esc(c.code)}" data-name="${esc(c.name)}">成员</button></td></tr>`).join('')}</tbody></table>`;
+    allCompanies = r.companies || [];
+    const curCode = PORTAL_COMPANY && PORTAL_COMPANY.code;
+    $('#coList').innerHTML = `<table class="tbl"><thead><tr><th>名称</th><th>编码</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody>${allCompanies.map(c => `<tr><td><b>${esc(c.name)}</b>${c.code === curCode ? ' <span class="badge blue">当前</span>' : ''}</td><td>${esc(c.code)}</td><td>${badge(c.enabled ? '启用' : '停用', c.enabled ? 'green' : 'gray')}</td><td>${esc((c.created || '').slice(0, 10))}</td><td style="white-space:nowrap">
+      <button class="btn sm" data-mem="${esc(c.code)}" data-name="${esc(c.name)}">成员</button>
+      ${c.code !== 'default' ? `<button class="btn sm" data-tog="${esc(c.code)}" data-en="${c.enabled ? 0 : 1}">${c.enabled ? '停用' : '启用'}</button><button class="btn sm danger-text" data-cdel="${esc(c.code)}" data-name="${esc(c.name)}">删除</button>` : ''}
+    </td></tr>`).join('')}</tbody></table>`;
     document.querySelectorAll('[data-mem]').forEach(b => b.onclick = () => companyMembers(b.dataset.mem, b.dataset.name));
+    document.querySelectorAll('[data-tog]').forEach(b => b.onclick = async () => {
+      const en = b.dataset.en === '1';
+      try {
+        const x = await api('PUT', '/api/portal/companies/' + encodeURIComponent(b.dataset.tog), { enabled: en });
+        syncCos(x.companies);
+        toast(en ? '公司已启用' : '公司已停用');
+        companiesPage(body);
+      } catch (e) { toast(e.message, 'error'); }
+    });
+    document.querySelectorAll('[data-cdel]').forEach(b => b.onclick = () => {
+      const code = b.dataset.cdel, name = b.dataset.name;
+      confirmBox(`确定永久删除公司「${esc(name)}」（编码 ${esc(code)}）及其全部账套数据吗？此操作不可恢复！`, async () => {
+        try {
+          const x = await api('DELETE', '/api/portal/companies/' + encodeURIComponent(code));
+          syncCos(x.companies);
+          toast('公司已删除');
+          companiesPage(body);
+        } catch (e) { toast(e.message, 'error'); }
+      });
+    });
   } catch (e) { $('#coList').innerHTML = `<p class="neg">${esc(e.message)}</p>`; }
+  $('#coBatchBtn').onclick = () => batchAssignCompanies(allCompanies);
   $('#coAdd').onclick = async () => {
     const name = $('#coName').value.trim(), code = $('#coCode').value.trim().toLowerCase();
     if (!name || !code) return toast('请填写公司名称和编码', 'error');
     try {
       const x = await api('POST', '/api/portal/companies', { name, code });
-      PORTAL_COMPANIES = x.companies || PORTAL_COMPANIES;
-      LS.set('portalCompanies', JSON.stringify(PORTAL_COMPANIES));
-      if (PORTAL) PORTAL.multi = PORTAL_COMPANIES.length > 1;
-      setupPortalUI();
+      syncCos(x.companies);
       toast('公司已创建，可在顶部切换');
       companiesPage(body);
+    } catch (e) { toast(e.message, 'error'); }
+  };
+}
+async function batchAssignCompanies(companies) {
+  let users = [];
+  try { users = (await api('GET', '/api/portal/users')).users || []; } catch (e) { return toast(e.message, 'error'); }
+  openModal(modalHead('批量分配员工账套权限') + `<div class="m-body">
+    <div class="form-grid">
+      <label class="field"><span>选择已有账号（或直接输入新用户名）</span><select id="baPick"><option value="">-- 新建或手输用户名 --</option>${users.map(u => `<option value="${esc(u.username)}">${esc(u.username)}（${esc(u.name)}）</option>`).join('')}</select></label>
+      <label class="field"><span>用户名 <i>*</i></span><input id="baUser" placeholder="例如 zhangsan"></label>
+      <label class="field"><span>姓名</span><input id="baName" placeholder="新账号选填"></label>
+      <label class="field"><span>账套内角色</span><select id="baRole"><option value="user">普通用户</option><option value="admin">管理员</option></select></label>
+      <label class="field span2"><span>初始密码（新账号必填，已有账号留空）</span><input id="baPass" type="password" placeholder="至少 6 位"></label>
+    </div>
+    <div style="margin-top:12px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><b style="font-size:13px">允许登录的公司账套</b><div style="display:flex;gap:6px"><button type="button" class="btn sm" id="baAll">全选</button><button type="button" class="btn sm" id="baNone">全不选</button></div></div>
+      <div id="baCos" style="display:flex;flex-wrap:wrap;gap:8px 16px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--panel2)">${companies.map(c => `<label class="chk"><input type="checkbox" value="${esc(c.code)}">${esc(c.name)}（${esc(c.code)}）${c.enabled ? '' : ' [已停用]'}</label>`).join('')}</div>
+    </div></div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="baSave">${ic('check')}保存分配</button></div>`);
+  $('#baPick').onchange = () => {
+    const u = users.find(x => x.username === $('#baPick').value);
+    $('#baUser').value = u ? u.username : '';
+    $('#baName').value = u ? (u.name || '') : '';
+    const map = (u && u.companies) || {};
+    document.querySelectorAll('#baCos input[type=checkbox]').forEach(cb => { cb.checked = !!map[cb.value]; });
+    const roles = Object.values(map);
+    if (roles.length) $('#baRole').value = roles.every(r => r === 'admin') ? 'admin' : 'user';
+  };
+  $('#baAll').onclick = () => document.querySelectorAll('#baCos input[type=checkbox]').forEach(cb => { cb.checked = true; });
+  $('#baNone').onclick = () => document.querySelectorAll('#baCos input[type=checkbox]').forEach(cb => { cb.checked = false; });
+  $('#baSave').onclick = async () => {
+    const username = $('#baUser').value.trim();
+    if (!username) return toast('请填写用户名', 'error');
+    const selected = [...document.querySelectorAll('#baCos input[type=checkbox]:checked')].map(cb => cb.value);
+    try {
+      await api('POST', '/api/portal/members/batch', { username, name: $('#baName').value.trim(), role: $('#baRole').value, password: $('#baPass').value, companies: selected });
+      closeModal();
+      toast(`已为 ${username} 分配 ${selected.length} 个公司账套权限`);
     } catch (e) { toast(e.message, 'error'); }
   };
 }
@@ -6099,7 +7094,7 @@ async function companyMembers(code, name) {
       catch (e) { toast(e.message, 'error'); }
     });
   };
-  openModal(modalHead('成员管理 · ' + name) + `<div class="m-body">
+  openModal(modalHead('成员管理 · ' + esc(name)) + `<div class="m-body">
     <div id="memList">加载中…</div>
     <h4 style="margin:18px 0 10px">添加成员</h4>
     <div class="form-grid"><label class="field"><span>用户名</span><input id="memUser"></label><label class="field"><span>姓名</span><input id="memName"></label>
@@ -6169,7 +7164,7 @@ function pageSettings() {
   const items = [['general', '常规设置']];
   if (isAdmin() || can('tpl.edit')) items.push(['print', '打印模板']);
   if (medOn()) items.push(['gsp', '医疗器械']);
-  if (PORTAL && PORTAL_ADMIN) items.push(['companies', '公司管理']);
+  if (PORTAL && (PORTAL_ADMIN || isAdmin())) items.push(['companies', '公司管理']);
   if (isAdmin()) items.push(['users', '用户管理'], ['roles', '角色管理'], ['data', '数据管理'], ['audit', '操作日志']);
   if (!items.some(i => i[0] === ui.setTab)) ui.setTab = 'general';
   const st = db.settings;
@@ -7339,8 +8334,10 @@ async function expAddSigner(id) {
 async function expTransfer(id) {
   const o = byId(db.expenses, id); if (!o) return;
   const me = ME.username;
-  const people = (await loadPeople()).filter(p => p.username !== me);
-  if (!people.length) return toast('没有可转交的账号', 'error');
+  const step = o.approval && Array.isArray(o.approval.steps) ? o.approval.steps[o.approval.current] : null;
+  const blocked = new Set([me, ...((step && step.approvers) || []), ...((step && step.acted) || []).map(x => x.by)]);
+  const people = (await loadPeople()).filter(p => !blocked.has(p.username));
+  if (!people.length) return toast('没有可转交的账号（已在当前审批节点里的账号不能重复转交）', 'error');
   closeModal();
   formModal({ title: '转交审批 · ' + o.no, okText: '确认转交', fields: [
     { n: 'to', l: '转交给谁', type: 'select', opts: people.map(p => [p.username, p.name + '（' + p.username + '）']), req: 1 },
@@ -7361,7 +8358,9 @@ const NAV = [
   {id:'products', label:'商品管理', icon:'box', fn:pageProducts, perm:'prod.view'},
   {id:'sales', label:'销售管理', icon:'sales', fn:() => pageOrders('sales'), badge:() => db.sales.filter(o => o.status === '待发货').length, perm:'sales'},
   {id:'purchase', label:'采购管理', icon:'cart', fn:() => pageOrders('purchase'), badge:() => db.purchases.filter(o => o.status === '待审核').length, perm:'purchase'},
-  {id:'agri', label:'粮食收购', icon:'box', fn:pageAgri, perm:'agri'},
+  {id:'engjobs', label:'工程结算', icon:'dashboard', fn:pageEngJobs, perm:['sales', 'inv.out', 'finance']},
+  {id:'contracts', label:'合同管理', icon:'file', fn:pageContracts, perm:['sales', 'purchase', 'agri', 'finance']},
+  {id:'agri', label:'农业 / 粮食', icon:'box', fn:pageAgri, perm:'agri'},
   {id:'shipping', label:'物流运费', icon:'truck', fn:pageShipping, badge:() => db.shipments.filter(s => s.status === '申诉中').length, perm:'ship.view'},
   {group:'往来单位'},
   {id:'customers', label:'客户管理', icon:'users', fn:() => pageParty('customers'), perm:'parties'},
@@ -7373,7 +8372,7 @@ const NAV = [
   {id:'reports', label:'统计报表', icon:'chart', fn:pageReports, perm:'reports'},
   {group:'系统'},
   {id:'cloud', label:'云服务', icon:'cloud', fn:pageCloud, adminOnly:true, demoHide:true},
-  {id:'feedback', label:'问题反馈', icon:'message', fn:pageFeedback, badge:() => db.settings.feedbackUnread || 0},
+  {id:'feedback', label:'问题反馈', icon:'message', fn:pageFeedback, adminOnly:true, badge:() => db.settings.feedbackUnread || 0},
   {id:'settings', label:'系统设置', icon:'settings', fn:pageSettings}
 ];
 const PAGES = Object.fromEntries(NAV.filter(n => n.id).map(n => [n.id, n]));
@@ -7478,6 +8477,8 @@ const A = {
   shipEdit: id => { closeModal(); shipModal({edit:id}); },
   shipVoid: id => { const s = byId(db.shipments, id); confirmBox(`作废运单 ${esc(s.trackNo)}？作废后不参与对账和运费统计。`, () => mutate('POST', `/api/shipments/${id}/void`, {}, '运单已作废')); },
   adhocPay: id => { const d = byId(db.deliveries, id); if (d) mutate('PUT', '/api/deliveries/' + id, { ...d, paid: true }, '已标记付款'); },
+  adhocDone: id => { const d = byId(db.deliveries, id); if (d) mutate('PUT', '/api/deliveries/' + id, { ...d, status: '已完成' }, '已标记送达/完成'); },
+  deliveryNew: v => { const [t, id] = split(v); closeModal(); deliveryDispatchModal(t, id); },
   shipResolve: id => { closeModal(); shipResolve(id); },
   kdnSave: () => mutate('PUT', '/api/settings/kdn', kdnBody(), '快递鸟设置已保存'),
   kdnTest: async () => {
@@ -7802,7 +8803,7 @@ const A = {
       onSubmit:v => mutate('POST', `/api/expenses/${id}/approve`, v, '审批已提交')});
   },
   advNew: () => advModal(null), advEdit: id => advModal(id), advView: id => advView(id),
-  advApprove: id => { const a = byId(db.advances, id); confirmBox(`批准 ${a.applicant} 的备用金 ${money(a.amount)}（${a.no}）吗？`, () => mutate('POST', `/api/advances/${id}/approve`, {}, '已批准'), {title:'批准备用金', danger:false, okText:'批准'}); },
+  advApprove: id => { const a = byId(db.advances, id); confirmBox(`批准 ${esc(a.applicant)} 的备用金 ${money(a.amount)}（${esc(a.no)}）吗？`, () => mutate('POST', `/api/advances/${id}/approve`, {}, '已批准'), {title:'批准备用金', danger:false, okText:'批准'}); },
   advReject: id => advReject(id), advPay: id => advPay(id), advReturn: id => advReturn(id),
   advVoid: id => { const a = byId(db.advances, id); confirmBox(`确定作废备用金 ${a.no} 吗？`, () => mutate('POST', `/api/advances/${id}/void`, {}, '已作废')); },
   expReject: id => expReject(id), expPay: id => expPay(id), expVoid: id => expVoid(id),
@@ -7854,7 +8855,8 @@ const A = {
   invDone: id => { const x = byId(db.invoices || [], id); if (x) mutate('PUT', '/api/invoices/' + id, { ...x, status: x.dir === 'out' ? '已开具' : '已收票' }, '状态已更新'); },
   invVoid: id => { const x = byId(db.invoices || [], id); if (x) confirmBox(`确定作废发票 ${esc(x.no)} 吗？`, () => mutate('PUT', '/api/invoices/' + id, { ...x, status: '已作废' }, '发票已作废')); },
   invDel: id => { const x = byId(db.invoices || [], id); confirmBox(`确定删除发票 ${esc(x ? x.no : '')} 吗？`, () => mutate('DELETE', '/api/invoices/' + id, undefined, '发票已删除')); },
-  grainNew: () => grainModal(),
+  grainNew: () => grainModal('in'),
+  grainOutNew: () => grainModal('out'),
   grainView: id => { closeModal(); grainView(id); },
   grainPay: id => {
     const o = byId(db.grainDocs || [], id); if (!o) return;

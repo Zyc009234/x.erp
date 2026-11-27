@@ -176,3 +176,30 @@ test('成员降权后旧会话立即失效，重新登录也不再拥有管理�
   assert.equal(lastDemote.http, 400);
   assert.match(lastDemote.error, /至少.*管理员/);
 });
+
+test('公司管理：停用/启用、批量分配账套权限与删除测试公司', async () => {
+  const admin = await login('admin', 'welcome123', 'default');
+  await ok(admin, 'POST', '/api/portal/companies', { name: '临时测试公司', code: 'tmpco' });
+  // 批量分配给新员工 multi1 同时访问 default 和 tmpco
+  await ok(admin, 'POST', '/api/portal/members/batch', {
+    username: 'multi1', name: '跨账套员工', role: 'user', password: 'multi123', companies: ['default', 'tmpco'],
+  });
+  const uList = await ok(admin, 'GET', '/api/portal/users');
+  const m1 = uList.users.find(x => x.username === 'multi1');
+  assert.ok(m1 && m1.companies.default === 'user' && m1.companies.tmpco === 'user');
+  const m1Tok = await login('multi1', 'multi123', 'tmpco');
+  await ok(m1Tok, 'GET', '/api/data');
+  // 停用 tmpco -> 旧会话失效，不能登录
+  await ok(admin, 'PUT', '/api/portal/companies/tmpco', { enabled: false });
+  assert.equal((await call(null, 'POST', '/api/portal/login', { username: 'multi1', password: 'multi123', company: 'tmpco' })).http, 404);
+  // 重新启用 tmpco -> 恢复登录
+  await ok(admin, 'PUT', '/api/portal/companies/tmpco', { enabled: true });
+  await login('multi1', 'multi123', 'tmpco');
+  // 不能删除或停用默认公司
+  assert.equal((await call(admin, 'PUT', '/api/portal/companies/default', { enabled: false })).http, 400);
+  assert.equal((await call(admin, 'DELETE', '/api/portal/companies/default')).http, 400);
+  // 删除测试公司 tmpco
+  await ok(admin, 'DELETE', '/api/portal/companies/tmpco');
+  const cos = await ok(admin, 'GET', '/api/portal/companies');
+  assert.equal(cos.companies.some(c => c.code === 'tmpco'), false);
+});
