@@ -20,7 +20,7 @@ const tls = require('tls');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.16.0';
+const VERSION = '2.16.1';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -4435,7 +4435,7 @@ function cleanTpl(t) {
   const cols = (Array.isArray(t.cols) ? t.cols : []).filter((c, i, a) => c && PRINT_COLS.includes(c.k) && a.findIndex(x => x && x.k === c.k) === i)
     .map(c => ({
       k: c.k, label: str(c.label, 10), on: !!c.on,
-      w: Number.isFinite(+c.w) && +c.w >= 10 && +c.w <= 120 ? Math.round(+c.w) : 0,
+      w: Number.isFinite(+c.w) && +c.w >= 5 && +c.w <= 200 ? Math.round(+c.w) : 0,
       al: ['left', 'center', 'right'].includes(c.al) ? c.al : ''
     }));
   const meta = {};
@@ -4449,7 +4449,8 @@ function cleanTpl(t) {
   const preprint = !!t.preprint;
   const offsetX = Number.isFinite(+t.offsetX) ? Math.max(-30, Math.min(80, Math.round(+t.offsetX * 10) / 10)) : 0;
   const offsetY = Number.isFinite(+t.offsetY) ? Math.max(-30, Math.min(120, Math.round(+t.offsetY * 10) / 10)) : 0;
-  const rowH = Number.isFinite(+t.rowH) && +t.rowH >= 4 && +t.rowH <= 20 ? Math.round(+t.rowH * 10) / 10 : 0;
+  const rowH = Number.isFinite(+t.rowH) && +t.rowH >= 4 && +t.rowH <= 40 ? Math.round(+t.rowH * 10) / 10 : 0;
+  const tableW = Number.isFinite(+t.tableW) && +t.tableW >= 40 && +t.tableW <= 300 ? Math.round(+t.tableW * 10) / 10 : 0;
   const preprintBg = typeof t.preprintBg === 'string' && t.preprintBg.length <= 260000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(t.preprintBg) ? t.preprintBg : '';
   const pos = {};
   if (t.pos && typeof t.pos === 'object' && !Array.isArray(t.pos)) {
@@ -4461,7 +4462,7 @@ function cleanTpl(t) {
     }
   }
   return { title: str(t.title, 20), header: str(t.header, 300), footer: str(t.footer, 300), signs: str(t.signs, 100),
-    fontSize: Math.min(24, Math.max(10, size)), paper, paperW, font, logo, logoPos, preprint, offsetX, offsetY, rowH, preprintBg, pos, upper: t.upper !== false, printer: t.printer !== false, cols, meta };
+    fontSize: Math.min(24, Math.max(10, size)), paper, paperW, font, logo, logoPos, preprint, offsetX, offsetY, rowH, tableW, preprintBg, pos, upper: t.upper !== false, printer: t.printer !== false, cols, meta };
 }
 // 商品分类 / 员工部门：列表存在设置里（没被用到的也能保留）；改名 / 删除同时改掉用到它的记录
 function namedList(ctx, { key, col, field, label, unit, empty }) {
