@@ -6443,9 +6443,12 @@ function parseKmlPolygons(xmlText) {
   return out;
 }
 function extractTdtKey(raw) {
-  const s = String(raw || '').trim();
+  let s = String(raw || '').trim();
   const m = s.match(/[?&]tk=([a-zA-Z0-9_-]+)/i);
-  return m ? m[1] : s;
+  if (m) s = m[1];
+  s = s.replace(/\s+/g, '');
+  if (s.length === 64 && s.slice(0, 32) === s.slice(32)) s = s.slice(0, 32);
+  return s;
 }
 function calcPolyAreaMu(pts) {
   if (!pts || pts.length < 3) return 0;
@@ -6509,7 +6512,7 @@ function renderFieldPage(body) {
     for (let ty = tY0; ty <= tY1; ty++) {
       for (let tx = tX0; tx <= tX1; tx++) {
         const px = tx * 256 - originX, py = ty * 256 - originY;
-        tiles.push(`<image href="https://t0.tianditu.gov.cn/img_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=img&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX=${z}&TILEROW=${ty}&TILECOL=${tx}&tk=${encodeURIComponent(tdtKey)}" x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="256" height="256" opacity="0.78"/>`);
+        tiles.push(`<image data-tdt-tile="/api/field/tile/${z}/${ty}/${tx}" x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="256" height="256" opacity="0.82"/>`);
       }
     }
     bgTile = tiles.join('');
@@ -6594,10 +6597,34 @@ function renderFieldPage(body) {
     ], exp:{name:'农事日历记录', cols:[['日期', l => l.date], ['地块', l => l.plotName], ['作物', l => l.crop], ['农事安排', l => l.task], ['领料单号', l => l.stockDocNo || ''], ['农资明细', l => (l.materials || []).map(m => `${m.name}x${m.qty}${m.unit || ''}`).join('；')], ['项目', l => l.project || ''], ['负责人', l => l.owner], ['备注', l => l.note]]}});
   };
   renderFarmBody();
+  // 通过后端代理加载天地图瓦片（同时兼容「服务器端」和「浏览器端」Key，并缓存 Blob URL 避免重绘闪烁）
+  if (tdtKey && $('#fieldSvg')) {
+    window._tdtCache = window._tdtCache || new Map();
+    let errShown = false;
+    const tok = LS.get('token'), hdrs = tok ? { Authorization: 'Bearer ' + tok } : {};
+    [...$('#fieldSvg').querySelectorAll('image[data-tdt-tile]')].forEach(async el => {
+      const url = el.getAttribute('data-tdt-tile'), ck = tdtKey.slice(-8) + '|' + url;
+      if (window._tdtCache.has(ck)) { el.setAttribute('href', window._tdtCache.get(ck)); return; }
+      try {
+        const r = await fetch(url, { headers: hdrs });
+        if (!r.ok) {
+          let msg = '天地图底图加载失败（HTTP ' + r.status + '）';
+          try { const j = await r.json(); if (j && j.error) msg = j.error; } catch {}
+          if (!errShown) { errShown = true; toast(msg, 'error'); }
+          return;
+        }
+        const objUrl = URL.createObjectURL(await r.blob());
+        if (window._tdtCache.size >= 160) { const firstK = window._tdtCache.keys().next().value; URL.revokeObjectURL(window._tdtCache.get(firstK)); window._tdtCache.delete(firstK); }
+        window._tdtCache.set(ck, objUrl);
+        el.setAttribute('href', objUrl);
+      } catch {}
+    });
+  }
 
   if ($('#tdtKeySave')) $('#tdtKeySave').onclick = () => {
     const tk = extractTdtKey($('#tdtKeyIn').value);
     $('#tdtKeyIn').value = tk;
+    if (window._tdtCache) { for (const u of window._tdtCache.values()) URL.revokeObjectURL(u); window._tdtCache.clear(); }
     mutate('PUT', '/api/settings', { tiandituKey: tk }, '天地图 Key 已保存');
   };
   $('#kmlExpBtn').onclick = () => exportPlotsKml(plots);

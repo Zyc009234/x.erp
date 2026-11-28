@@ -20,7 +20,7 @@ const tls = require('tls');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.17.1';
+const VERSION = '2.17.2';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -4642,7 +4642,7 @@ route('PUT', '/api/settings/expiry', ctx => {
 route('PUT', '/api/settings', ctx => {
   const s = getMeta('settings', {}), b = ctx.body, changes = [];
   if ('company' in b) { s.company = str(b.company, 100) || fail('公司名称不能为空'); changes.push('公司名称：' + s.company); }
-  if ('tiandituKey' in b) { s.tiandituKey = str(b.tiandituKey, 120); changes.push('天地图Key已更新'); }
+  if ('tiandituKey' in b) { s.tiandituKey = cleanTdtKey(b.tiandituKey); changes.push('天地图Key已更新'); }
   if (Array.isArray(b.modules)) {
     s.modules = b.modules.filter(m => m in MODULES);
     if (!s.modules.length) fail('至少启用一个模块');
@@ -5517,6 +5517,57 @@ function saveFieldPlot(ctx, id) {
     put('fieldPlots', rec); audit(ctx, old ? '修改地块' : '新增地块', `${rec.name} ${rec.areaMu}亩`); return rec;
   });
 }
+function cleanTdtKey(raw) {
+  let s = String(raw || '').trim();
+  const m = s.match(/[?&]tk=([a-zA-Z0-9_-]+)/i);
+  if (m) s = m[1];
+  s = s.replace(/\s+/g, '');
+  if (s.length === 64 && s.slice(0, 32) === s.slice(32)) s = s.slice(0, 32);
+  return s.slice(0, 120);
+}
+const _tdtTileCache = new Map();
+async function fetchTdtTile(layer, z, y, x, tk) {
+  const host = `t${(x + y) & 7}.tianditu.gov.cn`;
+  const url = `https://${host}/${layer}_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=${layer}&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX=${z}&TILEROW=${y}&TILECOL=${x}&tk=${encodeURIComponent(tk)}`;
+  const tryFetch = async ua => {
+    const r = await fetch(url, { headers: { 'User-Agent': ua }, signal: AbortSignal.timeout(8000) });
+    const ct = r.headers.get('content-type') || '';
+    const buf = Buffer.from(await r.arrayBuffer());
+    return { status: r.status, ct, buf };
+  };
+  // 先以服务端 UA 请求（兼容「服务器端」Key），若天地图要求浏览器端 Key 则自动切换浏览器 UA 重试
+  let res = await tryFetch('x.erp/tile-proxy');
+  if (!res.ct.startsWith('image/')) {
+    const txt = res.buf.toString('utf8', 0, 300);
+    if (res.status === 403 || txt.includes('浏览器') || txt.includes('301013')) {
+      const res2 = await tryFetch('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
+      if (res2.ct.startsWith('image/')) res = res2;
+    }
+  }
+  return res;
+}
+route('GET', '/api/field/tile/:z/:y/:x', async ctx => {
+  const z = Number(ctx.params.z), y = Number(ctx.params.y), x = Number(ctx.params.x);
+  if (!Number.isInteger(z) || z < 0 || z > 18) fail('无效缩放级别', 400);
+  const maxIdx = (1 << z) - 1;
+  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x > maxIdx || y > maxIdx) fail('无效瓦片坐标', 400);
+  const layer = (ctx.query && ctx.query.get('layer')) === 'cia' ? 'cia' : 'img';
+  const tk = cleanTdtKey(getMeta('settings', {}).tiandituKey);
+  if (!tk) fail('未配置天地图 Key', 400);
+  const ck = `${tk.slice(-8)}|${layer}|${z}|${y}|${x}`;
+  const hit = _tdtTileCache.get(ck);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return { [RAW]: { type: hit.ct, body: hit.buf } };
+  let res;
+  try { res = await fetchTdtTile(layer, z, y, x, tk); } catch (e) { fail('拉取天地图瓦片超时，请检查服务器外网连通性', 502); }
+  if (!res.ct.startsWith('image/')) {
+    let reason = `天地图返回异常（HTTP ${res.status}）`;
+    try { const j = JSON.parse(res.buf.toString('utf8')); if (j.resolve || j.msg) reason = j.resolve || j.msg; } catch {}
+    fail(reason, 502);
+  }
+  if (_tdtTileCache.size >= 240) _tdtTileCache.delete(_tdtTileCache.keys().next().value);
+  _tdtTileCache.set(ck, { ct: res.ct, buf: res.buf, at: Date.now() });
+  return { [RAW]: { type: res.ct, body: res.buf } };
+}, { perm: 'agri' });
 route('POST', '/api/field-plots', ctx => saveFieldPlot(ctx, null), { perm: 'agri' });
 route('PUT', '/api/field-plots/:id', ctx => saveFieldPlot(ctx, ctx.params.id), { perm: 'agri' });
 route('DELETE', '/api/field-plots/:id', ctx => tx(() => {
