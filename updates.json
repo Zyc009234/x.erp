@@ -1,34 +1,34 @@
 {
   "schema": 1,
-  "latest": "2.16.7",
-  "publishedAt": "2026-11-28T16:22:00+08:00",
+  "latest": "2.16.8",
+  "publishedAt": "2026-11-28T16:42:00+08:00",
   "notes": [
-    "套打明细表格改用独立块级外框并配备可见蓝色拖拽手柄，彻底解决拖动右边框时左边框跟着移动及误触整表拖动的问题",
-    "拖动表格总宽时同步按比例缩放固定列宽，避免列宽与总宽冲突"
+    "彻底修复套打模式拖动明细表格列分隔线或右边框时左侧列与左边框偏移的问题（套打不再自动隐藏空列并保持总宽与列宽之和 1:1 守恒）",
+    "打印模板预览样张改用短商品名，固定行高下单行显示不撑高"
   ],
   "packages": {
     "fnos": {
-      "version": "2.16.7",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.7.fpk",
-      "sha256": "f33ec7db4a4cc9b6ba8df1b1408fe22e39ea7613155819f38da32e0a79b31ee0",
-      "size": 885069,
-      "file": "xerp-2.16.7.fpk",
+      "version": "2.16.8",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.8.fpk",
+      "sha256": "6b6964f97161daf34347c060ec92bedc5172116ec0b99f7a21f1f7d7bf9a77fc",
+      "size": 886575,
+      "file": "xerp-2.16.8.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.16.7",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.7-windows-x64-setup.exe",
-      "sha256": "8595cdc92fdc5723f6fc26348d5e96e5a2aee193b780962d972c44f3401811b4",
-      "size": 23948128,
-      "file": "xerp-2.16.7-windows-x64-setup.exe",
+      "version": "2.16.8",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.8-windows-x64-setup.exe",
+      "sha256": "75b12d3a32cfad8ca099b73e9f1c53b9f43e2ad8deeb3824743e4bda5f16ea8c",
+      "size": 23944427,
+      "file": "xerp-2.16.8-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.16.7",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.7-android.apk",
-      "sha256": "ede3e92186565bd65a55ab866ce3948698a8b13bd7e0475fbccc96f0ae07616d",
+      "version": "2.16.8",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.8-android.apk",
+      "sha256": "eb8cbd9102ec5bf1cc9a63622636ca40025c531171e2b2fc9f00655c4ecfb4ea",
       "size": 279329,
-      "file": "xerp-2.16.7-android.apk",
+      "file": "xerp-2.16.8-android.apk",
       "kind": "apk",
       "versionCode": 21603
     },
