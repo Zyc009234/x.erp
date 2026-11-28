@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.17.0": {
+          "changelog": "新增维修工单、序列号修正、田间管理增强、销售出库转单、58/80mm热敏小票、采购/支付凭证上传与粮食结算单打印",
+          "updated_at": "2026-11-28T18:45:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.0.fpk",
+              "sha256": "938419280ba6cedf696d0af5b2e5457716948bb84086dd92a4f093b7a5425eba",
+              "size": 917150
+            }
+          }
+        },
         "2.16.10": {
           "changelog": "修复已知 Bug，提升系统稳定性与安全性",
           "updated_at": "2026-11-28T18:45:00+08:00",
@@ -189,7 +200,7 @@
           }
         }
       },
-      "version": "2.16.10"
+      "version": "2.17.0"
     }
   }
 }

@@ -1,43 +1,43 @@
 {
   "schema": 1,
-  "latest": "2.16.10",
+  "latest": "2.17.0",
   "publishedAt": "2026-11-28T18:45:00+08:00",
   "notes": [
-    "修复已知 Bug，提升系统稳定性与安全性"
+    "新增维修工单、序列号修正、田间管理增强、销售出库转单、58/80mm热敏小票、采购/支付凭证上传与粮食结算单打印"
   ],
   "packages": {
     "fnos": {
-      "version": "2.16.10",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.10.fpk",
-      "sha256": "cbe348f14738e1886078035a7af2f549d5d4636f36cd00a8f586c55c7b8e4b76",
-      "size": 894188,
-      "file": "xerp-2.16.10.fpk",
+      "version": "2.17.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.0.fpk",
+      "sha256": "938419280ba6cedf696d0af5b2e5457716948bb84086dd92a4f093b7a5425eba",
+      "size": 917150,
+      "file": "xerp-2.17.0.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.16.10",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.10-windows-x64-setup.exe",
-      "sha256": "115c9ab4a08a99857481f9290285bd9e7efa648a85beaca6613649ce88939bac",
-      "size": 23952626,
-      "file": "xerp-2.16.10-windows-x64-setup.exe",
+      "version": "2.17.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.0-windows-x64-setup.exe",
+      "sha256": "3754446177b8bb23d98278618475a72ff18df1c2cc97d2b91323698db3746a29",
+      "size": 23963639,
+      "file": "xerp-2.17.0-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.16.10",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.10-android.apk",
-      "sha256": "112b20e65e3a876e8a6738acdfbdcd427aeef937cbc92dd557c2b1e8b4b89a53",
+      "version": "2.17.0",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.0-android.apk",
+      "sha256": "6296b6aa2bc170649add205682781fea5fb6874c92ff4312463614d756e049f7",
       "size": 279329,
-      "file": "xerp-2.16.10-android.apk",
+      "file": "xerp-2.17.0-android.apk",
       "kind": "apk",
-      "versionCode": 21610
+      "versionCode": 21700
     },
     "docker": {
-      "version": "2.16.10",
+      "version": "2.17.0",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.16.10",
+      "image": "ghcr.io/zyc009234/xerp:2.17.0",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.10-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.10-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.0-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.0-docker-arm64.tar.gz"
       ],
       "note": "也可以下载离线包 docker load"
     }
