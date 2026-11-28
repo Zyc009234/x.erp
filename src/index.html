@@ -414,11 +414,15 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .pp-tbl-rz-se{position:absolute;right:-6px;bottom:-6px;width:13px;height:13px;border-radius:3px;background:#2563eb;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:nwse-resize;z-index:8;touch-action:none}
 .tp-col{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:3px 0}.tp-col input[data-l]{flex:1;min-width:100px}.tp-col input[data-w]{width:58px;padding-left:4px;padding-right:2px}.tp-col select[data-al]{width:62px;padding-left:4px;padding-right:2px}
 .tp-grid{display:grid;grid-template-columns:minmax(300px,360px) minmax(0,1fr);gap:16px;align-items:start}.tp-grid.wide{grid-template-columns:1fr}.tp-form .field{margin-bottom:12px}.tp-grid .card-head h3{white-space:nowrap}
+@media(min-width:1281px){.tp-grid:not(.wide) #tpPrevCard:not(.tp-float){position:sticky;top:12px;max-height:calc(100vh - 24px);display:flex;flex-direction:column}.tp-grid:not(.wide) #tpPrevCard:not(.tp-float)>.card-body{overflow:auto;min-height:0}}
+#tpPrevCard.tp-float{position:fixed;right:16px;top:16px;width:min(760px,62vw);max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);z-index:80;box-shadow:0 16px 48px rgba(15,23,42,.28);display:flex;flex-direction:column;margin:0}
+#tpPrevCard.tp-float>.card-head{cursor:move;user-select:none;background:var(--panel2)}
+#tpPrevCard.tp-float>.card-body{overflow:auto;min-height:0}
 @media(max-width:1280px){.tp-grid{grid-template-columns:1fr}}
 .tp-stage{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:16px;overflow:auto;display:flex;justify-content:center;align-items:flex-start}
 .tp-scale-box{position:relative;flex:none}
 .tp-stage .slip-preview{box-sizing:border-box;margin:0;box-shadow:0 4px 20px rgba(15,23,42,.08);transform-origin:top left;overflow:visible}
-.tp-stage .slip-preview table{min-width:0}
+.tp-stage .slip-preview table{min-width:0;margin-left:0;margin-right:auto}
 .slip-preview .r{text-align:right}.slip-preview .c{text-align:center}
 .slip-wrap{position:relative}
 .slip-stamp{position:absolute;right:30px;top:24px;border:3px solid #dc2626;color:#dc2626;font-size:22px;font-weight:800;padding:2px 14px;transform:rotate(-12deg);letter-spacing:.3em;opacity:.85}
@@ -555,7 +559,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.16.5</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.16.6</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -7605,8 +7609,50 @@ function printTplPage(body) {
       <label class="chk"><input type="checkbox" id="tpUpper" ${t.upper ? 'checked' : ''}>打印金额大写</label><label class="chk"><input type="checkbox" id="tpPrinter" ${t.printer ? 'checked' : ''}>页脚打印人和时间</label></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">${saved[kind] ? '<button class="btn" id="tpReset">恢复默认</button>' : ''}<button class="btn" id="tpTest">${ic('printer')}打印测试样张</button><button class="btn primary" id="tpSave">${ic('check')}保存模板</button></div>
   </div></div>
-  <div class="card" id="tpPrevCard"><div class="card-head" style="flex-wrap:wrap;gap:8px"><h3>预览</h3><span class="sub-t">${sample.no === '示例单号' ? '示例数据' : '用最近一张' + K.name + '预览'}</span><span class="badge blue plain" id="tpDim"></span><label class="chk" style="margin-left:auto"><input type="checkbox" id="tpShowMoney" checked>显示金额</label><button class="btn sm" id="tpWideBtn" type="button" title="切换全宽预览 / 左右分栏">${ui.tplWide ? '左右分栏' : '全宽预览'}</button></div><div class="card-body" style="padding:12px"><div class="tp-stage" id="tpStage"><div class="tp-scale-box" id="tpScaleBox"><div class="slip-preview" id="tpPrev"></div></div></div></div></div></div>`;
+  <div class="card" id="tpPrevCard"><div class="card-head" style="flex-wrap:wrap;gap:8px"><h3>预览</h3><span class="sub-t">${sample.no === '示例单号' ? '示例数据' : '用最近一张' + K.name + '预览'}</span><span class="badge blue plain" id="tpDim"></span><select id="tpPrevRows" class="select" style="height:28px;padding:0 6px;font-size:12px;margin-left:auto" title="预览显示的明细行数"><option value="0">跟随单据</option><option value="3">预览 3 行</option><option value="5">预览 5 行</option><option value="9">预览 9 行</option></select><label class="chk"><input type="checkbox" id="tpShowMoney" checked>显示金额</label><button class="btn sm" id="tpFloatBtn" type="button" title="悬浮固定预览框，滚动页面也能随时查看">${ui.tplFloat ? '取消浮动' : '浮动预览'}</button><button class="btn sm" id="tpWideBtn" type="button" title="切换全宽预览 / 左右分栏">${ui.tplWide ? '左右分栏' : '全宽预览'}</button></div><div class="card-body" style="padding:12px"><div class="tp-stage" id="tpStage"><div class="tp-scale-box" id="tpScaleBox"><div class="slip-preview" id="tpPrev"></div></div></div></div></div></div>`;
   if (ui.tplWide) body.querySelector('.tp-grid')?.classList.add('wide');
+  const prevCard = $('#tpPrevCard');
+  if (ui.tplFloat && prevCard) prevCard.classList.add('tp-float');
+  let prevRows = ui.tplPrevRows != null ? +ui.tplPrevRows : (t.preprint ? 9 : 0);
+  if ($('#tpPrevRows')) $('#tpPrevRows').value = String(prevRows);
+  const buildPrevSample = () => {
+    if (!prevRows || kind === 'expense') return sample;
+    const baseItems = Array.isArray(sample.items) ? sample.items : [];
+    if (!baseItems.length || baseItems.length >= prevRows) return sample;
+    const padded = [];
+    for (let i = 0; i < prevRows; i++) padded.push(baseItems[i % baseItems.length]);
+    return { ...sample, items: padded };
+  };
+  if ($('#tpFloatBtn')) $('#tpFloatBtn').onclick = () => {
+    ui.tplFloat = !ui.tplFloat;
+    if (prevCard) {
+      prevCard.classList.toggle('tp-float', !!ui.tplFloat);
+      prevCard.style.left = ''; prevCard.style.top = ''; prevCard.style.right = '';
+    }
+    $('#tpFloatBtn').textContent = ui.tplFloat ? '取消浮动' : '浮动预览';
+    requestAnimationFrame(fitPrev);
+  };
+  if (prevCard) {
+    const head = prevCard.querySelector('.card-head');
+    let flDrag = null;
+    if (head) head.addEventListener('pointerdown', e => {
+      if (!prevCard.classList.contains('tp-float') || e.button !== 0) return;
+      if (e.target.closest('button,input,select,label')) return;
+      const r = prevCard.getBoundingClientRect();
+      flDrag = { sx: e.clientX, sy: e.clientY, ox: r.left, oy: r.top, pid: e.pointerId };
+      try { head.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    if (head) head.addEventListener('pointermove', e => {
+      if (!flDrag) return;
+      const nx = Math.max(8, Math.min(window.innerWidth - 120, flDrag.ox + (e.clientX - flDrag.sx)));
+      const ny = Math.max(8, Math.min(window.innerHeight - 60, flDrag.oy + (e.clientY - flDrag.sy)));
+      prevCard.style.left = nx + 'px';
+      prevCard.style.top = ny + 'px';
+      prevCard.style.right = 'auto';
+    });
+    const endFl = () => { if (flDrag) { try { head.releasePointerCapture(flDrag.pid); } catch (err) {} flDrag = null; } };
+    if (head) { head.addEventListener('pointerup', endFl); head.addEventListener('pointercancel', endFl); }
+  }
   const isPinPaper = k => k === 'half' || k === 'full';
   const paperDim = tpl => {
     const k = tpl.paper || 'a4';
@@ -7622,8 +7668,8 @@ function printTplPage(body) {
     if (!stage || !sbox || !box) return;
     box.style.transform = '';
     const availW = Math.max(160, stage.clientWidth - 24);
-    const natW = Math.max(box.offsetWidth, box.scrollWidth, 1);
-    const natH = Math.max(box.offsetHeight, box.scrollHeight, 1);
+    const natW = Math.max(box.offsetWidth, 1);
+    const natH = Math.max(box.offsetHeight, 1);
     prevScale = natW > availW ? Math.max(0.18, availW / natW) : 1;
     box.style.transform = prevScale < 0.999 ? `scale(${prevScale})` : '';
     sbox.style.width = Math.ceil(natW * prevScale) + 'px';
@@ -7717,7 +7763,7 @@ function printTplPage(body) {
     box.tabIndex = tpl.preprint ? 0 : -1;
     box.style.backgroundImage = tpl.preprint && tpl.preprintBg ? `url("${tpl.preprintBg}")` : '';
     box.style.backgroundSize = tpl.preprint && tpl.preprintBg ? '100% 100%' : '';
-    box.innerHTML = slipRender(kind, sample, {showMoney:showMoneyPrev, tpl});
+    box.innerHTML = slipRender(kind, buildPrevSample(), {showMoney:showMoneyPrev, tpl, minRows: prevRows});
     if (tpl.preprint) mountTableResizers(box);
     if (tpl.preprint && ppSel) {
       const selEl = box.querySelector(`[data-pp="${CSS.escape(ppSel)}"]`);
@@ -7879,6 +7925,8 @@ function printTplPage(body) {
       if (mode === 'w' || mode === 'se') {
         const nw = Math.max(40, Math.min(300, Math.round((startW + dx) * 2) / 2));
         tbl.style.tableLayout = 'fixed';
+        tbl.style.marginLeft = '0';
+        tbl.style.marginRight = 'auto';
         tbl.style.width = nw + 'mm';
         if ($('#tpTableW')) $('#tpTableW').value = nw;
       }
@@ -7888,7 +7936,6 @@ function printTplPage(body) {
         if (wrap) { wrap.classList.add('has-rh'); wrap.style.setProperty('--rh', rh + 'mm'); }
         if ($('#tpRowH')) $('#tpRowH').value = rh;
       }
-      fitPrev();
       return;
     }
     if (!ppDrag) return;
@@ -8000,6 +8047,7 @@ function printTplPage(body) {
     if (x.dataset.c != null) cols[+x.dataset.c].on = x.checked;
     if (x.dataset.al != null) cols[+x.dataset.al].al = x.value;
     if (x.id === 'tpShowMoney') { showMoneyPrev = x.checked; prev(); return; }
+    if (x.id === 'tpPrevRows') { prevRows = +x.value || 0; ui.tplPrevRows = prevRows; prev(); return; }
     if (x.id === 'tpImport') {
       const f = x.files && x.files[0]; x.value = ''; if (!f) return;
       if (f.size > 512 * 1024) return toast('模板文件不能超过 512 KB', 'error');
