@@ -403,15 +403,16 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .slip-preview.is-preprint .pp-free-box.pp-sel{background:rgba(99,102,241,.20);border:1.5px solid #4f46e5;box-shadow:0 0 0 2px rgba(79,70,229,.18);z-index:12}
 .slip-preview.is-preprint .pp-free-box .pp-tag{position:absolute;top:-16px;left:0;font-size:10px;line-height:1;padding:2px 5px;border-radius:3px;background:#4f46e5;color:#fff;font-family:system-ui,sans-serif;pointer-events:none;opacity:0;white-space:nowrap}
 .slip-preview.is-preprint .pp-free-box:hover .pp-tag,.slip-preview.is-preprint .pp-free-box.pp-sel .pp-tag{opacity:1}
-.slip-preview.is-preprint table[data-pp="table"]{position:relative}
-.slip-preview.is-preprint table[data-pp="table"] td{position:relative}
+.slip-preview.is-preprint .pp-tbl-box{position:relative;display:block;margin-left:0;margin-right:auto}
+.slip-preview.is-preprint .pp-tbl-box table{width:100%;margin:0}
+.slip-preview.is-preprint .pp-tbl-box td{position:relative}
 .pp-col-rz{position:absolute;top:0;right:-4px;width:8px;height:100%;cursor:col-resize;z-index:5;touch-action:none}
 .pp-col-rz:hover,.pp-col-rz.on{background:rgba(99,102,241,.35)}
-.pp-tbl-rz-w{position:absolute;top:0;right:-5px;width:9px;height:100%;cursor:ew-resize;z-index:6;touch-action:none}
-.pp-tbl-rz-w:hover,.pp-tbl-rz-w.on{background:rgba(37,99,235,.4)}
-.pp-tbl-rz-h{position:absolute;left:0;bottom:-5px;width:100%;height:9px;cursor:ns-resize;z-index:6;touch-action:none}
-.pp-tbl-rz-h:hover,.pp-tbl-rz-h.on{background:rgba(37,99,235,.4)}
-.pp-tbl-rz-se{position:absolute;right:-6px;bottom:-6px;width:13px;height:13px;border-radius:3px;background:#2563eb;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:nwse-resize;z-index:8;touch-action:none}
+.pp-tbl-rz-w{position:absolute;top:0;right:-6px;width:12px;height:100%;cursor:ew-resize;z-index:7;touch-action:none;background:linear-gradient(to right,transparent 4px,rgba(37,99,235,.45) 4px,rgba(37,99,235,.45) 7px,transparent 7px)}
+.pp-tbl-rz-w:hover,.pp-tbl-rz-w.on{background:linear-gradient(to right,transparent 2px,rgba(37,99,235,.85) 2px,rgba(37,99,235,.85) 9px,transparent 9px)}
+.pp-tbl-rz-h{position:absolute;left:0;bottom:-6px;width:100%;height:12px;cursor:ns-resize;z-index:7;touch-action:none;background:linear-gradient(to bottom,transparent 4px,rgba(37,99,235,.45) 4px,rgba(37,99,235,.45) 7px,transparent 7px)}
+.pp-tbl-rz-h:hover,.pp-tbl-rz-h.on{background:linear-gradient(to bottom,transparent 2px,rgba(37,99,235,.85) 2px,rgba(37,99,235,.85) 9px,transparent 9px)}
+.pp-tbl-rz-se{position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;border-radius:3px;background:#2563eb;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:nwse-resize;z-index:9;touch-action:none}
 .tp-col{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:3px 0}.tp-col input[data-l]{flex:1;min-width:100px}.tp-col input[data-w]{width:58px;padding-left:4px;padding-right:2px}.tp-col select[data-al]{width:62px;padding-left:4px;padding-right:2px}
 .tp-grid{display:grid;grid-template-columns:minmax(300px,360px) minmax(0,1fr);gap:16px;align-items:start}.tp-grid.wide{grid-template-columns:1fr}.tp-form .field{margin-bottom:12px}.tp-grid .card-head h3{white-space:nowrap}
 @media(min-width:1281px){.tp-grid:not(.wide) #tpPrevCard:not(.tp-float){position:sticky;top:12px;max-height:calc(100vh - 24px);display:flex;flex-direction:column}.tp-grid:not(.wide) #tpPrevCard:not(.tp-float)>.card-body{overflow:auto;min-height:0}}
@@ -559,7 +560,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.16.6</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.16.7</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -2739,15 +2740,16 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
     extraReason ? `<div class="pp-line"${ppAttr('reason', '事由')}>${extraReason}</div>` : '',
     extraRemark ? `<div class="pp-line"${ppAttr('remark', '备注')}>${extraRemark}</div>` : ''
   ].join('');
-  const tblExtra = (cols.some(c => c.w) || (ppOn && +tpl.tableW >= 40) ? 'table-layout:fixed;' : '') + (ppOn && +tpl.tableW >= 40 ? `width:${+tpl.tableW}mm;` : '');
+  const tblExtra = (cols.some(c => c.w) || (ppOn && +tpl.tableW >= 40) ? 'table-layout:fixed;' : '') + (!ppOn && +tpl.tableW >= 40 ? `width:${+tpl.tableW}mm;` : '');
   const showTable = cols.length > 0 && !(ppOn && tpl.hideTable);
+  const tblInner = `<thead><tr>${cols.map(c => `<th style="${colStyle(c)}">${esc(colLabel(K, c))}</th>`).join('')}</tr></thead><tbody>${rows.join('')}${total}${tableTail}</tbody>`;
+  const tblHtml = !showTable ? '' : (ppOn
+    ? `<div class="pp-tbl-box"${ppAttr('table', '明细表格', +tpl.tableW >= 40 ? `width:${+tpl.tableW}mm;` : '')}><table style="${tblExtra}width:100%">${tblInner}</table></div>`
+    : `<table style="${tblExtra}">${tblInner}</table>`);
   return `<div class="slip-wrap${ppCls}" style="font-family:${PRINT_FONTS[tpl.font] || PRINT_FONTS.song};font-size:${+tpl.fontSize || 12}px${ppVars}">${d.stamp ? `<div class="slip-stamp">${d.stamp}</div>` : ''}
   ${titleHtml}
   <div class="s-meta">${meta}</div>
-  ${showTable ? `<table${ppAttr('table', '明细表格', tblExtra)}><thead><tr>${cols.map(c => `<th style="${colStyle(c)}">${esc(colLabel(K, c))}</th>`).join('')}</tr></thead>
-  <tbody>${rows.join('')}
-  ${total}
-  ${tableTail}</tbody></table>` : ''}
+  ${tblHtml}
   ${ppExtras}
   ${signs.length ? `<div class="s-sign">${signs.map((x, idx) => `<span${ppAttr('sign.' + idx, x)}><span class="pp-lbl">${esc(x)}：</span>${esc(auto[x] || '')}</span>`).join('')}</div>` : ''}
   ${d.payInfo ? `<div class="s-meta" style="margin-top:6px"><span>${esc(d.payInfo)}</span></div>` : ''}
@@ -2785,6 +2787,8 @@ function printFrame(title, body, paperKey, tpl) {
   .slip-preprint .s-meta>span,.slip-preprint .s-sign>span{display:inline-block}
   .slip-preprint .pp-line{margin-top:4px;padding:2px 4px}
   .slip-preprint table,.slip-preprint th,.slip-preprint td{border-color:transparent!important}
+  .slip-preprint .pp-tbl-box{margin-left:0;margin-right:auto}
+  .slip-preprint .pp-tbl-box table{width:100%;margin:0}
   .slip-preprint.has-rh tbody tr{height:var(--rh)}
   .slip-preprint .pp-free-box{position:absolute;white-space:nowrap;line-height:1.25;color:#000}
   .slip-preprint .pp-free-box .pp-tag{display:none!important}
@@ -7793,12 +7797,15 @@ function printTplPage(body) {
   // 套打模式：给明细表格挂上「拖动调列宽 / 调总宽 / 调行高 / 右下角自由缩放」手柄
   let ppResize = null;
   function mountTableResizers(box) {
-    const tbl = box.querySelector('table[data-pp="table"]');
-    if (!tbl) return;
-    // 1) 每列右边框拖拽调列宽
+    const tbox = box.querySelector('.pp-tbl-box[data-pp="table"]');
+    const tbl = tbox && tbox.querySelector('table');
+    if (!tbox || !tbl) return;
+    // 1) 内部列分隔线拖拽调列宽（跳过最后一列右边框，避免与表格总宽手柄冲突）
     const firstRow = tbl.querySelector('tbody tr');
     if (firstRow) {
-      [...firstRow.children].forEach(td => {
+      const tds = [...firstRow.children];
+      tds.forEach((td, idx) => {
+        if (idx >= tds.length - 1) return;
         const colKey = td.dataset.col;
         if (!colKey) return;
         const h = document.createElement('div');
@@ -7809,11 +7816,11 @@ function printTplPage(body) {
         td.appendChild(h);
       });
     }
-    // 2) 表格右边线（总宽）、底边线（行高）、右下角（宽高同调）
-    const hw = document.createElement('div'); hw.className = 'pp-tbl-rz-w'; hw.title = '左右拖动调整表格总宽（mm）'; hw.dataset.rz = 'w';
+    // 2) 表格右边线（总宽）、底边线（行高）、右下角（宽高同调）挂在块级外框 div 上
+    const hw = document.createElement('div'); hw.className = 'pp-tbl-rz-w'; hw.title = '左右拖动调整表格总宽（mm，左边框锁定不动）'; hw.dataset.rz = 'w';
     const hh = document.createElement('div'); hh.className = 'pp-tbl-rz-h'; hh.title = '上下拖动调整表格行高（mm）'; hh.dataset.rz = 'h';
     const hse = document.createElement('div'); hse.className = 'pp-tbl-rz-se'; hse.title = '拖动同时调整表格总宽与行高'; hse.dataset.rz = 'se';
-    tbl.append(hw, hh, hse);
+    tbox.append(hw, hh, hse);
   }
   if ($('#tpWideBtn')) $('#tpWideBtn').onclick = () => {
     ui.tplWide = !ui.tplWide;
@@ -7875,12 +7882,14 @@ function printTplPage(body) {
     if (rz && prevBox.contains(rz)) {
       e.preventDefault();
       e.stopPropagation();
-      const tbl = prevBox.querySelector('table[data-pp="table"]');
-      if (!tbl) return;
+      const tbox = prevBox.querySelector('.pp-tbl-box[data-pp="table"]');
+      const tbl = tbox && tbox.querySelector('table');
+      if (!tbox || !tbl) return;
       const sc = prevScale || 1, mode = rz.dataset.rz, trs = tbl.querySelectorAll('tbody tr'), rowCount = Math.max(1, trs.length);
-      const startW = tbl.getBoundingClientRect().width / (PX_PER_MM * sc);
+      const startW = tbox.getBoundingClientRect().width / (PX_PER_MM * sc);
       const startH = tbl.getBoundingClientRect().height / (PX_PER_MM * sc);
       let colIdx = -1, startColW = 0;
+      const startColWs = cols.map(c => c.w || 0);
       if (mode === 'col') {
         const colKey = rz.dataset.col;
         colIdx = cols.findIndex(c => c.k === colKey);
@@ -7888,7 +7897,7 @@ function printTplPage(body) {
         startColW = td ? td.getBoundingClientRect().width / (PX_PER_MM * sc) : (cols[colIdx]?.w || 20);
       }
       rz.classList.add('on');
-      ppResize = { rz, tbl, mode, sx: e.clientX, sy: e.clientY, startW, startH, rowCount, colIdx, startColW, pid: e.pointerId };
+      ppResize = { rz, tbox, tbl, mode, sx: e.clientX, sy: e.clientY, startW, startH, rowCount, colIdx, startColW, startColWs, pid: e.pointerId };
       try { rz.setPointerCapture(e.pointerId); } catch (err) {}
       return;
     }
@@ -7913,7 +7922,7 @@ function printTplPage(body) {
   prevBox.addEventListener('pointermove', e => {
     if (ppResize) {
       const sc = prevScale || 1, dx = (e.clientX - ppResize.sx) / (PX_PER_MM * sc), dy = (e.clientY - ppResize.sy) / (PX_PER_MM * sc);
-      const { tbl, mode, startW, startH, rowCount, colIdx, startColW } = ppResize;
+      const { tbox, tbl, mode, startW, startH, rowCount, colIdx, startColW, startColWs } = ppResize;
       if (mode === 'col' && colIdx >= 0) {
         const nw = Math.max(5, Math.min(200, Math.round(startColW + dx)));
         cols[colIdx].w = nw;
@@ -7924,10 +7933,19 @@ function printTplPage(body) {
       }
       if (mode === 'w' || mode === 'se') {
         const nw = Math.max(40, Math.min(300, Math.round((startW + dx) * 2) / 2));
+        const ratio = startW > 0 ? nw / startW : 1;
+        tbox.style.width = nw + 'mm';
         tbl.style.tableLayout = 'fixed';
-        tbl.style.marginLeft = '0';
-        tbl.style.marginRight = 'auto';
-        tbl.style.width = nw + 'mm';
+        tbl.style.width = '100%';
+        cols.forEach((c, i) => {
+          if (startColWs[i] > 0) {
+            const cw = Math.max(5, Math.min(200, Math.round(startColWs[i] * ratio)));
+            c.w = cw;
+            const inp = body.querySelector(`[data-w="${i}"]`);
+            if (inp) inp.value = cw;
+            tbl.querySelectorAll(`[data-col="${CSS.escape(c.k)}"]`).forEach(td => { td.style.width = cw + 'mm'; });
+          }
+        });
         if ($('#tpTableW')) $('#tpTableW').value = nw;
       }
       if (mode === 'h' || mode === 'se') {
