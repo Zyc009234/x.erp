@@ -394,6 +394,7 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .slip-preview .slip-preprint .pp-line{margin-top:4px;padding:2px 4px;border:1px dashed #cbd5e1}
 .slip-preview .slip-preprint table,.slip-preview .slip-preprint th,.slip-preview .slip-preprint td{border:1px dashed #cbd5e1}
 .slip-preview .slip-preprint.has-rh tbody tr{height:var(--rh)}
+.slip-preview .slip-preprint.has-rh tbody td{white-space:nowrap;overflow:hidden}
 .slip-preview.is-preprint [data-pp]{cursor:move;user-select:none;touch-action:none;border-radius:3px}
 .slip-preview.is-preprint [data-pp]:hover{outline:1px dashed rgba(99,102,241,.65);background:rgba(99,102,241,.04)}
 .slip-preview.is-preprint [data-pp].pp-sel{outline:1.5px solid #6366f1;background:rgba(99,102,241,.08)}
@@ -422,7 +423,7 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 @media(max-width:1280px){.tp-grid{grid-template-columns:1fr}}
 .tp-stage{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:16px;overflow:auto;display:flex;justify-content:center;align-items:flex-start}
 .tp-scale-box{position:relative;flex:none}
-.tp-stage .slip-preview{box-sizing:border-box;margin:0;box-shadow:0 4px 20px rgba(15,23,42,.08);transform-origin:top left;overflow:visible}
+.tp-stage .slip-preview{box-sizing:border-box;margin:0;box-shadow:0 4px 20px rgba(15,23,42,.08);transform-origin:top left;overflow:hidden}
 .tp-stage .slip-preview table{min-width:0;margin-left:0;margin-right:auto}
 .slip-preview .r{text-align:right}.slip-preview .c{text-align:center}
 .slip-wrap{position:relative}
@@ -560,7 +561,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.16.7</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.16.8</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -2645,7 +2646,7 @@ function tplPickHtml(kind, id) {
 // 各类单据统一成 { meta, items, creator, handler, remark, voided }
 function slipData(kind, o) {
   const K = SLIP_KINDS[kind];
-  const row = (i, unitPrice) => { const p = prodOf(i.productId); return {p, qty:lineQty(i), unit:lineUnit(i, p), price:unitPrice, amount:i.qty * (kind === 'transfer' ? i.cost || 0 : +i.price || 0) - (kind === 'transfer' ? 0 : (i.lineDiscount || 0)), batch:i.batches ? batchText(i.batches) : '', regNo:p.regNo || '', regHolder:p.regHolder || '', manufacturer:p.manufacturer || '', expiry:[...new Set((i.batches || []).map(b => b.expDate).filter(Boolean))].join('、'), note:[i.note, snText(i.serials)].filter(Boolean).join('；')}; };
+  const row = (i, unitPrice) => { const p = i._p || prodOf(i.productId); return {p, qty:lineQty(i), unit:lineUnit(i, p), price:unitPrice, amount:i.qty * (kind === 'transfer' ? i.cost || 0 : +i.price || 0) - (kind === 'transfer' ? 0 : (i.lineDiscount || 0)), batch:i.batches ? batchText(i.batches) : '', regNo:p.regNo || '', regHolder:p.regHolder || '', manufacturer:p.manufacturer || '', expiry:[...new Set((i.batches || []).map(b => b.expDate).filter(Boolean))].join('、'), note:[i.note, snText(i.serials)].filter(Boolean).join('；')}; };
   const voided = o.status === '已作废' ? ['作废：', o.voidBy, o.voidAt && fmtTime(o.voidAt), o.voidReason].filter(Boolean).join(' ') : '';
   const stamp = {'已作废':'作废', '待审核':'待审核', '已驳回':'驳回', '已撤回':'撤回'}[o.status] || '';
   if (kind === 'expense') {
@@ -2668,8 +2669,9 @@ function slipData(kind, o) {
 }
 function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {}) {
   const K = SLIP_KINDS[kind], d = slipData(kind, o), hasBatch = d.items.some(i => i.batch);
+  const ppOn = !!tpl.preprint && hasFeat('preprint');
   const batchInNote = hasBatch && !tpl.cols.some(c => c.on && c.k === 'batch');  // 没有单独的批次列时，批次写进备注
-  const blankCol = k => kind === 'expense' ? false
+  const blankCol = k => ppOn || kind === 'expense' ? false
     : k === 'brand' ? d.items.every(i => !i.p.brand)
     : k === 'spec' ? d.items.every(i => !i.p.spec)
     : k === 'barcode' ? d.items.every(i => !i.p.barcode)
@@ -2691,8 +2693,7 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
   const safeAl = al => ['left', 'center', 'right'].includes(al) ? al : '';
   const colStyle = c => [safeW(c.w) ? `width:${safeW(c.w)}mm` : '', `text-align:${safeAl(c.al) || (c.k === 'idx' || c.k === 'unit' ? 'center' : ['qty', 'price', 'amount'].includes(c.k) ? 'right' : 'left')}`].join(';');
   const rows = d.items.map((it, n) => `<tr>${cols.map(c => `<td data-col="${c.k}" style="${colStyle(c)}">${val(c, it, n)}</td>`).join('')}</tr>`);
-  for (let k = rows.length; k < minRows; k++) rows.push(`<tr>${'<td>&nbsp;</td>'.repeat(cols.length)}</tr>`);
-  const ppOn = !!tpl.preprint && hasFeat('preprint');
+  for (let k = rows.length; k < minRows; k++) rows.push(`<tr>${cols.map(c => `<td data-col="${c.k}" style="${colStyle(c)}">&nbsp;</td>`).join('')}</tr>`);
   const amt = sum(d.items, i => i.amount), first = cols.findIndex(c => c.k === 'qty' || c.k === 'amount');
   const total = first < 0 || (ppOn && tpl.hideTableTotal) ? '' : `<tr>${first ? `<td colspan="${first}" class="r"><b class="pp-lbl">合计</b></td>` : ''}${cols.slice(first).map(c => `<td class="r" style="${colStyle(c)}">${c.k === 'qty' ? `<b>${sum(d.items, i => i.qty)}</b>` : c.k === 'amount' ? `<b>${amt.toFixed(2)}</b>` : ''}</td>`).join('')}</tr>`;
   const ppPos = ppOn && tpl.pos && typeof tpl.pos === 'object' ? tpl.pos : {};
@@ -2740,11 +2741,15 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
     extraReason ? `<div class="pp-line"${ppAttr('reason', '事由')}>${extraReason}</div>` : '',
     extraRemark ? `<div class="pp-line"${ppAttr('remark', '备注')}>${extraRemark}</div>` : ''
   ].join('');
-  const tblExtra = (cols.some(c => c.w) || (ppOn && +tpl.tableW >= 40) ? 'table-layout:fixed;' : '') + (!ppOn && +tpl.tableW >= 40 ? `width:${+tpl.tableW}mm;` : '');
+  const allColsFixed = cols.length > 0 && cols.every(c => safeW(c.w) > 0);
+  const colSumW = allColsFixed ? cols.reduce((s, c) => s + safeW(c.w), 0) : 0;
+  const boxW = colSumW || (+tpl.tableW >= 40 ? +tpl.tableW : 0);
+  const tblExtra = (cols.some(c => c.w) || (ppOn && boxW >= 40) ? 'table-layout:fixed;' : '') + (!ppOn && +tpl.tableW >= 40 ? `width:${+tpl.tableW}mm;` : '');
   const showTable = cols.length > 0 && !(ppOn && tpl.hideTable);
-  const tblInner = `<thead><tr>${cols.map(c => `<th style="${colStyle(c)}">${esc(colLabel(K, c))}</th>`).join('')}</tr></thead><tbody>${rows.join('')}${total}${tableTail}</tbody>`;
+  const colGroup = `<colgroup>${cols.map(c => `<col data-col="${c.k}"${safeW(c.w) ? ` style="width:${safeW(c.w)}mm"` : ''}>`).join('')}</colgroup>`;
+  const tblInner = `${colGroup}<thead><tr>${cols.map(c => `<th style="${colStyle(c)}">${esc(colLabel(K, c))}</th>`).join('')}</tr></thead><tbody>${rows.join('')}${total}${tableTail}</tbody>`;
   const tblHtml = !showTable ? '' : (ppOn
-    ? `<div class="pp-tbl-box"${ppAttr('table', '明细表格', +tpl.tableW >= 40 ? `width:${+tpl.tableW}mm;` : '')}><table style="${tblExtra}width:100%">${tblInner}</table></div>`
+    ? `<div class="pp-tbl-box"${ppAttr('table', '明细表格', boxW >= 40 ? `width:${boxW}mm;` : '')}><table style="${tblExtra}width:100%">${tblInner}</table></div>`
     : `<table style="${tblExtra}">${tblInner}</table>`);
   return `<div class="slip-wrap${ppCls}" style="font-family:${PRINT_FONTS[tpl.font] || PRINT_FONTS.song};font-size:${+tpl.fontSize || 12}px${ppVars}">${d.stamp ? `<div class="slip-stamp">${d.stamp}</div>` : ''}
   ${titleHtml}
@@ -2790,6 +2795,7 @@ function printFrame(title, body, paperKey, tpl) {
   .slip-preprint .pp-tbl-box{margin-left:0;margin-right:auto}
   .slip-preprint .pp-tbl-box table{width:100%;margin:0}
   .slip-preprint.has-rh tbody tr{height:var(--rh)}
+  .slip-preprint.has-rh tbody td{white-space:nowrap;overflow:hidden}
   .slip-preprint .pp-free-box{position:absolute;white-space:nowrap;line-height:1.25;color:#000}
   .slip-preprint .pp-free-box .pp-tag{display:none!important}
   .foot{margin-top:6px;font-size:10px;color:#444;text-align:right}
@@ -7477,10 +7483,12 @@ function sampleDoc(kind) {
 function printTplPage(body) {
   const kind = SLIP_KINDS[ui.tplKind] ? ui.tplKind : 'out', K = SLIP_KINDS[kind], t = slipTpl(kind), cols = t.cols;
   // 预览和测试打印共用一个固定样张：客户名张三、示例单号、今天日期，避免每次看到的数据都不一样
+  const shortItem = (it, i) => ({ ...it, _p: { ...(it._p || prodOf(it.productId)), sku: 'A00' + (i + 1), name: '商品' + String(i + 1).padStart(2, '0'), spec: '40/2', unit: (it._p || prodOf(it.productId)).unit || '件' } });
   const rawSample = sampleDoc(kind);
   const sample = kind === 'expense'
     ? { ...rawSample, no: '示例单号', date: today() }
-    : { ...rawSample, no: '示例单号', date: today(), remark: '测试打印样张', party: '张三', _party: { name: '张三', contact: '138 0000 0000', address: '广东省深圳市南山区示例路 1 号' } };
+    : { ...rawSample, no: '示例单号', date: today(), remark: '测试打印样张', party: '张三', _party: { name: '张三', contact: '138 0000 0000', address: '广东省深圳市南山区示例路 1 号' },
+        items: (Array.isArray(rawSample.items) && rawSample.items.length ? rawSample.items : [{ qty: 2, price: 10, cost: 6, note: '' }]).map(shortItem) };
   const saved = db.settings.printTpl || {};
   const tplList = (db.settings.printTplList || {})[kind] || [];
   const activeId = (db.settings.printTplActive || {})[kind] || '';
@@ -7624,7 +7632,7 @@ function printTplPage(body) {
     const baseItems = Array.isArray(sample.items) ? sample.items : [];
     if (!baseItems.length || baseItems.length >= prevRows) return sample;
     const padded = [];
-    for (let i = 0; i < prevRows; i++) padded.push(baseItems[i % baseItems.length]);
+    for (let i = 0; i < prevRows; i++) padded.push(shortItem(baseItems[i % baseItems.length], i));
     return { ...sample, items: padded };
   };
   if ($('#tpFloatBtn')) $('#tpFloatBtn').onclick = () => {
@@ -7886,18 +7894,35 @@ function printTplPage(body) {
       const tbl = tbox && tbox.querySelector('table');
       if (!tbox || !tbl) return;
       const sc = prevScale || 1, mode = rz.dataset.rz, trs = tbl.querySelectorAll('tbody tr'), rowCount = Math.max(1, trs.length);
-      const startW = tbox.getBoundingClientRect().width / (PX_PER_MM * sc);
+      const firstTds = trs[0] ? [...trs[0].children].filter(td => td.dataset.col) : [];
+      // 快照所有可见列的宽度（mm）：已有设定值直接沿用，未设定才用实测取整，避免按比例放大后的数值反写导致跳变
+      const visCols = firstTds.map(td => {
+        const k = td.dataset.col;
+        const ci = cols.findIndex(c => c.k === k);
+        if (ci < 0) return null;
+        const savedW = Number.isFinite(+cols[ci].w) && +cols[ci].w >= 5 && +cols[ci].w <= 200 ? Math.round(+cols[ci].w) : 0;
+        const w = savedW || Math.max(5, Math.min(200, Math.round(td.getBoundingClientRect().width / (PX_PER_MM * sc))));
+        return { k, ci, startW: w };
+      }).filter(Boolean);
+      const startW = visCols.length ? visCols.reduce((s, x) => s + x.startW, 0) : (tbox.getBoundingClientRect().width / (PX_PER_MM * sc));
       const startH = tbl.getBoundingClientRect().height / (PX_PER_MM * sc);
-      let colIdx = -1, startColW = 0;
-      const startColWs = cols.map(c => c.w || 0);
-      if (mode === 'col') {
-        const colKey = rz.dataset.col;
-        colIdx = cols.findIndex(c => c.k === colKey);
-        const td = rz.parentElement;
-        startColW = td ? td.getBoundingClientRect().width / (PX_PER_MM * sc) : (cols[colIdx]?.w || 20);
+      let visIdx = -1;
+      if (mode === 'col') visIdx = visCols.findIndex(x => x.k === rz.dataset.col);
+      // 立即锁定当前外框与每列实际宽度，拖动过程中左边框和未拖动列绝对不会位移
+      if (mode === 'col' || mode === 'w' || mode === 'se') {
+        tbox.style.width = startW + 'mm';
+        tbl.style.tableLayout = 'fixed';
+        tbl.style.width = '100%';
+        visCols.forEach(x => {
+          cols[x.ci].w = x.startW;
+          const inp = body.querySelector(`[data-w="${x.ci}"]`);
+          if (inp) inp.value = x.startW;
+          tbl.querySelectorAll(`[data-col="${CSS.escape(x.k)}"]`).forEach(el => { el.style.width = x.startW + 'mm'; });
+        });
+        if ($('#tpTableW')) $('#tpTableW').value = startW;
       }
       rz.classList.add('on');
-      ppResize = { rz, tbox, tbl, mode, sx: e.clientX, sy: e.clientY, startW, startH, rowCount, colIdx, startColW, startColWs, pid: e.pointerId };
+      ppResize = { rz, tbox, tbl, mode, sx: e.clientX, sy: e.clientY, startW, startH, rowCount, visCols, visIdx, pid: e.pointerId };
       try { rz.setPointerCapture(e.pointerId); } catch (err) {}
       return;
     }
@@ -7922,30 +7947,40 @@ function printTplPage(body) {
   prevBox.addEventListener('pointermove', e => {
     if (ppResize) {
       const sc = prevScale || 1, dx = (e.clientX - ppResize.sx) / (PX_PER_MM * sc), dy = (e.clientY - ppResize.sy) / (PX_PER_MM * sc);
-      const { tbox, tbl, mode, startW, startH, rowCount, colIdx, startColW, startColWs } = ppResize;
-      if (mode === 'col' && colIdx >= 0) {
-        const nw = Math.max(5, Math.min(200, Math.round(startColW + dx)));
-        cols[colIdx].w = nw;
-        const inp = body.querySelector(`[data-w="${colIdx}"]`);
-        if (inp) inp.value = nw;
-        tbl.style.tableLayout = 'fixed';
-        tbl.querySelectorAll(`[data-col="${CSS.escape(cols[colIdx].k)}"]`).forEach(td => { td.style.width = nw + 'mm'; });
+      const { tbox, tbl, mode, startW, startH, rowCount, visCols, visIdx } = ppResize;
+      const setColW = (vc, wMm) => {
+        const rw = Math.max(5, Math.min(200, Math.round(wMm)));
+        cols[vc.ci].w = rw;
+        const inp = body.querySelector(`[data-w="${vc.ci}"]`);
+        if (inp) inp.value = rw;
+        tbl.querySelectorAll(`[data-col="${CSS.escape(vc.k)}"]`).forEach(el => { el.style.width = rw + 'mm'; });
+      };
+      if (mode === 'col' && visIdx >= 0 && visIdx < visCols.length - 1) {
+        // 拖动两列之间的分隔线：只调整相邻两列（左列 +dx、右列 -dx），其余列与表格左右外边框完全不动
+        const leftC = visCols[visIdx], rightC = visCols[visIdx + 1];
+        const pairSum = leftC.startW + rightC.startW;
+        const wL = Math.max(5, Math.min(pairSum - 5, Math.round(leftC.startW + dx)));
+        const wR = pairSum - wL;
+        // 把所有列都写入整数宽度，确保松手重绘后左侧列宽数字与视觉完全一致
+        visCols.forEach((vc, idx) => {
+          if (idx === visIdx) setColW(vc, wL);
+          else if (idx === visIdx + 1) setColW(vc, wR);
+          else setColW(vc, vc.startW);
+        });
+        const totalMm = visCols.reduce((s, vc) => s + (cols[vc.ci].w || vc.startW), 0);
+        tbox.style.width = totalMm + 'mm';
+        if ($('#tpTableW')) $('#tpTableW').value = totalMm;
       }
-      if (mode === 'w' || mode === 'se') {
-        const nw = Math.max(40, Math.min(300, Math.round((startW + dx) * 2) / 2));
-        const ratio = startW > 0 ? nw / startW : 1;
+      if ((mode === 'w' || mode === 'se') && visCols.length) {
+        // 拖动表格右边框：前 N-1 列全部锁定不动，只拉伸/收缩最后一列与表格总宽
+        const lastIdx = visCols.length - 1;
+        const prefixW = visCols.slice(0, lastIdx).reduce((s, vc) => s + vc.startW, 0);
+        const wLast = Math.max(5, Math.min(200, Math.round(visCols[lastIdx].startW + dx)));
+        const nw = Math.max(40, Math.min(300, prefixW + wLast));
+        setColW(visCols[lastIdx], nw - prefixW);
         tbox.style.width = nw + 'mm';
         tbl.style.tableLayout = 'fixed';
         tbl.style.width = '100%';
-        cols.forEach((c, i) => {
-          if (startColWs[i] > 0) {
-            const cw = Math.max(5, Math.min(200, Math.round(startColWs[i] * ratio)));
-            c.w = cw;
-            const inp = body.querySelector(`[data-w="${i}"]`);
-            if (inp) inp.value = cw;
-            tbl.querySelectorAll(`[data-col="${CSS.escape(c.k)}"]`).forEach(td => { td.style.width = cw + 'mm'; });
-          }
-        });
         if ($('#tpTableW')) $('#tpTableW').value = nw;
       }
       if (mode === 'h' || mode === 'se') {
