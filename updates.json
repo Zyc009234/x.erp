@@ -1,43 +1,43 @@
 {
   "schema": 1,
-  "latest": "2.16.8",
-  "publishedAt": "2026-11-28T16:42:00+08:00",
+  "latest": "2.16.9",
+  "publishedAt": "2026-11-28T17:02:00+08:00",
   "notes": [
     "修复已知 Bug，提升系统稳定性与兼容性"
   ],
   "packages": {
     "fnos": {
-      "version": "2.16.8",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.8.fpk",
-      "sha256": "6b6964f97161daf34347c060ec92bedc5172116ec0b99f7a21f1f7d7bf9a77fc",
-      "size": 886575,
-      "file": "xerp-2.16.8.fpk",
+      "version": "2.16.9",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.9.fpk",
+      "sha256": "34281eb66591235e28bb71ef4cceb8685f2d8cf485e7f19b2b6d9870950fe3c1",
+      "size": 887365,
+      "file": "xerp-2.16.9.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.16.8",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.8-windows-x64-setup.exe",
-      "sha256": "75b12d3a32cfad8ca099b73e9f1c53b9f43e2ad8deeb3824743e4bda5f16ea8c",
-      "size": 23944427,
-      "file": "xerp-2.16.8-windows-x64-setup.exe",
+      "version": "2.16.9",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.9-windows-x64-setup.exe",
+      "sha256": "62fda0949ebc411d105ad4e8ee65873ec7cd4577c765a94ca0af02a555a1ac6e",
+      "size": 23950967,
+      "file": "xerp-2.16.9-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.16.8",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.8-android.apk",
-      "sha256": "eb8cbd9102ec5bf1cc9a63622636ca40025c531171e2b2fc9f00655c4ecfb4ea",
+      "version": "2.16.9",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.9-android.apk",
+      "sha256": "5ae2c6f232552eb3c958145a98bd3930734781275fe4284c11f4211c128c89c6",
       "size": 279329,
-      "file": "xerp-2.16.8-android.apk",
+      "file": "xerp-2.16.9-android.apk",
       "kind": "apk",
       "versionCode": 21603
     },
     "docker": {
-      "version": "2.16.8",
+      "version": "2.16.9",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.16.8",
+      "image": "ghcr.io/zyc009234/xerp:2.16.9",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.8-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.8-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.9-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.9-docker-arm64.tar.gz"
       ],
       "note": "也可以下载离线包 docker load"
     }

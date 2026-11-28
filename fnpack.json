@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.16.9": {
+          "changelog": "修复已知 Bug，提升系统稳定性与兼容性",
+          "updated_at": "2026-11-28T17:02:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.9.fpk",
+              "sha256": "34281eb66591235e28bb71ef4cceb8685f2d8cf485e7f19b2b6d9870950fe3c1",
+              "size": 887365
+            }
+          }
+        },
         "2.16.8": {
           "changelog": "修复已知 Bug，提升系统稳定性与兼容性",
           "updated_at": "2026-11-28T16:42:00+08:00",
@@ -167,7 +178,7 @@
           }
         }
       },
-      "version": "2.16.8"
+      "version": "2.16.9"
     }
   }
 }
