@@ -341,7 +341,7 @@ test('P1 #3 #4 #5 #6 & P2 #7-#17: server.js 核心安全、隔离、财务与备
     assert.deepEqual(afterRestore.bomCols, { spec: true, cost: false }, '#17 对象形式 bomCols 应被恢复');
   } finally {
     srv.stop();
-    fs.rmSync(dir, { recursive: true, force: true });
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
   }
 });
 
