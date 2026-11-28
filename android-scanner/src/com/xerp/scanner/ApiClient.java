@@ -272,7 +272,7 @@ public final class ApiClient {
             }
             int code = c.getResponseCode();
             InputStream is = code >= 200 && code < 400 ? c.getInputStream() : c.getErrorStream();
-            String resp = is != null ? readStream(is, 8 * 1024 * 1024) : "";
+            String resp = is != null ? readStream(is, 32 * 1024 * 1024) : "";
             if (code >= 200 && code < 300) {
                 return resp.trim().isEmpty() ? new JSONObject() : new JSONObject(resp);
             }
@@ -294,7 +294,12 @@ public final class ApiClient {
         try (InputStream in = is; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             byte[] buf = new byte[16384];
             int n;
-            while ((n = in.read(buf)) > 0 && out.size() < maxBytes) out.write(buf, 0, n);
+            while ((n = in.read(buf)) > 0) {
+                if (out.size() + n > maxBytes) {
+                    throw new java.io.IOException("服务端返回数据过大（超过 " + (maxBytes / (1024 * 1024)) + "MB 上限）");
+                }
+                out.write(buf, 0, n);
+            }
             return out.toString("UTF-8");
         }
     }

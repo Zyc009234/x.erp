@@ -7,6 +7,7 @@ public interface TabPage {
     boolean needsCamera();
     void onShown();
     void onDataUpdated();
+    default void onCompanySwitched() { onDataUpdated(); }
     void onBarcodeScanned(String code);
     void onCameraStateChanged(boolean open);
 }

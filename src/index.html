@@ -399,9 +399,9 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .slip-preview.is-preprint [data-pp]:hover{outline:1px dashed rgba(99,102,241,.65);background:rgba(99,102,241,.04)}
 .slip-preview.is-preprint [data-pp].pp-sel{outline:1.5px solid #6366f1;background:rgba(99,102,241,.08)}
 .slip-preview.is-preprint.pp-placing{cursor:crosshair}
-.slip-preview.is-preprint .pp-free-box{position:absolute;cursor:move;user-select:none;touch-action:none;padding:1px 4px;border-radius:3px;white-space:nowrap;line-height:1.25;color:#1d4ed8;background:rgba(59,130,246,.10);border:1px dashed rgba(37,99,235,.7);z-index:6}
-.slip-preview.is-preprint .pp-free-box:hover{background:rgba(59,130,246,.18);border-color:#2563eb}
-.slip-preview.is-preprint .pp-free-box.pp-sel{background:rgba(99,102,241,.20);border:1.5px solid #4f46e5;box-shadow:0 0 0 2px rgba(79,70,229,.18);z-index:12}
+.slip-preview.is-preprint .pp-free-box{position:absolute;cursor:move;user-select:none;touch-action:none;padding:0;border-radius:3px;white-space:nowrap;line-height:1.25;color:#1d4ed8;background:rgba(59,130,246,.10);outline:1px dashed rgba(37,99,235,.7);z-index:6}
+.slip-preview.is-preprint .pp-free-box:hover{background:rgba(59,130,246,.18);outline-color:#2563eb}
+.slip-preview.is-preprint .pp-free-box.pp-sel{background:rgba(99,102,241,.20);outline:1.5px solid #4f46e5;box-shadow:0 0 0 2px rgba(79,70,229,.18);z-index:12}
 .slip-preview.is-preprint .pp-free-box .pp-tag{position:absolute;top:-16px;left:0;font-size:10px;line-height:1;padding:2px 5px;border-radius:3px;background:#4f46e5;color:#fff;font-family:system-ui,sans-serif;pointer-events:none;opacity:0;white-space:nowrap}
 .slip-preview.is-preprint .pp-free-box:hover .pp-tag,.slip-preview.is-preprint .pp-free-box.pp-sel .pp-tag{opacity:1}
 .slip-preview.is-preprint .pp-tbl-box{position:relative;display:block;margin-left:0;margin-right:auto}
@@ -705,7 +705,7 @@ const whName = id => (byId(db.warehouses, id || META.defaultWh) || {}).name || '
 const accts = (all = false) => (db.accounts || []).filter(a => all || !a.off);
 const acctName = f => { const a = f && byId(db.accounts || [], f.account); return a ? a.name : (f && f.method) || '-'; };
 const acctBal = id => { const a = byId(db.accounts, id); if (!a) return 0; const T = db.acctTransfers || [];
-  return +((a.opening || 0) + sum(db.finance.filter(f => f.account === id), f => f.type === 'income' ? f.amount : -f.amount) + sum(T.filter(t => t.to === id), t => t.amount) - sum(T.filter(t => t.from === id), t => t.amount)).toFixed(2); };
+  return +((a.opening || 0) + sum(db.finance.filter(f => f.account === id && !f.nonCash && f.category !== '固定资产折旧'), f => f.type === 'income' ? f.amount : -f.amount) + sum(T.filter(t => t.to === id), t => t.amount) - sum(T.filter(t => t.from === id), t => t.amount)).toFixed(2); };
 const acctOpts = keep => accts(true).filter(a => !a.off || a.id === keep).map(a => [a.id, a.name + (a.off ? '（已停用）' : '')]);
 const acctDefault = () => (accts().find(a => a.kind === '银行转账') || accts()[0] || {}).id || '';
 const whQty = (p, w) => !w ? p.stock : ((p.wh || {})[w] || 0);
@@ -757,16 +757,27 @@ async function reload() {
   db = {warehouses:[], transferDocs:[], batches:[], serials:[], carriers:[], shipments:[], shipBills:[], deliveries:[], expenses:[], advances:[], partyPayments:[], projects:[], contracts:[], contractTpls:[], attendance:[], payrolls:[], fixedAssets:[], engJobs:[], fieldPlots:[], farmLogs:[], ...d.data, settings:{...d.settings, version:d.version, theme:db.settings.theme, pageSize:db.settings.pageSize, user:ME.name}};
   return changed;
 }
-// 发起写操作 → 成功后重新拉取数据并刷新界面；失败则提示错误并保持弹窗
+// 发起写操作 → 成功后重新拉取数据并刷新界面；写成功但刷新失败时仍关闭弹窗避免重复提交
 async function mutate(method, path, body, msg) {
+  let r;
   try {
-    const r = await api(method, path, body);
-    if (/^\/api\/(users|employees|departments)/.test(path)) PEOPLE = null;
+    r = await api(method, path, body);
+  } catch (e) { toast(e.message, 'error'); return null; }
+  if (/^\/api\/(users|employees|departments)/.test(path)) PEOPLE = null;
+  try {
     await reload(); closeModal();
     if (msg) toast(typeof msg === 'function' ? msg(r) : msg);
     render();
-    return r || true;
-  } catch (e) { toast(e.message, 'error'); return null; }
+  } catch (e) {
+    closeModal();
+    toast((msg ? (typeof msg === 'function' ? msg(r) : msg) : '保存成功') + '，但刷新界面失败，请手动刷新', 'error');
+  }
+  return r || true;
+}
+function isQtyInvalid(i) {
+  const q = +i.qty, p = byId(db.products, i.productId);
+  if (!Number.isFinite(q) || q <= 0) return true;
+  return p && p.dec ? Math.abs(q * 100 - Math.round(q * 100)) > 1e-6 : !Number.isInteger(q);
 }
 
 /* ---------- 登录 ---------- */
@@ -783,7 +794,7 @@ async function testServer() {
     if (CLIENT_MODE) {
       const s = $('#lServer').value.trim();
       if (!s) throw new Error('请填写服务器地址');
-      const r = await fetch('/local/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({server:s})});
+      const r = await fetch('/local/config', {method:'POST', headers:{'Content-Type':'application/json', ...(window.__XERP_LOCAL_TOKEN__ ? {'X-XERP-Token': window.__XERP_LOCAL_TOKEN__} : {})}, body:JSON.stringify({server:s})});
       const c = await r.json();
       if (!r.ok) throw new Error(c.error || '地址格式不正确');
       $('#lServer').value = SERVER_ADDR = c.server;
@@ -1892,7 +1903,7 @@ function pageInventory() {
       {t:'类型', r:o => badge(o.type, o.dir === 'in' ? 'green' : 'orange') + (multiWh() ? `<div class="sub-t">${esc(whName(o.wh))}</div>` : '')},
       {t:'日期', r:o => `${o.date} <span class="sub-t">${o.time || ''}</span>`, s:o => o.date + o.time},
       {t:'往来单位', r:o => esc(o.party || '-') + (o.project ? `<div class="sub-t">项目：${esc(o.project)}</div>` : '')},
-      ...(db.stockDocs.some(x => x.srcOrderNo) ? [{t:'来源订单', r:o => o.srcOrderNo ? `<a class="link" data-act="${o.srcOrderKind === 'grain' ? 'grainView' : 'orderView'}" data-id="${o.srcOrderKind === 'grain' ? esc(o.srcOrderId) : `${esc(o.srcOrderKind || (o.dir === 'out' ? 'sales' : 'purchase'))}|${esc(o.srcOrderId)}`}">${esc(o.srcOrderNo)}</a>` : '<span class="sub-t">-</span>'}] : []),
+      ...(db.stockDocs.some(x => x.srcOrderNo) ? [{t:'来源订单', r:o => o.srcOrderNo ? `<a class="link" data-act="${o.srcOrderKind === 'eng' ? 'engView' : o.srcOrderKind === 'grain' ? 'grainView' : 'orderView'}" data-id="${(o.srcOrderKind === 'grain' || o.srcOrderKind === 'eng') ? esc(o.srcOrderId) : `${esc(o.srcOrderKind || (o.dir === 'out' ? 'sales' : 'purchase'))}|${esc(o.srcOrderId)}`}">${esc(o.srcOrderNo)}</a>` : '<span class="sub-t">-</span>'}] : []),
       {t:'商品', r:o => esc(prodOf(o.items[0]?.productId).name) + (o.items.length > 1 ? `<span class="sub-t"> 等${o.items.length}项</span>` : '')},
       {t:'数量', cls:'num', r:o => num(docQty(o)), s:docQty},
       ...(mo ? [{t:'金额', cls:'num', r:o => o.dir === 'in' && !co ? '<span class="sub-t">-</span>' : money(docShown(o)) + (o.items.some(i => i.sale != null) ? '<div class="sub-t" title="按出库销售价计">按出库价</div>' : ''), s:o => o.dir === 'in' && !co ? 0 : docShown(o)}] : []),
@@ -2490,7 +2501,7 @@ function docModal(dir, productId, type0, src, editDoc) {
   const save = async andPrint => {
     const items = draft.items.filter(i => i.productId);
     if (!items.length) return toast('请至少添加一个商品', 'error');
-    if (items.some(i => !Number.isInteger(+i.qty) || +i.qty <= 0)) return toast('数量必须为正整数', 'error');
+    if (items.some(isQtyInvalid)) return toast('数量格式不正确（普通商品须为正整数，小数商品最多两位小数）', 'error');
     if (dir === 'in' && co && items.some(i => i.price !== '' && +i.price < 0)) return toast('单价不能为负', 'error');
     if (dir === 'out' && showAmt && items.some(i => i.sale !== '' && +i.sale < 0)) return toast('出库单价不能为负', 'error');
     if (dir === 'out') {
@@ -2607,8 +2618,8 @@ function buildFreeBoxCtx(kind, o, d, amt, showMoney) {
       contact: partyObj.contact || '',
       phone: partyObj.phone || '',
       address: metaVal('address') || partyObj.address || '',
-      taxNo: partyObj.invoiceTaxNo || partyObj.taxNo || '',
-      bank: partyObj.invoiceBank || partyObj.bank || '',
+      taxNo: partyObj.taxId || partyObj.invoiceTaxNo || partyObj.taxNo || '',
+      bank: partyObj.bankName || partyObj.invoiceBank || partyObj.bank || '',
       bankAccount: partyObj.invoiceBankAccount || partyObj.bankAccount || ''
     },
     summary: {
@@ -2783,7 +2794,7 @@ function slipPagesHtml(kind, o, { showMoney, minRows = 0, tpl = slipTpl(kind), f
   for (let i = 0; i < arr.length; i += maxR) chunks.push(arr.slice(i, i + maxR));
   const total = chunks.length;
   return chunks.map((chunk, idx) => {
-    const pageDoc = { ...o, [listKey]: chunk, _pageText: `${idx + 1}/${total}`, _fullDoc: o };
+    const pageDoc = { ...o, [listKey]: chunk, discount: idx === total - 1 ? (o.discount || 0) : 0, _pageText: `${idx + 1}/${total}`, _fullDoc: o };
     return `<div class="page">${slipRender(kind, pageDoc, { showMoney, minRows: maxR, tpl })}${foot}</div>`;
   }).join('');
 }
@@ -2893,7 +2904,7 @@ function docView(id) {
     : o.approver ? ` · ${esc(o.approver)} 于 ${fmtTime(o.approvedAt)} 审核` : '';
   openModal(`${modalHead(docTitle(o.dir) + ' · ' + o.no + ' ' + docBadge(o))}
   <div class="m-body"><div class="slip-preview" id="slipPrev">${slipHtml(o, {showMoney:mo && prefs.slipMoney !== false})}</div>
-  ${o.srcOrderNo ? `<p class="sub-t" style="margin-top:10px">来源订单：<a class="link" data-act="${o.srcOrderKind === 'grain' ? 'grainView' : 'orderView'}" data-id="${o.srcOrderKind === 'grain' ? esc(o.srcOrderId) : `${esc(o.srcOrderKind || (o.dir === 'out' ? 'sales' : 'purchase'))}|${esc(o.srcOrderId)}`}">${esc(o.srcOrderNo)}</a></p>` : ''}
+  ${o.srcOrderNo ? `<p class="sub-t" style="margin-top:10px">来源订单：<a class="link" data-act="${o.srcOrderKind === 'eng' ? 'engView' : o.srcOrderKind === 'grain' ? 'grainView' : 'orderView'}" data-id="${(o.srcOrderKind === 'grain' || o.srcOrderKind === 'eng') ? esc(o.srcOrderId) : `${esc(o.srcOrderKind || (o.dir === 'out' ? 'sales' : 'purchase'))}|${esc(o.srcOrderId)}`}">${esc(o.srcOrderNo)}</a></p>` : ''}
   <p class="sub-t" style="margin-top:10px">开单时间 ${fmtTime(o.createdAt)} · 已打印 ${o.printCount || 0} 次${o.approver && o.status === '正常' ? appr : ''}</p>${o.status === '正常' ? '' : appr}
   ${o.dir === 'out' ? shipBlock('out', o, o.status !== '已作废') : ''}</div>
   <div class="m-foot" style="flex-wrap:wrap">
@@ -3575,7 +3586,7 @@ function transferModal() {
     const items = draft.items.filter(i => i.productId);
     if (draft.from === draft.to) return toast('调出仓库和调入仓库不能相同', 'error');
     if (!items.length) return toast('请至少添加一个商品', 'error');
-    if (items.some(i => !Number.isInteger(+i.qty) || +i.qty <= 0)) return toast('数量必须为正整数', 'error');
+    if (items.some(isQtyInvalid)) return toast('数量格式不正确（普通商品须为正整数，小数商品最多两位小数）', 'error');
     const need = {}; items.forEach(i => { need[i.productId] = (need[i.productId] || 0) + baseQ(i); });
     const lack = Object.entries(need).map(([pid, q]) => ({p:byId(db.products, pid), q})).filter(x => whQty(x.p, draft.from) < x.q);
     if (lack.length) return toast(whName(draft.from) + '库存不足：' + lack.map(x => `${x.p.name}（需 ${x.q}，现有 ${whQty(x.p, draft.from)}）`).join('、'), 'error');
@@ -4399,7 +4410,7 @@ function orderModal(kind, id, srcId0) {
     }
     if (!date) return toast('请选择日期', 'error');
     if (!items.length) return toast('请至少添加一个商品', 'error');
-    if (items.some(i => !Number.isInteger(+i.qty) || +i.qty <= 0)) return toast('数量必须为正整数', 'error');
+    if (items.some(isQtyInvalid)) return toast('数量格式不正确（普通商品须为正整数，小数商品最多两位小数）', 'error');
     if (items.some(i => +i.price < 0)) return toast('单价不能为负', 'error');
     if (items.some(i => +i.lineDiscount > (+i.qty * +i.price) + 0.001)) return toast('行小计不能小于 0', 'error');
     if (disc() < 0 || disc() > sum(items, sub) + 0.001) return toast('优惠金额要在 0 到明细合计之间', 'error');
@@ -4413,7 +4424,11 @@ function orderModal(kind, id, srcId0) {
   else if (!o && !srcOf()) tb.querySelector('[data-k=product]').focus();
 }
 function orderView(kind, id) {
-  const C = ORD[kind], o = byId(db[C.db], id), party = byId(db[C.party], o[C.partyKey]) || {};
+  const C = ORD[kind];
+  if (!C) return toast('不支持的订单类型', 'error');
+  const o = byId(db[C.db], id);
+  if (!o) return toast('关联订单不存在或无权查看', 'error');
+  const party = byId(db[C.party], o[C.partyKey]) || {};
   const total = orderTotal(o), paid = o[C.paidKey] || 0;
   const ppPays = [];
   if (kind === 'sales' || kind === 'purchase') {
@@ -4617,8 +4632,9 @@ function orderFulfillModal(kind, o) {
       amount: 0, paid: false,
       note: (dMode === 'worker' && $('#ofDelivNote') ? $('#ofDelivNote').value.trim() : '') || `销售单 ${o.no} ${dMode === 'pickup' ? '客户自提' : '小工配送'}`
     } : null;
-    const res = await mutate('POST', `/api/orders/${kind}/${o.id}/${isSales ? 'ship' : 'inbound'}`, { wh, items, allowOver:true }, docApproveOn(dir) ? '本次' + (isSales ? '发货' : '入库') + '已提交审核，请到库存管理审核对应单据' : (isSales ? '本次发货已提交，已生成销售出库单并同步库存' : '本次入库已提交，已生成采购入库单并同步库存'));
-    if (res && shipPayload) {
+    const needAppr = docApproveOn(dir);
+    const res = await mutate('POST', `/api/orders/${kind}/${o.id}/${isSales ? 'ship' : 'inbound'}`, { wh, items, allowOver:true }, needAppr ? '本次' + (isSales ? '发货' : '入库') + '已提交审核，请到库存管理审核对应单据' + (shipPayload || delivPayload ? '（审核通过后再登记物流/配送）' : '') : (isSales ? '本次发货已提交，已生成销售出库单并同步库存' : '本次入库已提交，已生成采购入库单并同步库存'));
+    if (res && !needAppr && res.status !== '待发货' && shipPayload) {
       try {
         await api('POST', '/api/shipments', shipPayload);
         await reload(); render();
@@ -4626,7 +4642,7 @@ function orderFulfillModal(kind, o) {
       } catch (err) {
         toast('发货已完成，但快递登记失败：' + err.message + '（可在订单详情补充登记）', 'error');
       }
-    } else if (res && delivPayload) {
+    } else if (res && !needAppr && res.status !== '待发货' && delivPayload) {
       try {
         await api('POST', '/api/deliveries', delivPayload);
         await reload(); render();
@@ -4695,7 +4711,7 @@ function orderAct(action, kind, id) {
 
 /* ================= 页面：物流运费 ================= */
 const hasFeat = k => (db.settings.features || []).includes(k);
-const FEAT_NAMES = { preprint: '套打模板' };
+const FEAT_NAMES = { preprint: '套打模板', pos_pay: '微信/支付宝直连收款（99元/年）' };
 const shipOn = () => (db.settings.modules || []).includes('shipping');
 const SHIP_STATUS = {'待对账':'orange', '已对账':'green', '申诉中':'red', '已作废':'gray'};
 const BILL_CAT = {diff:['金额差异', 'orange'], extra:['账单有、系统无', 'red'], dup:['重复计费', 'purple'], ok:['一致', 'green'], missing:['系统有、账单无', 'blue']};
@@ -5329,7 +5345,7 @@ function billMap(aoa, cid, period, fileName) {
     weight:map.weight != null ? cellText(r[map.weight]).replace(/(kg|KG|公斤)$/, '') : '', province:map.province != null ? cellText(r[map.province]) : '', date:map.date != null ? xlsDate(r[map.date]) : ''}))
     .filter(x => x.trackNo && !/合计|总计|小计/.test(x.trackNo));
   openModal(`${modalHead('核对账单列 · ' + esc(fileName))}<div class="m-body">
-    <div class="form-grid" style="grid-template-columns:repeat(5,1fr)">${BILL_FIELDS.map(([k, l]) => `<label class="field"><span>${l}${k === 'trackNo' || k === 'fee' ? ' <i>*</i>' : ''}</span><select data-map="${k}"><option value="">（没有）</option>${head.map((h, i) => `<option value="${i}" ${map[k] === i ? 'selected' : ''}>${esc(h || '第 ' + (i + 1) + ' 列')}</option>`).join('')}</select></label>`).join('')}</div>
+    <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">${BILL_FIELDS.map(([k, l]) => `<label class="field"><span>${l}${k === 'trackNo' || k === 'fee' ? ' <i>*</i>' : ''}</span><select data-map="${k}"><option value="">（没有）</option>${head.map((h, i) => `<option value="${i}" ${map[k] === i ? 'selected' : ''}>${esc(h || '第 ' + (i + 1) + ' 列')}</option>`).join('')}</select></label>`).join('')}</div>
     <div class="line-head"><b>预览</b><span class="sub-t" id="bCnt" style="margin-left:10px;margin-right:auto"></span></div><div class="table-wrap" id="bPrev" style="max-height:44vh;overflow:auto"></div></div>
     <div class="m-foot"><button class="btn" style="margin-right:auto" data-act="billImport">重新选择</button><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="bGo">${ic('check')}导入并对账</button></div>`, 'lg');
   const prevDraw = () => {
@@ -6111,7 +6127,7 @@ function renderFieldPage(body) {
     } catch (err) { toast(err.message, 'error'); }
   };
   const openPlotModal = p => formModal({
-    title: p ? '编辑地块 · ' + p.name : '新增地块',
+    title: p ? '编辑地块 · ' + esc(p.name) : '新增地块',
     data: p ? {...p} : { plantDate: today(), owner: ME.name, areaMu: 0 },
     fields:[
       {n:'name', l:'地块名称', req:1}, {n:'areaMu', l:'面积（亩）', type:'number'},
@@ -6130,7 +6146,7 @@ function renderFieldPage(body) {
       <label class="field"><span>负责人</span><input id="flOwner" value="${esc((pl && pl.owner) || ME.name)}"></label>
       <label class="field span2"><span>农事安排 / 内容 <i>*</i></span><input id="flTask" placeholder="如：播种、施肥、无人机飞防打药、灌溉"></label>
       <label class="field span2"><span>备注</span><textarea id="flNote" rows="2"></textarea></label>
-    </div><div style="margin-top:8px;display:flex;gap:8px;align-items:center"><label class="btn sm">${ic('upload')}上传现场照片（最多 4 张）<input type="file" id="flPhotos" accept="image/*" multiple hidden></label><div id="flPhotoPrev" style="display:flex;gap:6px"></div></div></div>
+    </div><div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center"><label class="btn sm">${ic('upload')}上传现场照片（最多 4 张）<input type="file" id="flPhotos" accept="image/*" multiple hidden></label><div id="flPhotoPrev" style="display:flex;flex-wrap:wrap;gap:6px"></div></div></div>
     <div class="m-foot"><button class="btn" data-act="closeModal">取消</button><button class="btn primary" id="flSave">${ic('check')}保存农事</button></div>`);
     $('#flPhotos').onchange = async e => {
       for (const f of [...e.target.files].slice(0, 4 - photos.length)) { try { photos.push(await shrinkImage(f, 1200, 350000)); } catch (err) {} }
@@ -7440,9 +7456,9 @@ function pageSettings() {
       <div style="margin-top:14px;text-align:right"><button class="btn primary" data-act="saveCostMethod">${ic('check')}保存成本设置</button></div>
     </div></div>
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>功能激活</h3>${st.deviceCode ? `<span class="sub-t">设备码：<code>${esc(st.deviceCode)}</code></span>` : ''}</div><div class="card-body">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><span class="sub-t">已激活功能：</span>${(st.features || []).length ? st.features.map(f => `<span class="badge green plain">${esc(FEAT_NAMES[f] || f)}</span>`).join('') : '<span class="sub-t">暂无</span>'}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><span class="sub-t">已激活功能：</span>${(st.features || []).length ? st.features.map(f => { const fd = st.featureDetails && st.featureDetails[f]; const expTxt = fd && fd.expiresAt ? `（有效期至 ${fd.expiresAt.slice(0, 10)}）` : ''; return `<span class="badge green plain">${esc((FEAT_NAMES[f] || f) + expTxt)}</span>`; }).join('') : '<span class="sub-t">暂无</span>'}</div>
       <div style="display:flex;gap:8px;max-width:460px"><input class="select" style="flex:1" id="sRedeemCode" placeholder="输入激活码（XP-... 或 PT-...）" autocomplete="off"><button class="btn primary" data-act="redeemCode" id="sRedeemBtn">激活</button></div>
-      <p class="sub-t" style="margin-top:8px">激活码一次有效并永久绑定本机，激活成功后可离线使用。</p>
+      <p class="sub-t" style="margin-top:8px">激活码一次有效并绑定本机，激活成功后可离线使用。收银台微信/支付宝直连收款提供 15 天免费试用，超期后需激活码激活（99 元/年）。</p>
     </div></div>
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>版本更新</h3></div><div class="card-body">
       <div class="setting-row"><div class="sr-group"><b>当前版本</b><small>v${esc(st.version || '-')} · ${esc(platLabel)}</small></div><button class="btn" data-act="updateCheck" id="updCheck">${ic('refresh')}检查更新</button></div>
@@ -7732,7 +7748,7 @@ function printTplPage(body) {
       const opts = PP_FREE_FIELDS.map(g => `<optgroup label="${g.group}">${g.items.map(([k, l]) => `<option value="${k}" ${cur.bind === k ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`).join('');
       form = `<div style="margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel);display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px 8px">
         <label class="field" style="margin:0"><span>名称</span><input id="bxName" maxlength="20" value="${esc(cur.name)}"></label>
-        <label class="field" style="margin:0;grid-column:span 2"><span>引用数据库字段</span><select id="bxBind">${opts}</select></label>
+        <label class="field" style="margin:0;grid-column:1/-1"><span>引用数据库字段</span><select id="bxBind">${opts}</select></label>
         ${cur.bind === '__custom__' ? `<label class="field" style="margin:0;grid-column:1/-1"><span>自定义文本 / 混排变量</span><input id="bxTpl" maxlength="120" value="${esc(cur.customTpl || '')}" placeholder="如：{{party.contact}} {{party.phone}}"></label>` : ''}
         <label class="field" style="margin:0"><span>X (mm)</span><input id="bxX" type="number" step="0.5" value="${cur.x}"></label>
         <label class="field" style="margin:0"><span>Y (mm)</span><input id="bxY" type="number" step="0.5" value="${cur.y}"></label>
@@ -9493,6 +9509,18 @@ const A = {
   grainNew: () => grainModal('in'),
   grainOutNew: () => grainModal('out'),
   grainView: id => { closeModal(); grainView(id); },
+  engView: id => {
+    closeModal();
+    const o = byId(db.engJobs || [], id);
+    if (!o) return toast('工程单不存在或无权查看', 'error');
+    const itemsHtml = (o.items || []).length ? `<div class="table-wrap"><table class="tbl compact"><thead><tr><th>商品</th><th class="num">数量</th><th class="num">单价</th><th class="num">小计</th></tr></thead><tbody>${(o.items || []).map(i => `<tr><td>${esc((byId(db.products, i.productId) || {}).name || i.name || i.productId)}</td><td class="num">${i.qty}</td><td class="num">${money(i.price || 0)}</td><td class="num">${money((+i.qty || 0) * (+i.price || 0))}</td></tr>`).join('')}</tbody></table></div>` : '<div class="sub-t">无材料清单</div>';
+    openModal(`${modalHead('工程结算单 · ' + esc(o.no) + ' ' + badge(o.status, o.status === '已完工' ? 'green' : o.status === '施工中' ? 'blue' : 'gray'))}
+    <div class="m-body">
+      <div class="grid g2 mb"><div><span class="sub-t">工程名称：</span><b>${esc(o.name)}</b></div><div><span class="sub-t">客户：</span>${esc(o.partyName || '-')}</div><div><span class="sub-t">日期：</span>${esc(o.date || '')}</div><div><span class="sub-t">总额 / 已收：</span><b>${money(o.totalAmount || 0)}</b> / <span class="pos">${money(o.paid || 0)}</span></div></div>
+      ${itemsHtml}
+    </div>
+    <div class="m-foot"><button class="btn" data-act="closeModal">关闭</button></div>`, 'lg');
+  },
   grainPay: id => {
     const o = byId(db.grainDocs || [], id); if (!o) return;
     const unpaid = Math.max(0, +(o.totalAmount - (o.paid || 0)).toFixed(2));

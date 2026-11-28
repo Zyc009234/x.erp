@@ -116,10 +116,11 @@ function mintCompanyToken(c, userId) {
     return t;
   } finally { db.close(); }
 }
+const CHILD_EXEC_ARGS = process.execArgv.filter(a => a === '--experimental-sqlite');
 function startCompany(c) {
   if (!c || !c.enabled || stopping) return;
   if (childOf.has(c.id)) return;
-  const child = spawn(process.execPath, [SERVER, '--data', c.dir, '--port', String(c.port), '--host', '127.0.0.1'], {
+  const child = spawn(process.execPath, [...CHILD_EXEC_ARGS, SERVER, '--data', c.dir, '--port', String(c.port), '--host', '127.0.0.1'], {
     stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, XERP_PORTAL_CHILD: '1', XERP_PORTAL_PARENT: String(process.pid) },
   });
   child.stdout.on('data', d => process.stdout.write(`[${c.code}] ${d}`));
@@ -180,7 +181,7 @@ function waitCompany(port, timeout = 15000) {
 }
 function initCompany(c, adminPwd) {
   fs.mkdirSync(c.dir, { recursive: true });
-  const r = spawnSync(process.execPath, [SERVER, '--data', c.dir, '--port', String(c.port), '--init'], {
+  const r = spawnSync(process.execPath, [...CHILD_EXEC_ARGS, SERVER, '--data', c.dir, '--port', String(c.port), '--init'], {
     stdio: 'ignore', env: { ...process.env, XERP_NO_DEMO: '1', XERP_COMPANY: c.name, ...(adminPwd ? { XERP_ADMIN_PASSWORD: adminPwd } : {}) },
   });
   if (r.status !== 0) log('账套初始化失败', c.code);
@@ -230,7 +231,7 @@ function migrateDefaultUsers(c) {
     if (users.length) log('已迁移全局账号', users.length, '个');
   } finally { db.close(); }
 }
-function syncCompanyUsers(c, liveMutation = false) {
+function syncCompanyUsers(c, liveMutation = false, actor = null) {
   let db;
   try { db = companyDb(c); } catch (e) { return; }
   try {
@@ -244,17 +245,32 @@ function syncCompanyUsers(c, liveMutation = false) {
         const id = uid('gu');
         reg.prepare('INSERT INTO users (id, username, name, salt, hash, admin, created) VALUES (?,?,?,?,?,?,?)')
           .run(id, u.username, u.name || u.username, u.salt, u.hash, (c.code === 'default' && role === 'admin') ? 1 : 0, u.created_at || new Date().toISOString());
-        g = { id };
-      } else if (liveMutation) {
-        const changed = g.salt !== u.salt || g.hash !== u.hash;
-        reg.prepare('UPDATE users SET name = ?, salt = ?, hash = ? WHERE id = ?')
-          .run(u.name || g.name || u.username, u.salt, u.hash, g.id);
-        if (changed) {
-          // 密码变化时同步给其他已加入账套（如有）
+        g = { id, admin: (c.code === 'default' && role === 'admin') ? 1 : 0 };
+        reg.prepare('INSERT INTO members (user_id, company_id, role) VALUES (?,?,?) ON CONFLICT(user_id, company_id) DO UPDATE SET role = excluded.role')
+          .run(g.id, c.id, role);
+      } else {
+        const alreadyMember = !!memberOf(g.id, c.id);
+        const otherCompanies = reg.prepare('SELECT COUNT(*) AS n FROM members WHERE user_id = ? AND company_id != ?').get(g.id, c.id).n;
+        const isGlobalAdmin = !!g.admin;
+        const actorIsGlobalAdmin = !!(actor && actor.admin);
+        const actorIsSelf = !!(actor && actor.username === u.username);
+
+        if (liveMutation) {
+          // 防止子账套管理员通过同名本地用户或重置密码覆盖全局管理员或其他账套用户的全局密码
+          const canUpdateGlobalPwd = actorIsGlobalAdmin || actorIsSelf || (!isGlobalAdmin && otherCompanies === 0 && alreadyMember);
+          if (canUpdateGlobalPwd) {
+            reg.prepare('UPDATE users SET name = ?, salt = ?, hash = ? WHERE id = ?')
+              .run(u.name || g.name || u.username, u.salt, u.hash, g.id);
+          }
+          if (alreadyMember || actorIsGlobalAdmin) {
+            reg.prepare('INSERT INTO members (user_id, company_id, role) VALUES (?,?,?) ON CONFLICT(user_id, company_id) DO UPDATE SET role = excluded.role')
+              .run(g.id, c.id, role);
+          }
+        } else {
+          reg.prepare('INSERT INTO members (user_id, company_id, role) VALUES (?,?,?) ON CONFLICT(user_id, company_id) DO UPDATE SET role = excluded.role')
+            .run(g.id, c.id, role);
         }
       }
-      reg.prepare('INSERT INTO members (user_id, company_id, role) VALUES (?,?,?) ON CONFLICT(user_id, company_id) DO UPDATE SET role = excluded.role')
-        .run(g.id, c.id, role);
     }
     if (liveMutation) {
       const ms = reg.prepare('SELECT m.user_id, u.username FROM members m JOIN users u ON u.id = m.user_id WHERE m.company_id = ?').all(c.id);
@@ -293,6 +309,26 @@ function loginPayload(user, c) {
   return { token: '', company: { code: c.code, name: c.name }, user: { username: user.username, name: user.name || user.username, admin: !!user.admin }, companies: list };
 }
 
+const loginFails = new Map();
+const LOGIN_LIMIT = 8, LOGIN_WIN_MS = 15 * 60 * 1000;
+function portalClientIp(req) {
+  return String((req.headers['x-forwarded-for'] || req.socket.remoteAddress || '')).split(',')[0].trim();
+}
+function checkPortalLoginLimit(key) {
+  const rec = loginFails.get(key);
+  if (!rec) return true;
+  if (Date.now() > rec.until) { loginFails.delete(key); return true; }
+  return rec.n < LOGIN_LIMIT;
+}
+function recordPortalLoginFail(key) {
+  const t = Date.now(), rec = loginFails.get(key);
+  if (!rec || t > rec.until) loginFails.set(key, { n: 1, until: t + LOGIN_WIN_MS });
+  else rec.n++;
+  if (loginFails.size > 5000) {
+    for (const [k, v] of loginFails) if (t > v.until) loginFails.delete(k);
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   let url;
   try { url = new URL(req.url, 'http://localhost'); }
@@ -305,10 +341,14 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/portal/login' && req.method === 'POST') {
       const b = await body(req);
-      const user = userByName(String(b.username || '').trim());
-      if (!user) return json(res, 401, { error: '用户名或密码不正确' });
+      const uname = String(b.username || '').trim();
+      const limitKey = portalClientIp(req) + '|' + uname.toLowerCase();
+      if (!checkPortalLoginLimit(limitKey)) return json(res, 429, { error: '登录失败次数过多，请 15 分钟后再试' });
+      const user = userByName(uname);
+      if (!user) { recordPortalLoginFail(limitKey); return json(res, 401, { error: '用户名或密码不正确' }); }
       const a = Buffer.from(hashPwd(String(b.password || ''), user.salt).hash, 'hex'), h = Buffer.from(user.hash || '', 'hex');
-      if (a.length !== h.length || !crypto.timingSafeEqual(a, h)) return json(res, 401, { error: '用户名或密码不正确' });
+      if (a.length !== h.length || !crypto.timingSafeEqual(a, h)) { recordPortalLoginFail(limitKey); return json(res, 401, { error: '用户名或密码不正确' }); }
+      loginFails.delete(limitKey);
       let c;
       if (b.company) {
         c = companyByCode(String(b.company));
@@ -576,7 +616,24 @@ const server = http.createServer(async (req, res) => {
         return json(res, 401, { error: '登录已失效，请重新登录' });
       }
       const syncAuth = req.method !== 'GET' && (p === '/api/users' || p.startsWith('/api/users/') || p === '/api/password');
-      return proxy(req, res, company, sess.company_token, syncAuth ? () => syncCompanyUsers(company, true) : null);
+      if (req.method === 'POST' && p === '/api/users' && !me.admin) {
+        const b = await body(req);
+        const newUname = String(b.username || '').trim();
+        const existingG = newUname ? userByName(newUname) : null;
+        if (existingG && (existingG.admin || !memberOf(existingG.id, company.id))) {
+          return json(res, 409, { error: '该用户名已存在于其他账套，请更换用户名或联系全局管理员添加成员' });
+        }
+        const rawBuf = Buffer.from(JSON.stringify(b), 'utf8');
+        const headers = { ...req.headers, host: '127.0.0.1:' + company.port, authorization: 'Bearer ' + sess.company_token, 'content-type': 'application/json', 'content-length': String(rawBuf.length) };
+        const pr = http.request({ host: '127.0.0.1', port: company.port, path: req.url, method: req.method, headers }, r => {
+          if (r.statusCode >= 200 && r.statusCode < 300) { try { syncCompanyUsers(company, true, me); } catch (e) {} }
+          res.writeHead(r.statusCode || 502, r.headers);
+          r.pipe(res);
+        });
+        pr.on('error', () => { if (!res.headersSent) json(res, 502, { error: '账套服务未启动，请稍后重试' }); else res.end(); });
+        return pr.end(rawBuf);
+      }
+      return proxy(req, res, company, sess.company_token, syncAuth ? () => syncCompanyUsers(company, true, me) : null);
     }
     return proxy(req, res, ensureDefaultCompany(), null);
   } catch (e) {

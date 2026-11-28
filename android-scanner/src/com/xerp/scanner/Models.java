@@ -25,14 +25,15 @@ public final class Models {
 
     public static class UnitSpec {
         public String name = "";
-        public int rate = 1;
+        public double rate = 1;
         public String barcode = "";
         public Double price;
 
         public static UnitSpec fromJson(JSONObject j) {
             UnitSpec u = new UnitSpec();
             u.name = j.optString("name", "");
-            u.rate = Math.max(1, j.optInt("rate", 1));
+            double r = j.optDouble("rate", 1);
+            u.rate = (Double.isFinite(r) && r > 0) ? r : 1;
             u.barcode = j.optString("barcode", "");
             if (j.has("price") && !j.isNull("price")) u.price = j.optDouble("price", 0);
             return u;
@@ -233,14 +234,14 @@ public final class Models {
             this.product = product;
             this.unit = unit;
         }
-        public int rate() { return unit != null ? unit.rate : 1; }
+        public double rate() { return unit != null ? unit.rate : 1; }
         public String unitName() { return unit != null ? unit.name : product.unit; }
     }
 
     public static class ScanCartItem {
         public String productId = "";
         public String unitName = "";
-        public int rate = 1;
+        public double rate = 1;
         public double qty = 1;
         public Double price;
         public String batchNo = "";

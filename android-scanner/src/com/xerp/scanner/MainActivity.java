@@ -381,7 +381,7 @@ public class MainActivity extends Activity {
                             store.reloadFromJson(data);
                             runOnUiThread(() -> {
                                 syncWarehouseBadge();
-                                notifyDataChanged();
+                                for (TabPage t : tabs) t.onCompanySwitched();
                                 Ui.toast(this, "已切换到：" + store.companyName);
                             });
                         } catch (Exception e) {

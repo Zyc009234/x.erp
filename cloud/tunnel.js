@@ -13,6 +13,7 @@ const TUNNEL_DOMAIN = (process.env.TUNNEL_DOMAIN || 'xerp.zhaoyoucai.xyz').toLow
 const CLOUD_API_ORIGIN = (process.env.CLOUD_API_ORIGIN || 'https://www.zhaoyoucai.xyz/xerp-cloud').replace(/\/+$/, '');
 const INTERNAL_KEY = process.env.TUNNEL_INTERNAL_KEY || '';
 const LOOKUP_TTL_MS = 60000;
+const SLUG_CACHE_MAX = 2000;
 
 const tunnels = new Map();       // account id -> { socket, slug, expires }
 const tunnelPending = new Map(); // request id -> { res, timer }
@@ -82,13 +83,28 @@ function wsRead(socket, onMessage) {
 }
 
 async function lookupSlug(slug) {
+  const nowMs = Date.now();
   const c = slugCache.get(slug);
-  if (c && c.until > Date.now()) return c.data;
+  if (c) {
+    if (c.until > nowMs) return c.data;
+    slugCache.delete(slug);
+  }
   const r = await fetch(`${CLOUD_API_ORIGIN}/api/internal/tunnel/lookup?slug=${encodeURIComponent(slug)}`, {
     headers: { 'X-Tunnel-Key': INTERNAL_KEY },
     signal: AbortSignal.timeout(5000),
   });
   const data = r.ok ? await r.json() : null;
+  if (slugCache.size >= SLUG_CACHE_MAX) {
+    const t = Date.now();
+    for (const [k, v] of slugCache) {
+      if (v.until <= t) slugCache.delete(k);
+    }
+    while (slugCache.size >= SLUG_CACHE_MAX) {
+      const oldest = slugCache.keys().next().value;
+      if (oldest === undefined) break;
+      slugCache.delete(oldest);
+    }
+  }
   slugCache.set(slug, { data, until: Date.now() + (data ? LOOKUP_TTL_MS : 3000) });
   return data;
 }

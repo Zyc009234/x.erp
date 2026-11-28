@@ -76,15 +76,28 @@ function proxy(req, res) {
   req.pipe(preq);
 }
 
+const crypto = require('crypto');
+const CLIENT_TOKEN = crypto.randomBytes(32).toString('hex');
+function isLocalHost(h) { const host = String(h || '').split(':')[0].toLowerCase(); return host === '127.0.0.1' || host === 'localhost'; }
+function isLocalOrigin(o) { if (!o) return true; try { return ['127.0.0.1', 'localhost'].includes(new URL(o).hostname); } catch (e) { return false; } }
 let lastBeat = Date.now() + 60e3, browserProc = null;
 const server = http.createServer(async (req, res) => {
   const p = req.url.split('?')[0];
   if (p.startsWith('/api/')) return proxy(req, res);
+  if (p.startsWith('/local/')) {
+    if (!isLocalHost(req.headers.host) || !isLocalOrigin(req.headers.origin)) {
+      return json(res, 403, { error: '禁止跨源访问本地配置接口' });
+    }
+  }
   if (p === '/local/ping') return json(res, 200, { app: 'XERP-Client' });
   if (p === '/local/heartbeat') { lastBeat = Date.now(); return json(res, 200, { ok: true }); }
   if (p === '/local/config') {
     if (req.method === 'GET') return json(res, 200, { server: cfg.server });
     if (req.method === 'POST') {
+      const ct = String(req.headers['content-type'] || '').toLowerCase();
+      if (!ct.includes('application/json') || req.headers['x-xerp-token'] !== CLIENT_TOKEN) {
+        return json(res, 403, { error: '本机会话校验失败' });
+      }
       try {
         cfg.server = normalize((await readBody(req)).server);
         fs.writeFileSync(CFG_FILE, JSON.stringify(cfg, null, 2));
@@ -95,7 +108,9 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
-    return res.end(indexHtml());
+    const inject = `<script>window.__XERP_LOCAL_TOKEN__=${JSON.stringify(CLIENT_TOKEN)};</script>`;
+    const html = indexHtml();
+    return res.end(html.includes('</head>') ? html.replace('</head>', inject + '</head>') : inject + html);
   }
   const v = req.method === 'GET' && vendorFile(p);
   if (v) { res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=604800' }); return res.end(v); }

@@ -484,9 +484,9 @@ public final class ProductEditorSheet {
                 String pkgRStr = etPkgRate.getText().toString().trim();
                 String pkgB = etPkgBar.getText().toString().trim();
                 if (!pkgN.isEmpty() || !pkgRStr.isEmpty() || !pkgB.isEmpty()) {
-                    int rate = (int) parseNum(pkgRStr, 0);
-                    if (pkgN.isEmpty() || rate < 2) {
-                        Ui.toast(act, "辅助单位请填名称且换算需 ≥ 2");
+                    double rate = parseNum(pkgRStr, 0);
+                    if (pkgN.isEmpty() || !Double.isFinite(rate) || rate <= 0) {
+                        Ui.toast(act, "辅助单位请填名称且换算须大于 0");
                         return;
                     }
                     Models.UnitSpec u0 = new Models.UnitSpec();
@@ -566,8 +566,8 @@ public final class ProductEditorSheet {
         box.setPadding(pad, Ui.dp(act, 8), pad, 0);
         EditText etU = Ui.input(act, "包装单位名称（如：箱、盒）");
         etU.setText("箱");
-        EditText etR = Ui.input(act, "1 箱等于多少 " + p.unit + "（填整数 ≥ 2）");
-        etR.setInputType(InputType.TYPE_CLASS_NUMBER);
+        EditText etR = Ui.input(act, "1 箱等于多少 " + p.unit + "（填正数，可小数）");
+        etR.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         etR.setText("12");
         box.addView(etU);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
@@ -577,8 +577,8 @@ public final class ProductEditorSheet {
                 .setView(box)
                 .setPositiveButton("确定绑定", (dd, w) -> {
                     String un = etU.getText().toString().trim();
-                    int r = (int) parseNum(etR.getText().toString().trim(), 0);
-                    if (un.isEmpty() || r < 2) { Ui.toast(act, "单位不能为空且换算 ≥ 2"); return; }
+                    double r = parseNum(etR.getText().toString().trim(), 0);
+                    if (un.isEmpty() || !Double.isFinite(r) || r <= 0) { Ui.toast(act, "单位不能为空且换算须大于 0"); return; }
                     Models.UnitSpec nu = new Models.UnitSpec();
                     nu.name = un; nu.rate = r; nu.barcode = code;
                     p.units.add(nu);

@@ -203,6 +203,18 @@ public class MainActivity extends Activity {
         });
     }
 
+    private static boolean isSameOrigin(Uri u, String baseUrl) {
+        if (u == null || baseUrl == null || baseUrl.isEmpty()) return false;
+        Uri base = Uri.parse(baseUrl);
+        String s1 = u.getScheme(), s2 = base.getScheme();
+        String h1 = u.getHost(), h2 = base.getHost();
+        if (s1 == null || s2 == null || h1 == null || h2 == null) return false;
+        if (!s1.equalsIgnoreCase(s2) || !h1.equalsIgnoreCase(h2)) return false;
+        int p1 = u.getPort() != -1 ? u.getPort() : ("https".equalsIgnoreCase(s1) ? 443 : "http".equalsIgnoreCase(s1) ? 80 : -1);
+        int p2 = base.getPort() != -1 ? base.getPort() : ("https".equalsIgnoreCase(s2) ? 443 : "http".equalsIgnoreCase(s2) ? 80 : -1);
+        return p1 == p2;
+    }
+
     private void setupWebView() {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -215,8 +227,8 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
-                // 服务端自己的页面留在应用里，其他链接（官网、GitHub 等）交给系统浏览器
-                if (!server.isEmpty() && u.toString().startsWith(server)) return false;
+                // 严格按协议 + 主机 + 端口校验同源，防止前缀匹配（如 https://erp.com.evil.com）把外部页面留在 WebView 中暴露 JS 桥接
+                if (!server.isEmpty() && isSameOrigin(u, server)) return false;
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (ActivityNotFoundException e) { toast("没有可以打开链接的应用"); }
                 return true;
             }

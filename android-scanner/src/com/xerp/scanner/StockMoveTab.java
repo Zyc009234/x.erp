@@ -133,6 +133,17 @@ public class StockMoveTab implements TabPage {
         renderAll();
     }
 
+    @Override
+    public void onCompanySwitched() {
+        cart.clear();
+        activeIdx = -1;
+        remark = "";
+        toWh = "";
+        docType = "";
+        syncContextDefaults();
+        renderAll();
+    }
+
     private void setMode(String m) {
         if (mode.equals(m)) return;
         mode = m;
@@ -245,7 +256,7 @@ public class StockMoveTab implements TabPage {
     private void addMatchToCart(Models.BarcodeMatch m) {
         Models.Product p = m.product;
         String uName = m.unitName();
-        int rate = m.rate();
+        double rate = m.rate();
 
         if (p.serial) {
             int idx = findCartIndex(p.id, p.unit);
@@ -633,7 +644,7 @@ public class StockMoveTab implements TabPage {
                         res = ApiClient.createStockDoc(store, b);
                     }
                     String no = res.optString("no", "");
-                    act.refreshData(() -> {
+                    act.runOnUiThread(() -> {
                         cart.clear();
                         activeIdx = -1;
                         remark = "";
@@ -641,6 +652,7 @@ public class StockMoveTab implements TabPage {
                         if (act.tts != null) act.tts.speakCue("单据已提交", "submitted");
                         Ui.toast(act, "单据已提交：" + no);
                         renderAll();
+                        act.refreshData(null);
                     });
                 } catch (Exception e) {
                     act.runOnUiThread(() -> {

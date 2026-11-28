@@ -715,8 +715,8 @@ public class StocktakeTab implements TabPage {
         right.addView(bigNum);
 
         LinearLayout badges = Ui.row(act);
-        int boxStep = !p.units.isEmpty() ? p.units.get(0).rate : 5;
-        String boxLabel = !p.units.isEmpty() ? ("+" + p.units.get(0).name + "(" + boxStep + ")") : "+5";
+        double boxStep = !p.units.isEmpty() ? p.units.get(0).rate : 5;
+        String boxLabel = !p.units.isEmpty() ? ("+" + p.units.get(0).name + "(" + Ui.fmtQty(boxStep) + ")") : "+5";
         TextView plusBoxBadge = Ui.badge(act, boxLabel, Ui.PRIMARY_SOFT, Ui.PRIMARY);
         plusBoxBadge.setBackground(Ui.rippleOutlined(act, Ui.PRIMARY_SOFT, Ui.PRIMARY_BORDER, 1, 8));
         plusBoxBadge.setOnClickListener(v -> adjustCurrent(boxStep));

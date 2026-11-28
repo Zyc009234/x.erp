@@ -325,37 +325,57 @@ function prune(a) {
   }
 }
 
+const inflightByAccount = new Map();
+let inflightTotal = 0;
+
 async function upload(req, res, a, name) {
   if (!sanitizeName(name)) return fail(res, 400, '文件名不合法');
   if (a.expires < now()) return fail(res, 402, '云备份已到期，请续费后使用');
   const len = +(req.headers['content-length'] || 0);
   if (!len) return fail(res, 411, '缺少内容长度');
   if (len > MAX_UPLOAD) return fail(res, 413, '单个备份不能超过 200MB');
-  const u = accountUsage(a.id);
-  const old = db.prepare('SELECT id, size FROM backups WHERE account = ? AND name = ?').get(a.id, name);
-  const delta = len - (old ? old.size : 0);
-  if (u.used + delta > a.quota) return fail(res, 413, `云备份空间不足（已用 ${fmtBytes(u.used)} / ${fmtBytes(a.quota)}），请删除旧备份或升级套餐`);
-  const allUsed = db.prepare('SELECT COALESCE(SUM(size), 0) AS n FROM backups').get().n;
-  if (allUsed + delta > TOTAL_QUOTA) return fail(res, 507, '云端空间已满，请联系作者扩容');
-  const buf = await body(req, MAX_UPLOAD);
-  if (buf.length !== len) return fail(res, 400, '上传不完整');
-  const sha = crypto.createHash('sha256').update(buf).digest('hex');
-  const want = String(req.headers['x-sha256'] || '').toLowerCase();
-  if (want && want !== sha) return fail(res, 400, '校验失败，请重试');
-  const id = old ? old.id : 'bk_' + crypto.randomBytes(12).toString('hex');
-  const dir = path.join(BLOB_DIR, a.id);
-  fs.mkdirSync(dir, { recursive: true });
-  const tmp = path.join(dir, id + '.tmp');
-  fs.writeFileSync(tmp, buf);
-  fs.renameSync(tmp, accountBackupPath(a.id, id));
-  if (old) {
-    db.prepare('UPDATE backups SET size = ?, sha256 = ?, created = ? WHERE id = ?').run(buf.length, sha, now(), id);
-  } else {
-    db.prepare('INSERT INTO backups (id, account, name, size, sha256, created) VALUES (?,?,?,?,?,?)')
-      .run(id, a.id, name, buf.length, sha, now());
+  const u0 = accountUsage(a.id);
+  const old0 = db.prepare('SELECT id, size FROM backups WHERE account = ? AND name = ?').get(a.id, name);
+  const delta0 = len - (old0 ? old0.size : 0);
+  const reserve = Math.max(0, delta0);
+  const acctInflight = inflightByAccount.get(a.id) || 0;
+  if (u0.used + acctInflight + reserve > a.quota) return fail(res, 413, `云备份空间不足（已用 ${fmtBytes(u0.used)} / ${fmtBytes(a.quota)}），请删除旧备份或升级套餐`);
+  const allUsed0 = db.prepare('SELECT COALESCE(SUM(size), 0) AS n FROM backups').get().n;
+  if (allUsed0 + inflightTotal + reserve > TOTAL_QUOTA) return fail(res, 507, '云端空间已满，请联系作者扩容');
+  inflightByAccount.set(a.id, acctInflight + reserve);
+  inflightTotal += reserve;
+  try {
+    const buf = await body(req, MAX_UPLOAD);
+    if (buf.length !== len) return fail(res, 400, '上传不完整');
+    const sha = crypto.createHash('sha256').update(buf).digest('hex');
+    const want = String(req.headers['x-sha256'] || '').toLowerCase();
+    if (want && want !== sha) return fail(res, 400, '校验失败，请重试');
+    const u = accountUsage(a.id);
+    const old = db.prepare('SELECT id, size FROM backups WHERE account = ? AND name = ?').get(a.id, name);
+    const delta = buf.length - (old ? old.size : 0);
+    if (u.used + delta > a.quota) return fail(res, 413, `云备份空间不足（已用 ${fmtBytes(u.used)} / ${fmtBytes(a.quota)}），请删除旧备份或升级套餐`);
+    const allUsed = db.prepare('SELECT COALESCE(SUM(size), 0) AS n FROM backups').get().n;
+    if (allUsed + delta > TOTAL_QUOTA) return fail(res, 507, '云端空间已满，请联系作者扩容');
+    const id = old ? old.id : 'bk_' + crypto.randomBytes(12).toString('hex');
+    const dir = path.join(BLOB_DIR, a.id);
+    fs.mkdirSync(dir, { recursive: true });
+    const tmp = path.join(dir, id + '.tmp');
+    fs.writeFileSync(tmp, buf);
+    fs.renameSync(tmp, accountBackupPath(a.id, id));
+    if (old) {
+      db.prepare('UPDATE backups SET size = ?, sha256 = ?, created = ? WHERE id = ?').run(buf.length, sha, now(), id);
+    } else {
+      db.prepare('INSERT INTO backups (id, account, name, size, sha256, created) VALUES (?,?,?,?,?,?)')
+        .run(id, a.id, name, buf.length, sha, now());
+    }
+    prune(a);
+    json(res, 200, { ok: true, id, size: buf.length, sha256: sha, ...status(a) });
+  } finally {
+    inflightTotal = Math.max(0, inflightTotal - reserve);
+    const cur = (inflightByAccount.get(a.id) || 0) - reserve;
+    if (cur <= 0) inflightByAccount.delete(a.id);
+    else inflightByAccount.set(a.id, cur);
   }
-  prune(a);
-  json(res, 200, { ok: true, id, size: buf.length, sha256: sha, ...status(a) });
 }
 
 function adminPage(req, res, flash) {
