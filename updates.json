@@ -3,8 +3,7 @@
   "latest": "2.16.8",
   "publishedAt": "2026-11-28T16:42:00+08:00",
   "notes": [
-    "彻底修复套打模式拖动明细表格列分隔线或右边框时左侧列与左边框偏移的问题（套打不再自动隐藏空列并保持总宽与列宽之和 1:1 守恒）",
-    "打印模板预览样张改用短商品名，固定行高下单行显示不撑高"
+    "修复已知 Bug，提升系统稳定性与兼容性"
   ],
   "packages": {
     "fnos": {
@@ -33,12 +32,12 @@
       "versionCode": 21603
     },
     "docker": {
-      "version": "2.16.3",
+      "version": "2.16.8",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.16.3",
+      "image": "ghcr.io/zyc009234/xerp:2.16.8",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.3-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.3-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.8-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.8-docker-arm64.tar.gz"
       ],
       "note": "也可以下载离线包 docker load"
     }

@@ -34,6 +34,61 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.16.8": {
+          "changelog": "修复已知 Bug，提升系统稳定性与兼容性",
+          "updated_at": "2026-11-28T16:42:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.8.fpk",
+              "sha256": "6b6964f97161daf34347c060ec92bedc5172116ec0b99f7a21f1f7d7bf9a77fc",
+              "size": 886575
+            }
+          }
+        },
+        "2.16.7": {
+          "changelog": "修复已知 Bug，提升系统稳定性与兼容性",
+          "updated_at": "2026-11-28T16:22:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.7.fpk",
+              "sha256": "f33ec7db4a4cc9b6ba8df1b1408fe22e39ea7613155819f38da32e0a79b31ee0",
+              "size": 885069
+            }
+          }
+        },
+        "2.16.6": {
+          "changelog": "修复已知 Bug，提升系统稳定性与兼容性",
+          "updated_at": "2026-11-28T16:12:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.6.fpk",
+              "sha256": "a9620f0118598b2b257f8cce93e92d54ffa378b2f3192017e574ebdb124ed039",
+              "size": 884469
+            }
+          }
+        },
+        "2.16.5": {
+          "changelog": "修复已知 Bug，提升系统稳定性与兼容性",
+          "updated_at": "2026-11-28T14:00:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.5.fpk",
+              "sha256": "9b90275bf1223aa42bcc5629316661f7332103bd6119f1824ed5e41e37da1dd1",
+              "size": 883004
+            }
+          }
+        },
+        "2.16.4": {
+          "changelog": "修复已知 Bug，提升系统稳定性与兼容性",
+          "updated_at": "2026-11-28T13:45:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.4.fpk",
+              "sha256": "3d6c65bba214232a54729a3fc5545a7975e2fe681634a7bafdba65f510033fa2",
+              "size": 883003
+            }
+          }
+        },
         "2.16.3": {
           "changelog": "修复 29 项工程结算、粮食分摊与作废成本、固定资产折旧、离职临工工资、合同隔离、天地图/KMZ、多账套与移动端适配问题",
           "updated_at": "2026-11-27T23:50:00+08:00",
