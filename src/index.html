@@ -397,6 +397,12 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .slip-preview.is-preprint [data-pp]{cursor:move;user-select:none;touch-action:none;border-radius:3px}
 .slip-preview.is-preprint [data-pp]:hover{outline:1px dashed rgba(99,102,241,.65);background:rgba(99,102,241,.04)}
 .slip-preview.is-preprint [data-pp].pp-sel{outline:1.5px solid #6366f1;background:rgba(99,102,241,.08)}
+.slip-preview.is-preprint.pp-placing{cursor:crosshair}
+.slip-preview.is-preprint .pp-free-box{position:absolute;cursor:move;user-select:none;touch-action:none;padding:1px 4px;border-radius:3px;white-space:nowrap;line-height:1.25;color:#1d4ed8;background:rgba(59,130,246,.10);border:1px dashed rgba(37,99,235,.7);z-index:6}
+.slip-preview.is-preprint .pp-free-box:hover{background:rgba(59,130,246,.18);border-color:#2563eb}
+.slip-preview.is-preprint .pp-free-box.pp-sel{background:rgba(99,102,241,.20);border:1.5px solid #4f46e5;box-shadow:0 0 0 2px rgba(79,70,229,.18);z-index:12}
+.slip-preview.is-preprint .pp-free-box .pp-tag{position:absolute;top:-16px;left:0;font-size:10px;line-height:1;padding:2px 5px;border-radius:3px;background:#4f46e5;color:#fff;font-family:system-ui,sans-serif;pointer-events:none;opacity:0;white-space:nowrap}
+.slip-preview.is-preprint .pp-free-box:hover .pp-tag,.slip-preview.is-preprint .pp-free-box.pp-sel .pp-tag{opacity:1}
 .slip-preview.is-preprint table[data-pp="table"]{position:relative}
 .slip-preview.is-preprint table[data-pp="table"] td{position:relative}
 .pp-col-rz{position:absolute;top:0;right:-4px;width:8px;height:100%;cursor:col-resize;z-index:5;touch-action:none}
@@ -549,7 +555,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.16.3</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.16.4</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -2542,6 +2548,77 @@ const SLIP_KINDS = {
 const isCustomPrintCol = k => /^custom_[a-zA-Z0-9_-]{1,20}$/.test(String(k || ''));
 const colLabel = (K, c) => c.label || (c.k === 'price' && K.price) || (c.k === 'amount' && K.amount) || SLIP_COLS[c.k] || '自定义列';
 // 当前生效的模板（可传指定模板 id）：保存过的设置 + 默认值；以后新增的列补在后面（默认不打印）
+const PP_FREE_FIELDS = [
+  { group: '单据信息', items: [
+    ['order.no', '单据编号 (NO.)'], ['order.date', '单据日期'], ['order.creator', '制单人'],
+    ['order.approver', '审核人'], ['order.handler', '经手人'], ['order.wh', '仓库'],
+    ['order.express', '快递/物流单号'], ['order.project', '项目'], ['order.remark', '单据备注']
+  ]},
+  { group: '客户 / 供应商档案', items: [
+    ['party.name', '客户/单位名称'], ['party.contact', '联系人'], ['party.phone', '联系电话'],
+    ['party.address', '收货/联系地址'], ['party.taxNo', '税号'], ['party.bank', '开户行'], ['party.bankAccount', '银行账号']
+  ]},
+  { group: '金额与数量汇总', items: [
+    ['summary.totalQty', '合计数量'], ['summary.totalAmount', '合计金额'], ['summary.amountUpper', '总金额大写'],
+    ['summary.discount', '优惠金额'], ['summary.payable', '实收/实付金额']
+  ]},
+  { group: '本公司信息', items: [
+    ['company.name', '公司名称'], ['company.header', '抬头附加信息']
+  ]},
+  { group: '自定义', items: [
+    ['__custom__', '自定义文本 / 混排变量 {{...}}']
+  ]}
+];
+function ppFieldLabel(bind) {
+  for (const g of PP_FREE_FIELDS) { const hit = g.items.find(x => x[0] === bind); if (hit) return hit[1]; }
+  return bind || '';
+}
+function buildFreeBoxCtx(kind, o, d, amt, showMoney) {
+  const C = ORD[kind], partyObj = C ? (o._party || byId(db[C.party], o[C.partyKey]) || {}) : {};
+  const metaVal = k => { const v = d.meta[k]; return Array.isArray(v) ? (v[1] || '') : (v || ''); };
+  const totalQty = sum(d.items, i => i.qty);
+  const payable = amt - (d.discount || 0);
+  return {
+    order: {
+      no: metaVal('no') || o.no || '',
+      date: metaVal('date') || o.date || '',
+      creator: d.creator || '',
+      approver: d.approver || '',
+      handler: d.handler || metaVal('handler') || '',
+      wh: metaVal('wh') || '',
+      express: metaVal('express') || '',
+      project: metaVal('project') || o.project || '',
+      remark: d.remark || ''
+    },
+    party: {
+      name: metaVal('party') || partyObj.name || '',
+      contact: partyObj.contact || '',
+      phone: partyObj.phone || '',
+      address: metaVal('address') || partyObj.address || '',
+      taxNo: partyObj.invoiceTaxNo || partyObj.taxNo || '',
+      bank: partyObj.invoiceBank || partyObj.bank || '',
+      bankAccount: partyObj.invoiceBankAccount || partyObj.bankAccount || ''
+    },
+    summary: {
+      totalQty: String(totalQty),
+      totalAmount: showMoney ? amt.toFixed(2) : '',
+      amountUpper: showMoney ? rmbUpper(payable) : '',
+      discount: showMoney ? (d.discount || 0).toFixed(2) : '',
+      payable: showMoney ? payable.toFixed(2) : ''
+    },
+    company: {
+      name: db.settings.company || '',
+      header: (slipTpl(kind).header || '').replace(/\n+/g, ' ')
+    }
+  };
+}
+function resolveFreeBox(box, bctx) {
+  const getPath = p => p.split('.').reduce((acc, k) => (acc && acc[k] !== undefined ? acc[k] : ''), bctx);
+  if (box.bind === '__custom__') {
+    return String(box.customTpl || '').replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_, p) => String(getPath(p) ?? ''));
+  }
+  return String(getPath(box.bind || '') ?? '');
+}
 function slipTpl(kind, tplId) {
   const K = SLIP_KINDS[kind], activeId = (db.settings.printTplActive || {})[kind] || '';
   const colKeys = K.allowedCols || Object.keys(SLIP_COLS).filter(k => k !== 'category');
@@ -2551,8 +2628,9 @@ function slipTpl(kind, tplId) {
   const saved = (t.cols || []).filter(c => colKeys.includes(c.k) || isCustomPrintCol(c.k));
   const cols = saved.length ? [...saved, ...colKeys.filter(k => !saved.some(c => c.k === k)).map(k => ({k, label:'', on:false}))]
     : colKeys.map(k => ({k, label:'', on:!['barcode', 'brand'].includes(k)}));
-  return {title:'', header:'', footer:'', signs:K.signs, fontSize:12, upper:true, printer:true, paper:'', paperW:0, font:'song', logo:'', logoPos:'inline', preprint:false, offsetX:0, offsetY:0, rowH:0, tableW:0, preprintBg:'', ...t,
+  return {title:'', header:'', footer:'', signs:K.signs, fontSize:12, upper:true, printer:true, paper:'', paperW:0, font:'song', logo:'', logoPos:'inline', preprint:false, hideTableTotal:false, offsetX:0, offsetY:0, rowH:0, tableW:0, preprintBg:'', ...t,
     pos:t.pos && typeof t.pos === 'object' ? {...t.pos} : {},
+    boxes:Array.isArray(t.boxes) ? t.boxes.map(b => ({...b})) : [],
     cols:cols.map(c => ({...c})), meta:{...Object.fromEntries(K.meta.map(k => [k, true])), ...(t.meta || {})}};
 }
 function tplPickHtml(kind, id) {
@@ -2609,10 +2687,17 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
   const colStyle = c => [safeW(c.w) ? `width:${safeW(c.w)}mm` : '', `text-align:${safeAl(c.al) || (c.k === 'idx' || c.k === 'unit' ? 'center' : ['qty', 'price', 'amount'].includes(c.k) ? 'right' : 'left')}`].join(';');
   const rows = d.items.map((it, n) => `<tr>${cols.map(c => `<td data-col="${c.k}" style="${colStyle(c)}">${val(c, it, n)}</td>`).join('')}</tr>`);
   for (let k = rows.length; k < minRows; k++) rows.push(`<tr>${'<td>&nbsp;</td>'.repeat(cols.length)}</tr>`);
-  const amt = sum(d.items, i => i.amount), first = cols.findIndex(c => c.k === 'qty' || c.k === 'amount');
-  const total = first < 0 ? '' : `<tr>${first ? `<td colspan="${first}" class="r"><b class="pp-lbl">合计</b></td>` : ''}${cols.slice(first).map(c => `<td class="r" style="${colStyle(c)}">${c.k === 'qty' ? `<b>${sum(d.items, i => i.qty)}</b>` : c.k === 'amount' ? `<b>${amt.toFixed(2)}</b>` : ''}</td>`).join('')}</tr>`;
   const ppOn = !!tpl.preprint && hasFeat('preprint');
+  const amt = sum(d.items, i => i.amount), first = cols.findIndex(c => c.k === 'qty' || c.k === 'amount');
+  const total = first < 0 || (ppOn && tpl.hideTableTotal) ? '' : `<tr>${first ? `<td colspan="${first}" class="r"><b class="pp-lbl">合计</b></td>` : ''}${cols.slice(first).map(c => `<td class="r" style="${colStyle(c)}">${c.k === 'qty' ? `<b>${sum(d.items, i => i.qty)}</b>` : c.k === 'amount' ? `<b>${amt.toFixed(2)}</b>` : ''}</td>`).join('')}</tr>`;
   const ppPos = ppOn && tpl.pos && typeof tpl.pos === 'object' ? tpl.pos : {};
+  const ppBoxes = ppOn && Array.isArray(tpl.boxes) ? tpl.boxes : [];
+  const bctx = ppBoxes.length ? buildFreeBoxCtx(kind, o, d, amt, showMoney) : null;
+  const ppFreeHtml = ppBoxes.map(b => {
+    const txt = resolveFreeBox(b, bctx);
+    const st = `left:${+b.x || 0}mm;top:${+b.y || 0}mm;font-size:${+b.fontSize || 12}px;${b.bold ? 'font-weight:bold;' : ''}text-align:${b.align || 'left'}`;
+    return `<div class="pp-free-box" data-pp-box="${esc(b.id)}" data-pp-name="${esc(b.name || ppFieldLabel(b.bind))}" style="${st}"><span class="pp-tag">${esc(b.name || ppFieldLabel(b.bind))} → ${esc(b.bind === '__custom__' ? '自定义' : b.bind)}</span><span>${txt ? esc(txt) : '&nbsp;'}</span></div>`;
+  }).join('');
   const ppTf = key => { const p = Array.isArray(ppPos[key]) ? ppPos[key] : null; return p && (+p[0] || +p[1]) ? `transform:translate(${+p[0] || 0}mm,${+p[1] || 0}mm);` : ''; };
   const ppAttr = (key, label, extra = '') => {
     const st = extra + (ppOn ? ppTf(key) : '');
@@ -2662,7 +2747,7 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
   ${signs.length ? `<div class="s-sign">${signs.map((x, idx) => `<span${ppAttr('sign.' + idx, x)}><span class="pp-lbl">${esc(x)}：</span>${esc(auto[x] || '')}</span>`).join('')}</div>` : ''}
   ${d.payInfo ? `<div class="s-meta" style="margin-top:6px"><span>${esc(d.payInfo)}</span></div>` : ''}
   ${tpl.footer ? `<div class="s-foot">${lines(tpl.footer)}</div>` : ''}
-  ${d.voided.length > 3 ? `<div class="s-meta" style="margin-top:6px"><span>${esc(d.voided)}</span></div>` : ''}</div>`;
+  ${d.voided.length > 3 ? `<div class="s-meta" style="margin-top:6px"><span>${esc(d.voided)}</span></div>` : ''}${ppFreeHtml}</div>`;
 }
 const slipHtml = (o, opts) => slipRender(o.dir, o, opts);
 const printFoot = (kind, n, tpl = slipTpl(kind)) => tpl.printer ? `<div class="foot">打印人：${esc(ME.name)} · ${fmtTime(new Date())}${n ? ' · 第 ' + n + ' 次打印' : ''}</div>` : '';
@@ -2696,6 +2781,8 @@ function printFrame(title, body, paperKey, tpl) {
   .slip-preprint .pp-line{margin-top:4px;padding:2px 4px}
   .slip-preprint table,.slip-preprint th,.slip-preprint td{border-color:transparent!important}
   .slip-preprint.has-rh tbody tr{height:var(--rh)}
+  .slip-preprint .pp-free-box{position:absolute;white-space:nowrap;line-height:1.25;color:#000}
+  .slip-preprint .pp-free-box .pp-tag{display:none!important}
   .foot{margin-top:6px;font-size:10px;color:#444;text-align:right}
   img{max-width:100%;height:auto}`;
   // 打印文档不要 viewport：让它按纸张宽度排版，手机浏览器只负责缩放预览
@@ -7314,7 +7401,7 @@ function pageSettings() {
     </div></div>
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>功能激活</h3>${st.deviceCode ? `<span class="sub-t">设备码：<code>${esc(st.deviceCode)}</code></span>` : ''}</div><div class="card-body">
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><span class="sub-t">已激活功能：</span>${(st.features || []).length ? st.features.map(f => `<span class="badge green plain">${esc(FEAT_NAMES[f] || f)}</span>`).join('') : '<span class="sub-t">暂无</span>'}</div>
-      <div style="display:flex;gap:8px;max-width:460px"><input class="select" style="flex:1" id="sRedeemCode" placeholder="输入激活码，例如 XP-XXXX-XXXX-XXXX" autocomplete="off"><button class="btn primary" data-act="redeemCode" id="sRedeemBtn">激活</button></div>
+      <div style="display:flex;gap:8px;max-width:460px"><input class="select" style="flex:1" id="sRedeemCode" placeholder="输入激活码（XP-... 或 PT-...）" autocomplete="off"><button class="btn primary" data-act="redeemCode" id="sRedeemBtn">激活</button></div>
       <p class="sub-t" style="margin-top:8px">激活码一次有效并永久绑定本机，激活成功后可离线使用。</p>
     </div></div>
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>版本更新</h3></div><div class="card-body">
@@ -7402,7 +7489,27 @@ function printTplPage(body) {
     }
     return out;
   };
-  let ppPos = cleanPos(t.pos), ppSel = '', ppSelName = '';
+  const cleanBoxes = raw => {
+    const out = [], seen = new Set();
+    if (!Array.isArray(raw)) return out;
+    for (const b of raw.slice(0, 30)) {
+      if (!b || typeof b !== 'object') continue;
+      const bid = typeof b.id === 'string' && /^[a-zA-Z0-9_-]{1,32}$/.test(b.id) ? b.id : ('b' + (out.length + 1));
+      if (seen.has(bid)) continue;
+      seen.add(bid);
+      const bind = typeof b.bind === 'string' && /^(?:__custom__|(?:order|party|summary|company)\.[a-zA-Z0-9_]{1,24})$/.test(b.bind) ? b.bind : 'order.no';
+      out.push({
+        id: bid, name: String(b.name || '').slice(0, 20), bind,
+        customTpl: bind === '__custom__' ? String(b.customTpl || '').slice(0, 120) : '',
+        x: Number.isFinite(+b.x) ? Math.max(-30, Math.min(300, Math.round(+b.x * 10) / 10)) : 0,
+        y: Number.isFinite(+b.y) ? Math.max(-30, Math.min(320, Math.round(+b.y * 10) / 10)) : 0,
+        fontSize: Number.isFinite(+b.fontSize) ? Math.min(28, Math.max(8, Math.round(+b.fontSize))) : 12,
+        bold: !!b.bold, align: ['left', 'center', 'right'].includes(b.align) ? b.align : 'left'
+      });
+    }
+    return out;
+  };
+  let ppPos = cleanPos(t.pos), ppBoxes = cleanBoxes(t.boxes), ppSel = '', ppSelName = '', ppBoxSel = '', ppPlacing = false;
   const canPreprint = hasFeat('preprint');
   const adaptTpl = (raw, targetKind, keepTitle) => {
     const src = raw && typeof raw === 'object' ? raw : {}, K2 = SLIP_KINDS[targetKind], seen = new Set();
@@ -7429,12 +7536,14 @@ function printTplPage(body) {
       logo: typeof src.logo === 'string' && src.logo.length <= 180000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(src.logo) ? src.logo : '',
       logoPos: ['inline', 'left', 'right', 'top'].includes(src.logoPos) ? src.logoPos : 'inline',
       preprint: canPreprint && !!src.preprint,
+      hideTableTotal: canPreprint && !!src.preprint && !!src.hideTableTotal,
       offsetX: Number.isFinite(+src.offsetX) ? Math.max(-30, Math.min(80, Math.round(+src.offsetX * 10) / 10)) : 0,
       offsetY: Number.isFinite(+src.offsetY) ? Math.max(-30, Math.min(120, Math.round(+src.offsetY * 10) / 10)) : 0,
       rowH: Number.isFinite(+src.rowH) && +src.rowH >= 4 && +src.rowH <= 40 ? Math.round(+src.rowH * 10) / 10 : 0,
       tableW: Number.isFinite(+src.tableW) && +src.tableW >= 40 && +src.tableW <= 300 ? Math.round(+src.tableW * 10) / 10 : 0,
       preprintBg: typeof src.preprintBg === 'string' && src.preprintBg.length <= 260000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(src.preprintBg) ? src.preprintBg : '',
       pos: canPreprint ? cleanPos(src.pos) : {},
+      boxes: canPreprint && !!src.preprint ? cleanBoxes(src.boxes) : [],
       upper: src.upper !== false, printer: src.printer !== false, cols: fullCols, meta
     };
   };
@@ -7464,6 +7573,16 @@ function printTplPage(body) {
           <label class="field" style="margin:0"><span>表格总宽（mm，0=自动）</span><input id="tpTableW" type="number" min="0" max="300" step="1" value="${t.tableW || 0}"></label>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px" id="tpBgBox">${bgSrc ? '<span class="badge green plain">已上传校准底图</span>' : '<span class="sub-t">可选：上传预印单据照片辅助预览对位（不打印）</span>'}<label class="btn sm">${ic('upload')}底图<input type="file" id="tpBg" accept="image/png,image/jpeg,image/webp" hidden></label>${bgSrc ? '<button class="btn sm danger-text" id="tpBgDel">清除底图</button>' : ''}</div>
+        <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
+          <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="tpHideTblTotal" ${t.hideTableTotal ? 'checked' : ''}>隐藏表格自带合计行（改用下方自由数据框独立定位）</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <b style="font-size:12px">自由数据框（引用数据库字段）</b>
+            <button class="btn sm" type="button" id="tpAddBox">${ic('plus')}添加数据框</button>
+            <button class="btn sm" type="button" id="tpPlaceBox">点底图放框</button>
+            <span class="sub-t" id="tpBoxCnt"></span>
+          </div>
+          <div id="tpBoxEditor" style="margin-top:8px"></div>
+        </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)" id="tpPosBar"></div>
       </div>
     </div>` : ''}
@@ -7510,20 +7629,74 @@ function printTplPage(body) {
     }
   };
   const read = () => ({title:$('#tpTitle').value.trim(), header:$('#tpHeader').value.trim(), footer:$('#tpFooter').value.trim(), signs:$('#tpSigns').value.trim(), fontSize:+$('#tpFs').value, paper:$('#tpPaper').value, paperW:isPinPaper($('#tpPaper').value) ? Math.max(120, Math.min(300, Math.round(+$('#tpPaperW').value || 215))) : 0, font:$('#tpFont').value, logo:logoSrc, logoPos:$('#tpLogoPos').value,
-    preprint:canPreprint && !!$('#tpPreprint')?.checked, offsetX:canPreprint ? Math.max(-30, Math.min(80, Math.round((+(($('#tpOffX') || {}).value || 0)) * 10) / 10)) : 0, offsetY:canPreprint ? Math.max(-30, Math.min(120, Math.round((+(($('#tpOffY') || {}).value || 0)) * 10) / 10)) : 0, rowH:canPreprint && (+(($('#tpRowH') || {}).value || 0)) >= 4 ? Math.min(40, Math.round((+(($('#tpRowH') || {}).value || 0)) * 10) / 10) : 0, tableW:canPreprint && (+(($('#tpTableW') || {}).value || 0)) >= 40 ? Math.min(300, Math.round((+(($('#tpTableW') || {}).value || 0)) * 10) / 10) : 0, preprintBg:canPreprint ? bgSrc : '', pos:canPreprint ? cleanPos(ppPos) : {},
+    preprint:canPreprint && !!$('#tpPreprint')?.checked, hideTableTotal:canPreprint && !!$('#tpPreprint')?.checked && !!$('#tpHideTblTotal')?.checked, offsetX:canPreprint ? Math.max(-30, Math.min(80, Math.round((+(($('#tpOffX') || {}).value || 0)) * 10) / 10)) : 0, offsetY:canPreprint ? Math.max(-30, Math.min(120, Math.round((+(($('#tpOffY') || {}).value || 0)) * 10) / 10)) : 0, rowH:canPreprint && (+(($('#tpRowH') || {}).value || 0)) >= 4 ? Math.min(40, Math.round((+(($('#tpRowH') || {}).value || 0)) * 10) / 10) : 0, tableW:canPreprint && (+(($('#tpTableW') || {}).value || 0)) >= 40 ? Math.min(300, Math.round((+(($('#tpTableW') || {}).value || 0)) * 10) / 10) : 0, preprintBg:canPreprint ? bgSrc : '', pos:canPreprint ? cleanPos(ppPos) : {}, boxes:canPreprint && !!$('#tpPreprint')?.checked ? cleanBoxes(ppBoxes) : [],
     upper:$('#tpUpper').checked, printer:$('#tpPrinter').checked, meta:Object.fromEntries([...body.querySelectorAll('[data-meta]')].map(x => [x.dataset.meta, x.checked])), cols});
+  const drawBoxEditor = () => {
+    const ed = $('#tpBoxEditor'), cnt = $('#tpBoxCnt');
+    if (cnt) cnt.textContent = ppBoxes.length ? `已添加 ${ppBoxes.length} / 30 个` : '点击「添加数据框」或「点底图放框」在底图任意位置绑定数据库字段';
+    if (!ed) return;
+    const pills = ppBoxes.map(b => `<button type="button" class="btn sm ${ppBoxSel === b.id ? 'primary' : ''}" data-pick-box="${esc(b.id)}">${esc(b.name || ppFieldLabel(b.bind))}</button>`).join('');
+    const cur = ppBoxes.find(b => b.id === ppBoxSel);
+    let form = '';
+    if (cur) {
+      const opts = PP_FREE_FIELDS.map(g => `<optgroup label="${g.group}">${g.items.map(([k, l]) => `<option value="${k}" ${cur.bind === k ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`).join('');
+      form = `<div style="margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel);display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px 8px">
+        <label class="field" style="margin:0"><span>名称</span><input id="bxName" maxlength="20" value="${esc(cur.name)}"></label>
+        <label class="field" style="margin:0;grid-column:span 2"><span>引用数据库字段</span><select id="bxBind">${opts}</select></label>
+        ${cur.bind === '__custom__' ? `<label class="field" style="margin:0;grid-column:1/-1"><span>自定义文本 / 混排变量</span><input id="bxTpl" maxlength="120" value="${esc(cur.customTpl || '')}" placeholder="如：{{party.contact}} {{party.phone}}"></label>` : ''}
+        <label class="field" style="margin:0"><span>X (mm)</span><input id="bxX" type="number" step="0.5" value="${cur.x}"></label>
+        <label class="field" style="margin:0"><span>Y (mm)</span><input id="bxY" type="number" step="0.5" value="${cur.y}"></label>
+        <label class="field" style="margin:0"><span>字号 (px)</span><input id="bxFs" type="number" min="8" max="28" value="${cur.fontSize}"></label>
+        <label class="field" style="margin:0"><span>对齐</span><select id="bxAl"><option value="left" ${cur.align === 'left' ? 'selected' : ''}>左对齐</option><option value="center" ${cur.align === 'center' ? 'selected' : ''}>居中</option><option value="right" ${cur.align === 'right' ? 'selected' : ''}>右对齐</option></select></label>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;grid-column:1/-1;margin-top:2px">
+          <label class="chk"><input type="checkbox" id="bxBold" ${cur.bold ? 'checked' : ''}>加粗</label>
+          <button type="button" class="btn sm danger-text" id="bxDel">删除此数据框</button>
+        </div>
+      </div>`;
+    }
+    ed.innerHTML = (pills ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${pills}</div>` : '') + form;
+    ed.querySelectorAll('[data-pick-box]').forEach(btn => btn.onclick = () => {
+      ppBoxSel = btn.dataset.pickBox; ppSel = ''; ppSelName = '';
+      prev();
+    });
+    if (cur) {
+      const syncBox = () => { prev(true); };
+      $('#bxName').oninput = e => {
+        cur.name = e.target.value.slice(0, 20);
+        const pill = ed.querySelector(`[data-pick-box="${CSS.escape(cur.id)}"]`);
+        if (pill) pill.textContent = cur.name || ppFieldLabel(cur.bind);
+        syncBox();
+      };
+      $('#bxBind').onchange = e => {
+        cur.bind = e.target.value;
+        if (cur.bind === '__custom__' && !cur.customTpl) cur.customTpl = '{{party.contact}} {{party.phone}}';
+        if (cur.bind !== '__custom__') cur.name = ppFieldLabel(cur.bind).replace(/\s*\(.*\)/, '').slice(0, 20);
+        prev();
+      };
+      if ($('#bxTpl')) $('#bxTpl').oninput = e => { cur.customTpl = e.target.value.slice(0, 120); syncBox(); };
+      $('#bxX').oninput = e => { cur.x = Math.max(-30, Math.min(300, Math.round((+e.target.value || 0) * 10) / 10)); syncBox(); };
+      $('#bxY').oninput = e => { cur.y = Math.max(-30, Math.min(320, Math.round((+e.target.value || 0) * 10) / 10)); syncBox(); };
+      $('#bxFs').oninput = e => { cur.fontSize = Math.min(28, Math.max(8, Math.round(+e.target.value || 12))); syncBox(); };
+      $('#bxAl').onchange = e => { cur.align = e.target.value; syncBox(); };
+      $('#bxBold').onchange = e => { cur.bold = e.target.checked; syncBox(); };
+      $('#bxDel').onclick = () => { ppBoxes = ppBoxes.filter(x => x.id !== cur.id); ppBoxSel = ppBoxes[0]?.id || ''; prev(); };
+    }
+  };
   const drawPosBar = () => {
     const bar = $('#tpPosBar'); if (!bar) return;
     const cnt = Object.keys(ppPos).length;
     const p = ppSel && Array.isArray(ppPos[ppSel]) ? ppPos[ppSel] : [0, 0];
     const fmt = v => (v > 0 ? '+' : '') + v + 'mm';
-    const info = ppSel
+    const bcur = ppBoxSel ? ppBoxes.find(x => x.id === ppBoxSel) : null;
+    const info = bcur
+      ? `<span class="badge blue plain">已选数据框：${esc(bcur.name || bcur.bind)} (${bcur.x}mm, ${bcur.y}mm)</span><span class="sub-t">拖动或方向键微调 0.5mm（Shift 2mm）</span>`
+      : ppSel
       ? `<span class="badge blue plain">已选：${esc(ppSelName || ppSel)} (${fmt(p[0])}, ${fmt(p[1])})</span><span class="sub-t">方向键微调 0.5mm，双击元素还原</span>`
-      : `<span class="sub-t">预览中可拖拽任意文字/表格定位，拖动表格边线、列线或右下角可调整宽高（双击还原）</span>`;
+      : `<span class="sub-t">预览中可拖拽任意文字/表格/自由数据框定位，拖动表格边线、列线或右下角可调整宽高（双击还原）</span>`;
     bar.innerHTML = info + (cnt ? `<button class="btn sm danger-text" id="tpPosReset" style="margin-left:auto">重置全部位置（${cnt}）</button>` : '');
     if ($('#tpPosReset')) $('#tpPosReset').onclick = () => { ppPos = {}; ppSel = ''; ppSelName = ''; prev(); };
   };
-  const prev = () => {
+  const prev = (skipBoxEditor = false) => {
     const tpl = read();
     if ($('#tpPaperWBox')) $('#tpPaperWBox').style.display = isPinPaper(tpl.paper) ? '' : 'none';
     if ($('#tpPreprintBox')) $('#tpPreprintBox').style.display = tpl.preprint ? '' : 'none';
@@ -7535,16 +7708,36 @@ function printTplPage(body) {
     box.style.maxWidth = 'none';
     box.style.margin = '0';
     box.classList.toggle('is-preprint', !!tpl.preprint);
+    box.classList.toggle('pp-placing', !!tpl.preprint && ppPlacing);
     box.tabIndex = tpl.preprint ? 0 : -1;
     box.style.backgroundImage = tpl.preprint && tpl.preprintBg ? `url("${tpl.preprintBg}")` : '';
+    box.style.backgroundSize = tpl.preprint && tpl.preprintBg ? '100% 100%' : '';
     box.innerHTML = slipRender(kind, sample, {showMoney:showMoneyPrev, tpl});
     if (tpl.preprint) mountTableResizers(box);
     if (tpl.preprint && ppSel) {
       const selEl = box.querySelector(`[data-pp="${CSS.escape(ppSel)}"]`);
       if (selEl) selEl.classList.add('pp-sel');
     }
+    if (tpl.preprint && ppBoxSel) {
+      const selBoxEl = box.querySelector(`[data-pp-box="${CSS.escape(ppBoxSel)}"]`);
+      if (selBoxEl) selBoxEl.classList.add('pp-sel');
+    }
+    if (!skipBoxEditor) drawBoxEditor();
     drawPosBar();
     requestAnimationFrame(fitPrev);
+  };
+  if ($('#tpAddBox')) $('#tpAddBox').onclick = () => {
+    if (ppBoxes.length >= 30) return toast('最多添加 30 个自由数据框', 'error');
+    const nb = { id: 'b_' + Date.now().toString(36), name: '客户名称', bind: 'party.name', customTpl: '', x: 30, y: 15, fontSize: 12, bold: false, align: 'left' };
+    ppBoxes.push(nb); ppBoxSel = nb.id; ppSel = ''; ppSelName = '';
+    prev();
+  };
+  if ($('#tpPlaceBox')) $('#tpPlaceBox').onclick = () => {
+    if (ppBoxes.length >= 30) return toast('最多添加 30 个自由数据框', 'error');
+    ppPlacing = !ppPlacing;
+    $('#tpPlaceBox').classList.toggle('primary', ppPlacing);
+    $('#tpPrev').classList.toggle('pp-placing', ppPlacing);
+    if (ppPlacing) toast('请直接点击右侧预览底图上需要填字的空白处');
   };
   // 套打模式：给明细表格挂上「拖动调列宽 / 调总宽 / 调行高 / 右下角自由缩放」手柄
   let ppResize = null;
@@ -7593,19 +7786,40 @@ function printTplPage(body) {
     drawPosBar();
   };
   const selectPp = el => {
-    prevBox.querySelectorAll('[data-pp].pp-sel').forEach(x => x.classList.remove('pp-sel'));
-    if (el) {
+    prevBox.querySelectorAll('[data-pp].pp-sel,[data-pp-box].pp-sel').forEach(x => x.classList.remove('pp-sel'));
+    if (el && el.dataset.ppBox) {
+      el.classList.add('pp-sel');
+      ppBoxSel = el.dataset.ppBox;
+      ppSel = ''; ppSelName = '';
+      prevBox.focus({ preventScroll: true });
+      drawBoxEditor();
+    } else if (el) {
       el.classList.add('pp-sel');
       ppSel = el.dataset.pp || '';
       ppSelName = el.dataset.ppName || ppSel;
+      if (ppBoxSel) { ppBoxSel = ''; drawBoxEditor(); }
       prevBox.focus({ preventScroll: true });
     } else {
       ppSel = ''; ppSelName = '';
+      if (ppBoxSel) { ppBoxSel = ''; drawBoxEditor(); }
     }
     drawPosBar();
   };
   prevBox.addEventListener('pointerdown', e => {
     if (!prevBox.classList.contains('is-preprint') || e.button !== 0) return;
+    if (ppPlacing) {
+      e.preventDefault(); e.stopPropagation();
+      const wrap = prevBox.querySelector('.slip-wrap') || prevBox;
+      const r = wrap.getBoundingClientRect(), sc = prevScale || 1;
+      const x = Math.max(-30, Math.min(300, Math.round(((e.clientX - r.left) / (PX_PER_MM * sc)) * 2) / 2));
+      const y = Math.max(-30, Math.min(320, Math.round(((e.clientY - r.top) / (PX_PER_MM * sc)) * 2) / 2));
+      const nb = { id: 'b_' + Date.now().toString(36), name: '客户名称', bind: 'party.name', customTpl: '', x, y, fontSize: 12, bold: false, align: 'left' };
+      ppBoxes.push(nb); ppBoxSel = nb.id; ppSel = ''; ppSelName = ''; ppPlacing = false;
+      if ($('#tpPlaceBox')) $('#tpPlaceBox').classList.remove('primary');
+      prev();
+      toast('已放置新数据框，请在左侧选择引用的数据库字段');
+      return;
+    }
     const rz = e.target.closest('[data-rz]');
     if (rz && prevBox.contains(rz)) {
       e.preventDefault();
@@ -7625,6 +7839,16 @@ function printTplPage(body) {
       rz.classList.add('on');
       ppResize = { rz, tbl, mode, sx: e.clientX, sy: e.clientY, startW, startH, rowCount, colIdx, startColW, pid: e.pointerId };
       try { rz.setPointerCapture(e.pointerId); } catch (err) {}
+      return;
+    }
+    const fbox = e.target.closest('[data-pp-box]');
+    if (fbox && prevBox.contains(fbox)) {
+      e.preventDefault();
+      selectPp(fbox);
+      const b = ppBoxes.find(x => x.id === fbox.dataset.ppBox);
+      if (!b) return;
+      ppDrag = { el: fbox, box: b, sx: e.clientX, sy: e.clientY, ox: +b.x || 0, oy: +b.y || 0, pid: e.pointerId };
+      try { fbox.setPointerCapture(e.pointerId); } catch (err) {}
       return;
     }
     const el = e.target.closest('[data-pp]');
@@ -7667,6 +7891,16 @@ function printTplPage(body) {
     const snap = v => Math.round(v / step) * step;
     const nx = snap(ppDrag.ox + (e.clientX - ppDrag.sx) / (PX_PER_MM * (prevScale || 1)));
     const ny = snap(ppDrag.oy + (e.clientY - ppDrag.sy) / (PX_PER_MM * (prevScale || 1)));
+    if (ppDrag.box) {
+      ppDrag.box.x = Math.max(-30, Math.min(300, Math.round(nx * 10) / 10));
+      ppDrag.box.y = Math.max(-30, Math.min(320, Math.round(ny * 10) / 10));
+      ppDrag.el.style.left = ppDrag.box.x + 'mm';
+      ppDrag.el.style.top = ppDrag.box.y + 'mm';
+      if ($('#bxX')) $('#bxX').value = ppDrag.box.x;
+      if ($('#bxY')) $('#bxY').value = ppDrag.box.y;
+      drawPosBar();
+      return;
+    }
     setPos(ppDrag.el, ppDrag.key, nx, ny);
   });
   const endDrag = () => {
@@ -7707,11 +7941,23 @@ function printTplPage(body) {
     }
   });
   prevBox.addEventListener('keydown', e => {
-    if (!prevBox.classList.contains('is-preprint') || !ppSel) return;
+    if (!prevBox.classList.contains('is-preprint') || (!ppSel && !ppBoxSel)) return;
     const map = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     const d = map[e.key]; if (!d) return;
     e.preventDefault();
     const step = e.altKey ? 0.1 : e.shiftKey ? 2 : 0.5;
+    if (ppBoxSel) {
+      const b = ppBoxes.find(x => x.id === ppBoxSel);
+      if (!b) return;
+      b.x = Math.max(-30, Math.min(300, Math.round(((+b.x || 0) + d[0] * step) * 10) / 10));
+      b.y = Math.max(-30, Math.min(320, Math.round(((+b.y || 0) + d[1] * step) * 10) / 10));
+      const el = prevBox.querySelector(`[data-pp-box="${CSS.escape(ppBoxSel)}"]`);
+      if (el) { el.style.left = b.x + 'mm'; el.style.top = b.y + 'mm'; }
+      if ($('#bxX')) $('#bxX').value = b.x;
+      if ($('#bxY')) $('#bxY').value = b.y;
+      drawPosBar();
+      return;
+    }
     const cur = Array.isArray(ppPos[ppSel]) ? ppPos[ppSel] : [0, 0];
     const el = prevBox.querySelector(`[data-pp="${CSS.escape(ppSel)}"]`);
     setPos(el, ppSel, (+cur[0] || 0) + d[0] * step, (+cur[1] || 0) + d[1] * step);
@@ -7742,9 +7988,10 @@ function printTplPage(body) {
   const drawBg = () => {
     $('#tpBgBox').innerHTML = `${bgSrc ? '<span class="badge green plain">已上传校准底图</span>' : '<span class="sub-t">可选：上传预印单据照片辅助预览对位（不打印）</span>'}<label class="btn sm">${ic('upload')}底图<input type="file" id="tpBg" accept="image/png,image/jpeg,image/webp" hidden></label>${bgSrc ? '<button class="btn sm danger-text" id="tpBgDel">清除底图</button>' : ''}`;
   };
-  body.addEventListener('input', e => { const x = e.target; if (x.dataset.l != null) cols[+x.dataset.l].label = x.value.trim(); if (x.dataset.def != null) cols[+x.dataset.def].def = x.value.slice(0, 40); if (x.dataset.w != null) cols[+x.dataset.w].w = Math.max(0, Math.min(200, Math.round(+x.value || 0))); if (x.id !== 'tpKind') prev(); });
+  body.addEventListener('input', e => { const x = e.target; if (x.closest && x.closest('#tpBoxEditor')) return; if (x.dataset.l != null) cols[+x.dataset.l].label = x.value.trim(); if (x.dataset.def != null) cols[+x.dataset.def].def = x.value.slice(0, 40); if (x.dataset.w != null) cols[+x.dataset.w].w = Math.max(0, Math.min(200, Math.round(+x.value || 0))); if (x.id !== 'tpKind') prev(); });
   body.addEventListener('change', e => {
     const x = e.target;
+    if (x.closest && x.closest('#tpBoxEditor')) return;
     if (x.dataset.c != null) cols[+x.dataset.c].on = x.checked;
     if (x.dataset.al != null) cols[+x.dataset.al].al = x.value;
     if (x.id === 'tpShowMoney') { showMoneyPrev = x.checked; prev(); return; }
@@ -9159,7 +9406,7 @@ const A = {
     try {
       const r = await api('POST', '/api/settings/redeem', { code });
       await reload(); render();
-      toast('激活成功：' + (FEAT_NAMES[r.feature] || r.feature) + '已解锁');
+      toast(r.presetName ? `激活成功：专属套打模板「${r.presetName}」已解锁并导入打印模板` : '激活成功：' + (FEAT_NAMES[r.feature] || r.feature) + '已解锁');
     } catch (e) { toast(e.message, 'error'); }
     finally { if (b) b.disabled = false; }
   },
