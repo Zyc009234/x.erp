@@ -2926,8 +2926,29 @@ function slipPagesHtml(kind, o, { showMoney, minRows = 0, tpl = slipTpl(kind), f
   const chunks = [];
   for (let i = 0; i < arr.length; i += maxR) chunks.push(arr.slice(i, i + maxR));
   const total = chunks.length;
+  // 按各页明细金额比例分摊整单优惠（以分为单位处理舍入，且每页优惠不超过本页金额），避免末页出现负金额
+  const totalDiscCents = Math.max(0, Math.round((+(o.discount || 0)) * 100));
+  const pageAmts = chunks.map(chunk => {
+    const pd = slipData(kind, { ...o, [listKey]: chunk, discount: 0 });
+    return Math.max(0, Math.round(sum(pd.items, it => it.amount) * 100));
+  });
+  const sumPageAmts = pageAmts.reduce((s, v) => s + v, 0);
+  const pageDiscs = pageAmts.map(() => 0);
+  if (totalDiscCents > 0 && sumPageAmts > 0) {
+    let rem = Math.min(totalDiscCents, sumPageAmts);
+    for (let idx = 0; idx < total; idx++) {
+      const share = idx === total - 1 ? rem : Math.min(pageAmts[idx], Math.round(totalDiscCents * (pageAmts[idx] / sumPageAmts)));
+      const take = Math.min(rem, pageAmts[idx], share);
+      pageDiscs[idx] = take;
+      rem -= take;
+    }
+    for (let idx = total - 1; idx >= 0 && rem > 0; idx--) {
+      const room = pageAmts[idx] - pageDiscs[idx];
+      if (room > 0) { const add = Math.min(room, rem); pageDiscs[idx] += add; rem -= add; }
+    }
+  }
   return chunks.map((chunk, idx) => {
-    const pageDoc = { ...o, [listKey]: chunk, discount: idx === total - 1 ? (o.discount || 0) : 0, _pageText: `${idx + 1}/${total}`, _fullDoc: o };
+    const pageDoc = { ...o, [listKey]: chunk, discount: +(pageDiscs[idx] / 100).toFixed(2), _pageText: `${idx + 1}/${total}`, _fullDoc: o };
     return `<div class="page">${slipRender(kind, pageDoc, { showMoney, minRows: maxR, tpl })}${foot}</div>`;
   }).join('');
 }
@@ -4860,15 +4881,16 @@ function orderFulfillModal(kind, o) {
     } : null;
     const needAppr = docApproveOn(dir);
     const res = await mutate('POST', `/api/orders/${kind}/${o.id}/${isSales ? 'ship' : 'inbound'}`, { wh, items, allowOver:true }, needAppr ? '本次' + (isSales ? '发货' : '入库') + '已提交审核，请到库存管理审核对应单据' + (shipPayload || delivPayload ? '（审核通过后再登记物流/配送）' : '') : (isSales ? '本次发货已提交，已生成销售出库单并同步库存' : '本次入库已提交，已生成采购入库单并同步库存'));
-    if (res && !needAppr && res.status !== '待发货' && shipPayload) {
+    const postedOk = !!(res && !needAppr && res.lastStockDocStatus !== '待审核');
+    if (postedOk && shipPayload) {
       try {
-        await api('POST', '/api/shipments', shipPayload);
+        await api('POST', '/api/shipments', { ...shipPayload, ...(res.lastStockDocId ? { stockDocId: res.lastStockDocId } : {}) });
         await reload(); render();
         toast(`已同步登记快递单号 ${trackNo}`, 'success');
       } catch (err) {
         toast('发货已完成，但快递登记失败：' + err.message + '（可在订单详情补充登记）', 'error');
       }
-    } else if (res && !needAppr && res.status !== '待发货' && delivPayload) {
+    } else if (postedOk && delivPayload) {
       try {
         await api('POST', '/api/deliveries', delivPayload);
         await reload(); render();
@@ -6987,7 +7009,7 @@ function pageEngJobs() {
 /* ================= 页面：财务 ================= */
 function pageFinance() {
   if (!ui.finTab) ui.finTab = 'flow';
-  const m = monthKey(today()), mf = db.finance.filter(f => monthKey(f.date) === m);
+  const m = monthKey(today()), mf = db.finance.filter(f => monthKey(f.date) === m && !f.nonCash && f.category !== '固定资产折旧');
   const inc = sum(mf.filter(f => f.type === 'income'), f => f.amount), exp = sum(mf.filter(f => f.type === 'expense'), f => f.amount);
   const recv = partyDue('sales'), pay = partyDue('purchase');
   $('#view').innerHTML = pageHead('财务管理', '收支流水、应收应付与资金概览', `<button class="btn primary" data-act="finAdd">${ic('plus')}记一笔</button>`) + `
@@ -7020,7 +7042,7 @@ function pageFinance() {
   } else if (ui.finTab === 'acct') {
     const T = db.acctTransfers || [];
     card.innerHTML = `<div class="card-head"><h3>资金账户</h3><div class="ops"><button class="btn" data-act="acctTransfer">${ic('swap')}账户转账</button><button class="btn primary" data-act="acctEdit">${ic('plus')}新增账户</button></div></div>
-    <div class="acct-grid">${accts(true).map(a => { const fs = db.finance.filter(f => f.account === a.id), bal = acctBal(a.id);
+    <div class="acct-grid">${accts(true).map(a => { const fs = db.finance.filter(f => f.account === a.id && !f.nonCash && f.category !== '固定资产折旧'), bal = acctBal(a.id);
       return `<div class="acct${a.off ? ' off' : ''}"><div class="acct-h"><b>${esc(a.name)}</b>${badge(a.off ? '已停用' : a.kind === '银行转账' ? '银行' : a.kind, a.off ? 'gray' : 'blue plain')}</div>
       <div class="sub-t">${esc(a.no || a.remark || ' ')}</div><div class="acct-v ${bal < 0 ? 'neg' : ''}">${money(bal)}</div>
       <div class="sub-t">期初 ${money(a.opening || 0)} · 收 <span class="pos">${money(sum(fs.filter(f => f.type === 'income'), f => f.amount))}</span> · 支 <span class="neg">${money(sum(fs.filter(f => f.type === 'expense'), f => f.amount))}</span></div>
@@ -7129,7 +7151,7 @@ function pageFinance() {
     card.innerHTML = `<div class="card-body grid g2"><div><h3 style="margin-bottom:12px">月度收支（近 6 个月）</h3><div class="chart-box"><canvas id="f1"></canvas></div></div><div><h3 style="margin-bottom:12px">支出结构（近 6 个月）</h3><div class="chart-box"><canvas id="f2"></canvas></div></div></div>`;
     const ms = lastMonths(6), fm = (mk, t) => sum(db.finance.filter(f => f.type === t && monthKey(f.date) === mk), f => f.amount);
     chart('f1', {type:'bar', data:{labels:ms.map(mLabel), datasets:[{label:'收入', data:ms.map(m => fm(m, 'income')), backgroundColor:'#10b981', borderRadius:6, maxBarThickness:26}, {label:'支出', data:ms.map(m => fm(m, 'expense')), backgroundColor:'#f43f5e', borderRadius:6, maxBarThickness:26}]}, options:{scales:{y:yMoney, x:{grid:{display:false}}}}});
-    const ec = {}; db.finance.filter(f => f.type === 'expense' && ms.includes(monthKey(f.date))).forEach(f => { ec[f.category] = (ec[f.category] || 0) + f.amount; });
+    const ec = {}; db.finance.filter(f => f.type === 'expense' && !f.nonExpense && f.category !== '备用金发放' && ms.includes(monthKey(f.date))).forEach(f => { ec[f.category] = (ec[f.category] || 0) + f.amount; });
     chart('f2', {type:'doughnut', data:{labels:Object.keys(ec), datasets:[{data:Object.values(ec), backgroundColor:PALETTE, borderWidth:0}]}, options:{cutout:'62%', plugins:{legend:{position:'right'}}}});
   }
 }
@@ -7580,7 +7602,7 @@ function pageReports() {
     const po = personal ? [] : db.purchases.filter(o => o.status !== '已作废' && monthKey(o.date) === mk);
     const sales = sum(so, orderTotal), ret = sum(sr, orderTotal), recv = sum(so, o => o.received || 0), unpaid = sum(so, o => Math.max(0, orderTotal(o) - (o.received || 0)));
     const cost = sum(so, orderCost), gp = sales - cost;
-    const exp = personal ? 0 : sum(db.finance.filter(f => f.type === 'expense' && !NON_OP_EXP.has(f.category) && f.category !== '农产品收购' && monthKey(f.date) === mk), f => f.amount);
+    const exp = personal ? 0 : sum(db.finance.filter(f => f.type === 'expense' && !f.nonExpense && !NON_OP_EXP.has(f.category) && f.category !== '备用金发放' && f.category !== '农产品收购' && monthKey(f.date) === mk), f => f.amount);
     return {mk, count:so.length, sales, ret, netSales:sales - ret, recv, unpaid, cost, gp, rate:sales ? gp / sales * 100 : 0, purchase:sum(po, orderTotal), exp, net:gp - exp};
   });
   const inRange = S.filter(o => months.includes(monthKey(o.date)));

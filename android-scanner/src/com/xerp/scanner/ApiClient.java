@@ -119,6 +119,10 @@ public final class ApiClient {
         }
     }
 
+    public static class ResponseTooLargeException extends IOException {
+        public ResponseTooLargeException(String msg) { super(msg); }
+    }
+
     public static String friendlyError(Throwable e) {
         if (e == null) return "操作失败，请稍后重试";
         if (e instanceof ApiException) {
@@ -147,6 +151,7 @@ public final class ApiClient {
         if (e instanceof MalformedURLException) return "服务器地址格式不正确";
         if (e instanceof NoRouteToHostException || e instanceof SocketException) return "网络连接异常，请检查 Wi-Fi 或移动网络";
         if (e instanceof JSONException) return "服务器返回格式异常，请确认服务器地址为 x.erp 服务端";
+        if (e instanceof ResponseTooLargeException) return e.getMessage();
         if (e instanceof IOException) return "网络传输中断，请重试";
         if (e instanceof SecurityException) return "缺少系统权限，请在手机设置中开启权限";
         String m = e.getMessage();
@@ -296,7 +301,7 @@ public final class ApiClient {
             int n;
             while ((n = in.read(buf)) > 0) {
                 if (out.size() + n > maxBytes) {
-                    throw new java.io.IOException("服务端返回数据过大（超过 " + (maxBytes / (1024 * 1024)) + "MB 上限）");
+                    throw new ResponseTooLargeException("服务端返回数据过大（超过 " + (maxBytes / (1024 * 1024)) + "MB 上限），请联系管理员归档或清理历史数据");
                 }
                 out.write(buf, 0, n);
             }

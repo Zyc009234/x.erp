@@ -231,7 +231,7 @@ function migrateDefaultUsers(c) {
     if (users.length) log('已迁移全局账号', users.length, '个');
   } finally { db.close(); }
 }
-function syncCompanyUsers(c, liveMutation = false, actor = null) {
+function syncCompanyUsers(c, liveMutation = false, actor = null, targetUsername = null, keepToken = null) {
   let db;
   try { db = companyDb(c); } catch (e) { return; }
   try {
@@ -256,13 +256,19 @@ function syncCompanyUsers(c, liveMutation = false, actor = null) {
         const actorIsSelf = !!(actor && actor.username === u.username);
 
         if (liveMutation) {
-          // 防止子账套管理员通过同名本地用户或重置密码覆盖全局管理员或其他账套用户的全局密码
-          const canUpdateGlobalPwd = actorIsGlobalAdmin || actorIsSelf || (!isGlobalAdmin && otherCompanies === 0 && alreadyMember);
+          // 仅允许更新本次明确操作的目标用户的全局密码，绝不顺带把同库其他用户的旧密码覆盖回全局库
+          const isTarget = !!(targetUsername && u.username === targetUsername);
+          const canUpdateGlobalPwd = isTarget && (actorIsGlobalAdmin || actorIsSelf || (!isGlobalAdmin && otherCompanies === 0 && alreadyMember));
           if (canUpdateGlobalPwd) {
+            const pwdChanged = u.salt !== g.salt || u.hash !== g.hash;
             reg.prepare('UPDATE users SET name = ?, salt = ?, hash = ? WHERE id = ?')
               .run(u.name || g.name || u.username, u.salt, u.hash, g.id);
+            if (pwdChanged) {
+              if (keepToken && actorIsSelf) reg.prepare('DELETE FROM sessions WHERE user_id = ? AND token <> ?').run(g.id, keepToken);
+              else reg.prepare('DELETE FROM sessions WHERE user_id = ?').run(g.id);
+            }
           }
-          if (alreadyMember || actorIsGlobalAdmin) {
+          if (alreadyMember || (isTarget && actorIsGlobalAdmin)) {
             reg.prepare('INSERT INTO members (user_id, company_id, role) VALUES (?,?,?) ON CONFLICT(user_id, company_id) DO UPDATE SET role = excluded.role')
               .run(g.id, c.id, role);
           }
@@ -310,22 +316,37 @@ function loginPayload(user, c) {
 }
 
 const loginFails = new Map();
-const LOGIN_LIMIT = 8, LOGIN_WIN_MS = 15 * 60 * 1000;
+const LOGIN_LIMIT = 8, LOGIN_LIMIT_USER = 20, LOGIN_WIN_MS = 15 * 60 * 1000, LOGIN_FAILS_MAX = 5000;
+const TRUST_PROXY = process.env.XERP_TRUST_PROXY === '1';
 function portalClientIp(req) {
-  return String((req.headers['x-forwarded-for'] || req.socket.remoteAddress || '')).split(',')[0].trim();
+  const peer = String(req.socket.remoteAddress || '').trim();
+  const isLocalPeer = peer === '127.0.0.1' || peer === '::1' || peer === '::ffff:127.0.0.1';
+  if (TRUST_PROXY && isLocalPeer && req.headers['x-forwarded-for']) {
+    const parts = String(req.headers['x-forwarded-for']).split(',').map(s => s.trim()).filter(Boolean);
+    if (parts.length) return parts[parts.length - 1];
+  }
+  return peer || 'unknown';
 }
-function checkPortalLoginLimit(key) {
+function checkPortalLoginLimit(key, max = LOGIN_LIMIT) {
   const rec = loginFails.get(key);
   if (!rec) return true;
   if (Date.now() > rec.until) { loginFails.delete(key); return true; }
-  return rec.n < LOGIN_LIMIT;
+  return rec.n < max;
 }
 function recordPortalLoginFail(key) {
   const t = Date.now(), rec = loginFails.get(key);
-  if (!rec || t > rec.until) loginFails.set(key, { n: 1, until: t + LOGIN_WIN_MS });
-  else rec.n++;
-  if (loginFails.size > 5000) {
-    for (const [k, v] of loginFails) if (t > v.until) loginFails.delete(k);
+  if (!rec || t > rec.until) {
+    if (loginFails.size >= LOGIN_FAILS_MAX) {
+      for (const [k, v] of loginFails) if (t > v.until) loginFails.delete(k);
+      while (loginFails.size >= LOGIN_FAILS_MAX) {
+        const oldest = loginFails.keys().next().value;
+        if (oldest === undefined) break;
+        loginFails.delete(oldest);
+      }
+    }
+    loginFails.set(key, { n: 1, until: t + LOGIN_WIN_MS });
+  } else {
+    rec.n++;
   }
 }
 
@@ -342,13 +363,17 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/portal/login' && req.method === 'POST') {
       const b = await body(req);
       const uname = String(b.username || '').trim();
-      const limitKey = portalClientIp(req) + '|' + uname.toLowerCase();
-      if (!checkPortalLoginLimit(limitKey)) return json(res, 429, { error: '登录失败次数过多，请 15 分钟后再试' });
+      const unameKey = 'u|' + uname.toLowerCase();
+      const limitKey = 'ip|' + portalClientIp(req) + '|' + uname.toLowerCase();
+      if (!checkPortalLoginLimit(limitKey, LOGIN_LIMIT) || (uname && !checkPortalLoginLimit(unameKey, LOGIN_LIMIT_USER))) {
+        return json(res, 429, { error: '登录失败次数过多，请 15 分钟后再试' });
+      }
       const user = userByName(uname);
-      if (!user) { recordPortalLoginFail(limitKey); return json(res, 401, { error: '用户名或密码不正确' }); }
+      if (!user) { recordPortalLoginFail(limitKey); if (uname) recordPortalLoginFail(unameKey); return json(res, 401, { error: '用户名或密码不正确' }); }
       const a = Buffer.from(hashPwd(String(b.password || ''), user.salt).hash, 'hex'), h = Buffer.from(user.hash || '', 'hex');
-      if (a.length !== h.length || !crypto.timingSafeEqual(a, h)) { recordPortalLoginFail(limitKey); return json(res, 401, { error: '用户名或密码不正确' }); }
+      if (a.length !== h.length || !crypto.timingSafeEqual(a, h)) { recordPortalLoginFail(limitKey); if (uname) recordPortalLoginFail(unameKey); return json(res, 401, { error: '用户名或密码不正确' }); }
       loginFails.delete(limitKey);
+      if (uname) loginFails.delete(unameKey);
       let c;
       if (b.company) {
         c = companyByCode(String(b.company));
@@ -616,24 +641,36 @@ const server = http.createServer(async (req, res) => {
         return json(res, 401, { error: '登录已失效，请重新登录' });
       }
       const syncAuth = req.method !== 'GET' && (p === '/api/users' || p.startsWith('/api/users/') || p === '/api/password');
-      if (req.method === 'POST' && p === '/api/users' && !me.admin) {
+      if (req.method === 'POST' && p === '/api/users') {
         const b = await body(req);
         const newUname = String(b.username || '').trim();
         const existingG = newUname ? userByName(newUname) : null;
-        if (existingG && (existingG.admin || !memberOf(existingG.id, company.id))) {
+        if (!me.admin && existingG && (existingG.admin || !memberOf(existingG.id, company.id))) {
           return json(res, 409, { error: '该用户名已存在于其他账套，请更换用户名或联系全局管理员添加成员' });
         }
         const rawBuf = Buffer.from(JSON.stringify(b), 'utf8');
         const headers = { ...req.headers, host: '127.0.0.1:' + company.port, authorization: 'Bearer ' + sess.company_token, 'content-type': 'application/json', 'content-length': String(rawBuf.length) };
         const pr = http.request({ host: '127.0.0.1', port: company.port, path: req.url, method: req.method, headers }, r => {
-          if (r.statusCode >= 200 && r.statusCode < 300) { try { syncCompanyUsers(company, true, me); } catch (e) {} }
+          if (r.statusCode >= 200 && r.statusCode < 300) { try { syncCompanyUsers(company, true, me, newUname); } catch (e) {} }
           res.writeHead(r.statusCode || 502, r.headers);
           r.pipe(res);
         });
         pr.on('error', () => { if (!res.headersSent) json(res, 502, { error: '账套服务未启动，请稍后重试' }); else res.end(); });
         return pr.end(rawBuf);
       }
-      return proxy(req, res, company, sess.company_token, syncAuth ? () => syncCompanyUsers(company, true, me) : null);
+      let targetUname = null;
+      if (syncAuth) {
+        if (p === '/api/password') targetUname = me.username;
+        else if (p.startsWith('/api/users/')) {
+          const uidSeg = decodeURIComponent(p.split('/')[3] || '');
+          try {
+            const cdb = companyDb(company);
+            try { const row = cdb.prepare('SELECT username FROM users WHERE id = ?').get(uidSeg); if (row) targetUname = row.username; }
+            finally { cdb.close(); }
+          } catch (e) {}
+        }
+      }
+      return proxy(req, res, company, sess.company_token, syncAuth ? () => syncCompanyUsers(company, true, me, targetUname, sess.token) : null);
     }
     return proxy(req, res, ensureDefaultCompany(), null);
   } catch (e) {

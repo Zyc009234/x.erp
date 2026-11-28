@@ -109,7 +109,7 @@ test('P1 #1 & #2 & #38: portal.js 防子账套管理员覆盖全局密码 + 登�
     const pSrc = fs.readFileSync(path.join(ROOT, 'src/portal.js'), 'utf8');
     assert.ok(pSrc.includes('CHILD_EXEC_ARGS'), '#38 应透传 --experimental-sqlite');
     assert.ok(pSrc.includes('该用户名已存在于其他账套，请更换用户名或联系全局管理员添加成员'), '#1 非全局管理员禁止创建/覆盖同名跨账套账号');
-    assert.ok(pSrc.includes('function syncCompanyUsers(c, liveMutation = false, actor = null)'), '#1 syncCompanyUsers 支持权限隔离与防覆盖');
+    assert.ok(pSrc.includes('function syncCompanyUsers(c, liveMutation = false, actor = null, targetUsername = null'), '#1 syncCompanyUsers 支持权限隔离与防覆盖');
   } finally {
     portal.stop();
     fs.rmSync(dir, { recursive: true, force: true });
@@ -170,10 +170,10 @@ test('P1 #3 #4 #5 #6 & P2 #7-#17: server.js 核心安全、隔离、财务与备
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xerp-audit-srv-'));
   const srv = await startServer(dir);
   try {
-    // #3 [P1]: 畸形 URL 请求返回 400 且服务不崩溃
+    // #3 [P1]: 通过 HTTP 解析器但触发 new URL() 异常的畸形请求（无空格），返回 400 且服务不崩溃
     const rawResp = await new Promise((resolve, reject) => {
       const sock = net.connect(srv.port, '127.0.0.1', () => {
-        sock.write('GET // [ HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n');
+        sock.write('GET http://[::1 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n');
       });
       let buf = '';
       sock.on('data', c => { buf += c.toString(); });
@@ -189,9 +189,9 @@ test('P1 #3 #4 #5 #6 & P2 #7-#17: server.js 核心安全、隔离、财务与备
     const pDec = (await admin.req('POST', '/api/products', { name: '散装铜线', sku: 'DEC-1', unit: '米', dec: true, cost: 10, price: 20, stock: 10 })).data;
     const pNor = (await admin.req('POST', '/api/products', { name: '水泥', sku: 'NOR-1', unit: '袋', cost: 20, price: 35, stock: 50 })).data;
 
-    // #4 [P1]: 小数商品盘点/手工调整拒绝 NaN / Infinity
+    // #4 [P1]: 小数商品盘点/手工调整（真实 mode: 'check'）拒绝 NaN / Infinity
     for (const bad of ['NaN', 'Infinity', '-Infinity']) {
-      const r = await admin.req('POST', `/api/stock/${pDec.id}`, { mode: 'set', qty: bad });
+      const r = await admin.req('POST', `/api/stock/${pDec.id}`, { mode: 'check', qty: bad });
       assert.equal(r.status, 400, `手工库存调整应拒绝 ${bad}`);
     }
     const pDecAfter = (await admin.req('GET', '/api/data')).data.data.products.find(x => x.id === pDec.id);
@@ -350,10 +350,10 @@ test('前端 #18-#29 + Android #31-#35 + Cloud #36-#37 静态与逻辑校验', (
   assert.ok(html.includes("title: p ? '编辑地块 · ' + esc(p.name) : '新增地块'"), '#18 地块标题转义');
   assert.ok(html.includes('function isQtyInvalid(i)'), '#19 支持小数商品校验函数');
   assert.ok(html.includes('但刷新界面失败，请手动刷新'), '#20 mutate 写成功与刷新失败分离');
-  assert.ok(html.includes('!needAppr && res.status !== \'待发货\' && shipPayload'), '#21 待审核发货不提前建快递/配送单');
+  assert.ok(html.includes('res.lastStockDocStatus !== \'待审核\''), '#21 待审核发货不提前建快递/配送单');
   assert.ok(html.includes("o.srcOrderKind === 'eng' ? 'engView'"), '#22 来源订单 engView 路由');
   assert.ok(html.includes("f.account === id && !f.nonCash && f.category !== '固定资产折旧'"), '#23 acctBal 排除非现金与折旧');
-  assert.ok(html.includes('discount: idx === total - 1 ? (o.discount || 0) : 0'), '#24 多页套打优惠仅末页扣减一次');
+  assert.ok(html.includes('discount: +(pageDiscs[idx] / 100).toFixed(2)'), '#24 多页套打按页比例分摊优惠且不出现负数');
   assert.ok(html.includes('partyObj.taxId || partyObj.invoiceTaxNo'), '#25 自由数据框读取 taxId 与 bankName');
   assert.ok(html.includes('padding:0;border-radius:3px') && html.includes('outline:1px dashed rgba(37,99,235,.7)'), '#26 套打自由框预览无内边距偏移');
   assert.ok(html.includes('grid-template-columns:repeat(auto-fit,minmax(130px,1fr))'), '#27 快递账单列映射响应式布局');
@@ -370,7 +370,7 @@ test('前端 #18-#29 + Android #31-#35 + Cloud #36-#37 静态与逻辑校验', (
   assert.ok(stockMoveJava.includes('public void onCompanySwitched()'), '#34 切换账套清空 StockMoveTab 购物车');
   assert.ok(stockMoveJava.indexOf('cart.clear();') < stockMoveJava.indexOf('act.refreshData(null);'), '#33 提交成功后先清购物车再刷新');
   const apiClientJava = fs.readFileSync(path.join(ROOT, 'android-scanner/src/com/xerp/scanner/ApiClient.java'), 'utf8');
-  assert.ok(apiClientJava.includes('32 * 1024 * 1024') && apiClientJava.includes('throw new java.io.IOException'), '#35 响应流超限抛明确异常而非静默截断');
+  assert.ok(apiClientJava.includes('32 * 1024 * 1024') && apiClientJava.includes('throw new ResponseTooLargeException'), '#35 响应流超限抛明确异常而非静默截断');
 
   const cloudSrv = fs.readFileSync(path.join(ROOT, 'cloud/server.js'), 'utf8');
   assert.ok(cloudSrv.includes('inflightByAccount') && cloudSrv.includes('inflightTotal'), '#36 云备份并发上传预留配额');

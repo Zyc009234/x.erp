@@ -377,11 +377,19 @@ public class MainActivity extends Activity {
                                 store.companyCode = co.optString("code", target.code);
                                 store.companyName = co.optString("name", target.name);
                             }
+                            // 服务端已切换账套，立即清空旧账套缓存与各页签购物车，防止后续拉取失败时把旧明细提交到新账套
+                            store.products.clear();
+                            store.productById.clear();
+                            store.warehouses.clear();
+                            runOnUiThread(() -> {
+                                syncWarehouseBadge();
+                                for (TabPage t : tabs) t.onCompanySwitched();
+                            });
                             JSONObject data = ApiClient.fetchData(store);
                             store.reloadFromJson(data);
                             runOnUiThread(() -> {
                                 syncWarehouseBadge();
-                                for (TabPage t : tabs) t.onCompanySwitched();
+                                for (TabPage t : tabs) t.onDataUpdated();
                                 Ui.toast(this, "已切换到：" + store.companyName);
                             });
                         } catch (Exception e) {

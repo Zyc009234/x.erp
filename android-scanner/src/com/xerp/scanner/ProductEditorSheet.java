@@ -281,8 +281,8 @@ public final class ProductEditorSheet {
         moreBox.addView(Ui.tv(act, "大包装/辅助单位（如 1 箱 = 12 个）", 12, Ui.MUTED, true), skulp);
         LinearLayout pkgRow = Ui.row(act);
         EditText etPkgName = Ui.input(act, "单位(如 箱)");
-        EditText etPkgRate = Ui.input(act, "换算(如 12)");
-        etPkgRate.setInputType(InputType.TYPE_CLASS_NUMBER);
+        EditText etPkgRate = Ui.input(act, "换算(如 12 或 0.5)");
+        etPkgRate.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         pkgRow.addView(etPkgName, new LinearLayout.LayoutParams(0, -2, 1));
         pkgRow.addView(Ui.space(act, 6, 1));
         pkgRow.addView(etPkgRate, new LinearLayout.LayoutParams(0, -2, 1));
@@ -485,8 +485,8 @@ public final class ProductEditorSheet {
                 String pkgB = etPkgBar.getText().toString().trim();
                 if (!pkgN.isEmpty() || !pkgRStr.isEmpty() || !pkgB.isEmpty()) {
                     double rate = parseNum(pkgRStr, 0);
-                    if (pkgN.isEmpty() || !Double.isFinite(rate) || rate <= 0) {
-                        Ui.toast(act, "辅助单位请填名称且换算须大于 0");
+                    if (pkgN.isEmpty() || !Double.isFinite(rate) || rate <= 0 || Math.abs(rate - 1.0) < 1e-6) {
+                        Ui.toast(act, "辅助单位请填名称且换算须大于 0 且不等于 1");
                         return;
                     }
                     Models.UnitSpec u0 = new Models.UnitSpec();
