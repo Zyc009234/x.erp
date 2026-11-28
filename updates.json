@@ -1,43 +1,43 @@
 {
   "schema": 1,
-  "latest": "2.17.1",
-  "publishedAt": "2026-11-28T19:53:00+08:00",
+  "latest": "2.17.2",
+  "publishedAt": "2026-11-28T20:32:00+08:00",
   "notes": [
-    "修复 Codex 全面重审 19 项问题：跨账套密码隔离与登录限流、配送权限、分批发货幂等与退货行级限额、粮食待审作废/实际成本回填与脱敏、备用金统计与历史兼容、申诉字段与暂存面单恢复、多页打印比例分摊优惠、安卓扫码端切账套清购物车与小数倍率键盘"
+    "新增天地图服务端瓦片代理，同时兼容「服务器端」和「浏览器端」Key，自动清洗重复粘贴的 Key 并内置瓦片缓存"
   ],
   "packages": {
     "fnos": {
-      "version": "2.17.1",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.1.fpk",
-      "sha256": "3eaed066618002be265d9847729acc2d0617cb1e67d853d9088b7e2fde750bef",
-      "size": 920008,
-      "file": "xerp-2.17.1.fpk",
+      "version": "2.17.2",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.2.fpk",
+      "sha256": "20c8f56a7b3a9a7e3799fc69041b6171c76893eebc05aa546e570ead4f222537",
+      "size": 921256,
+      "file": "xerp-2.17.2.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.17.1",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.1-windows-x64-setup.exe",
-      "sha256": "a27dd34666dae14b5ef83ca9bcd16dea69837e306f713b297ce8691aa2ccc2ab",
-      "size": 23967473,
-      "file": "xerp-2.17.1-windows-x64-setup.exe",
+      "version": "2.17.2",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.2-windows-x64-setup.exe",
+      "sha256": "2dee069bc869adca3a2a3da04c40eb245a303ef130d17b63dd96123d18cbea18",
+      "size": 23971789,
+      "file": "xerp-2.17.2-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.17.1",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.1-android.apk",
-      "sha256": "aeb1744f2741718110f76267005016fef536483a71947a198d2d5c65c6609059",
+      "version": "2.17.2",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.2-android.apk",
+      "sha256": "f3be3ef12533ea1b318c4579cd3365aa0558fb314d80395c9c2549b5370d9e8d",
       "size": 279329,
-      "file": "xerp-2.17.1-android.apk",
+      "file": "xerp-2.17.2-android.apk",
       "kind": "apk",
-      "versionCode": 21701
+      "versionCode": 21702
     },
     "docker": {
-      "version": "2.17.1",
+      "version": "2.17.2",
       "kind": "docker",
-      "image": "ghcr.io/zyc009234/xerp:2.17.1",
+      "image": "ghcr.io/zyc009234/xerp:2.17.2",
       "offline": [
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.1-docker-amd64.tar.gz",
-        "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.1-docker-arm64.tar.gz"
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.2-docker-amd64.tar.gz",
+        "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.2-docker-arm64.tar.gz"
       ],
       "note": "也可以下载离线包 docker load"
     }
