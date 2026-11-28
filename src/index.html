@@ -561,7 +561,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.16.8</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.16.9</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -2556,7 +2556,7 @@ const colLabel = (K, c) => c.label || (c.k === 'price' && K.price) || (c.k === '
 // 当前生效的模板（可传指定模板 id）：保存过的设置 + 默认值；以后新增的列补在后面（默认不打印）
 const PP_FREE_FIELDS = [
   { group: '单据信息', items: [
-    ['order.no', '单据编号 (NO.)'], ['order.date', '单据日期'], ['order.creator', '制单人'],
+    ['order.no', '单据编号 (NO.)'], ['order.date', '单据日期'], ['order.pageNo', '页码 (如 1/2)'], ['order.creator', '制单人'],
     ['order.approver', '审核人'], ['order.handler', '经手人'], ['order.wh', '仓库'],
     ['order.express', '快递/物流单号'], ['order.project', '项目'], ['order.remark', '单据备注']
   ]},
@@ -2565,7 +2565,8 @@ const PP_FREE_FIELDS = [
     ['party.address', '收货/联系地址'], ['party.taxNo', '税号'], ['party.bank', '开户行'], ['party.bankAccount', '银行账号']
   ]},
   { group: '金额与数量汇总', items: [
-    ['summary.totalQty', '合计数量'], ['summary.totalAmount', '合计金额'], ['summary.amountUpper', '总金额大写'],
+    ['summary.totalQty', '本页合计数量'], ['summary.totalAmount', '本页合计金额'], ['summary.amountUpper', '本页金额大写'],
+    ['summary.orderTotalQty', '整单合计数量'], ['summary.orderTotalAmount', '整单合计金额'], ['summary.orderAmountUpper', '整单总金额大写'],
     ['summary.discount', '优惠金额'], ['summary.payable', '实收/实付金额']
   ]},
   { group: '本公司信息', items: [
@@ -2584,10 +2585,15 @@ function buildFreeBoxCtx(kind, o, d, amt, showMoney) {
   const metaVal = k => { const v = d.meta[k]; return Array.isArray(v) ? (v[1] || '') : (v || ''); };
   const totalQty = sum(d.items, i => i.qty);
   const payable = amt - (d.discount || 0);
+  const fullD = o._fullDoc && o._fullDoc !== o ? slipData(kind, o._fullDoc) : d;
+  const fullQty = fullD === d ? totalQty : sum(fullD.items, i => i.qty);
+  const fullAmt = fullD === d ? amt : sum(fullD.items, i => i.amount);
+  const fullPayable = fullAmt - (fullD.discount || 0);
   return {
     order: {
       no: metaVal('no') || o.no || '',
       date: metaVal('date') || o.date || '',
+      pageNo: o._pageText || '1/1',
       creator: d.creator || '',
       approver: d.approver || '',
       handler: d.handler || metaVal('handler') || '',
@@ -2609,6 +2615,9 @@ function buildFreeBoxCtx(kind, o, d, amt, showMoney) {
       totalQty: String(totalQty),
       totalAmount: showMoney ? amt.toFixed(2) : '',
       amountUpper: showMoney ? rmbUpper(payable) : '',
+      orderTotalQty: String(fullQty),
+      orderTotalAmount: showMoney ? fullAmt.toFixed(2) : '',
+      orderAmountUpper: showMoney ? rmbUpper(fullPayable) : '',
       discount: showMoney ? (d.discount || 0).toFixed(2) : '',
       payable: showMoney ? payable.toFixed(2) : ''
     },
@@ -2634,7 +2643,7 @@ function slipTpl(kind, tplId) {
   const saved = (t.cols || []).filter(c => colKeys.includes(c.k) || isCustomPrintCol(c.k));
   const cols = saved.length ? [...saved, ...colKeys.filter(k => !saved.some(c => c.k === k)).map(k => ({k, label:'', on:false}))]
     : colKeys.map(k => ({k, label:'', on:!['barcode', 'brand'].includes(k)}));
-  return {title:'', header:'', footer:'', signs:K.signs, fontSize:12, upper:true, printer:true, paper:'', paperW:0, font:'song', logo:'', logoPos:'inline', preprint:false, hideTable:false, hideTableTotal:false, offsetX:0, offsetY:0, rowH:0, tableW:0, preprintBg:'', ...t,
+  return {title:'', header:'', footer:'', signs:K.signs, fontSize:12, upper:true, printer:true, paper:'', paperW:0, font:'song', logo:'', logoPos:'inline', preprint:false, hideTable:false, hideTableTotal:false, pageRows:0, offsetX:0, offsetY:0, rowH:0, tableW:0, preprintBg:'', ...t,
     pos:t.pos && typeof t.pos === 'object' ? {...t.pos} : {},
     boxes:Array.isArray(t.boxes) ? t.boxes.map(b => ({...b})) : [],
     cols:cols.map(c => ({...c})), meta:{...Object.fromEntries(K.meta.map(k => [k, true])), ...(t.meta || {})}};
@@ -2762,6 +2771,22 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
   ${d.voided.length > 3 ? `<div class="s-meta" style="margin-top:6px"><span>${esc(d.voided)}</span></div>` : ''}${ppFreeHtml}</div>`;
 }
 const slipHtml = (o, opts) => slipRender(o.dir, o, opts);
+function slipPagesHtml(kind, o, { showMoney, minRows = 0, tpl = slipTpl(kind), foot = '' } = {}) {
+  const ppOn = !!tpl.preprint && hasFeat('preprint');
+  const maxR = ppOn && +tpl.pageRows >= 1 ? Math.min(50, Math.round(+tpl.pageRows)) : 0;
+  const listKey = kind === 'expense' ? 'lines' : 'items';
+  const arr = Array.isArray(o[listKey]) ? o[listKey] : [];
+  if (!maxR || arr.length <= maxR) {
+    return `<div class="page">${slipRender(kind, { ...o, _pageText: '1/1', _fullDoc: o }, { showMoney, minRows: maxR || minRows, tpl })}${foot}</div>`;
+  }
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += maxR) chunks.push(arr.slice(i, i + maxR));
+  const total = chunks.length;
+  return chunks.map((chunk, idx) => {
+    const pageDoc = { ...o, [listKey]: chunk, _pageText: `${idx + 1}/${total}`, _fullDoc: o };
+    return `<div class="page">${slipRender(kind, pageDoc, { showMoney, minRows: maxR, tpl })}${foot}</div>`;
+  }).join('');
+}
 const printFoot = (kind, n, tpl = slipTpl(kind)) => tpl.printer ? `<div class="foot">打印人：${esc(ME.name)} · ${fmtTime(new Date())}${n ? ' · 第 ' + n + ' 次打印' : ''}</div>` : '';
 function printFrame(title, body, paperKey, tpl) {
   const paper = PAPERS[paperKey] || PRINT_ONLY[paperKey] || PAPERS.a4;
@@ -2858,7 +2883,7 @@ async function docPrint(id) {
   const paper = tpl.paper || prefs.paper || 'a4', showMoney = docCanShowMoney(o) && prefs.slipMoney !== false;
   let n = (o.printCount || 0) + 1;
   try { n = (await api('POST', `/api/stockdocs/${id}/print`, {})).printCount; o.printCount = n; } catch (e) { return toast(e.message, 'error'); }
-  printFrame(o.no, `<div class="page">${slipRender(o.dir, o, {showMoney, minRows:PAPERS[paper][2], tpl})}${printFoot(o.dir, n, tpl)}</div>`, paper, tpl);
+  printFrame(o.no, slipPagesHtml(o.dir, o, { showMoney, minRows: PAPERS[paper][2], tpl, foot: printFoot(o.dir, n, tpl) }), paper, tpl);
 }
 function docView(id) {
   const o = byId(db.stockDocs, id); if (!o) return toast('单据不存在或无权查看', 'error');
@@ -3587,7 +3612,7 @@ async function transferPrint(id) {
   const tpl = slipTpl('transfer', $('#tTpl') ? $('#tTpl').value : undefined), paper = tpl.paper || prefs.paper || 'a4', showMoney = canMoney() && prefs.slipMoney !== false;
   let n;
   try { n = (await api('POST', `/api/transfers/${id}/print`, {})).printCount; o.printCount = n; } catch (e) { return toast(e.message, 'error'); }
-  printFrame(o.no, `<div class="page">${slipRender('transfer', o, {showMoney, minRows:PAPERS[paper][2], tpl})}${printFoot('transfer', n, tpl)}</div>`, paper, tpl);
+  printFrame(o.no, slipPagesHtml('transfer', o, { showMoney, minRows: PAPERS[paper][2], tpl, foot: printFoot('transfer', n, tpl) }), paper, tpl);
 }
 function transferVoid(id) {
   const o = byId(db.transferDocs, id);
@@ -4434,7 +4459,7 @@ function orderView(kind, id) {
 function orderPrint(kind, id) {
   const o = byId(db[ORD[kind].db], id); if (!o) return;
   const tpl = slipTpl(kind, $('#oTpl') ? $('#oTpl').value : undefined), paper = tpl.paper || prefs.paper || 'a4', showMoney = prefs.orderMoney !== false;
-  printFrame(o.no, `<div class="page">${slipRender(kind, o, {showMoney, minRows:PAPERS[paper][2], tpl})}${printFoot(kind, undefined, tpl)}</div>`, paper, tpl);
+  printFrame(o.no, slipPagesHtml(kind, o, { showMoney, minRows: PAPERS[paper][2], tpl, foot: printFoot(kind, undefined, tpl) }), paper, tpl);
 }
 // 订单发货 / 采购入库 / 退货出入库的确认窗口：多仓库时选仓库；序列号商品逐行登记（出库可自动选）；入库的批次商品可填批号和日期
 function orderStockModal({title, okText, desc, o, dir, wh0, check, onOk}) {
@@ -7555,6 +7580,7 @@ function printTplPage(body) {
       preprint: canPreprint && !!src.preprint,
       hideTable: canPreprint && !!src.preprint && !!src.hideTable,
       hideTableTotal: canPreprint && !!src.preprint && !!src.hideTableTotal,
+      pageRows: canPreprint && !!src.preprint && Number.isFinite(+src.pageRows) && +src.pageRows >= 1 && +src.pageRows <= 50 ? Math.round(+src.pageRows) : 0,
       offsetX: Number.isFinite(+src.offsetX) ? Math.max(-30, Math.min(80, Math.round(+src.offsetX * 10) / 10)) : 0,
       offsetY: Number.isFinite(+src.offsetY) ? Math.max(-30, Math.min(120, Math.round(+src.offsetY * 10) / 10)) : 0,
       rowH: Number.isFinite(+src.rowH) && +src.rowH >= 4 && +src.rowH <= 40 ? Math.round(+src.rowH * 10) / 10 : 0,
@@ -7589,6 +7615,7 @@ function printTplPage(body) {
           <label class="field" style="margin:0"><span>上偏移（mm）</span><input id="tpOffY" type="number" min="-30" max="120" step="0.5" value="${t.offsetY || 0}"></label>
           <label class="field" style="margin:0"><span>明细行高（mm，0=自动）</span><input id="tpRowH" type="number" min="0" max="40" step="0.5" value="${t.rowH || 0}"></label>
           <label class="field" style="margin:0"><span>表格总宽（mm，0=自动）</span><input id="tpTableW" type="number" min="0" max="300" step="1" value="${t.tableW || 0}"></label>
+          <label class="field" style="margin:0;grid-column:1/-1"><span>每页最大行数（0=不分页，如填 9 超出 9 行自动打下一张）</span><input id="tpPageRows" type="number" min="0" max="50" step="1" value="${t.pageRows || 0}"></label>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px" id="tpBgBox">${bgSrc ? '<span class="badge green plain">已上传校准底图</span>' : '<span class="sub-t">可选：上传预印单据照片辅助预览对位（不打印）</span>'}<label class="btn sm">${ic('upload')}底图<input type="file" id="tpBg" accept="image/png,image/jpeg,image/webp" hidden></label>${bgSrc ? '<button class="btn sm danger-text" id="tpBgDel">清除底图</button>' : ''}</div>
         <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
@@ -7692,7 +7719,7 @@ function printTplPage(body) {
     }
   };
   const read = () => ({title:$('#tpTitle').value.trim(), header:$('#tpHeader').value.trim(), footer:$('#tpFooter').value.trim(), signs:$('#tpSigns').value.trim(), fontSize:+$('#tpFs').value, paper:$('#tpPaper').value, paperW:isPinPaper($('#tpPaper').value) ? Math.max(120, Math.min(300, Math.round(+$('#tpPaperW').value || 215))) : 0, font:$('#tpFont').value, logo:logoSrc, logoPos:$('#tpLogoPos').value,
-    preprint:canPreprint && !!$('#tpPreprint')?.checked, hideTable:canPreprint && !!$('#tpPreprint')?.checked && !!$('#tpHideTbl')?.checked, hideTableTotal:canPreprint && !!$('#tpPreprint')?.checked && !!$('#tpHideTblTotal')?.checked, offsetX:canPreprint ? Math.max(-30, Math.min(80, Math.round((+(($('#tpOffX') || {}).value || 0)) * 10) / 10)) : 0, offsetY:canPreprint ? Math.max(-30, Math.min(120, Math.round((+(($('#tpOffY') || {}).value || 0)) * 10) / 10)) : 0, rowH:canPreprint && (+(($('#tpRowH') || {}).value || 0)) >= 4 ? Math.min(40, Math.round((+(($('#tpRowH') || {}).value || 0)) * 10) / 10) : 0, tableW:canPreprint && (+(($('#tpTableW') || {}).value || 0)) >= 40 ? Math.min(300, Math.round((+(($('#tpTableW') || {}).value || 0)) * 10) / 10) : 0, preprintBg:canPreprint ? bgSrc : '', pos:canPreprint ? cleanPos(ppPos) : {}, boxes:canPreprint && !!$('#tpPreprint')?.checked ? cleanBoxes(ppBoxes) : [],
+    preprint:canPreprint && !!$('#tpPreprint')?.checked, hideTable:canPreprint && !!$('#tpPreprint')?.checked && !!$('#tpHideTbl')?.checked, hideTableTotal:canPreprint && !!$('#tpPreprint')?.checked && !!$('#tpHideTblTotal')?.checked, pageRows:canPreprint && !!$('#tpPreprint')?.checked && (+(($('#tpPageRows') || {}).value || 0)) >= 1 ? Math.min(50, Math.round(+(($('#tpPageRows') || {}).value || 0))) : 0, offsetX:canPreprint ? Math.max(-30, Math.min(80, Math.round((+(($('#tpOffX') || {}).value || 0)) * 10) / 10)) : 0, offsetY:canPreprint ? Math.max(-30, Math.min(120, Math.round((+(($('#tpOffY') || {}).value || 0)) * 10) / 10)) : 0, rowH:canPreprint && (+(($('#tpRowH') || {}).value || 0)) >= 4 ? Math.min(40, Math.round((+(($('#tpRowH') || {}).value || 0)) * 10) / 10) : 0, tableW:canPreprint && (+(($('#tpTableW') || {}).value || 0)) >= 40 ? Math.min(300, Math.round((+(($('#tpTableW') || {}).value || 0)) * 10) / 10) : 0, preprintBg:canPreprint ? bgSrc : '', pos:canPreprint ? cleanPos(ppPos) : {}, boxes:canPreprint && !!$('#tpPreprint')?.checked ? cleanBoxes(ppBoxes) : [],
     upper:$('#tpUpper').checked, printer:$('#tpPrinter').checked, meta:Object.fromEntries([...body.querySelectorAll('[data-meta]')].map(x => [x.dataset.meta, x.checked])), cols});
   const drawBoxEditor = () => {
     const ed = $('#tpBoxEditor'), cnt = $('#tpBoxCnt');
@@ -8168,7 +8195,7 @@ function printTplPage(body) {
     const minRows = (PAPERS[paper] || PAPERS.a4)[2];
     // 页脚必须放在 .page 里面：.page 后面带强制分页，放外面会单独打出第二张纸
     const foot = tpl.printer ? `<div class="foot">打印人：${esc(ME.name)} · ${fmtTime(new Date())}</div>` : '';
-    printFrame(K.name + ' 测试样张', `<div class="page">${slipRender(kind, sample, { showMoney, minRows, tpl })}${foot}</div>`, paper, tpl);
+    printFrame(K.name + ' 测试样张', slipPagesHtml(kind, buildPrevSample(), { showMoney, minRows, tpl, foot }), paper, tpl);
   };
   $('#tpPick').onchange = async e => {
     const id = e.target.value, it = tplList.find(x => x.id === id);
@@ -9429,7 +9456,7 @@ const A = {
     const o = byId(db.expenses, id); if (!o) return;
     const tpl = slipTpl('expense', $('#xTpl') ? $('#xTpl').value : undefined);
     const paper = tpl.paper || ($('#xPaper') ? $('#xPaper').value : '') || prefs.paper || 'a4';
-    printFrame(o.no, `<div class="page">${slipRender('expense', o, { showMoney: true, minRows: (PAPERS[paper] || PAPERS.a4)[2], tpl })}${printFoot('expense', 0, tpl)}</div>`, paper, tpl);
+    printFrame(o.no, slipPagesHtml('expense', o, { showMoney: true, minRows: (PAPERS[paper] || PAPERS.a4)[2], tpl, foot: printFoot('expense', 0, tpl) }), paper, tpl);
   },
   gspApprove: v => { const [type, id] = split(v), rec = byId(db[type] || [], id); if (rec) mutate('PUT', '/api/' + type + '/' + id, { ...rec, firstStatus: '已通过' }, '首营已审核'); },
   ppRange: v => { [ui.ppFrom, ui.ppTo] = split(v); render(); }, ppDetail: n => ppDetail(n),

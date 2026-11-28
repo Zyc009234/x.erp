@@ -20,7 +20,7 @@ const tls = require('tls');
 const zlib = require('zlib');
 const { DatabaseSync } = require('node:sqlite');
 
-const VERSION = '2.16.8';
+const VERSION = '2.16.9';
 const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf('--' + name); return i >= 0 && argv[i + 1] ? argv[i + 1] : def; };
 
@@ -4302,7 +4302,7 @@ route('POST', '/api/settings/redeem', async ctx => {
     const hit = decryptVaultPreset(code);
     if (!hit) fail('专属模板码无效，请核对后重试');
     const { vaultId, preset } = hit;
-    const cleaned = cleanTpl(preset.tpl);
+    const cleaned = cleanTpl({ ...preset.tpl, pageRows: preset.tpl.pageRows || 9 });
     if (!cleaned) fail('专属模板解析失败');
     const kinds = (Array.isArray(preset.kinds) ? preset.kinds : ['sales']).filter(k => PRINT_KINDS[k]);
     const s = getMeta('settings', {});
@@ -4523,6 +4523,7 @@ function cleanTpl(t) {
   const preprint = !!t.preprint;
   const hideTable = preprint && !!t.hideTable;
   const hideTableTotal = preprint && !!t.hideTableTotal;
+  const pageRows = preprint && Number.isFinite(+t.pageRows) && +t.pageRows >= 1 && +t.pageRows <= 50 ? Math.round(+t.pageRows) : 0;
   const offsetX = Number.isFinite(+t.offsetX) ? Math.max(-30, Math.min(80, Math.round(+t.offsetX * 10) / 10)) : 0;
   const offsetY = Number.isFinite(+t.offsetY) ? Math.max(-30, Math.min(120, Math.round(+t.offsetY * 10) / 10)) : 0;
   const rowH = Number.isFinite(+t.rowH) && +t.rowH >= 4 && +t.rowH <= 40 ? Math.round(+t.rowH * 10) / 10 : 0;
@@ -4560,7 +4561,7 @@ function cleanTpl(t) {
     }
   }
   return { title: str(t.title, 20), header: str(t.header, 300), footer: str(t.footer, 300), signs: str(t.signs, 100),
-    fontSize: Math.min(24, Math.max(10, size)), paper, paperW, font, logo, logoPos, preprint, hideTable, hideTableTotal, offsetX, offsetY, rowH, tableW, preprintBg, pos, boxes, upper: t.upper !== false, printer: t.printer !== false, cols, meta };
+    fontSize: Math.min(24, Math.max(10, size)), paper, paperW, font, logo, logoPos, preprint, hideTable, hideTableTotal, pageRows, offsetX, offsetY, rowH, tableW, preprintBg, pos, boxes, upper: t.upper !== false, printer: t.printer !== false, cols, meta };
 }
 // 商品分类 / 员工部门：列表存在设置里（没被用到的也能保留）；改名 / 删除同时改掉用到它的记录
 function namedList(ctx, { key, col, field, label, unit, empty }) {

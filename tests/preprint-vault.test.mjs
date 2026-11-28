@@ -42,18 +42,19 @@ test('加密套打模板隔离与自由数据框校验', async () => {
     // 3. 未激活套打时禁止保存 preprint=true 模板
     const noFeat = await req('PUT', '/api/settings/print', {
       kind: 'sales',
-      tpl: { preprint: true, hideTableTotal: true, boxes: [{ id: 'b1', name: '单号', bind: 'order.no', x: 10, y: 10, fontSize: 12 }] }
+      tpl: { preprint: true, hideTableTotal: true, pageRows: 9, boxes: [{ id: 'b1', name: '单号', bind: 'order.no', x: 10, y: 10, fontSize: 12 }] }
     }, token);
     assert.equal(noFeat.status, 403);
 
-    // 4. 普通模板即使携带 boxes / hideTable / hideTableTotal 也会被服务端剥离（仅套打模式可用）
+    // 4. 普通模板即使携带 boxes / hideTable / hideTableTotal / pageRows 也会被服务端剥离（仅套打模式可用）
     const normalSave = await req('PUT', '/api/settings/print', {
       kind: 'sales',
-      tpl: { preprint: false, hideTable: true, hideTableTotal: true, boxes: [{ id: 'b1', name: '单号', bind: 'order.no', x: 10, y: 10, fontSize: 12 }] }
+      tpl: { preprint: false, hideTable: true, hideTableTotal: true, pageRows: 9, boxes: [{ id: 'b1', name: '单号', bind: 'order.no', x: 10, y: 10, fontSize: 12 }] }
     }, token);
     assert.equal(normalSave.status, 200);
     assert.equal(normalSave.data.defaultTpl.hideTable, false);
     assert.equal(normalSave.data.defaultTpl.hideTableTotal, false);
+    assert.equal(normalSave.data.defaultTpl.pageRows, 0);
     assert.deepEqual(normalSave.data.defaultTpl.boxes, []);
   } finally {
     child.kill();
