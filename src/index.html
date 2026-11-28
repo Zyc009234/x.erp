@@ -555,7 +555,7 @@ html.mobile .doc-sum b{font-size:14px}
   <aside class="sidebar">
     <div class="brand"><div class="logo">E</div><span class="brand-name">x.erp</span></div>
     <nav id="nav"></nav>
-<div class="side-foot"><span id="sideVer">v2.16.4</span> · 数据保存在服务器</div>
+<div class="side-foot"><span id="sideVer">v2.16.5</span> · 数据保存在服务器</div>
   </aside>
   <div class="backdrop" data-act="toggleSide"></div>
   <div class="main">
@@ -2628,7 +2628,7 @@ function slipTpl(kind, tplId) {
   const saved = (t.cols || []).filter(c => colKeys.includes(c.k) || isCustomPrintCol(c.k));
   const cols = saved.length ? [...saved, ...colKeys.filter(k => !saved.some(c => c.k === k)).map(k => ({k, label:'', on:false}))]
     : colKeys.map(k => ({k, label:'', on:!['barcode', 'brand'].includes(k)}));
-  return {title:'', header:'', footer:'', signs:K.signs, fontSize:12, upper:true, printer:true, paper:'', paperW:0, font:'song', logo:'', logoPos:'inline', preprint:false, hideTableTotal:false, offsetX:0, offsetY:0, rowH:0, tableW:0, preprintBg:'', ...t,
+  return {title:'', header:'', footer:'', signs:K.signs, fontSize:12, upper:true, printer:true, paper:'', paperW:0, font:'song', logo:'', logoPos:'inline', preprint:false, hideTable:false, hideTableTotal:false, offsetX:0, offsetY:0, rowH:0, tableW:0, preprintBg:'', ...t,
     pos:t.pos && typeof t.pos === 'object' ? {...t.pos} : {},
     boxes:Array.isArray(t.boxes) ? t.boxes.map(b => ({...b})) : [],
     cols:cols.map(c => ({...c})), meta:{...Object.fromEntries(K.meta.map(k => [k, true])), ...(t.meta || {})}};
@@ -2736,13 +2736,14 @@ function slipRender(kind, o, {showMoney, minRows = 0, tpl = slipTpl(kind)} = {})
     extraRemark ? `<div class="pp-line"${ppAttr('remark', '备注')}>${extraRemark}</div>` : ''
   ].join('');
   const tblExtra = (cols.some(c => c.w) || (ppOn && +tpl.tableW >= 40) ? 'table-layout:fixed;' : '') + (ppOn && +tpl.tableW >= 40 ? `width:${+tpl.tableW}mm;` : '');
+  const showTable = cols.length > 0 && !(ppOn && tpl.hideTable);
   return `<div class="slip-wrap${ppCls}" style="font-family:${PRINT_FONTS[tpl.font] || PRINT_FONTS.song};font-size:${+tpl.fontSize || 12}px${ppVars}">${d.stamp ? `<div class="slip-stamp">${d.stamp}</div>` : ''}
   ${titleHtml}
   <div class="s-meta">${meta}</div>
-  <table${ppAttr('table', '明细表格', tblExtra)}><thead><tr>${cols.map(c => `<th style="${colStyle(c)}">${esc(colLabel(K, c))}</th>`).join('')}</tr></thead>
+  ${showTable ? `<table${ppAttr('table', '明细表格', tblExtra)}><thead><tr>${cols.map(c => `<th style="${colStyle(c)}">${esc(colLabel(K, c))}</th>`).join('')}</tr></thead>
   <tbody>${rows.join('')}
   ${total}
-  ${tableTail}</tbody></table>
+  ${tableTail}</tbody></table>` : ''}
   ${ppExtras}
   ${signs.length ? `<div class="s-sign">${signs.map((x, idx) => `<span${ppAttr('sign.' + idx, x)}><span class="pp-lbl">${esc(x)}：</span>${esc(auto[x] || '')}</span>`).join('')}</div>` : ''}
   ${d.payInfo ? `<div class="s-meta" style="margin-top:6px"><span>${esc(d.payInfo)}</span></div>` : ''}
@@ -7536,6 +7537,7 @@ function printTplPage(body) {
       logo: typeof src.logo === 'string' && src.logo.length <= 180000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(src.logo) ? src.logo : '',
       logoPos: ['inline', 'left', 'right', 'top'].includes(src.logoPos) ? src.logoPos : 'inline',
       preprint: canPreprint && !!src.preprint,
+      hideTable: canPreprint && !!src.preprint && !!src.hideTable,
       hideTableTotal: canPreprint && !!src.preprint && !!src.hideTableTotal,
       offsetX: Number.isFinite(+src.offsetX) ? Math.max(-30, Math.min(80, Math.round(+src.offsetX * 10) / 10)) : 0,
       offsetY: Number.isFinite(+src.offsetY) ? Math.max(-30, Math.min(120, Math.round(+src.offsetY * 10) / 10)) : 0,
@@ -7574,7 +7576,10 @@ function printTplPage(body) {
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px" id="tpBgBox">${bgSrc ? '<span class="badge green plain">已上传校准底图</span>' : '<span class="sub-t">可选：上传预印单据照片辅助预览对位（不打印）</span>'}<label class="btn sm">${ic('upload')}底图<input type="file" id="tpBg" accept="image/png,image/jpeg,image/webp" hidden></label>${bgSrc ? '<button class="btn sm danger-text" id="tpBgDel">清除底图</button>' : ''}</div>
         <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
-          <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="tpHideTblTotal" ${t.hideTableTotal ? 'checked' : ''}>隐藏表格自带合计行（改用下方自由数据框独立定位）</label>
+          <div style="display:flex;gap:8px 16px;flex-wrap:wrap;margin-bottom:8px">
+            <label class="chk"><input type="checkbox" id="tpHideTbl" ${t.hideTable ? 'checked' : ''}>隐藏明细表格（仅用自由数据框）</label>
+            <label class="chk"><input type="checkbox" id="tpHideTblTotal" ${t.hideTableTotal ? 'checked' : ''}>隐藏表格自带合计行（改用自由数据框定位）</label>
+          </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <b style="font-size:12px">自由数据框（引用数据库字段）</b>
             <button class="btn sm" type="button" id="tpAddBox">${ic('plus')}添加数据框</button>
@@ -7629,7 +7634,7 @@ function printTplPage(body) {
     }
   };
   const read = () => ({title:$('#tpTitle').value.trim(), header:$('#tpHeader').value.trim(), footer:$('#tpFooter').value.trim(), signs:$('#tpSigns').value.trim(), fontSize:+$('#tpFs').value, paper:$('#tpPaper').value, paperW:isPinPaper($('#tpPaper').value) ? Math.max(120, Math.min(300, Math.round(+$('#tpPaperW').value || 215))) : 0, font:$('#tpFont').value, logo:logoSrc, logoPos:$('#tpLogoPos').value,
-    preprint:canPreprint && !!$('#tpPreprint')?.checked, hideTableTotal:canPreprint && !!$('#tpPreprint')?.checked && !!$('#tpHideTblTotal')?.checked, offsetX:canPreprint ? Math.max(-30, Math.min(80, Math.round((+(($('#tpOffX') || {}).value || 0)) * 10) / 10)) : 0, offsetY:canPreprint ? Math.max(-30, Math.min(120, Math.round((+(($('#tpOffY') || {}).value || 0)) * 10) / 10)) : 0, rowH:canPreprint && (+(($('#tpRowH') || {}).value || 0)) >= 4 ? Math.min(40, Math.round((+(($('#tpRowH') || {}).value || 0)) * 10) / 10) : 0, tableW:canPreprint && (+(($('#tpTableW') || {}).value || 0)) >= 40 ? Math.min(300, Math.round((+(($('#tpTableW') || {}).value || 0)) * 10) / 10) : 0, preprintBg:canPreprint ? bgSrc : '', pos:canPreprint ? cleanPos(ppPos) : {}, boxes:canPreprint && !!$('#tpPreprint')?.checked ? cleanBoxes(ppBoxes) : [],
+    preprint:canPreprint && !!$('#tpPreprint')?.checked, hideTable:canPreprint && !!$('#tpPreprint')?.checked && !!$('#tpHideTbl')?.checked, hideTableTotal:canPreprint && !!$('#tpPreprint')?.checked && !!$('#tpHideTblTotal')?.checked, offsetX:canPreprint ? Math.max(-30, Math.min(80, Math.round((+(($('#tpOffX') || {}).value || 0)) * 10) / 10)) : 0, offsetY:canPreprint ? Math.max(-30, Math.min(120, Math.round((+(($('#tpOffY') || {}).value || 0)) * 10) / 10)) : 0, rowH:canPreprint && (+(($('#tpRowH') || {}).value || 0)) >= 4 ? Math.min(40, Math.round((+(($('#tpRowH') || {}).value || 0)) * 10) / 10) : 0, tableW:canPreprint && (+(($('#tpTableW') || {}).value || 0)) >= 40 ? Math.min(300, Math.round((+(($('#tpTableW') || {}).value || 0)) * 10) / 10) : 0, preprintBg:canPreprint ? bgSrc : '', pos:canPreprint ? cleanPos(ppPos) : {}, boxes:canPreprint && !!$('#tpPreprint')?.checked ? cleanBoxes(ppBoxes) : [],
     upper:$('#tpUpper').checked, printer:$('#tpPrinter').checked, meta:Object.fromEntries([...body.querySelectorAll('[data-meta]')].map(x => [x.dataset.meta, x.checked])), cols});
   const drawBoxEditor = () => {
     const ed = $('#tpBoxEditor'), cnt = $('#tpBoxCnt');

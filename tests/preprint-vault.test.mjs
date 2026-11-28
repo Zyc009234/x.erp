@@ -46,12 +46,13 @@ test('加密套打模板隔离与自由数据框校验', async () => {
     }, token);
     assert.equal(noFeat.status, 403);
 
-    // 4. 普通模板即使携带 boxes / hideTableTotal 也会被服务端剥离（仅套打模式可用）
+    // 4. 普通模板即使携带 boxes / hideTable / hideTableTotal 也会被服务端剥离（仅套打模式可用）
     const normalSave = await req('PUT', '/api/settings/print', {
       kind: 'sales',
-      tpl: { preprint: false, hideTableTotal: true, boxes: [{ id: 'b1', name: '单号', bind: 'order.no', x: 10, y: 10, fontSize: 12 }] }
+      tpl: { preprint: false, hideTable: true, hideTableTotal: true, boxes: [{ id: 'b1', name: '单号', bind: 'order.no', x: 10, y: 10, fontSize: 12 }] }
     }, token);
     assert.equal(normalSave.status, 200);
+    assert.equal(normalSave.data.defaultTpl.hideTable, false);
     assert.equal(normalSave.data.defaultTpl.hideTableTotal, false);
     assert.deepEqual(normalSave.data.defaultTpl.boxes, []);
   } finally {
