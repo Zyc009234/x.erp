@@ -1,34 +1,34 @@
 {
   "schema": 1,
-  "latest": "2.16.3",
-  "publishedAt": "2026-11-27T23:50:00+08:00",
+  "latest": "2.16.4",
+  "publishedAt": "2026-11-28T13:45:00+08:00",
   "notes": [
-    "修复工程结算、粮食购销分摊与作废成本、固定资产月折旧、离职临工工资及合同权限隔离等 14 项核心账目与权限问题",
-    "修复天地图与地块投影对齐、KMZ 解析、多账套批量分配事务与混合角色保留、备份设置恢复、套打表格双击还原及手机端适配等 15 项体验问题"
+    "套打模式新增「自由数据框」与数据库字段绑定，支持点击底图放框、拖拽及方向键 0.5mm 微调与自定义变量混排",
+    "套打模式新增「隐藏表格自带合计行」选项，并支持通过专属激活码离线解密导入隐藏套打模板"
   ],
   "packages": {
     "fnos": {
-      "version": "2.16.3",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.3.fpk",
-      "sha256": "fedb8197eb9608099587a1a6d6f496c26f8f81ef6b1728357f5441016b3fe3cd",
-      "size": 832004,
-      "file": "xerp-2.16.3.fpk",
+      "version": "2.16.4",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.4.fpk",
+      "sha256": "3d6c65bba214232a54729a3fc5545a7975e2fe681634a7bafdba65f510033fa2",
+      "size": 883003,
+      "file": "xerp-2.16.4.fpk",
       "kind": "fpk"
     },
     "windows": {
-      "version": "2.16.3",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.3-windows-x64-setup.exe",
-      "sha256": "b91243847df85bd19c4c474ccf757eba1642455c0e81e456d0ed5494746d14a2",
-      "size": 23897380,
-      "file": "xerp-2.16.3-windows-x64-setup.exe",
+      "version": "2.16.4",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.4-windows-x64-setup.exe",
+      "sha256": "4107055253ad399dd3b2c8120430516c83b959ea9596c9bb42e7647498085953",
+      "size": 23950107,
+      "file": "xerp-2.16.4-windows-x64-setup.exe",
       "kind": "exe"
     },
     "android": {
-      "version": "2.16.3",
-      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.3-android.apk",
-      "sha256": "99c77c9e0143b1208e6ef98acdaa3f7e4ed827d71da7a70c269467af47bc4c7a",
+      "version": "2.16.4",
+      "url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.16.4-android.apk",
+      "sha256": "5c8b258b22addd690ffd0c406fd60b7affac3a691fed6bc9bbc8e5f02f0c9b29",
       "size": 279329,
-      "file": "xerp-2.16.3-android.apk",
+      "file": "xerp-2.16.4-android.apk",
       "kind": "apk",
       "versionCode": 21603
     },
