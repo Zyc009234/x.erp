@@ -34,6 +34,17 @@
       "is_docker": false,
       "service_port": "8686",
       "releases": {
+        "2.17.3": {
+          "changelog": "田间管理交互式地图升级：支持设备 GPS 定位、滚轮/按钮缩放（Z4–Z18）、拖拽平移、自适应铺满去黑边、防标签重叠及列表一键定位地块",
+          "updated_at": "2026-11-29T13:18:00+08:00",
+          "packages": {
+            "all": {
+              "download_url": "https://www.zhaoyoucai.xyz/downloads/xerp-2.17.3.fpk",
+              "sha256": "0f2265cee9d800796e26b0a8fbe425e3e7b9bfdd4fce338c3f98c85f5446bf16",
+              "size": 923441
+            }
+          }
+        },
         "2.17.2": {
           "changelog": "新增天地图服务端瓦片代理，同时兼容「服务器端」和「浏览器端」Key，自动清洗重复粘贴的 Key 并内置瓦片缓存",
           "updated_at": "2026-11-28T20:32:00+08:00",
