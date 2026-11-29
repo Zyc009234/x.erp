@@ -420,7 +420,15 @@ html.printing #printRoot{display:block;position:fixed;inset:0;background:#fff;z-
 .slip-receipt .rc-bc svg{max-width:100%;height:34px;display:block;margin:0 auto}
 .slip-receipt .rc-ft{text-align:center;margin-top:6px;font-size:.9em;color:#333}
 #fieldMapWrap.is-full{position:fixed;inset:0;z-index:200;background:#0f172a;padding:12px;display:flex;flex-direction:column}
-#fieldMapWrap.is-full svg{flex:1;height:auto!important;max-height:calc(100vh - 64px)}
+#fieldMapBox{position:relative;width:100%;height:400px;border-radius:10px;overflow:hidden;background:#0f172a;user-select:none;touch-action:none}
+#fieldMapWrap.is-full #fieldMapBox{flex:1;height:auto!important;min-height:0}
+#fieldMapBox svg{width:100%;height:100%;display:block;cursor:grab}
+#fieldMapBox svg.dragging{cursor:grabbing}
+#fieldMapBox svg.drawing{cursor:crosshair}
+.map-ctrls{position:absolute;top:10px;right:10px;z-index:5;display:flex;flex-direction:column;gap:6px}
+.map-ctrls button{width:34px;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.22);background:rgba(15,23,42,.82);color:#fff;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);line-height:1}
+.map-ctrls button:hover{background:rgba(37,99,235,.92)}
+.map-hud{position:absolute;left:10px;bottom:10px;z-index:5;padding:4px 10px;border-radius:999px;background:rgba(15,23,42,.78);color:#e2e8f0;font-size:12px;pointer-events:none;backdrop-filter:blur(4px)}
 .slip-preview.is-preprint .pp-tbl-box{position:relative;display:block;margin-left:0;margin-right:auto}
 .slip-preview.is-preprint .pp-tbl-box table{width:100%;margin:0}
 .slip-preview.is-preprint .pp-tbl-box td{position:relative}
@@ -6484,45 +6492,6 @@ function renderFieldPage(body) {
     const rad = Math.atan(Math.sinh(Math.PI * (1 - 2 * ty / n)));
     return [+(lng).toFixed(6), +(rad * 180 / Math.PI).toFixed(6)];
   };
-  const W = 720, H = 300;
-  let z = 15, originX = 0, originY = 0;
-  if (allPts.length) {
-    const minLng = Math.min(...allPts.map(p => p[0])), maxLng = Math.max(...allPts.map(p => p[0]));
-    const minLat = Math.min(...allPts.map(p => p[1])), maxLat = Math.max(...allPts.map(p => p[1]));
-    z = 17;
-    while (z > 8) {
-      const [x1, y1] = toTile(minLng, maxLat, z), [x2, y2] = toTile(maxLng, minLat, z);
-      if ((x2 - x1) * 256 <= W * 0.72 && (y2 - y1) * 256 <= H * 0.72) break;
-      z--;
-    }
-    const [cxT, cyT] = toTile((minLng + maxLng) / 2, (minLat + maxLat) / 2, z);
-    originX = cxT * 256 - W / 2; originY = cyT * 256 - H / 2;
-  } else {
-    const [cxT, cyT] = toTile(104.0668, 30.5728, z);
-    originX = cxT * 256 - W / 2; originY = cyT * 256 - H / 2;
-  }
-  const proj = ([lng, lat]) => { const [tx, ty] = toTile(lng, lat, z); return [tx * 256 - originX, ty * 256 - originY]; };
-  const unproj = (px, py) => fromTile((px + originX) / 256, (py + originY) / 256, z);
-  let bgTile = '';
-  if (tdtKey) {
-    const maxIdx = (1 << z) - 1;
-    const tX0 = Math.max(0, Math.floor(originX / 256)), tX1 = Math.min(maxIdx, Math.floor((originX + W) / 256));
-    const tY0 = Math.max(0, Math.floor(originY / 256)), tY1 = Math.min(maxIdx, Math.floor((originY + H) / 256));
-    const tiles = [];
-    for (let ty = tY0; ty <= tY1; ty++) {
-      for (let tx = tX0; tx <= tX1; tx++) {
-        const px = tx * 256 - originX, py = ty * 256 - originY;
-        tiles.push(`<image data-tdt-tile="/api/field/tile/${z}/${ty}/${tx}" x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="256" height="256" opacity="0.82"/>`);
-      }
-    }
-    bgTile = tiles.join('');
-  }
-  const mapSvg = `<svg id="fieldSvg" viewBox="0 0 ${W} ${H}" style="width:100%;height:300px;border-radius:10px;background:#0f172a;display:block">${bgTile}${plots.map((pl, idx) => {
-    if (!pl.coords || pl.coords.length < 3) return '';
-    const ptsStr = pl.coords.map(p => proj(p).map(n => n.toFixed(1)).join(',')).join(' ');
-    const c = proj(pl.center || pl.coords[0]);
-    return `<g data-plot-id="${pl.id}" style="cursor:pointer"><polygon points="${ptsStr}" fill="${PALETTE[idx % PALETTE.length]}" fill-opacity="0.42" stroke="#fff" stroke-width="1.5"/><text x="${c[0].toFixed(1)}" y="${c[1].toFixed(1)}" fill="#fff" font-size="12" font-weight="600" text-anchor="middle">${esc(pl.name)} (${pl.areaMu}亩)</text></g>`;
-  }).join('')}<g id="fieldDrawLayer"></g></svg>`;
   const lf = [
     {key:'plot', label:'全部地块', options:plots.map(p => [p.id, p.name]), test:(l, v) => l.plotId === v || (l.plotIds || []).includes(v)},
     {key:'month', label:'全部月份', options:lastMonths(12).reverse(), test:(l, v) => String(l.date || '').startsWith(v)}
@@ -6538,20 +6507,31 @@ function renderFieldPage(body) {
       <label class="btn sm">${ic('upload')}导入 KML / KMZ<input type="file" id="kmlIn" accept=".kml,.kmz" hidden></label>
       <button class="btn sm" id="kmlExpBtn">${ic('download')}导出 KML</button>
       <button class="btn sm" id="plotDrawBtn">地图勾画地块</button>
+      <button class="btn sm" id="mapLocBtn">定位当前位置</button>
       <button class="btn sm" id="mapFullBtn">全屏地图</button>
       <button class="btn sm primary" id="plotAddBtn">${ic('plus')}手动新增地块</button>
     </div></div>
     <div class="card-body">
       <div id="fieldMapWrap">
         <div id="fieldDrawBar" style="display:none;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;border-radius:8px;background:var(--panel2);flex-wrap:wrap">
-          <span class="badge blue">勾画模式</span><span class="sub-t" id="fieldDrawHint">在地图上依次点击添加地块顶点（至少 3 个点）</span>
+          <span class="badge blue">勾画模式</span><span class="sub-t" id="fieldDrawHint">在地图上依次点击添加地块顶点（至少 3 个点，可拖拽平移/滚轮缩放）</span>
           <button class="btn sm" id="drawUndo" style="margin-left:auto">撤销一点</button>
           <button class="btn sm primary" id="drawDone">完成勾画</button>
           <button class="btn sm" id="drawCancel">取消</button>
         </div>
-        ${mapSvg}
+        <div id="fieldMapBox">
+          <svg id="fieldSvg"></svg>
+          <div class="map-ctrls">
+            <button type="button" id="mapZoomIn" title="放大（+）">＋</button>
+            <button type="button" id="mapZoomOut" title="缩小（-）">－</button>
+            <button type="button" id="mapLocate" title="定位到设备当前位置">◎</button>
+            <button type="button" id="mapReset" title="复位查看全部地块">⊡</button>
+            <button type="button" id="mapFullFloat" title="全屏 / 退出全屏">⛶</button>
+          </div>
+          <div class="map-hud" id="mapHud">缩放 Z15 · 滚轮缩放 · 拖拽平移 · 点击地块编辑</div>
+        </div>
       </div>
-      ${plots.length ? `<div class="table-wrap" style="margin-top:12px"><table class="tbl compact"><thead><tr><th>地块名称</th><th class="num">面积(亩)</th><th>作物</th><th>种植时间</th><th>负责人</th><th>操作</th></tr></thead><tbody>${plots.map(p => `<tr><td><b>${esc(p.name)}</b></td><td class="num">${p.areaMu || 0}</td><td>${esc(p.crop || '-')}</td><td>${esc(p.plantDate || '-')}</td><td>${esc(p.owner || '-')}</td><td><div class="ops"><button class="tbtn" data-pl-log="${p.id}">记农事</button><button class="tbtn" data-pl-edit="${p.id}">编辑</button><button class="tbtn danger-text" data-pl-del="${p.id}">删除</button></div></td></tr>`).join('')}</tbody></table></div>` : ''}
+      ${plots.length ? `<div class="table-wrap" style="margin-top:12px"><table class="tbl compact"><thead><tr><th>地块名称</th><th class="num">面积(亩)</th><th>作物</th><th>种植时间</th><th>负责人</th><th>操作</th></tr></thead><tbody>${plots.map(p => `<tr><td><b>${esc(p.name)}</b></td><td class="num">${p.areaMu || 0}</td><td>${esc(p.crop || '-')}</td><td>${esc(p.plantDate || '-')}</td><td>${esc(p.owner || '-')}</td><td><div class="ops">${p.coords && p.coords.length >= 3 ? `<button class="tbtn" data-pl-focus="${p.id}">定位</button>` : ''}<button class="tbtn" data-pl-log="${p.id}">记农事</button><button class="tbtn" data-pl-edit="${p.id}">编辑</button><button class="tbtn danger-text" data-pl-del="${p.id}">删除</button></div></td></tr>`).join('')}</tbody></table></div>` : ''}
     </div></div>
   <div class="card">
     <div class="card-head" style="flex-wrap:wrap;gap:8px">
@@ -6597,30 +6577,210 @@ function renderFieldPage(body) {
     ], exp:{name:'农事日历记录', cols:[['日期', l => l.date], ['地块', l => l.plotName], ['作物', l => l.crop], ['农事安排', l => l.task], ['领料单号', l => l.stockDocNo || ''], ['农资明细', l => (l.materials || []).map(m => `${m.name}x${m.qty}${m.unit || ''}`).join('；')], ['项目', l => l.project || ''], ['负责人', l => l.owner], ['备注', l => l.note]]}});
   };
   renderFarmBody();
-  // 通过后端代理加载天地图瓦片（同时兼容「服务器端」和「浏览器端」Key，并缓存 Blob URL 避免重绘闪烁）
-  if (tdtKey && $('#fieldSvg')) {
-    window._tdtCache = window._tdtCache || new Map();
-    let errShown = false;
-    const tok = LS.get('token'), hdrs = tok ? { Authorization: 'Bearer ' + tok } : {};
-    [...$('#fieldSvg').querySelectorAll('image[data-tdt-tile]')].forEach(async el => {
-      const url = el.getAttribute('data-tdt-tile'), ck = tdtKey.slice(-8) + '|' + url;
-      if (window._tdtCache.has(ck)) { el.setAttribute('href', window._tdtCache.get(ck)); return; }
-      try {
-        const r = await fetch(url, { headers: hdrs });
-        if (!r.ok) {
-          let msg = '天地图底图加载失败（HTTP ' + r.status + '）';
-          try { const j = await r.json(); if (j && j.error) msg = j.error; } catch {}
-          if (!errShown) { errShown = true; toast(msg, 'error'); }
-          return;
-        }
-        const objUrl = URL.createObjectURL(await r.blob());
-        if (window._tdtCache.size >= 160) { const firstK = window._tdtCache.keys().next().value; URL.revokeObjectURL(window._tdtCache.get(firstK)); window._tdtCache.delete(firstK); }
-        window._tdtCache.set(ck, objUrl);
-        el.setAttribute('href', objUrl);
-      } catch {}
-    });
-  }
 
+  // 交互式田间地图引擎：自适应满宽、滚轮/按钮缩放、拖拽平移、设备 GPS 定位、防标签重叠、点击地块直接编辑
+  const mapBox = $('#fieldMapBox'), svg = $('#fieldSvg');
+  let drawPts = [], drawing = false, renderGen = 0, errShown = false;
+  const getSize = () => [Math.max(320, Math.round(mapBox.clientWidth || 720)), Math.max(300, Math.round(mapBox.clientHeight || 400))];
+  const computeFit = (pts, maxZ = 17) => {
+    const [W, H] = getSize();
+    if (!pts || !pts.length) return { z: 15, cLng: 104.0668, cLat: 30.5728 };
+    const minLng = Math.min(...pts.map(p => p[0])), maxLng = Math.max(...pts.map(p => p[0]));
+    const minLat = Math.min(...pts.map(p => p[1])), maxLat = Math.max(...pts.map(p => p[1]));
+    let z = maxZ;
+    while (z > 4) {
+      const [x1, y1] = toTile(minLng, maxLat, z), [x2, y2] = toTile(maxLng, minLat, z);
+      if ((x2 - x1) * 256 <= W * 0.78 && (y2 - y1) * 256 <= H * 0.78) break;
+      z--;
+    }
+    return { z, cLng: (minLng + maxLng) / 2, cLat: (minLat + maxLat) / 2 };
+  };
+  if (!ui.fieldMap) {
+    const f0 = computeFit(allPts);
+    ui.fieldMap = { z: f0.z, cLng: f0.cLng, cLat: f0.cLat, myPos: null };
+  }
+  const ms = ui.fieldMap;
+  const mapProj = () => {
+    const [W, H] = getSize(), z = ms.z;
+    const [cxT, cyT] = toTile(ms.cLng, ms.cLat, z);
+    const originX = cxT * 256 - W / 2, originY = cyT * 256 - H / 2;
+    const proj = ([lng, lat]) => { const [tx, ty] = toTile(lng, lat, z); return [tx * 256 - originX, ty * 256 - originY]; };
+    const unproj = (px, py) => fromTile((px + originX) / 256, (py + originY) / 256, z);
+    return { W, H, z, originX, originY, proj, unproj };
+  };
+  const redrawDraft = () => {
+    const layer = $('#fieldDrawLayer'); if (!layer) return;
+    const { proj } = mapProj();
+    const ptsStr = drawPts.map(p => proj(p).map(n => n.toFixed(1)).join(',')).join(' ');
+    layer.innerHTML = (drawPts.length >= 2 ? `<polygon points="${ptsStr}" fill="#22c55e" fill-opacity="0.35" stroke="#4ade80" stroke-width="2" stroke-dasharray="4 3"/>` : '')
+      + drawPts.map(p => { const [x, y] = proj(p); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="#fff" stroke="#16a34a" stroke-width="2"/>`; }).join('');
+    if ($('#fieldDrawHint')) $('#fieldDrawHint').textContent = drawPts.length >= 3 ? `已标记 ${drawPts.length} 个顶点 · 约 ${calcPolyAreaMu(drawPts)} 亩` : `已标记 ${drawPts.length} 个顶点（至少 3 个点，可拖拽平移/滚轮缩放）`;
+  };
+  const drawMap = () => {
+    if (!svg || !mapBox) return;
+    const myGen = ++renderGen;
+    const { W, H, z, originX, originY, proj } = mapProj();
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.classList.toggle('drawing', drawing);
+    let bgTile = '';
+    if (tdtKey) {
+      const maxIdx = (1 << z) - 1;
+      const tX0 = Math.max(0, Math.floor(originX / 256)), tX1 = Math.min(maxIdx, Math.floor((originX + W) / 256));
+      const tY0 = Math.max(0, Math.floor(originY / 256)), tY1 = Math.min(maxIdx, Math.floor((originY + H) / 256));
+      const tiles = [];
+      for (let ty = tY0; ty <= tY1; ty++) {
+        for (let tx = tX0; tx <= tX1; tx++) {
+          const px = tx * 256 - originX, py = ty * 256 - originY;
+          const url = `/api/field/tile/${z}/${ty}/${tx}`, ck = tdtKey.slice(-8) + '|' + url;
+          const cached = window._tdtCache && window._tdtCache.get(ck);
+          tiles.push(`<image data-tdt-tile="${url}"${cached ? ` href="${cached}"` : ''} x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="256" height="256" opacity="0.86"/>`);
+        }
+      }
+      bgTile = tiles.join('');
+    }
+    // 渲染地块多边形 + 智能防文字重叠（远景或密集时不糊成一团白）
+    const usedBoxes = [];
+    const overlap = b => usedBoxes.some(u => !(b.x2 < u.x1 || b.x1 > u.x2 || b.y2 < u.y1 || b.y1 > u.y2));
+    const plotSvg = plots.map((pl, idx) => {
+      if (!pl.coords || pl.coords.length < 3) return '';
+      const pts = pl.coords.map(proj);
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const [x, y] of pts) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+      if (maxX < -20 || minX > W + 20 || maxY < -20 || minY > H + 20) return '';
+      const bw = maxX - minX, bh = maxY - minY;
+      const ptsStr = pts.map(p => p.map(n => n.toFixed(1)).join(',')).join(' ');
+      const c = proj(pl.center || pl.coords[0]);
+      const lbl = `${pl.name}${pl.areaMu ? ` (${pl.areaMu}亩)` : ''}`;
+      let textHtml = '';
+      if (plots.length <= 8 || bw >= 26 || bh >= 18) {
+        const tw = Math.min(180, Math.max(44, lbl.length * 9));
+        const box = { x1: c[0] - tw / 2, x2: c[0] + tw / 2, y1: c[1] - 11, y2: c[1] + 5 };
+        if (!overlap(box)) {
+          usedBoxes.push(box);
+          textHtml = `<text x="${c[0].toFixed(1)}" y="${c[1].toFixed(1)}" fill="#fff" stroke="rgba(15,23,42,.85)" stroke-width="3" paint-order="stroke" font-size="12" font-weight="600" text-anchor="middle" style="pointer-events:none">${esc(lbl)}</text>`;
+        }
+      }
+      return `<g data-plot-id="${pl.id}" style="cursor:pointer"><title>${esc(pl.name)}${pl.areaMu ? ` (${pl.areaMu}亩)` : ''}${pl.crop ? ' · ' + esc(pl.crop) : ''} — 点击查看/编辑</title><polygon points="${ptsStr}" fill="${PALETTE[idx % PALETTE.length]}" fill-opacity="0.42" stroke="#fff" stroke-width="${bw > 20 ? 1.6 : 1}"/>${textHtml}</g>`;
+    }).join('');
+    let myDot = '';
+    if (ms.myPos) {
+      const [mx, my] = proj(ms.myPos);
+      if (mx >= -20 && mx <= W + 20 && my >= -20 && my <= H + 20) {
+        myDot = `<g style="pointer-events:none"><circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="14" fill="#3b82f6" fill-opacity="0.28"/><circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="6" fill="#2563eb" stroke="#fff" stroke-width="2.5"/></g>`;
+      }
+    }
+    svg.innerHTML = `${bgTile}${plotSvg}${myDot}<g id="fieldDrawLayer"></g>`;
+    redrawDraft();
+    if ($('#mapHud')) $('#mapHud').textContent = `缩放 Z${z} · 滚轮缩放 · 拖拽平移 · 点击地块编辑`;
+    if (tdtKey) {
+      window._tdtCache = window._tdtCache || new Map();
+      const tok = LS.get('token'), hdrs = tok ? { Authorization: 'Bearer ' + tok } : {};
+      [...svg.querySelectorAll('image[data-tdt-tile]:not([href])')].forEach(async el => {
+        const url = el.getAttribute('data-tdt-tile'), ck = tdtKey.slice(-8) + '|' + url;
+        if (window._tdtCache.has(ck)) { if (myGen === renderGen) el.setAttribute('href', window._tdtCache.get(ck)); return; }
+        try {
+          const r = await fetch(url, { headers: hdrs });
+          if (!r.ok) {
+            let msg = '天地图底图加载失败（HTTP ' + r.status + '）';
+            try { const j = await r.json(); if (j && j.error) msg = j.error; } catch {}
+            if (!errShown) { errShown = true; toast(msg, 'error'); }
+            return;
+          }
+          const objUrl = URL.createObjectURL(await r.blob());
+          if (window._tdtCache.size >= 240) { const firstK = window._tdtCache.keys().next().value; URL.revokeObjectURL(window._tdtCache.get(firstK)); window._tdtCache.delete(firstK); }
+          window._tdtCache.set(ck, objUrl);
+          if (myGen === renderGen) el.setAttribute('href', objUrl);
+        } catch {}
+      });
+    }
+  };
+  const zoomAt = (delta, clientX, clientY) => {
+    const nextZ = Math.max(4, Math.min(18, ms.z + delta));
+    if (nextZ === ms.z) return;
+    const rect = svg.getBoundingClientRect();
+    const { W, H, unproj } = mapProj();
+    const px = clientX != null ? (clientX - rect.left) / rect.width * W : W / 2;
+    const py = clientY != null ? (clientY - rect.top) / rect.height * H : H / 2;
+    const [aLng, aLat] = unproj(px, py);
+    ms.z = nextZ;
+    const [tx, ty] = toTile(aLng, aLat, nextZ);
+    const newCenter = fromTile(tx - (px - W / 2) / 256, ty - (py - H / 2) / 256, nextZ);
+    ms.cLng = newCenter[0]; ms.cLat = newCenter[1];
+    drawMap();
+  };
+  const locateMe = () => {
+    if (!navigator.geolocation) return toast('当前浏览器不支持设备定位', 'error');
+    toast('正在获取设备当前位置…');
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lng = +pos.coords.longitude.toFixed(6), lat = +pos.coords.latitude.toFixed(6);
+      ms.myPos = [lng, lat]; ms.cLng = lng; ms.cLat = lat; ms.z = Math.max(ms.z, 16);
+      drawMap();
+      toast(`已定位到当前位置（${lng}, ${lat}）`, 'success');
+    }, err => {
+      const isHttp = location.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(location.hostname);
+      toast(isHttp ? '浏览器限制：非 HTTPS 地址无法获取定位，请改用 HTTPS 或手机客户端访问，也可直接用滚轮缩放/拖拽定位' : ('定位失败：' + (err.message || '请允许浏览器定位权限')), 'error');
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  };
+  const toggleFull = () => {
+    const wrap = $('#fieldMapWrap');
+    const on = wrap.classList.toggle('is-full');
+    $('#mapFullBtn').textContent = on ? '退出全屏' : '全屏地图';
+    setTimeout(drawMap, 30);
+  };
+  drawMap();
+
+  // 滚轮缩放 + 拖拽平移 + 点击地块编辑 / 勾画顶点
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    zoomAt(e.deltaY < 0 ? 1 : -1, e.clientX, e.clientY);
+  }, { passive: false });
+  let dragStart = null, dragged = false;
+  svg.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    dragStart = { x: e.clientX, y: e.clientY, cLng: ms.cLng, cLat: ms.cLat, z: ms.z };
+    dragged = false;
+    try { svg.setPointerCapture(e.pointerId); } catch {}
+  });
+  svg.addEventListener('pointermove', e => {
+    if (!dragStart) return;
+    const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
+    if (!dragged && Math.hypot(dx, dy) < 5) return;
+    dragged = true;
+    svg.classList.add('dragging');
+    const [cxT, cyT] = toTile(dragStart.cLng, dragStart.cLat, dragStart.z);
+    const nc = fromTile(cxT - dx / 256, cyT - dy / 256, dragStart.z);
+    ms.cLng = nc[0]; ms.cLat = nc[1];
+    drawMap();
+  });
+  const endDrag = e => {
+    if (!dragStart) return;
+    const wasDragged = dragged;
+    dragStart = null; dragged = false;
+    svg.classList.remove('dragging');
+    if (wasDragged) return;
+    if (drawing) {
+      const rect = svg.getBoundingClientRect(), { W, H, unproj } = mapProj();
+      const px = (e.clientX - rect.left) / rect.width * W, py = (e.clientY - rect.top) / rect.height * H;
+      drawPts.push(unproj(px, py));
+      redrawDraft();
+      return;
+    }
+    const g = e.target.closest && e.target.closest('g[data-plot-id]');
+    if (g) {
+      const pl = byId(plots, g.getAttribute('data-plot-id'));
+      if (pl) openPlotModal(pl);
+    }
+  };
+  svg.addEventListener('pointerup', endDrag);
+  svg.addEventListener('pointercancel', () => { dragStart = null; dragged = false; svg.classList.remove('dragging'); });
+
+  $('#mapZoomIn').onclick = () => zoomAt(1);
+  $('#mapZoomOut').onclick = () => zoomAt(-1);
+  $('#mapLocate').onclick = locateMe;
+  $('#mapLocBtn').onclick = locateMe;
+  $('#mapReset').onclick = () => { const f = computeFit(allPts); ms.z = f.z; ms.cLng = f.cLng; ms.cLat = f.cLat; drawMap(); };
+  $('#mapFullBtn').onclick = toggleFull;
+  $('#mapFullFloat').onclick = toggleFull;
   if ($('#tdtKeySave')) $('#tdtKeySave').onclick = () => {
     const tk = extractTdtKey($('#tdtKeyIn').value);
     $('#tdtKeyIn').value = tk;
@@ -6628,23 +6788,11 @@ function renderFieldPage(body) {
     mutate('PUT', '/api/settings', { tiandituKey: tk }, '天地图 Key 已保存');
   };
   $('#kmlExpBtn').onclick = () => exportPlotsKml(plots);
-  $('#mapFullBtn').onclick = () => {
-    const wrap = $('#fieldMapWrap');
-    const on = wrap.classList.toggle('is-full');
-    $('#mapFullBtn').textContent = on ? '退出全屏' : '全屏地图';
-  };
-  let drawPts = [], drawing = false;
-  const redrawDraft = () => {
-    const layer = $('#fieldDrawLayer'); if (!layer) return;
-    const ptsStr = drawPts.map(p => proj(p).map(n => n.toFixed(1)).join(',')).join(' ');
-    layer.innerHTML = (drawPts.length >= 2 ? `<polygon points="${ptsStr}" fill="#22c55e" fill-opacity="0.35" stroke="#4ade80" stroke-width="2" stroke-dasharray="4 3"/>` : '')
-      + drawPts.map(p => { const [x, y] = proj(p); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="#fff" stroke="#16a34a" stroke-width="2"/>`; }).join('');
-    if ($('#fieldDrawHint')) $('#fieldDrawHint').textContent = drawPts.length >= 3 ? `已标记 ${drawPts.length} 个顶点 · 约 ${calcPolyAreaMu(drawPts)} 亩` : `已标记 ${drawPts.length} 个顶点（至少 3 个点）`;
-  };
-  const stopDraw = () => { drawing = false; drawPts = []; if ($('#fieldDrawBar')) $('#fieldDrawBar').style.display = 'none'; redrawDraft(); };
+  const stopDraw = () => { drawing = false; drawPts = []; if ($('#fieldDrawBar')) $('#fieldDrawBar').style.display = 'none'; svg.classList.remove('drawing'); redrawDraft(); };
   $('#plotDrawBtn').onclick = () => {
     drawing = true; drawPts = [];
     $('#fieldDrawBar').style.display = 'flex';
+    svg.classList.add('drawing');
     redrawDraft();
   };
   $('#drawUndo').onclick = () => { drawPts.pop(); redrawDraft(); };
@@ -6655,19 +6803,13 @@ function renderFieldPage(body) {
     stopDraw();
     openPlotModal(null, { coords, areaMu });
   };
-  $('#fieldSvg').addEventListener('click', e => {
-    if (!drawing) return;
-    const svg = $('#fieldSvg'), rect = svg.getBoundingClientRect();
-    const px = (e.clientX - rect.left) / rect.width * W, py = (e.clientY - rect.top) / rect.height * H;
-    drawPts.push(unproj(px, py));
-    redrawDraft();
-  });
   $('#kmlIn').onchange = async e => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     try {
       const xml = await extractKmlFromFile(f), polys = parseKmlPolygons(xml);
       if (!polys.length) return toast('文件中未找到有效的多边形地块坐标', 'error');
       for (const pl of polys) await api('POST', '/api/field-plots', pl);
+      ui.fieldMap = null;
       await reload(); render(); toast(`成功导入 ${polys.length} 块地块`, 'success');
     } catch (err) { toast(err.message, 'error'); }
   };
@@ -6715,6 +6857,17 @@ function renderFieldPage(body) {
   $('#farmLogAdd').onclick = () => openFarmLogModal('');
   body.addEventListener('click', e => {
     const fv = e.target.closest('[data-fv]'); if (fv) { ui.farmView = fv.dataset.fv; renderFieldPage(body); return; }
+    const fo = e.target.closest('[data-pl-focus]');
+    if (fo) {
+      const pl = byId(plots, fo.dataset.plFocus);
+      if (pl && pl.coords && pl.coords.length >= 3) {
+        const f = computeFit(pl.coords, 17);
+        ms.z = f.z; ms.cLng = f.cLng; ms.cLat = f.cLat;
+        drawMap();
+        mapBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
     const a = e.target.closest('[data-pl-log]'); if (a) openFarmLogModal(a.dataset.plLog);
     const b = e.target.closest('[data-pl-edit]'); if (b) openPlotModal(byId(plots, b.dataset.plEdit));
     const c = e.target.closest('[data-pl-del]'); if (c) confirmBox('确定删除该地块吗？', () => mutate('DELETE', '/api/field-plots/' + c.dataset.plDel, undefined, '地块已删除'));
